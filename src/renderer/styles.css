@@ -1,0 +1,639 @@
+/* ============================================
+   Claude Terminal - Premium Dark Theme
+   Aesthetic: Refined developer tool with warmth
+   ============================================ */
+
+:root {
+  /* Core palette - deep charcoal with warm orange accent */
+  --bg-base: #0d0d0f;
+  --bg-elevated: #141417;
+  --bg-surface: #1a1a1f;
+  --bg-hover: #222228;
+  --bg-active: #2a2a32;
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Text */
+  --text-primary: #e8e8ed;
+  --text-secondary: #9898a0;
+  --text-tertiary: #606068;
+  --text-muted: #48484f;
+
+  /* Accent - Claude's warm orange */
+  --accent: #e87c45;
+  --accent-hover: #f08d58;
+  --accent-subtle: rgba(232, 124, 69, 0.15);
+  --accent-glow: rgba(232, 124, 69, 0.4);
+
+  /* Semantic colors */
+  --success: #4ade80;
+  --success-subtle: rgba(74, 222, 128, 0.15);
+  --info: #60a5fa;
+  --info-subtle: rgba(96, 165, 250, 0.15);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  /* Typography */
+  --font-ui: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px var(--accent-glow);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* UI font styles - scoped to avoid affecting xterm */
+.app {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ============================================
+   App Layout
+   ============================================ */
+
+.app {
+  display: flex;
+  height: 100%;
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================
+   Sidebar
+   ============================================ */
+
+.sidebar {
+  width: 280px;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Subtle gradient overlay for depth */
+.sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(232, 124, 69, 0.03) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.sidebar-header {
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-tertiary);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.sidebar-header::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.projects-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) 0;
+}
+
+/* ============================================
+   Project Items
+   ============================================ */
+
+.project-item {
+  padding: var(--space-md) var(--space-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  border-left: 2px solid transparent;
+  margin: 2px var(--space-sm);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.project-item:hover {
+  background: var(--bg-hover);
+  border-left-color: var(--border-strong);
+}
+
+.project-item.expanded {
+  background: var(--bg-active);
+  border-left-color: var(--accent);
+}
+
+.project-item.expanded::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 60%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.expand-arrow {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.expand-arrow:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.project-icon {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.project-item:hover .project-icon {
+  transform: scale(1.05);
+}
+
+.project-icon.emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+}
+
+.project-icon.letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-name {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.project-path {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+
+/* ============================================
+   Sessions List
+   ============================================ */
+
+.sessions-list {
+  padding: var(--space-sm) 0 var(--space-sm) 44px;
+  background: var(--bg-base);
+  border-left: 1px solid var(--border-subtle);
+  margin-left: var(--space-xl);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.session-item {
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-radius: var(--radius-sm);
+  margin: 2px 0;
+  transition: all var(--transition-fast);
+}
+
+.session-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  padding-left: var(--space-lg);
+}
+
+.session-item.most-recent {
+  color: var(--accent);
+}
+
+.session-item.most-recent .session-icon {
+  color: var(--success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.session-icon {
+  font-size: 8px;
+  width: 12px;
+  text-align: center;
+}
+
+.session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.session-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-item.most-recent .session-time {
+  color: var(--success);
+}
+
+.new-session {
+  color: var(--info) !important;
+  font-weight: 500;
+}
+
+.new-session:hover {
+  background: var(--info-subtle) !important;
+}
+
+/* ============================================
+   Add Project Button
+   ============================================ */
+
+.empty-projects {
+  padding: var(--space-xl);
+  color: var(--text-tertiary);
+  text-align: center;
+  line-height: 1.8;
+  font-size: 12px;
+}
+
+.add-project-btn {
+  margin: var(--space-md) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: linear-gradient(135deg, var(--accent) 0%, #d66b35 100%);
+  border: none;
+  color: #fff;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm), 0 0 0 0 var(--accent-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.add-project-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.add-project-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md), 0 0 20px var(--accent-glow);
+}
+
+.add-project-btn:hover::before {
+  left: 100%;
+}
+
+.add-project-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================
+   Remove Button
+   ============================================ */
+
+.remove-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 18px;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+
+.project-item:hover .remove-btn {
+  opacity: 1;
+}
+
+.remove-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================
+   Main Content
+   ============================================ */
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+/* ============================================
+   Tabs Bar
+   ============================================ */
+
+.tabs-bar {
+  display: flex;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  min-height: 42px;
+}
+
+.tabs-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: transparent;
+  border-right: 1px solid var(--border-subtle);
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 140px;
+  max-width: 220px;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+}
+
+.tab.active {
+  background: var(--bg-base);
+}
+
+.tab.active::after {
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.tab.active .tab-title {
+  color: var(--text-primary);
+}
+
+.tab-close {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* ============================================
+   Terminal Container
+   ============================================ */
+
+.terminal-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+.terminal-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  animation: terminalFadeIn 0.3s ease;
+}
+
+@keyframes terminalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.terminal-wrapper.active {
+  display: block;
+}
+
+.terminal-wrapper .xterm {
+  height: 100%;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  animation: fadeIn 0.5s ease;
+}
+
+.empty-state h2 {
+  font-weight: 600;
+  font-size: 24px;
+  color: var(--text-secondary);
+  background: linear-gradient(135deg, var(--text-secondary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.empty-state p {
+  font-size: 14px;
+  text-align: center;
+  max-width: 300px;
+  line-height: 1.6;
+}
+
+/* ============================================
+   Scrollbar
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-active);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================
+   Selection
+   ============================================ */
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+}

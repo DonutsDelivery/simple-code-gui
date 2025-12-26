@@ -1,0 +1,13 @@
+appId: com.claude-terminal.app
+productName: Claude Terminal
+directories:
+  buildResources: resources
+  output: dist-build
+files:
+  - dist/**/*
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: resources/icon.png

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e1e"/>
+      <stop offset="100%" style="stop-color:#2d2d2d"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff8c42"/>
+      <stop offset="100%" style="stop-color:#ff6b1a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="url(#bg)" stroke="#3c3c3c" stroke-width="2"/>
+
+  <!-- Terminal window frame -->
+  <rect x="16" y="24" width="96" height="80" rx="8" fill="#252526" stroke="#3c3c3c" stroke-width="1"/>
+
+  <!-- Terminal title bar -->
+  <rect x="16" y="24" width="96" height="16" rx="8" fill="#323232"/>
+  <rect x="16" y="32" width="96" height="8" fill="#323232"/>
+
+  <!-- Window buttons -->
+  <circle cx="28" cy="32" r="4" fill="#f14c4c"/>
+  <circle cx="40" cy="32" r="4" fill="#f5f543"/>
+  <circle cx="52" cy="32" r="4" fill="#23d18b"/>
+
+  <!-- Claude logo (stylized C) -->
+  <circle cx="80" cy="72" r="24" fill="none" stroke="url(#orange)" stroke-width="6" stroke-linecap="round" stroke-dasharray="110 40"/>
+
+  <!-- Cursor blink -->
+  <rect x="28" y="52" width="8" height="14" fill="#d4d4d4">
+    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- Terminal text lines -->
+  <rect x="28" y="72" width="32" height="3" rx="1" fill="#666"/>
+  <rect x="28" y="80" width="24" height="3" rx="1" fill="#666"/>
+  <rect x="28" y="88" width="28" height="3" rx="1" fill="#666"/>
+</svg>
