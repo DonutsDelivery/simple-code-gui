@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { mkdirSync, existsSync } from 'fs'
+import { mkdirSync, existsSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { spawn, exec } from 'child_process'
 import { promisify } from 'util'
 
@@ -564,6 +565,29 @@ ipcMain.handle('beads:install', async () => {
     return result
   } catch (e: any) {
     beadsAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// Clipboard image saving
+ipcMain.handle('clipboard:saveImage', async (_, { base64Data, mimeType }: { base64Data: string; mimeType: string }) => {
+  try {
+    // Determine extension from mime type
+    let ext = 'png'
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg'
+    else if (mimeType.includes('gif')) ext = 'gif'
+    else if (mimeType.includes('webp')) ext = 'webp'
+
+    // Generate unique filename
+    const filename = `clipboard-${Date.now()}.${ext}`
+    const filepath = join(tmpdir(), filename)
+
+    // Decode base64 and write to file
+    const buffer = Buffer.from(base64Data, 'base64')
+    writeFileSync(filepath, buffer)
+
+    return { success: true, path: filepath }
+  } catch (e: any) {
     return { success: false, error: e.message }
   }
 })

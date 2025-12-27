@@ -4,13 +4,60 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { Theme } from '../themes'
 
-// Custom paste handler for xterm
+// Custom paste handler for xterm - supports text, file paths, and images
 async function handlePaste(term: XTerm, ptyId: string) {
   try {
+    // Try to read clipboard items for richer content
+    const clipboardItems = await navigator.clipboard.read()
+
+    for (const item of clipboardItems) {
+      // Check for image types first
+      const imageType = item.types.find(t => t.startsWith('image/'))
+      if (imageType) {
+        const blob = await item.getType(imageType)
+        const buffer = await blob.arrayBuffer()
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+
+        // Save image to temp file via main process
+        const result = await window.electronAPI.saveClipboardImage(base64, imageType)
+        if (result.success && result.path) {
+          window.electronAPI.writePty(ptyId, result.path)
+          return
+        }
+      }
+
+      // Check for text/plain (includes file paths from file manager)
+      if (item.types.includes('text/plain')) {
+        const blob = await item.getType('text/plain')
+        const text = await blob.text()
+
+        // Clean up file:// URIs to plain paths
+        let cleanText = text
+        if (text.startsWith('file://')) {
+          // Handle file URIs (common on Linux when copying files)
+          cleanText = text.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.startsWith('file://'))
+            .map(line => decodeURIComponent(line.replace('file://', '')))
+            .join(' ')
+        }
+
+        window.electronAPI.writePty(ptyId, cleanText || text)
+        return
+      }
+    }
+
+    // Fallback to simple text read
     const text = await navigator.clipboard.readText()
     window.electronAPI.writePty(ptyId, text)
   } catch (e) {
-    console.error('Failed to paste:', e)
+    // Fallback for browsers that don't support clipboard.read()
+    try {
+      const text = await navigator.clipboard.readText()
+      window.electronAPI.writePty(ptyId, text)
+    } catch (e2) {
+      console.error('Failed to paste:', e2)
+    }
   }
 }
 

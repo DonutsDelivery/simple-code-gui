@@ -60,6 +60,9 @@ export interface ElectronAPI {
   downloadUpdate: () => Promise<{ success: boolean; error?: string }>
   installUpdate: () => void
   onUpdaterStatus: (callback: (data: { status: string; version?: string; progress?: number; error?: string }) => void) => () => void
+
+  // Clipboard
+  saveClipboardImage: (base64Data: string, mimeType: string) => Promise<{ success: boolean; path?: string; error?: string }>
 }
 
 const api: ElectronAPI = {
@@ -134,7 +137,10 @@ const api: ElectronAPI = {
     const handler = (_: any, data: { status: string; version?: string; progress?: number; error?: string }) => callback(data)
     ipcRenderer.on('updater:status', handler)
     return () => ipcRenderer.removeListener('updater:status', handler)
-  }
+  },
+
+  // Clipboard
+  saveClipboardImage: (base64Data, mimeType) => ipcRenderer.invoke('clipboard:saveImage', { base64Data, mimeType })
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

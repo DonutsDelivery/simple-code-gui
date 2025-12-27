@@ -48,6 +48,8 @@ declare global {
       downloadUpdate: () => Promise<{ success: boolean; error?: string }>
       installUpdate: () => void
       onUpdaterStatus: (callback: (data: { status: string; version?: string; progress?: number; error?: string }) => void) => () => void
+      // Clipboard
+      saveClipboardImage: (base64Data: string, mimeType: string) => Promise<{ success: boolean; path?: string; error?: string }>
     }
   }
 }
