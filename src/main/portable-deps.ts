@@ -90,6 +90,12 @@ export function getPortablePipPath(): string | null {
 export function getPortableBinDirs(): string[] {
   const dirs: string[] = []
 
+  // Add beads directory (cross-platform)
+  const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
+  if (fs.existsSync(beadsDir)) {
+    dirs.push(beadsDir)
+  }
+
   if (isWindows) {
     const nodeBase = path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`)
     if (fs.existsSync(nodeBase)) {
@@ -336,20 +342,95 @@ export async function installClaudeWithPortableNpm(): Promise<{ success: boolean
   }
 }
 
-// Install Beads using portable pip
-export async function installBeadsWithPortablePip(): Promise<{ success: boolean; error?: string }> {
-  const pipPath = getPortablePipPath()
-  if (!pipPath && isWindows) {
-    return { success: false, error: 'Portable pip not found. Please install Python first.' }
-  }
+// Get the beads binary path
+export function getBeadsBinaryPath(): string | null {
+  const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
+  const binaryName = isWindows ? 'bd.exe' : 'bd'
+  const binaryPath = path.join(beadsDir, binaryName)
+  return fs.existsSync(binaryPath) ? binaryPath : null
+}
 
+// Get beads bin directory
+export function getBeadsBinDir(): string {
+  return path.join(app.getPath('userData'), 'deps', 'beads')
+}
+
+// Install Beads CLI (Go binary from GitHub releases)
+export async function installBeadsBinary(onProgress?: (status: string, percent?: number) => void): Promise<{ success: boolean; error?: string }> {
   try {
-    if (isWindows && pipPath) {
-      await execAsync(`"${pipPath}" install beads-cli`, { timeout: 120000 })
-    } else {
-      // Try system pip on macOS/Linux
-      await execAsync('pip3 install --user beads-cli', { timeout: 120000 })
+    ensureDepsDir()
+
+    const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
+    if (!fs.existsSync(beadsDir)) {
+      fs.mkdirSync(beadsDir, { recursive: true })
     }
+
+    // Determine platform and architecture
+    const platform = process.platform
+    const arch = process.arch
+
+    let assetName: string
+    if (platform === 'win32') {
+      assetName = arch === 'arm64' ? 'beads_Windows_arm64.zip' : 'beads_Windows_x86_64.zip'
+    } else if (platform === 'darwin') {
+      assetName = arch === 'arm64' ? 'beads_Darwin_arm64.tar.gz' : 'beads_Darwin_x86_64.tar.gz'
+    } else {
+      assetName = arch === 'arm64' ? 'beads_Linux_arm64.tar.gz' : 'beads_Linux_x86_64.tar.gz'
+    }
+
+    // Get latest release URL from GitHub
+    onProgress?.('Fetching latest release info...', 0)
+
+    const releaseUrl = 'https://api.github.com/repos/steveyegge/beads/releases/latest'
+    const releaseInfo = await new Promise<any>((resolve, reject) => {
+      https.get(releaseUrl, { headers: { 'User-Agent': 'simple-claude-gui' } }, (res) => {
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data))
+          } catch (e) {
+            reject(new Error('Failed to parse release info'))
+          }
+        })
+      }).on('error', reject)
+    })
+
+    const asset = releaseInfo.assets?.find((a: any) => a.name === assetName)
+    if (!asset) {
+      return { success: false, error: `No release found for ${assetName}` }
+    }
+
+    const downloadUrl = asset.browser_download_url
+    const ext = isWindows ? '.zip' : '.tar.gz'
+    const archivePath = path.join(beadsDir, `beads${ext}`)
+
+    onProgress?.('Downloading Beads CLI...', 10)
+    await downloadFile(downloadUrl, archivePath, (percent) => {
+      onProgress?.('Downloading Beads CLI...', 10 + Math.round(percent * 0.7))
+    })
+
+    onProgress?.('Extracting Beads CLI...', 85)
+    await extractArchive(archivePath, beadsDir)
+
+    // Cleanup archive
+    fs.unlinkSync(archivePath)
+
+    // On Unix, make binary executable
+    if (!isWindows) {
+      const binaryPath = path.join(beadsDir, 'bd')
+      if (fs.existsSync(binaryPath)) {
+        fs.chmodSync(binaryPath, 0o755)
+      }
+    }
+
+    // Verify installation
+    const binaryPath = getBeadsBinaryPath()
+    if (!binaryPath) {
+      return { success: false, error: 'Beads extraction failed - binary not found' }
+    }
+
+    onProgress?.('Beads CLI installed successfully', 100)
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }

@@ -103,6 +103,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
       }
       // Ctrl+Shift+V or Ctrl+V for paste
       if (event.ctrlKey && (event.key === 'V' || event.key === 'v')) {
+        event.preventDefault()  // Prevent browser's native paste (which would cause duplicate)
         handlePaste(terminal, ptyId)
         return false
       }

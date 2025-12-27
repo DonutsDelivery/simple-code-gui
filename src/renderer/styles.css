@@ -1831,7 +1831,7 @@ html, body, #root {
 .version-indicator {
   position: fixed;
   bottom: var(--space-sm);
-  left: var(--space-sm);
+  left: 288px;  /* After sidebar (280px) + small gap */
   display: flex;
   align-items: center;
   gap: var(--space-sm);

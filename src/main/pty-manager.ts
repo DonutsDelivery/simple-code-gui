@@ -13,7 +13,18 @@ interface ClaudeProcess {
 
 function getEnhancedEnv(): { [key: string]: string } {
   const env = { ...process.env } as { [key: string]: string }
-  env.PATH = getEnhancedPathWithPortable()
+  const enhancedPath = getEnhancedPathWithPortable()
+
+  // On Windows, environment variables are case-insensitive but we need to set the right one
+  if (isWindows) {
+    // Windows uses 'Path' but Node sometimes uses 'PATH' - set both to be safe
+    env.PATH = enhancedPath
+    env.Path = enhancedPath
+  } else {
+    env.PATH = enhancedPath
+  }
+
+  console.log('Enhanced PATH for PTY:', enhancedPath.substring(0, 200) + '...')
   return env
 }
 

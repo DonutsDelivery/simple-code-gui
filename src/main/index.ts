@@ -17,7 +17,8 @@ import {
   installPortableNode,
   installPortablePython,
   installClaudeWithPortableNpm,
-  installBeadsWithPortablePip
+  installBeadsBinary,
+  getBeadsBinaryPath
 } from './portable-deps'
 import { initUpdater } from './updater'
 
@@ -480,56 +481,28 @@ ipcMain.handle('python:install', async () => {
 })
 
 ipcMain.handle('beads:install', async () => {
-  const { shell } = await import('electron')
-
   try {
     // Reset cache so we re-check after install
     beadsAvailable = null
 
-    // Check if portable pip is available (Windows)
-    const portablePip = getPortablePipPath()
-    if (portablePip) {
-      const result = await installBeadsWithPortablePip()
-      if (result.success) {
-        const portableDirs = getPortableBinDirs()
-        setPortableBinDirs(portableDirs)
-        const installed = await checkBeadsInstalled()
-        return { success: installed, method: 'portable', error: installed ? undefined : 'Installation completed but bd command not found' }
+    // Install beads binary (Go binary from GitHub releases)
+    const result = await installBeadsBinary((status, percent) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('install:progress', { type: 'beads', status, percent })
       }
-      return result
-    }
+    })
 
-    // Try pipx first (better for CLI tools - isolated environment)
-    const hasPipx = await checkPipxInstalled()
-    if (hasPipx) {
-      await execAsync('pipx install beads-cli', { ...getExecOptions(), timeout: 120000 })
+    if (result.success) {
+      // Update PATH with new beads directory
+      const portableDirs = getPortableBinDirs()
+      setPortableBinDirs(portableDirs)
+
+      // Verify installation
       const installed = await checkBeadsInstalled()
-      return { success: installed, method: 'pipx', error: installed ? undefined : 'Installation completed but bd command not found' }
+      return { success: installed, method: 'binary', error: installed ? undefined : 'Installation completed but bd command not found' }
     }
 
-    // Try pip/pip3
-    const hasPip = await checkPipInstalled()
-    if (hasPip) {
-      // Use --user flag for safety (no sudo required)
-      try {
-        await execAsync('pip3 install --user beads-cli', { ...getExecOptions(), timeout: 120000 })
-      } catch {
-        await execAsync('pip install --user beads-cli', { ...getExecOptions(), timeout: 120000 })
-      }
-      const installed = await checkBeadsInstalled()
-      return { success: installed, method: 'pip', error: installed ? undefined : 'Installation completed but bd command not found. You may need to restart the app.' }
-    }
-
-    // No pip available - need Python installation
-    if (isWindows) {
-      return { success: false, needsPython: true, error: 'Python is required. Click "Install Python" to download the portable version.' }
-    } else if (process.platform === 'darwin') {
-      shell.openExternal('https://www.python.org/downloads/macos/')
-      return { success: false, needsPython: true, error: 'Python is required. Please install Python from the download page, then restart Simple Claude GUI.' }
-    } else {
-      // Linux - suggest package manager
-      return { success: false, needsPython: true, error: 'Python/pip is required. Install via: sudo apt install python3-pip (Debian/Ubuntu) or sudo pacman -S python-pip (Arch)' }
-    }
+    return result
   } catch (e: any) {
     beadsAvailable = null
     return { success: false, error: e.message }
