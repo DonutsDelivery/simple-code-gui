@@ -32,7 +32,7 @@ package() {
     # Install desktop file
     install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/$pkgname.desktop" <<EOF
 [Desktop Entry]
-Name=Claude Terminal
+Name=Simple Claude GUI
 Comment=Multi-session Claude Code terminal manager
 Exec=electron /usr/lib/$pkgname/main/index.js
 Icon=$pkgname

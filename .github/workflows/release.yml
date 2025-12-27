@@ -163,7 +163,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: Claude Terminal ${{ steps.version.outputs.version }}
+          name: Simple Claude GUI ${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           files: |
@@ -178,29 +178,29 @@ jobs:
             ## Installation
 
             ### Windows
-            - **Installer**: Download `Claude-Terminal-Setup-*.exe` and run it
-            - **Portable**: Download `Claude-Terminal-Portable-*.exe` (no installation required)
+            - **Installer**: Download `Simple-Claude-GUI-Setup-*.exe` and run it
+            - **Portable**: Download `Simple-Claude-GUI-Portable-*.exe` (no installation required)
             - **Windows Store**: Coming soon! (`.appx` package included for manual sideloading)
 
             ### macOS
-            Download the `.dmg` file, open it, and drag Claude Terminal to your Applications folder.
+            Download the `.dmg` file, open it, and drag Simple Claude GUI to your Applications folder.
             - `arm64` = Apple Silicon (M1/M2/M3)
             - `x64` = Intel Macs
 
             ### AppImage (Any Linux distro)
             ```bash
-            chmod +x Claude-Terminal-*.AppImage
-            ./Claude-Terminal-*.AppImage
+            chmod +x Simple-Claude-GUI-*.AppImage
+            ./Simple-Claude-GUI-*.AppImage
             ```
 
             ### Debian/Ubuntu
             ```bash
-            sudo dpkg -i Claude-Terminal-*.deb
+            sudo dpkg -i Simple-Claude-GUI-*.deb
             ```
 
             ### Fedora/RHEL
             ```bash
-            sudo rpm -i Claude-Terminal-*.rpm
+            sudo rpm -i Simple-Claude-GUI-*.rpm
             ```
 
             ### Arch Linux (AUR)

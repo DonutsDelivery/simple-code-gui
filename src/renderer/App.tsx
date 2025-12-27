@@ -220,7 +220,7 @@ function App() {
       if (result.success) {
         if (result.method === 'download') {
           // User needs to complete manual install
-          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Claude Terminal.')
+          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Claude GUI.')
         } else {
           // winget install succeeded, re-check npm
           setNpmInstalled(true)
@@ -378,7 +378,7 @@ function App() {
           </div>
         ) : (
           <div className="empty-state">
-            <h2>Claude Terminal</h2>
+            <h2>Simple Claude GUI</h2>
             <p>Add a project from the sidebar, then click a session to open it</p>
           </div>
         )}

@@ -517,7 +517,7 @@ ipcMain.handle('beads:install', async () => {
       return { success: false, needsPython: true, error: 'Python is required. Click "Install Python" to download the portable version.' }
     } else if (process.platform === 'darwin') {
       shell.openExternal('https://www.python.org/downloads/macos/')
-      return { success: false, needsPython: true, error: 'Python is required. Please install Python from the download page, then restart Claude Terminal.' }
+      return { success: false, needsPython: true, error: 'Python is required. Please install Python from the download page, then restart Simple Claude GUI.' }
     } else {
       // Linux - suggest package manager
       return { success: false, needsPython: true, error: 'Python/pip is required. Install via: sudo apt install python3-pip (Debian/Ubuntu) or sudo pacman -S python-pip (Arch)' }

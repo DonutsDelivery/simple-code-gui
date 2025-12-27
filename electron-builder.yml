@@ -1,5 +1,5 @@
-appId: com.claude-terminal.app
-productName: Claude Terminal
+appId: com.simple-claude-gui.app
+productName: Simple Claude GUI
 directories:
   buildResources: resources
   output: dist-build
@@ -53,9 +53,9 @@ portable:
   artifactName: ${productName}-Portable-${version}.${ext}
 
 appx:
-  applicationId: ClaudeTerminal
-  displayName: Claude Terminal
-  identityName: ClaudeTerminal
+  applicationId: SimpleClaudeGUI
+  displayName: Simple Claude GUI
+  identityName: SimpleClaudeGUI
   publisher: CN=DonutsDelivery
   publisherDisplayName: DonutsDelivery
   languages:
