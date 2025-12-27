@@ -17,7 +17,7 @@ export function TerminalTabs({ tabs, activeTabId, onSelectTab, onCloseTab }: Ter
           className={`tab ${tab.id === activeTabId ? 'active' : ''}`}
           onClick={() => onSelectTab(tab.id)}
         >
-          <span className="tab-title">{tab.title}</span>
+          <span className="tab-title" title={tab.title}>{tab.title}</span>
           <button
             className="tab-close"
             onClick={(e) => {

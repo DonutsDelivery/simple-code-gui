@@ -256,7 +256,7 @@ function App() {
                 {openTabs.map((tab) => (
                   <div key={tab.id} className="terminal-tile">
                     <div className="tile-header">
-                      <span className="tile-title">{tab.title}</span>
+                      <span className="tile-title" title={tab.title}>{tab.title}</span>
                       <button
                         className="tile-close"
                         onClick={() => handleCloseTab(tab.id)}

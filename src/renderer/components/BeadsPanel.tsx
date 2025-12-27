@@ -223,7 +223,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                         </button>
                       )}
                       <div className="beads-task-content">
-                        <div className={`beads-task-title ${task.status === 'closed' ? 'completed' : ''}`}>{task.title}</div>
+                        <div className={`beads-task-title ${task.status === 'closed' ? 'completed' : ''}`} title={task.title}>{task.title}</div>
                         <div className="beads-task-meta">
                           <span className="beads-task-id">{task.id}</span>
                           <span className={`beads-task-status status-${task.status}`}>

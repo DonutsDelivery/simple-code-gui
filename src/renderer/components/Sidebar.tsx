@@ -137,7 +137,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         {projects.map((project) => (
           <div key={project.path}>
             <div
-              className={`project-item ${expandedProject === project.path ? 'expanded' : ''}`}
+              className={`project-item ${expandedProject === project.path ? 'expanded' : ''} ${openTabs.some(t => t.projectPath === project.path) ? 'has-open-tab' : ''}`}
               onClick={() => openMostRecentSession(project.path)}
             >
               <span
@@ -149,8 +149,8 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
               </span>
               <ProjectIcon projectName={project.name} size={28} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="project-name">{project.name}</div>
-                <div className="project-path">{project.path}</div>
+                <div className="project-name" title={project.name}>{project.name}</div>
+                <div className="project-path" title={project.path}>{project.path}</div>
               </div>
               <div className="project-actions">
                 {project.executable ? (
@@ -199,7 +199,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                     title={`Session ID: ${session.sessionId}`}
                   >
                     <span className="session-icon">{index === 0 ? '●' : '◦'}</span>
-                    <span className="session-name">{session.slug}</span>
+                    <span className="session-name" title={session.slug}>{session.slug}</span>
                     <span className="session-time">{formatDate(session.lastModified)}</span>
                   </div>
                 ))}
@@ -219,6 +219,21 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         onToggle={() => setBeadsExpanded(!beadsExpanded)}
       />
       <div className="sidebar-actions">
+        {(() => {
+          const focusedProject = projects.find(p => p.path === focusedProjectPath)
+          if (focusedProject?.executable) {
+            return (
+              <button
+                className="sidebar-btn run-app"
+                onClick={() => handleRunExecutable({ stopPropagation: () => {} } as React.MouseEvent, focusedProject)}
+                title={`Run: ${focusedProject.executable}`}
+              >
+                <span className="icon">▶</span> Run App
+              </button>
+            )
+          }
+          return null
+        })()}
         <button className="sidebar-btn" onClick={onOpenMakeProject}>
           <span className="icon">+</span> Make Project
         </button>
