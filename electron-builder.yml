@@ -21,17 +21,17 @@ linux:
   description: Desktop app for managing multiple Claude Code sessions across projects
 
 appImage:
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: Simple-Claude-GUI-${version}.${ext}
 
 deb:
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: Simple-Claude-GUI-${version}.${ext}
   depends:
     - libnotify4
     - libxtst6
     - libnss3
 
 rpm:
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: Simple-Claude-GUI-${version}.${ext}
 
 mac:
   target:
@@ -39,7 +39,7 @@ mac:
     - zip
   category: public.app-category.developer-tools
   icon: resources/icon.png
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: Simple-Claude-GUI-${version}-${arch}.${ext}
 
 win:
   target:
@@ -47,15 +47,15 @@ win:
     - portable
     - appx
   icon: resources/icon.ico
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: Simple-Claude-GUI-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: Simple-Claude-GUI-Setup-${version}.${ext}
 
 portable:
-  artifactName: ${productName}-Portable-${version}.${ext}
+  artifactName: Simple-Claude-GUI-Portable-${version}.${ext}
 
 appx:
   applicationId: SimpleClaudeGUI
@@ -65,4 +65,4 @@ appx:
   publisherDisplayName: DonutsDelivery
   languages:
     - en-US
-  artifactName: ${productName}-Store-${version}.${ext}
+  artifactName: Simple-Claude-GUI-Store-${version}.${ext}
