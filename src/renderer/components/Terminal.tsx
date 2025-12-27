@@ -91,7 +91,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
       window.electronAPI.writePty(ptyId, data)
     })
 
-    // Handle copy/paste keyboard shortcuts
+    // Handle copy/paste keyboard shortcuts and prevent arrow key scrolling
     terminal.attachCustomKeyEventHandler((event) => {
       // Only handle keydown events to prevent double-firing
       if (event.type !== 'keydown') return true
@@ -106,6 +106,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         handlePaste(terminal, ptyId)
         return false
       }
+
+      // Prevent arrow keys from scrolling the viewport
+      // They still get sent to the PTY via onData for Claude's interactive prompts
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        // Send the escape sequence manually to ensure it reaches PTY
+        const seq = event.key === 'ArrowUp' ? '\x1b[A' : '\x1b[B'
+        window.electronAPI.writePty(ptyId, seq)
+        return false  // Prevent xterm from also handling it (which causes scrolling)
+      }
+
       // Ctrl+C without shift should pass through to terminal
       return true
     })
