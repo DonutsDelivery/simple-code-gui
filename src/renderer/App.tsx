@@ -20,6 +20,8 @@ declare global {
       createProject: (name: string, parentDir: string) => Promise<{ success: boolean; path?: string; error?: string }>
       selectExecutable: () => Promise<string | null>
       runExecutable: (executable: string, cwd: string) => Promise<{ success: boolean; error?: string }>
+      claudeCheck: () => Promise<{ installed: boolean }>
+      claudeInstall: () => Promise<{ success: boolean; error?: string }>
       beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
       beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
       beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
@@ -60,6 +62,9 @@ function App() {
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0])
   const [viewMode, setViewMode] = useState<'tabs' | 'tiled'>('tabs')
   const [lastFocusedTabId, setLastFocusedTabId] = useState<string | null>(null)
+  const [claudeInstalled, setClaudeInstalled] = useState<boolean | null>(null)
+  const [installingClaude, setInstallingClaude] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
   const initRef = useRef(false)
 
   // Load workspace on mount and restore tabs
@@ -70,6 +75,10 @@ function App() {
 
     const loadWorkspace = async () => {
       try {
+        // Check if Claude is installed
+        const claudeStatus = await window.electronAPI.claudeCheck()
+        setClaudeInstalled(claudeStatus.installed)
+
         // Load and apply theme
         const settings = await window.electronAPI.getSettings()
         const theme = getThemeById(settings.theme || 'default')
@@ -192,6 +201,22 @@ function App() {
     handleOpenSession(projectPath)
   }, [addProject, handleOpenSession])
 
+  const handleInstallClaude = useCallback(async () => {
+    setInstallingClaude(true)
+    setInstallError(null)
+    try {
+      const result = await window.electronAPI.claudeInstall()
+      if (result.success) {
+        setClaudeInstalled(true)
+      } else {
+        setInstallError(result.error || 'Installation failed')
+      }
+    } catch (e) {
+      setInstallError(String(e))
+    }
+    setInstallingClaude(false)
+  }, [])
+
   if (loading) {
     return (
       <div className="app">
@@ -280,6 +305,26 @@ function App() {
               </div>
             )}
           </>
+        ) : claudeInstalled === false ? (
+          <div className="empty-state">
+            <h2>Claude Code Not Found</h2>
+            <p>Claude Code needs to be installed to use this application.</p>
+            {installError && (
+              <p className="error-message">{installError}</p>
+            )}
+            <button
+              className="install-btn"
+              onClick={handleInstallClaude}
+              disabled={installingClaude}
+            >
+              {installingClaude ? 'Installing...' : 'Install Claude Code'}
+            </button>
+            <p className="install-note">
+              Requires Node.js and npm to be installed.
+              <br />
+              Or install manually: <code>npm install -g @anthropic-ai/claude-code</code>
+            </p>
+          </div>
         ) : (
           <div className="empty-state">
             <h2>Claude Terminal</h2>

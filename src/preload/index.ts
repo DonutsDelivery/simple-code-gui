@@ -26,6 +26,10 @@ export interface ElectronAPI {
   selectExecutable: () => Promise<string | null>
   runExecutable: (executable: string, cwd: string) => Promise<{ success: boolean; error?: string }>
 
+  // Claude Code
+  claudeCheck: () => Promise<{ installed: boolean }>
+  claudeInstall: () => Promise<{ success: boolean; error?: string }>
+
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
   beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
@@ -66,6 +70,10 @@ const api: ElectronAPI = {
   // Executable
   selectExecutable: () => ipcRenderer.invoke('executable:select'),
   runExecutable: (executable, cwd) => ipcRenderer.invoke('executable:run', { executable, cwd }),
+
+  // Claude Code
+  claudeCheck: () => ipcRenderer.invoke('claude:check'),
+  claudeInstall: () => ipcRenderer.invoke('claude:install'),
 
   // Beads
   beadsCheck: (cwd) => ipcRenderer.invoke('beads:check', cwd),

@@ -863,6 +863,52 @@ html, body, #root {
   color: var(--text-secondary);
 }
 
+.empty-state .error-message {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.empty-state .install-btn {
+  padding: var(--space-md) var(--space-xl);
+  font-size: 15px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), #d4723c);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-md), 0 0 20px var(--accent-glow);
+}
+
+.empty-state .install-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), 0 0 30px var(--accent-glow);
+}
+
+.empty-state .install-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.empty-state .install-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: var(--space-sm);
+}
+
+.empty-state .install-note code {
+  background: var(--bg-surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
 /* ============================================
    Scrollbar
    ============================================ */

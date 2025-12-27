@@ -193,14 +193,56 @@ ipcMain.handle('executable:run', (_, { executable, cwd }: { executable: string; 
   }
 })
 
-// Beads integration
-let beadsAvailable: boolean | null = null
-
 // Use platform-aware shell and PATH
-const beadsExecOptions = {
+const execOptions = {
   shell: isWindows ? true : '/bin/bash',  // true uses default shell on Windows
   env: { ...process.env, PATH: getEnhancedPath() }
 }
+
+// Claude Code installation check and management
+let claudeAvailable: boolean | null = null
+
+async function checkClaudeInstalled(): Promise<boolean> {
+  if (claudeAvailable !== null) return claudeAvailable
+  try {
+    await execAsync('claude --version', execOptions)
+    claudeAvailable = true
+  } catch {
+    claudeAvailable = false
+  }
+  return claudeAvailable
+}
+
+ipcMain.handle('claude:check', async () => {
+  return { installed: await checkClaudeInstalled() }
+})
+
+ipcMain.handle('claude:install', async () => {
+  try {
+    // Reset cache so we re-check after install
+    claudeAvailable = null
+
+    // Install Claude Code globally via npm
+    const installCmd = isWindows
+      ? 'npm install -g @anthropic-ai/claude-code'
+      : 'npm install -g @anthropic-ai/claude-code'
+
+    await execAsync(installCmd, { ...execOptions, timeout: 120000 })
+
+    // Verify installation
+    const installed = await checkClaudeInstalled()
+    return { success: installed, error: installed ? undefined : 'Installation completed but claude command not found' }
+  } catch (e: any) {
+    claudeAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// Beads integration
+let beadsAvailable: boolean | null = null
+
+// Backwards compat alias
+const beadsExecOptions = execOptions
 
 async function checkBeadsInstalled(): Promise<boolean> {
   if (beadsAvailable !== null) return beadsAvailable
