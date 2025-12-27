@@ -871,6 +871,21 @@ html, body, #root {
   border: 1px solid rgba(248, 113, 113, 0.3);
 }
 
+.empty-state .install-message {
+  color: var(--success);
+  background: var(--success-subtle);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.empty-state .install-buttons {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .empty-state .install-btn {
   padding: var(--space-md) var(--space-xl);
   font-size: 15px;
@@ -1700,6 +1715,16 @@ html, body, #root {
 
 .beads-empty a:hover {
   text-decoration: underline;
+}
+
+.beads-install-error {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 11px;
+  word-break: break-word;
 }
 
 .beads-create-form {

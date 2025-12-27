@@ -26,13 +26,15 @@ export interface ElectronAPI {
   selectExecutable: () => Promise<string | null>
   runExecutable: (executable: string, cwd: string) => Promise<{ success: boolean; error?: string }>
 
-  // Claude Code
-  claudeCheck: () => Promise<{ installed: boolean }>
-  claudeInstall: () => Promise<{ success: boolean; error?: string }>
+  // Claude Code & Node.js
+  claudeCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
+  claudeInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
+  nodeInstall: () => Promise<{ success: boolean; error?: string; method?: string; message?: string }>
 
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
   beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
+  beadsInstall: () => Promise<{ success: boolean; error?: string; method?: string; needsPython?: boolean }>
   beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
   beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
   beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: any; error?: string }>
@@ -71,13 +73,15 @@ const api: ElectronAPI = {
   selectExecutable: () => ipcRenderer.invoke('executable:select'),
   runExecutable: (executable, cwd) => ipcRenderer.invoke('executable:run', { executable, cwd }),
 
-  // Claude Code
+  // Claude Code & Node.js
   claudeCheck: () => ipcRenderer.invoke('claude:check'),
   claudeInstall: () => ipcRenderer.invoke('claude:install'),
+  nodeInstall: () => ipcRenderer.invoke('node:install'),
 
   // Beads
   beadsCheck: (cwd) => ipcRenderer.invoke('beads:check', cwd),
   beadsInit: (cwd) => ipcRenderer.invoke('beads:init', cwd),
+  beadsInstall: () => ipcRenderer.invoke('beads:install'),
   beadsReady: (cwd) => ipcRenderer.invoke('beads:ready', cwd),
   beadsList: (cwd) => ipcRenderer.invoke('beads:list', cwd),
   beadsShow: (cwd, taskId) => ipcRenderer.invoke('beads:show', { cwd, taskId }),

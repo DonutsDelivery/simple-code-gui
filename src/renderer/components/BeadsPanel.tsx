@@ -24,6 +24,8 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [initializing, setInitializing] = useState(false)
+  const [installing, setInstalling] = useState(false)
+  const [installError, setInstallError] = useState<string | null>(null)
 
   const loadTasks = useCallback(async (showLoading = true) => {
     if (!projectPath) return
@@ -68,6 +70,25 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
       setError(String(e))
     } finally {
       setInitializing(false)
+    }
+  }
+
+  const handleInstallBeads = async () => {
+    setInstalling(true)
+    setInstallError(null)
+
+    try {
+      const result = await window.electronAPI.beadsInstall()
+      if (result.success) {
+        setBeadsInstalled(true)
+        loadTasks()
+      } else {
+        setInstallError(result.error || 'Installation failed')
+      }
+    } catch (e) {
+      setInstallError(String(e))
+    } finally {
+      setInstalling(false)
     }
   }
 
@@ -171,7 +192,15 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
 
           {projectPath && !beadsInstalled && !loading && (
             <div className="beads-empty">
-              Beads CLI (<code>bd</code>) not found.
+              <p>Beads CLI (<code>bd</code>) not found.</p>
+              {installError && <p className="beads-install-error">{installError}</p>}
+              <button
+                className="beads-init-btn"
+                onClick={handleInstallBeads}
+                disabled={installing}
+              >
+                {installing ? 'Installing...' : 'Install Beads CLI'}
+              </button>
             </div>
           )}
 

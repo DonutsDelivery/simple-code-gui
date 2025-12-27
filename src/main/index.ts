@@ -213,8 +213,101 @@ async function checkClaudeInstalled(): Promise<boolean> {
   return claudeAvailable
 }
 
+// Check if npm is available
+async function checkNpmInstalled(): Promise<boolean> {
+  try {
+    await execAsync('npm --version', execOptions)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Check if winget is available (Windows 10/11)
+async function checkWingetInstalled(): Promise<boolean> {
+  if (!isWindows) return false
+  try {
+    await execAsync('winget --version', execOptions)
+    return true
+  } catch {
+    return false
+  }
+}
+
 ipcMain.handle('claude:check', async () => {
-  return { installed: await checkClaudeInstalled() }
+  const installed = await checkClaudeInstalled()
+  const npmInstalled = await checkNpmInstalled()
+  return { installed, npmInstalled }
+})
+
+ipcMain.handle('node:install', async () => {
+  const { shell } = await import('electron')
+
+  try {
+    if (isWindows) {
+      // Try winget first (cleanest method, built into Windows 10/11)
+      const hasWinget = await checkWingetInstalled()
+      if (hasWinget) {
+        await execAsync('winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements', {
+          ...execOptions,
+          timeout: 300000 // 5 minutes for download + install
+        })
+        return { success: true, method: 'winget' }
+      }
+
+      // Fallback: Download and run Node.js installer
+      shell.openExternal('https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi')
+      return { success: true, method: 'download', message: 'Node.js installer opened. Please complete the installation and restart Claude Terminal.' }
+    }
+
+    // macOS: Try brew first
+    if (process.platform === 'darwin') {
+      try {
+        await execAsync('brew --version', execOptions)
+        await execAsync('brew install node', { ...execOptions, timeout: 300000 })
+        return { success: true, method: 'brew' }
+      } catch {
+        // No brew, open download page
+        shell.openExternal('https://nodejs.org/dist/v20.18.1/node-v20.18.1.pkg')
+        return { success: true, method: 'download', message: 'Node.js installer opened. Please complete the installation and restart Claude Terminal.' }
+      }
+    }
+
+    // Linux: Try package managers
+    if (process.platform === 'linux') {
+      // Try apt (Debian/Ubuntu)
+      try {
+        await execAsync('apt --version', execOptions)
+        // Use NodeSource for latest LTS
+        shell.openExternal('https://nodejs.org/en/download/')
+        return { success: true, method: 'download', message: 'Please install Node.js from the download page or your package manager, then restart Claude Terminal.' }
+      } catch {}
+
+      // Try dnf (Fedora)
+      try {
+        await execAsync('dnf --version', execOptions)
+        shell.openExternal('https://nodejs.org/en/download/')
+        return { success: true, method: 'download', message: 'Please install Node.js from the download page or run: sudo dnf install nodejs npm' }
+      } catch {}
+
+      // Try pacman (Arch)
+      try {
+        await execAsync('pacman --version', execOptions)
+        shell.openExternal('https://nodejs.org/en/download/')
+        return { success: true, method: 'download', message: 'Please install Node.js from the download page or run: sudo pacman -S nodejs npm' }
+      } catch {}
+
+      // Generic fallback
+      shell.openExternal('https://nodejs.org/en/download/')
+      return { success: true, method: 'download', message: 'Please install Node.js from the download page, then restart Claude Terminal.' }
+    }
+
+    // Unknown platform
+    shell.openExternal('https://nodejs.org/en/download/')
+    return { success: true, method: 'download', message: 'Please install Node.js from the download page, then restart Claude Terminal.' }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
 })
 
 ipcMain.handle('claude:install', async () => {
@@ -222,12 +315,14 @@ ipcMain.handle('claude:install', async () => {
     // Reset cache so we re-check after install
     claudeAvailable = null
 
-    // Install Claude Code globally via npm
-    const installCmd = isWindows
-      ? 'npm install -g @anthropic-ai/claude-code'
-      : 'npm install -g @anthropic-ai/claude-code'
+    // Check if npm is available first
+    const hasNpm = await checkNpmInstalled()
+    if (!hasNpm) {
+      return { success: false, error: 'npm is not installed. Please install Node.js first.', needsNode: true }
+    }
 
-    await execAsync(installCmd, { ...execOptions, timeout: 120000 })
+    // Install Claude Code globally via npm
+    await execAsync('npm install -g @anthropic-ai/claude-code', { ...execOptions, timeout: 120000 })
 
     // Verify installation
     const installed = await checkClaudeInstalled()
@@ -337,6 +432,78 @@ ipcMain.handle('beads:start', async (_, { cwd, taskId }: { cwd: string; taskId: 
     await execAsync(`bd update ${taskId} --status in_progress`, { ...beadsExecOptions, cwd })
     return { success: true }
   } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
+// Check if pipx is available (preferred for CLI tools)
+async function checkPipxInstalled(): Promise<boolean> {
+  try {
+    await execAsync('pipx --version', execOptions)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Check if pip/pip3 is available
+async function checkPipInstalled(): Promise<boolean> {
+  try {
+    // Try pip3 first (common on Linux/macOS)
+    await execAsync('pip3 --version', execOptions)
+    return true
+  } catch {
+    try {
+      // Fall back to pip
+      await execAsync('pip --version', execOptions)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+ipcMain.handle('beads:install', async () => {
+  const { shell } = await import('electron')
+
+  try {
+    // Reset cache so we re-check after install
+    beadsAvailable = null
+
+    // Try pipx first (better for CLI tools - isolated environment)
+    const hasPipx = await checkPipxInstalled()
+    if (hasPipx) {
+      await execAsync('pipx install beads-cli', { ...execOptions, timeout: 120000 })
+      const installed = await checkBeadsInstalled()
+      return { success: installed, method: 'pipx', error: installed ? undefined : 'Installation completed but bd command not found' }
+    }
+
+    // Try pip/pip3
+    const hasPip = await checkPipInstalled()
+    if (hasPip) {
+      // Use --user flag for safety (no sudo required)
+      try {
+        await execAsync('pip3 install --user beads-cli', { ...execOptions, timeout: 120000 })
+      } catch {
+        await execAsync('pip install --user beads-cli', { ...execOptions, timeout: 120000 })
+      }
+      const installed = await checkBeadsInstalled()
+      return { success: installed, method: 'pip', error: installed ? undefined : 'Installation completed but bd command not found. You may need to restart the app.' }
+    }
+
+    // No pip available - guide user to install Python
+    if (isWindows) {
+      shell.openExternal('https://www.python.org/downloads/windows/')
+      return { success: false, needsPython: true, error: 'Python is required. Please install Python from the download page, then restart Claude Terminal.' }
+    } else if (process.platform === 'darwin') {
+      shell.openExternal('https://www.python.org/downloads/macos/')
+      return { success: false, needsPython: true, error: 'Python is required. Please install Python from the download page, then restart Claude Terminal.' }
+    } else {
+      // Linux - suggest package manager
+      return { success: false, needsPython: true, error: 'Python/pip is required. Install via: sudo apt install python3-pip (Debian/Ubuntu) or sudo pacman -S python-pip (Arch)' }
+    }
+  } catch (e: any) {
+    beadsAvailable = null
     return { success: false, error: e.message }
   }
 })
