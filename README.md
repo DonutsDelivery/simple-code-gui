@@ -94,4 +94,4 @@ npm run dev
 
 ## License
 
-MIT
+[PolyForm Noncommercial 1.0.0](LICENSE) - Free for personal use. Commercial distribution requires permission from the author.
