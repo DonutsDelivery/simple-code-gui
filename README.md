@@ -2,21 +2,33 @@
 
 A desktop app for managing multiple Claude Code sessions across different projects in a single window.
 
-![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![GitHub Release](https://img.shields.io/github/v/release/DonutsDelivery/simple-claude-gui)
+![Downloads](https://img.shields.io/github/downloads/DonutsDelivery/simple-claude-gui/total)
+![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron)
 ![AUR](https://img.shields.io/aur/version/simple-claude-gui)
 
 ## Features
 
+- **Image & File Paste** - Paste screenshots and files directly into terminal with Ctrl+V
+- **Drag & Drop Files** - Drop files from your file manager into the terminal
+- **Tabbed Sessions** - Multiple Claude sessions open simultaneously with easy tab switching
 - **Project Sidebar** - Save and organize your project folders for quick access
-- **Tabbed Terminals** - Multiple Claude sessions open simultaneously with easy switching
-- **Session Discovery** - Automatically finds existing Claude sessions from `~/.claude`
 - **Session Resume** - Resume previous conversations where you left off
-- **Workspace Persistence** - Restores your open tabs and layout on restart
-- **Auto Icons** - Generates project icons based on folder names
+- **9 Color Themes** - Dark, light, and RGB Gamer mode with animations
+- **Beads Integration** - Task tracking panel for managing project tasks
+- **Create Projects** - Make new project directories without leaving the app
+- **Session Discovery** - Automatically finds existing Claude sessions from `~/.claude`
+- **Auto Updates** - Automatic updates on Windows, macOS, and Linux
 
 ## Installation
+
+### Windows / macOS / Linux
+
+Download the latest release from [GitHub Releases](https://github.com/DonutsDelivery/simple-claude-gui/releases):
+
+- **Windows**: `.exe` installer or portable
+- **macOS**: `.dmg` (Apple Silicon)
+- **Linux**: `.AppImage` or `.deb`
 
 ### Arch Linux (AUR)
 
@@ -51,8 +63,11 @@ npm run build  # Production build
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+C` | Copy selection (or SIGINT if no selection) |
+| `Ctrl+V` | Paste text, files, or images |
 | `Ctrl+Shift+C` | Copy from terminal |
 | `Ctrl+Shift+V` | Paste to terminal |
+| `F12` | Toggle DevTools |
 
 ## Tech Stack
 
