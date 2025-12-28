@@ -6,9 +6,12 @@ import { Theme } from '../themes'
 
 // Custom paste handler for xterm - supports text, file paths, and images
 async function handlePaste(term: XTerm, ptyId: string) {
+  console.log('[handlePaste] Function called for ptyId:', ptyId)
   try {
     // First check if clipboard has an image or file (using Electron's native clipboard)
+    console.log('[handlePaste] Calling readClipboardImage...')
     const imageResult = await window.electronAPI.readClipboardImage()
+    console.log('[handlePaste] imageResult:', imageResult)
     if (imageResult.success && imageResult.hasImage && imageResult.path) {
       window.electronAPI.writePty(ptyId, imageResult.path)
       return
@@ -116,6 +119,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
       // Only handle keydown events to prevent double-firing
       if (event.type !== 'keydown') return true
 
+      // Debug: log all Ctrl key combinations
+      if (event.ctrlKey) {
+        console.log('[KeyHandler] Ctrl+key detected:', event.key, 'shiftKey:', event.shiftKey)
+      }
+
       // Ctrl+Shift+C for copy (always)
       if (event.ctrlKey && event.shiftKey && event.key === 'C') {
         handleCopy(terminal)
@@ -135,6 +143,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
 
       // Ctrl+Shift+V or Ctrl+V for paste
       if (event.ctrlKey && (event.key === 'V' || event.key === 'v')) {
+        console.log('[KeyHandler] Paste triggered, calling handlePaste')
         event.preventDefault()  // Prevent browser's native paste (which would cause duplicate)
         handlePaste(terminal, ptyId)
         return false
