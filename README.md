@@ -7,28 +7,63 @@ A desktop app for managing multiple Claude Code sessions across different projec
 ![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron)
 ![AUR](https://img.shields.io/aur/version/simple-claude-gui)
 
+![Screenshot](assets/screenshot.png)
+
 ## Features
 
-- **Image & File Paste** - Paste screenshots and files directly into terminal with Ctrl+V
-- **Drag & Drop Files** - Drop files from your file manager into the terminal
-- **Tabbed Sessions** - Multiple Claude sessions open simultaneously with easy tab switching
-- **Project Sidebar** - Save and organize your project folders for quick access
-- **Session Resume** - Resume previous conversations where you left off
-- **9 Color Themes** - Dark, light, and RGB Gamer mode with animations
-- **Beads Integration** - Task tracking panel for managing project tasks
+### Session Management
+- **Tabbed Interface** - Multiple Claude sessions open simultaneously
+- **Session Resume** - Pick up conversations where you left off
+- **Session Discovery** - Auto-finds existing sessions from `~/.claude`
+- **Tiled View** - See multiple terminals side-by-side (toggle with grid button)
+- **Workspace Persistence** - Restores your open tabs and layout on restart
+
+### Project Organization
+- **Project Sidebar** - Save and organize project folders for quick access
 - **Create Projects** - Make new project directories without leaving the app
-- **Session Discovery** - Automatically finds existing Claude sessions from `~/.claude`
-- **Auto Updates** - Automatic updates on Windows, macOS, and Linux
+- **Session History** - Expand projects to see all past sessions with timestamps
+- **Project Icons** - Custom emoji icons for each project
+- **Run Executable** - Launch your app directly from the sidebar
+
+### Terminal
+- **Image & File Paste** - Paste screenshots and copied files with Ctrl+V
+- **Drag & Drop** - Drop files from file manager into terminal
+- **Smart Ctrl+C** - Copies selection if text selected, sends SIGINT otherwise
+- **Right-Click Menu** - Copy selection or paste with right-click
+- **Full Color Support** - xterm-256color with 10,000 line scrollback
+
+### Customization
+- **9 Color Themes** - Including RGB Gamer mode with animations
+- **Settings Panel** - Configure themes and default project directory
+- **Window Memory** - Remembers size and position
+
+<p>
+<img src="assets/settings.png" width="400" alt="Settings">
+<img src="assets/screenshot-gamer.png" width="400" alt="RGB Gamer Theme">
+</p>
+
+### Task Tracking (Beads Integration)
+- **Task Panel** - Manage project tasks without leaving the app
+- **Create Tasks** - Add tasks with title, description, and priority
+- **Track Progress** - Start, complete, and delete tasks
+- **Auto-Refresh** - Task list updates automatically
+
+### Setup & Updates
+- **Auto-Install Dependencies** - Installs Claude Code, Node.js, Git if missing
+- **Auto Updates** - Downloads and installs updates automatically
+- **Cross-Platform** - Windows, macOS (Apple Silicon), and Linux
 
 ## Installation
 
 ### Windows / macOS / Linux
 
-Download the latest release from [GitHub Releases](https://github.com/DonutsDelivery/simple-claude-gui/releases):
+Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-claude-gui/releases):
 
-- **Windows**: `.exe` installer or portable
-- **macOS**: `.dmg` (Apple Silicon)
-- **Linux**: `.AppImage` or `.deb`
+| Platform | Download |
+|----------|----------|
+| Windows | `.exe` installer or portable |
+| macOS | `.dmg` (Apple Silicon) |
+| Linux | `.AppImage` or `.deb` |
 
 ### Arch Linux (AUR)
 
@@ -42,22 +77,8 @@ yay -S simple-claude-gui
 git clone https://github.com/DonutsDelivery/simple-claude-gui.git
 cd simple-claude-gui
 npm install
-npm run dev    # Development
-npm run build  # Production build
+npm run dev
 ```
-
-## Requirements
-
-- [Claude Code CLI](https://claude.ai/claude-code) installed and authenticated
-- Node.js 18+
-
-## Usage
-
-1. Click **+ Add Project** to add a project folder
-2. Click a project to open the most recent session (or start new)
-3. Click the expand arrow (▶) to see all sessions for a project
-4. Switch between tabs to work on multiple projects
-5. Sessions auto-save - close and reopen anytime
 
 ## Keyboard Shortcuts
 
@@ -68,14 +89,6 @@ npm run build  # Production build
 | `Ctrl+Shift+C` | Copy from terminal |
 | `Ctrl+Shift+V` | Paste to terminal |
 | `F12` | Toggle DevTools |
-
-## Tech Stack
-
-- **Electron** - Desktop framework
-- **React** - UI components
-- **xterm.js** - Terminal emulation
-- **node-pty** - Pseudo-terminal spawning
-- **Zustand** - State management
 
 ## License
 
