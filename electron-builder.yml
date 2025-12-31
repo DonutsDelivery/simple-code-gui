@@ -20,6 +20,9 @@ linux:
     - rpm
   category: Development
   icon: resources/icon.png
+  executableName: simple-claude-gui
+  desktop:
+    StartupWMClass: simple-claude-gui
   synopsis: Multi-session Claude Code terminal manager
   description: Desktop app for managing multiple Claude Code sessions across projects
 

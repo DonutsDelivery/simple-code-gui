@@ -6,6 +6,14 @@ import { spawn, exec } from 'child_process'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
+
+// Set app name and WM_CLASS for proper Linux taskbar integration
+// Must be done before app is ready
+app.setName('Simple Claude GUI')
+if (process.platform === 'linux') {
+  // Set the WM_CLASS to match the .desktop file's StartupWMClass
+  app.commandLine.appendSwitch('class', 'simple-claude-gui')
+}
 import { PtyManager } from './pty-manager'
 import { SessionStore } from './session-store'
 import { discoverSessions } from './session-discovery'
