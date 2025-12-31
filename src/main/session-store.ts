@@ -6,6 +6,7 @@ export interface Project {
   path: string
   name: string
   executable?: string
+  apiPort?: number  // Port for HTTP API to send prompts to terminal
 }
 
 export interface OpenTab {

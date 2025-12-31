@@ -54,6 +54,11 @@ export interface ElectronAPI {
   onPtyData: (id: string, callback: (data: string) => void) => () => void
   onPtyExit: (id: string, callback: (code: number) => void) => () => void
 
+  // API Server
+  apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+  apiStop: (projectPath: string) => Promise<{ success: boolean }>
+  apiStatus: (projectPath: string) => Promise<{ running: boolean; port?: number }>
+
   // Updater
   getVersion: () => Promise<string>
   checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
@@ -136,6 +141,11 @@ const api: ElectronAPI = {
     ipcRenderer.on(`pty:exit:${id}`, handler)
     return () => ipcRenderer.removeListener(`pty:exit:${id}`, handler)
   },
+
+  // API Server
+  apiStart: (projectPath, port) => ipcRenderer.invoke('api:start', { projectPath, port }),
+  apiStop: (projectPath) => ipcRenderer.invoke('api:stop', projectPath),
+  apiStatus: (projectPath) => ipcRenderer.invoke('api:status', projectPath),
 
   // Updater
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),

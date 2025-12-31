@@ -1729,6 +1729,52 @@ html, body, #root {
   margin: var(--space-xs) 0;
 }
 
+.menu-hint {
+  margin-left: auto;
+  padding-left: var(--space-md);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+/* API Port Modal */
+.api-port-modal {
+  width: 420px;
+}
+
+.api-port-modal input[type="number"] {
+  width: 120px;
+}
+
+.api-usage {
+  margin-top: var(--space-md);
+  font-size: 12px;
+}
+
+.api-usage code {
+  display: block;
+  margin-top: var(--space-xs);
+  padding: var(--space-sm);
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+/* API Toggle Button */
+.sidebar-btn.api-toggle.running {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.sidebar-btn.api-toggle.running:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
 /* ============================================
    Beads Panel
    ============================================ */

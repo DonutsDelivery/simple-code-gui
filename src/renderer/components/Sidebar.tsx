@@ -39,6 +39,8 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [beadsExpanded, setBeadsExpanded] = useState(true)
   const [isResizing, setIsResizing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
+  const [apiPortModal, setApiPortModal] = useState<{ project: Project; currentPort: string } | null>(null)
+  const [apiStatus, setApiStatus] = useState<Record<string, { running: boolean; port?: number }>>({})
   const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Resize handler
@@ -116,6 +118,71 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
       return () => document.removeEventListener('click', handleClick)
     }
   }, [contextMenu])
+
+  // Check API status when context menu opens
+  useEffect(() => {
+    if (contextMenu) {
+      window.electronAPI.apiStatus(contextMenu.project.path).then((status) => {
+        setApiStatus(prev => ({ ...prev, [contextMenu.project.path]: status }))
+      })
+    }
+  }, [contextMenu])
+
+  const handleConfigureApi = (project: Project) => {
+    setApiPortModal({ project, currentPort: project.apiPort?.toString() || '' })
+    setContextMenu(null)
+  }
+
+  const handleSaveApiPort = async () => {
+    if (!apiPortModal) return
+    const port = parseInt(apiPortModal.currentPort, 10)
+
+    if (apiPortModal.currentPort && (isNaN(port) || port < 1024 || port > 65535)) {
+      alert('Please enter a valid port number (1024-65535)')
+      return
+    }
+
+    const newPort = apiPortModal.currentPort ? port : undefined
+    onUpdateProject(apiPortModal.project.path, { apiPort: newPort })
+
+    // If port is set and terminal is open, start the server
+    if (newPort && openTabs.some(t => t.projectPath === apiPortModal.project.path)) {
+      const result = await window.electronAPI.apiStart(apiPortModal.project.path, newPort)
+      if (!result.success) {
+        alert(`Failed to start API server: ${result.error}`)
+      }
+    } else if (!newPort) {
+      // Stop server if port is cleared
+      await window.electronAPI.apiStop(apiPortModal.project.path)
+    }
+
+    setApiPortModal(null)
+  }
+
+  const handleToggleApi = async (project: Project) => {
+    const status = apiStatus[project.path]
+    if (status?.running) {
+      await window.electronAPI.apiStop(project.path)
+      setApiStatus(prev => ({ ...prev, [project.path]: { running: false } }))
+    } else if (project.apiPort) {
+      const result = await window.electronAPI.apiStart(project.path, project.apiPort)
+      if (result.success) {
+        setApiStatus(prev => ({ ...prev, [project.path]: { running: true, port: project.apiPort } }))
+      } else {
+        alert(`Failed to start API server: ${result.error}`)
+      }
+    }
+    setContextMenu(null)
+  }
+
+  // Check API status for focused project
+  useEffect(() => {
+    if (focusedProjectPath) {
+      window.electronAPI.apiStatus(focusedProjectPath).then((status) => {
+        setApiStatus(prev => ({ ...prev, [focusedProjectPath]: status }))
+      })
+    }
+  }, [focusedProjectPath])
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -298,6 +365,23 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           }
           return null
         })()}
+        {(() => {
+          const focusedProject = projects.find(p => p.path === focusedProjectPath)
+          if (focusedProject?.apiPort) {
+            const status = apiStatus[focusedProject.path]
+            return (
+              <button
+                className={`sidebar-btn api-toggle ${status?.running ? 'running' : ''}`}
+                onClick={() => handleToggleApi(focusedProject)}
+                title={status?.running ? `Stop API Server (port ${focusedProject.apiPort})` : `Start API Server (port ${focusedProject.apiPort})`}
+              >
+                <span className="icon">{status?.running ? '⏹' : '🔌'}</span>
+                {status?.running ? `API :${focusedProject.apiPort}` : 'Start API'}
+              </button>
+            )
+          }
+          return null
+        })()}
         <button className="sidebar-btn" onClick={onOpenMakeProject}>
           <span className="icon">+</span> Make Project
         </button>
@@ -338,6 +422,11 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
             </button>
           )}
           <div className="context-menu-divider" />
+          <button onClick={() => handleConfigureApi(contextMenu.project)}>
+            <span className="icon">🔌</span> Configure API Port
+            {contextMenu.project.apiPort && <span className="menu-hint">:{contextMenu.project.apiPort}</span>}
+          </button>
+          <div className="context-menu-divider" />
           <button
             className="danger"
             onClick={() => {
@@ -347,6 +436,42 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           >
             <span className="icon">🗑</span> Remove Project
           </button>
+        </div>
+      )}
+
+      {/* API Port Modal */}
+      {apiPortModal && (
+        <div className="modal-overlay" onClick={() => setApiPortModal(null)}>
+          <div className="modal api-port-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Configure API Port</h2>
+              <button className="modal-close" onClick={() => setApiPortModal(null)}>×</button>
+            </div>
+            <div className="modal-content">
+              <p className="form-hint">
+                Set a port to enable HTTP API for sending prompts to this project's terminal.
+              </p>
+              <div className="form-group">
+                <label>Port Number</label>
+                <input
+                  type="number"
+                  min="1024"
+                  max="65535"
+                  value={apiPortModal.currentPort}
+                  onChange={(e) => setApiPortModal({ ...apiPortModal, currentPort: e.target.value })}
+                  placeholder="e.g., 3001"
+                  autoFocus
+                />
+              </div>
+              <p className="form-hint api-usage">
+                Usage: <code>curl -X POST http://localhost:{apiPortModal.currentPort || '3001'}/prompt -d '{`{"prompt":"your message"}`}'</code>
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setApiPortModal(null)}>Cancel</button>
+              <button className="btn-primary" onClick={handleSaveApiPort}>Save</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

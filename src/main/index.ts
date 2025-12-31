@@ -9,6 +9,7 @@ const execAsync = promisify(exec)
 import { PtyManager } from './pty-manager'
 import { SessionStore } from './session-store'
 import { discoverSessions } from './session-discovery'
+import { ApiServerManager } from './api-server'
 import { isWindows, getDefaultShell, getEnhancedPath, getEnhancedPathWithPortable, setPortableBinDirs } from './platform'
 import {
   checkDeps,
@@ -41,6 +42,22 @@ if (!gotTheLock) {
 let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
 const sessionStore = new SessionStore()
+const apiServerManager = new ApiServerManager()
+
+// Track which PTY belongs to which project
+const ptyToProject: Map<string, string> = new Map()  // ptyId -> projectPath
+
+// Set up API server prompt handler
+apiServerManager.setPromptHandler((projectPath, prompt) => {
+  // Find a PTY for this project
+  for (const [ptyId, path] of ptyToProject) {
+    if (path === projectPath) {
+      ptyManager.write(ptyId, prompt + '\n')
+      return true
+    }
+  }
+  return false
+})
 
 function createWindow() {
   const bounds = sessionStore.getWindowBounds()
@@ -127,6 +144,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  apiServerManager.stopAll()
   ptyManager.killAll()
 })
 
@@ -166,12 +184,23 @@ ipcMain.handle('pty:spawn', (_, { cwd, sessionId }: { cwd: string; sessionId?: s
 
     const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools)
 
+    // Track PTY to project mapping
+    ptyToProject.set(id, cwd)
+
+    // Start API server if project has a port configured
+    const workspace = sessionStore.getWorkspace()
+    const project = workspace.projects.find(p => p.path === cwd)
+    if (project?.apiPort && !apiServerManager.isRunning(cwd)) {
+      apiServerManager.start(cwd, project.apiPort)
+    }
+
     ptyManager.onData(id, (data) => {
       mainWindow?.webContents.send(`pty:data:${id}`, data)
     })
 
     ptyManager.onExit(id, (code) => {
       mainWindow?.webContents.send(`pty:exit:${id}`, code)
+      ptyToProject.delete(id)
     })
 
     return id
@@ -190,7 +219,25 @@ ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; row
 })
 
 ipcMain.on('pty:kill', (_, id: string) => {
+  ptyToProject.delete(id)
   ptyManager.kill(id)
+})
+
+// API Server management
+ipcMain.handle('api:start', (_, { projectPath, port }: { projectPath: string; port: number }) => {
+  return apiServerManager.start(projectPath, port)
+})
+
+ipcMain.handle('api:stop', (_, projectPath: string) => {
+  apiServerManager.stop(projectPath)
+  return { success: true }
+})
+
+ipcMain.handle('api:status', (_, projectPath: string) => {
+  return {
+    running: apiServerManager.isRunning(projectPath),
+    port: apiServerManager.getPort(projectPath)
+  }
 })
 
 // Settings management

@@ -44,6 +44,10 @@ declare global {
       killPty: (id: string) => void
       onPtyData: (id: string, callback: (data: string) => void) => () => void
       onPtyExit: (id: string, callback: (code: number) => void) => () => void
+      // API Server
+      apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+      apiStop: (projectPath: string) => Promise<{ success: boolean }>
+      apiStatus: (projectPath: string) => Promise<{ running: boolean; port?: number }>
       // Updater
       getVersion: () => Promise<string>
       checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
