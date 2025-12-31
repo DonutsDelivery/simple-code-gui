@@ -386,6 +386,21 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+.project-name-input {
+  flex: 1;
+  font-weight: 500;
+  font-size: inherit;
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-color);
+  border-radius: 3px;
+  color: var(--text-primary);
+  padding: 2px 4px;
+  margin: -2px 0;
+  outline: none;
+  min-width: 0;
+}
+
 .project-path {
   font-size: 12px;
   color: var(--text-tertiary);
@@ -1588,6 +1603,57 @@ html, body, #root {
 .permission-mode-option .mode-desc {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+/* Permissions Modal */
+.permissions-modal {
+  width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.permissions-modal .tool-chips {
+  margin-top: var(--space-sm);
+}
+
+.permission-mode-options.compact {
+  gap: var(--space-xs);
+}
+
+.permission-mode-options.compact .permission-mode-option {
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.permission-mode-options.compact .mode-label {
+  min-width: 80px;
+  font-size: 13px;
+}
+
+.permission-mode-options.compact .mode-desc {
+  font-size: 11px;
+}
+
+.permission-quick-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btn-danger-outline {
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+}
+
+.btn-danger-outline:hover {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 /* ============================================

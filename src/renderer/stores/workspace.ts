@@ -4,6 +4,9 @@ export interface Project {
   path: string
   name: string
   executable?: string
+  apiPort?: number
+  autoAcceptTools?: string[]
+  permissionMode?: string
 }
 
 export interface OpenTab {

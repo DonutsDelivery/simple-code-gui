@@ -201,19 +201,18 @@ ipcMain.handle('sessions:discover', (_, projectPath: string) => {
 // PTY management
 ipcMain.handle('pty:spawn', (_, { cwd, sessionId }: { cwd: string; sessionId?: string }) => {
   try {
-    // Get auto-accept tools and permission mode from settings
-    const settings = sessionStore.getSettings()
-    const autoAcceptTools = settings.autoAcceptTools
-    const permissionMode = settings.permissionMode
+    // Get auto-accept tools and permission mode from project settings
+    const workspace = sessionStore.getWorkspace()
+    const project = workspace.projects.find(p => p.path === cwd)
+    const autoAcceptTools = project?.autoAcceptTools
+    const permissionMode = project?.permissionMode
 
     const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode)
 
     // Track PTY to project mapping
     ptyToProject.set(id, cwd)
 
-    // Start API server if project has a port configured
-    const workspace = sessionStore.getWorkspace()
-    const project = workspace.projects.find(p => p.path === cwd)
+    // Start API server if project has a port configured (reuse project from above)
     if (project?.apiPort && !apiServerManager.isRunning(cwd)) {
       apiServerManager.start(cwd, project.apiPort)
     }

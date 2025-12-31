@@ -4,6 +4,32 @@ import { Project } from '../stores/workspace'
 import { ProjectIcon } from './ProjectIcon'
 import { BeadsPanel } from './BeadsPanel'
 
+// Tool patterns for quick selection
+const COMMON_TOOLS = [
+  { label: 'Read', value: 'Read' },
+  { label: 'Write', value: 'Write' },
+  { label: 'Edit', value: 'Edit' },
+  { label: 'MultiEdit', value: 'MultiEdit' },
+  { label: 'Grep', value: 'Grep' },
+  { label: 'Glob', value: 'Glob' },
+  { label: 'LS', value: 'LS' },
+  { label: 'WebFetch', value: 'WebFetch' },
+  { label: 'WebSearch', value: 'WebSearch' },
+  { label: 'Questions', value: 'AskUserQuestion' },
+  { label: 'Task', value: 'Task' },
+  { label: 'TodoWrite', value: 'TodoWrite' },
+  { label: 'Git', value: 'Bash(git:*)' },
+  { label: 'npm', value: 'Bash(npm:*)' },
+  { label: 'All Bash', value: 'Bash' },
+]
+
+const PERMISSION_MODES = [
+  { label: 'Default', value: 'default', desc: 'Ask for permissions' },
+  { label: 'Accept Edits', value: 'acceptEdits', desc: 'Auto-accept edits' },
+  { label: "Don't Ask", value: 'dontAsk', desc: 'Skip prompts' },
+  { label: 'Bypass All', value: 'bypassPermissions', desc: 'Skip all checks' },
+]
+
 interface ClaudeSession {
   sessionId: string
   slug: string
@@ -41,8 +67,11 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [isResizing, setIsResizing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
   const [apiPortModal, setApiPortModal] = useState<{ project: Project; currentPort: string; status?: 'checking' | 'success' | 'error'; error?: string } | null>(null)
+  const [permissionsModal, setPermissionsModal] = useState<{ project: Project; tools: string[]; mode: string } | null>(null)
   const [apiStatus, setApiStatus] = useState<Record<string, { running: boolean; port?: number }>>({})
+  const [editingProject, setEditingProject] = useState<{ path: string; name: string } | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   // Resize handler
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -109,6 +138,28 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
     e.preventDefault()
     e.stopPropagation()
     setContextMenu({ x: e.clientX, y: e.clientY, project })
+  }
+
+  const handleStartRename = (e: React.MouseEvent, project: Project) => {
+    e.stopPropagation()
+    setEditingProject({ path: project.path, name: project.name })
+    // Focus input after render
+    setTimeout(() => editInputRef.current?.select(), 0)
+  }
+
+  const handleRenameSubmit = () => {
+    if (editingProject && editingProject.name.trim()) {
+      onUpdateProject(editingProject.path, { name: editingProject.name.trim() })
+    }
+    setEditingProject(null)
+  }
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRenameSubmit()
+    } else if (e.key === 'Escape') {
+      setEditingProject(null)
+    }
   }
 
   // Close context menu on click outside
@@ -185,6 +236,43 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
       }
     }
     setContextMenu(null)
+  }
+
+  const handleConfigurePermissions = (project: Project) => {
+    setPermissionsModal({
+      project,
+      tools: project.autoAcceptTools || [],
+      mode: project.permissionMode || 'default'
+    })
+    setContextMenu(null)
+  }
+
+  const handleSavePermissions = () => {
+    if (!permissionsModal) return
+    onUpdateProject(permissionsModal.project.path, {
+      autoAcceptTools: permissionsModal.tools.length > 0 ? permissionsModal.tools : undefined,
+      permissionMode: permissionsModal.mode !== 'default' ? permissionsModal.mode : undefined
+    })
+    setPermissionsModal(null)
+  }
+
+  const togglePermissionTool = (tool: string) => {
+    if (!permissionsModal) return
+    const newTools = permissionsModal.tools.includes(tool)
+      ? permissionsModal.tools.filter(t => t !== tool)
+      : [...permissionsModal.tools, tool]
+    setPermissionsModal({ ...permissionsModal, tools: newTools })
+  }
+
+  const handleAllowAll = () => {
+    if (!permissionsModal) return
+    const allTools = COMMON_TOOLS.map(t => t.value)
+    setPermissionsModal({ ...permissionsModal, tools: allTools, mode: 'bypassPermissions' })
+  }
+
+  const handleClearAll = () => {
+    if (!permissionsModal) return
+    setPermissionsModal({ ...permissionsModal, tools: [], mode: 'default' })
   }
 
   // Check API status for focused project
@@ -309,7 +397,26 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
               </span>
               <ProjectIcon projectName={project.name} size={28} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="project-name" title={project.name}>{project.name}</div>
+                {editingProject?.path === project.path ? (
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    className="project-name-input"
+                    value={editingProject.name}
+                    onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
+                    onKeyDown={handleRenameKeyDown}
+                    onBlur={handleRenameSubmit}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <div
+                    className="project-name"
+                    title={project.name}
+                    onDoubleClick={(e) => handleStartRename(e, project)}
+                  >
+                    {project.name}
+                  </div>
+                )}
                 <div className="project-path" title={project.path}>{project.path}</div>
               </div>
               {project.executable && (
@@ -446,6 +553,12 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
             <span className="icon">🔌</span> Configure API Port
             {contextMenu.project.apiPort && <span className="menu-hint">:{contextMenu.project.apiPort}</span>}
           </button>
+          <button onClick={() => handleConfigurePermissions(contextMenu.project)}>
+            <span className="icon">🔓</span> Permissions
+            {(contextMenu.project.autoAcceptTools?.length || contextMenu.project.permissionMode) && (
+              <span className="menu-hint">configured</span>
+            )}
+          </button>
           <div className="context-menu-divider" />
           <button
             className="danger"
@@ -508,6 +621,69 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                 </div>
               </>
             )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Permissions Modal - rendered via portal */}
+      {permissionsModal && ReactDOM.createPortal(
+        <div className="modal-overlay" onClick={() => setPermissionsModal(null)}>
+          <div className="modal permissions-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Permissions: {permissionsModal.project.name}</h2>
+              <button className="modal-close" onClick={() => setPermissionsModal(null)}>×</button>
+            </div>
+            <div className="modal-content">
+              <div className="form-group">
+                <label>Auto-Accept Tools</label>
+                <p className="form-hint">Select tools Claude can use without asking.</p>
+                <div className="tool-chips">
+                  {COMMON_TOOLS.map((tool) => (
+                    <button
+                      key={tool.value}
+                      className={`tool-chip ${permissionsModal.tools.includes(tool.value) ? 'selected' : ''}`}
+                      onClick={() => togglePermissionTool(tool.value)}
+                      title={tool.value}
+                    >
+                      {tool.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Permission Mode</label>
+                <div className="permission-mode-options compact">
+                  {PERMISSION_MODES.map((mode) => (
+                    <label key={mode.value} className={`permission-mode-option ${permissionsModal.mode === mode.value ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="permissionMode"
+                        value={mode.value}
+                        checked={permissionsModal.mode === mode.value}
+                        onChange={(e) => setPermissionsModal({ ...permissionsModal, mode: e.target.value })}
+                      />
+                      <span className="mode-label">{mode.label}</span>
+                      <span className="mode-desc">{mode.desc}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="permission-quick-actions">
+                <button className="btn-danger-outline" onClick={handleAllowAll}>
+                  ⚠️ Allow All (Not Recommended)
+                </button>
+                <button className="btn-secondary" onClick={handleClearAll}>
+                  Clear All
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setPermissionsModal(null)}>Cancel</button>
+              <button className="btn-primary" onClick={handleSavePermissions}>Save</button>
+            </div>
           </div>
         </div>,
         document.body

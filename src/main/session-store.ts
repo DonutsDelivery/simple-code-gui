@@ -7,6 +7,8 @@ export interface Project {
   name: string
   executable?: string
   apiPort?: number  // Port for HTTP API to send prompts to terminal
+  autoAcceptTools?: string[]  // Per-project tool patterns to auto-accept
+  permissionMode?: string     // Per-project permission mode
 }
 
 export interface OpenTab {
