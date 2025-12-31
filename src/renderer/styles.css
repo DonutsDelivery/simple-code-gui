@@ -1661,26 +1661,72 @@ html, body, #root {
   box-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
 }
 
-.set-executable-btn {
-  opacity: 0;
+/* ============================================
+   Context Menu
+   ============================================ */
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-xs);
+  animation: contextMenuFadeIn 0.1s ease;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  text-align: left;
   cursor: pointer;
-  font-size: 14px;
-  padding: var(--space-xs);
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
-  line-height: 1;
 }
 
-.project-item:hover .set-executable-btn {
-  opacity: 1;
+.context-menu button:hover {
+  background: var(--bg-hover);
 }
 
-.set-executable-btn:hover {
-  color: var(--accent);
-  background: var(--accent-subtle);
+.context-menu button.danger {
+  color: var(--danger);
+}
+
+.context-menu button.danger:hover {
+  background: var(--danger-subtle);
+}
+
+.context-menu button .icon {
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-xs) 0;
 }
 
 /* ============================================

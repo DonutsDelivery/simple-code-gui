@@ -38,6 +38,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [sessions, setSessions] = useState<Record<string, ClaudeSession[]>>({})
   const [beadsExpanded, setBeadsExpanded] = useState(true)
   const [isResizing, setIsResizing] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Resize handler
@@ -78,23 +79,43 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   // Use expanded project if viewing sessions, otherwise use focused/active tab's project
   const beadsProjectPath = expandedProject || focusedProjectPath
 
-  const handleSelectExecutable = async (e: React.MouseEvent, projectPath: string) => {
-    e.stopPropagation()
+  const handleSelectExecutable = async (project: Project) => {
     const executable = await window.electronAPI.selectExecutable()
     if (executable) {
-      onUpdateProject(projectPath, { executable })
+      onUpdateProject(project.path, { executable })
     }
+    setContextMenu(null)
   }
 
-  const handleRunExecutable = async (e: React.MouseEvent, project: Project) => {
-    e.stopPropagation()
+  const handleClearExecutable = (project: Project) => {
+    onUpdateProject(project.path, { executable: undefined })
+    setContextMenu(null)
+  }
+
+  const handleRunExecutable = async (project: Project) => {
     if (project.executable) {
       const result = await window.electronAPI.runExecutable(project.executable, project.path)
       if (!result.success) {
         console.error('Failed to run executable:', result.error)
       }
     }
+    setContextMenu(null)
   }
+
+  const handleContextMenu = (e: React.MouseEvent, project: Project) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ x: e.clientX, y: e.clientY, project })
+  }
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    if (contextMenu) {
+      document.addEventListener('click', handleClick)
+      return () => document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -196,8 +217,9 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         {projects.map((project) => (
           <div key={project.path}>
             <div
-              className={`project-item ${expandedProject === project.path ? 'expanded' : ''} ${openTabs.some(t => t.projectPath === project.path) ? 'has-open-tab' : ''}`}
+              className={`project-item ${expandedProject === project.path ? 'expanded' : ''} ${openTabs.some(t => t.projectPath === project.path) ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''}`}
               onClick={() => openMostRecentSession(project.path)}
+              onContextMenu={(e) => handleContextMenu(e, project)}
             >
               <span
                 className="expand-arrow"
@@ -211,35 +233,18 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                 <div className="project-name" title={project.name}>{project.name}</div>
                 <div className="project-path" title={project.path}>{project.path}</div>
               </div>
-              <div className="project-actions">
-                {project.executable ? (
-                  <button
-                    className="start-btn"
-                    onClick={(e) => handleRunExecutable(e, project)}
-                    title={`Run: ${project.executable}`}
-                  >
-                    ▶
-                  </button>
-                ) : (
-                  <button
-                    className="set-executable-btn"
-                    onClick={(e) => handleSelectExecutable(e, project.path)}
-                    title="Set executable"
-                  >
-                    ⚡
-                  </button>
-                )}
+              {project.executable && (
                 <button
-                  className="remove-btn"
+                  className="start-btn"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onRemoveProject(project.path)
+                    handleRunExecutable(project)
                   }}
-                  title="Remove project"
+                  title={`Run: ${project.executable}`}
                 >
-                  ×
+                  ▶
                 </button>
-              </div>
+              )}
             </div>
             {expandedProject === project.path && (
               <div className="sessions-list">
@@ -284,7 +289,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
             return (
               <button
                 className="sidebar-btn run-app"
-                onClick={() => handleRunExecutable({ stopPropagation: () => {} } as React.MouseEvent, focusedProject)}
+                onClick={() => handleRunExecutable(focusedProject)}
                 title={`Run: ${focusedProject.executable}`}
               >
                 <span className="icon">▶</span> Run App
@@ -307,6 +312,43 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         className="sidebar-resize-handle"
         onMouseDown={handleMouseDown}
       />
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {contextMenu.project.executable ? (
+            <>
+              <button onClick={() => handleRunExecutable(contextMenu.project)}>
+                <span className="icon">▶</span> Run App
+              </button>
+              <button onClick={() => handleSelectExecutable(contextMenu.project)}>
+                <span className="icon">⚡</span> Change Executable
+              </button>
+              <button onClick={() => handleClearExecutable(contextMenu.project)}>
+                <span className="icon">✕</span> Clear Executable
+              </button>
+            </>
+          ) : (
+            <button onClick={() => handleSelectExecutable(contextMenu.project)}>
+              <span className="icon">⚡</span> Set Executable
+            </button>
+          )}
+          <div className="context-menu-divider" />
+          <button
+            className="danger"
+            onClick={() => {
+              onRemoveProject(contextMenu.project.path)
+              setContextMenu(null)
+            }}
+          >
+            <span className="icon">🗑</span> Remove Project
+          </button>
+        </div>
+      )}
     </div>
   )
 }
