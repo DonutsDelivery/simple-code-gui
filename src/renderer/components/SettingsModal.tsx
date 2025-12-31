@@ -6,11 +6,26 @@ const COMMON_TOOLS = [
   { label: 'Read files', value: 'Read' },
   { label: 'Write files', value: 'Write' },
   { label: 'Edit files', value: 'Edit' },
-  { label: 'Git commands', value: 'Bash(git:*)' },
+  { label: 'MultiEdit', value: 'MultiEdit' },
   { label: 'Grep search', value: 'Grep' },
   { label: 'Glob search', value: 'Glob' },
+  { label: 'List dirs', value: 'LS' },
+  { label: 'Web fetch', value: 'WebFetch' },
+  { label: 'Web search', value: 'WebSearch' },
+  { label: 'Questions', value: 'AskUserQuestion' },
+  { label: 'Task agents', value: 'Task' },
+  { label: 'Todo list', value: 'TodoWrite' },
+  { label: 'Git commands', value: 'Bash(git:*)' },
   { label: 'npm commands', value: 'Bash(npm:*)' },
   { label: 'All Bash', value: 'Bash' },
+]
+
+// Permission modes available in Claude Code
+const PERMISSION_MODES = [
+  { label: 'Default', value: 'default', desc: 'Ask for all permissions' },
+  { label: 'Accept Edits', value: 'acceptEdits', desc: 'Auto-accept file edits' },
+  { label: "Don't Ask", value: 'dontAsk', desc: 'Skip permission prompts' },
+  { label: 'Bypass All', value: 'bypassPermissions', desc: 'Skip all permission checks' },
 ]
 
 interface SettingsModalProps {
@@ -23,6 +38,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
   const [defaultProjectDir, setDefaultProjectDir] = useState('')
   const [selectedTheme, setSelectedTheme] = useState('default')
   const [autoAcceptTools, setAutoAcceptTools] = useState<string[]>([])
+  const [permissionMode, setPermissionMode] = useState('default')
   const [customTool, setCustomTool] = useState('')
 
   useEffect(() => {
@@ -31,6 +47,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
         setDefaultProjectDir(settings.defaultProjectDir || '')
         setSelectedTheme(settings.theme || 'default')
         setAutoAcceptTools(settings.autoAcceptTools || [])
+        setPermissionMode(settings.permissionMode || 'default')
       })
     }
   }, [isOpen])
@@ -50,7 +67,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
   }
 
   const handleSave = async () => {
-    await window.electronAPI.saveSettings({ defaultProjectDir, theme: selectedTheme, autoAcceptTools })
+    await window.electronAPI.saveSettings({ defaultProjectDir, theme: selectedTheme, autoAcceptTools, permissionMode })
     onClose()
   }
 
@@ -178,6 +195,28 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="form-group">
+            <label>Permission Mode</label>
+            <p className="form-hint">
+              Global permission behavior for Claude Code sessions.
+            </p>
+            <div className="permission-mode-options">
+              {PERMISSION_MODES.map((mode) => (
+                <label key={mode.value} className={`permission-mode-option ${permissionMode === mode.value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="permissionMode"
+                    value={mode.value}
+                    checked={permissionMode === mode.value}
+                    onChange={(e) => setPermissionMode(e.target.value)}
+                  />
+                  <span className="mode-label">{mode.label}</span>
+                  <span className="mode-desc">{mode.desc}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
         <div className="modal-footer">

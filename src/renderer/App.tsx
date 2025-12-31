@@ -16,8 +16,8 @@ declare global {
       saveWorkspace: (workspace: any) => Promise<void>
       addProject: () => Promise<string | null>
       discoverSessions: (projectPath: string) => Promise<any[]>
-      getSettings: () => Promise<{ defaultProjectDir: string; theme: string; autoAcceptTools?: string[] }>
-      saveSettings: (settings: { defaultProjectDir: string; theme: string; autoAcceptTools?: string[] }) => Promise<void>
+      getSettings: () => Promise<{ defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string }>
+      saveSettings: (settings: { defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string }) => Promise<void>
       selectDirectory: () => Promise<string | null>
       createProject: (name: string, parentDir: string) => Promise<{ success: boolean; path?: string; error?: string }>
       selectExecutable: () => Promise<string | null>

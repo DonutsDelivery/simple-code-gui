@@ -1546,6 +1546,50 @@ html, body, #root {
   color: #fff;
 }
 
+/* Permission Mode Options */
+.permission-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.permission-mode-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.permission-mode-option:hover {
+  border-color: var(--accent);
+}
+
+.permission-mode-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.permission-mode-option input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+.permission-mode-option .mode-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 100px;
+}
+
+.permission-mode-option .mode-desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 /* ============================================
    Sidebar Action Buttons
    ============================================ */

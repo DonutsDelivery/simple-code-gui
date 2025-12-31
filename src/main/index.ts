@@ -201,11 +201,12 @@ ipcMain.handle('sessions:discover', (_, projectPath: string) => {
 // PTY management
 ipcMain.handle('pty:spawn', (_, { cwd, sessionId }: { cwd: string; sessionId?: string }) => {
   try {
-    // Get auto-accept tools from settings
+    // Get auto-accept tools and permission mode from settings
     const settings = sessionStore.getSettings()
     const autoAcceptTools = settings.autoAcceptTools
+    const permissionMode = settings.permissionMode
 
-    const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools)
+    const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode)
 
     // Track PTY to project mapping
     ptyToProject.set(id, cwd)

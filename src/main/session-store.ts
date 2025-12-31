@@ -43,6 +43,7 @@ export interface Settings {
   defaultProjectDir: string
   theme: string
   autoAcceptTools?: string[]  // List of tool patterns to auto-accept (e.g., "Bash(git:*)", "Read", "Write")
+  permissionMode?: string     // Permission mode: default, acceptEdits, dontAsk, bypassPermissions
 }
 
 interface StoredData {
