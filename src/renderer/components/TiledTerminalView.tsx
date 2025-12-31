@@ -64,13 +64,18 @@ export function TiledTerminalView({
   onLayoutChange
 }: TiledTerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Track column and row sizes as fractions (default equal)
+  const [colSizes, setColSizes] = useState<number[]>([1, 1])
+  const [rowSizes, setRowSizes] = useState<number[]>([1, 1])
+
   const [dragging, setDragging] = useState<{
-    type: 'resize-h' | 'resize-v' | 'resize-corner'
-    tileId: string
-    startX: number
-    startY: number
-    initialLayout: TileLayout[]
+    type: 'col' | 'row'
+    index: number  // Which divider (0 = between col 0 and 1)
+    startPos: number
+    startSizes: number[]
   } | null>(null)
+
   const [draggedTile, setDraggedTile] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
 
@@ -109,46 +114,74 @@ export function TiledTerminalView({
   const gridCols = Math.max(2, ...effectiveLayout.map(t => t.x + t.width))
   const gridRows = Math.max(2, ...effectiveLayout.map(t => t.y + t.height))
 
+  // Initialize/resize col and row sizes when grid dimensions change
+  useEffect(() => {
+    setColSizes(prev => {
+      if (prev.length === gridCols) return prev
+      const newSizes = Array(gridCols).fill(1)
+      prev.forEach((size, i) => {
+        if (i < gridCols) newSizes[i] = size
+      })
+      return newSizes
+    })
+  }, [gridCols])
+
+  useEffect(() => {
+    setRowSizes(prev => {
+      if (prev.length === gridRows) return prev
+      const newSizes = Array(gridRows).fill(1)
+      prev.forEach((size, i) => {
+        if (i < gridRows) newSizes[i] = size
+      })
+      return newSizes
+    })
+  }, [gridRows])
+
   // Handle mouse move for resize
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!dragging || !containerRef.current) return
 
     const rect = containerRef.current.getBoundingClientRect()
-    const cellWidth = rect.width / gridCols
-    const cellHeight = rect.height / gridRows
+    const delta = dragging.type === 'col'
+      ? (e.clientX - dragging.startPos) / rect.width
+      : (e.clientY - dragging.startPos) / rect.height
 
-    const deltaX = e.clientX - dragging.startX
-    const deltaY = e.clientY - dragging.startY
-    const deltaCols = Math.round(deltaX / cellWidth)
-    const deltaRows = Math.round(deltaY / cellHeight)
+    const totalBefore = dragging.startSizes.reduce((a, b) => a + b, 0)
+    const idx = dragging.index
 
-    const newLayout = dragging.initialLayout.map(tile => {
-      if (tile.id !== dragging.tileId) return tile
+    // Calculate new sizes - adjust the two adjacent tracks
+    const newSizes = [...dragging.startSizes]
+    const minSize = 0.15 // Minimum 15% of total
 
-      let newWidth = tile.width
-      let newHeight = tile.height
+    const sizeChange = delta * totalBefore
+    const newSize1 = Math.max(minSize, dragging.startSizes[idx] + sizeChange)
+    const newSize2 = Math.max(minSize, dragging.startSizes[idx + 1] - sizeChange)
 
-      if (dragging.type === 'resize-h' || dragging.type === 'resize-corner') {
-        newWidth = Math.max(1, tile.width + deltaCols)
+    // Only apply if both are above minimum
+    if (newSize1 >= minSize && newSize2 >= minSize) {
+      newSizes[idx] = newSize1
+      newSizes[idx + 1] = newSize2
+
+      if (dragging.type === 'col') {
+        setColSizes(newSizes)
+      } else {
+        setRowSizes(newSizes)
       }
-      if (dragging.type === 'resize-v' || dragging.type === 'resize-corner') {
-        newHeight = Math.max(1, tile.height + deltaRows)
-      }
-
-      return { ...tile, width: newWidth, height: newHeight }
-    })
-
-    onLayoutChange(newLayout)
-  }, [dragging, gridCols, gridRows, onLayoutChange])
+    }
+  }, [dragging])
 
   const handleMouseUp = useCallback(() => {
     setDragging(null)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
   }, [])
 
   useEffect(() => {
     if (dragging) {
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = dragging.type === 'col' ? 'ew-resize' : 'ns-resize'
+      document.body.style.userSelect = 'none'
       return () => {
         window.removeEventListener('mousemove', handleMouseMove)
         window.removeEventListener('mouseup', handleMouseUp)
@@ -156,19 +189,25 @@ export function TiledTerminalView({
     }
   }, [dragging, handleMouseMove, handleMouseUp])
 
-  const startResize = (
-    e: React.MouseEvent,
-    tileId: string,
-    direction: 'resize-h' | 'resize-v' | 'resize-corner'
-  ) => {
+  const startColResize = (e: React.MouseEvent, index: number) => {
     e.preventDefault()
     e.stopPropagation()
     setDragging({
-      type: direction,
-      tileId,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialLayout: [...effectiveLayout]
+      type: 'col',
+      index,
+      startPos: e.clientX,
+      startSizes: [...colSizes]
+    })
+  }
+
+  const startRowResize = (e: React.MouseEvent, index: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragging({
+      type: 'row',
+      index,
+      startPos: e.clientY,
+      startSizes: [...rowSizes]
     })
   }
 
@@ -227,19 +266,24 @@ export function TiledTerminalView({
     return null
   }
 
+  // Generate grid template strings
+  const gridTemplateColumns = colSizes.map(s => `${s}fr`).join(' ')
+  const gridTemplateRows = rowSizes.map(s => `${s}fr`).join(' ')
+
   return (
     <div
       ref={containerRef}
       className="terminal-tiled-custom"
       style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-        gridTemplateRows: `repeat(${gridRows}, 1fr)`,
-        gap: '2px',
+        gridTemplateColumns,
+        gridTemplateRows,
+        gap: '4px',
         flex: 1,
-        padding: '2px',
+        padding: '4px',
         overflow: 'hidden',
-        background: 'var(--bg-base)'
+        background: 'var(--bg-base)',
+        position: 'relative'
       }}
     >
       {effectiveLayout.map((tile) => {
@@ -281,7 +325,7 @@ export function TiledTerminalView({
                 onClick={() => onCloseTab(tab.id)}
                 title="Close"
               >
-                x
+                ×
               </button>
             </div>
             <div className="tile-terminal">
@@ -294,21 +338,50 @@ export function TiledTerminalView({
                 />
               </div>
             </div>
-
-            {/* Resize handles */}
-            <div
-              className="tile-resize-handle tile-resize-h"
-              onMouseDown={(e) => startResize(e, tile.id, 'resize-h')}
-            />
-            <div
-              className="tile-resize-handle tile-resize-v"
-              onMouseDown={(e) => startResize(e, tile.id, 'resize-v')}
-            />
-            <div
-              className="tile-resize-handle tile-resize-corner"
-              onMouseDown={(e) => startResize(e, tile.id, 'resize-corner')}
-            />
           </div>
+        )
+      })}
+
+      {/* Column resize handles - between columns */}
+      {colSizes.slice(0, -1).map((_, i) => {
+        // Calculate position as percentage
+        const leftPercent = colSizes.slice(0, i + 1).reduce((a, b) => a + b, 0) / colSizes.reduce((a, b) => a + b, 0) * 100
+        return (
+          <div
+            key={`col-resize-${i}`}
+            className="grid-resize-handle grid-resize-col"
+            style={{
+              position: 'absolute',
+              left: `calc(${leftPercent}% - 3px)`,
+              top: 0,
+              width: '6px',
+              height: '100%',
+              cursor: 'ew-resize',
+              zIndex: 50
+            }}
+            onMouseDown={(e) => startColResize(e, i)}
+          />
+        )
+      })}
+
+      {/* Row resize handles - between rows */}
+      {rowSizes.slice(0, -1).map((_, i) => {
+        const topPercent = rowSizes.slice(0, i + 1).reduce((a, b) => a + b, 0) / rowSizes.reduce((a, b) => a + b, 0) * 100
+        return (
+          <div
+            key={`row-resize-${i}`}
+            className="grid-resize-handle grid-resize-row"
+            style={{
+              position: 'absolute',
+              top: `calc(${topPercent}% - 3px)`,
+              left: 0,
+              width: '100%',
+              height: '6px',
+              cursor: 'ns-resize',
+              zIndex: 50
+            }}
+            onMouseDown={(e) => startRowResize(e, i)}
+          />
         )
       })}
     </div>
