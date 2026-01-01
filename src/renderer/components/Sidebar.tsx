@@ -85,6 +85,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
   const [apiPortModal, setApiPortModal] = useState<{ project: Project; currentPort: string; status?: 'checking' | 'success' | 'error'; error?: string } | null>(null)
   const [permissionsModal, setPermissionsModal] = useState<{ project: Project; tools: string[]; mode: string } | null>(null)
+  const [globalPermissions, setGlobalPermissions] = useState<{ tools: string[]; mode: string }>({ tools: [], mode: 'default' })
   const [apiStatus, setApiStatus] = useState<Record<string, { running: boolean; port?: number }>>({})
   const [editingProject, setEditingProject] = useState<{ path: string; name: string } | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -255,7 +256,13 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
     setContextMenu(null)
   }
 
-  const handleConfigurePermissions = (project: Project) => {
+  const handleConfigurePermissions = async (project: Project) => {
+    // Fetch global settings to show comparison
+    const settings = await window.electronAPI.getSettings()
+    setGlobalPermissions({
+      tools: settings.autoAcceptTools || [],
+      mode: settings.permissionMode || 'default'
+    })
     setPermissionsModal({
       project,
       tools: project.autoAcceptTools || [],
@@ -687,35 +694,49 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                 <label>Auto-Accept Tools</label>
                 <p className="form-hint">Overrides global settings for this project.</p>
                 <div className="tool-chips">
-                  {COMMON_TOOLS.map((tool) => (
-                    <button
-                      key={tool.value}
-                      className={`tool-chip ${permissionsModal.tools.includes(tool.value) ? 'selected' : ''}`}
-                      onClick={() => togglePermissionTool(tool.value)}
-                      title={tool.value}
-                    >
-                      {tool.label}
-                    </button>
-                  ))}
+                  {COMMON_TOOLS.map((tool) => {
+                    const isProjectSelected = permissionsModal.tools.includes(tool.value)
+                    const isGlobalSelected = globalPermissions.tools.includes(tool.value)
+                    return (
+                      <button
+                        key={tool.value}
+                        className={`tool-chip ${isProjectSelected ? 'selected' : ''} ${isGlobalSelected && !isProjectSelected ? 'global' : ''}`}
+                        onClick={() => togglePermissionTool(tool.value)}
+                        title={`${tool.value}${isGlobalSelected ? ' (enabled in global settings)' : ''}`}
+                      >
+                        {tool.label}
+                        {isGlobalSelected && !isProjectSelected && <span className="global-indicator">G</span>}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
               <div className="form-group">
                 <label>Permission Mode</label>
+                {globalPermissions.mode !== 'default' && permissionsModal.mode === 'default' && (
+                  <p className="form-hint global-hint">
+                    Global: {PERMISSION_MODES.find(m => m.value === globalPermissions.mode)?.label}
+                  </p>
+                )}
                 <div className="permission-mode-options compact">
-                  {PERMISSION_MODES.map((mode) => (
-                    <label key={mode.value} className={`permission-mode-option ${permissionsModal.mode === mode.value ? 'selected' : ''}`}>
-                      <input
-                        type="radio"
-                        name="permissionMode"
-                        value={mode.value}
-                        checked={permissionsModal.mode === mode.value}
-                        onChange={(e) => setPermissionsModal({ ...permissionsModal, mode: e.target.value })}
-                      />
-                      <span className="mode-label">{mode.label}</span>
-                      <span className="mode-desc">{mode.desc}</span>
-                    </label>
-                  ))}
+                  {PERMISSION_MODES.map((mode) => {
+                    const isGlobalMode = globalPermissions.mode === mode.value && permissionsModal.mode === 'default'
+                    return (
+                      <label key={mode.value} className={`permission-mode-option ${permissionsModal.mode === mode.value ? 'selected' : ''} ${isGlobalMode ? 'global' : ''}`}>
+                        <input
+                          type="radio"
+                          name="permissionMode"
+                          value={mode.value}
+                          checked={permissionsModal.mode === mode.value}
+                          onChange={(e) => setPermissionsModal({ ...permissionsModal, mode: e.target.value })}
+                        />
+                        <span className="mode-label">{mode.label}</span>
+                        <span className="mode-desc">{mode.desc}</span>
+                        {isGlobalMode && <span className="global-indicator">G</span>}
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
 

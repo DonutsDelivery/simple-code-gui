@@ -1599,6 +1599,44 @@ html, body, #root {
   color: #fff;
 }
 
+.tool-chip.global {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--text-secondary);
+  position: relative;
+}
+
+.tool-chip.global:hover {
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.global-indicator {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.tool-chip.selected .global-indicator {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.permission-mode-option.global {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.permission-mode-option .global-indicator {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+.global-hint {
+  color: var(--accent);
+  font-style: italic;
+}
+
 .custom-tool-input {
   display: flex;
   gap: var(--space-sm);
