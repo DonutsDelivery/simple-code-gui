@@ -1194,8 +1194,8 @@ html, body, #root {
    ============================================ */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
 }
 
 ::-webkit-scrollbar-track {
@@ -1204,11 +1204,15 @@ html, body, #root {
 
 ::-webkit-scrollbar-thumb {
   background: var(--bg-active);
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* ============================================
@@ -2264,6 +2268,22 @@ html, body, #root {
   position: relative;
 }
 
+.beads-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+
+.beads-resize-handle:hover,
+.beads-resize-handle.active {
+  background: var(--accent);
+}
+
 .beads-empty,
 .beads-loading,
 .beads-error {
@@ -2293,7 +2313,6 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  max-height: 200px;
   overflow-y: auto;
   margin-bottom: var(--space-sm);
   padding-right: var(--space-sm);
@@ -2590,7 +2609,8 @@ html, body, #root {
   flex: 1;
 }
 
-.beads-refresh-btn {
+.beads-refresh-btn,
+.beads-clear-btn {
   background: none;
   border: 1px solid var(--border-default);
   color: var(--text-muted);
@@ -2606,6 +2626,12 @@ html, body, #root {
   color: var(--text-primary);
   background: var(--bg-hover);
   border-color: var(--border-strong);
+}
+
+.beads-clear-btn:hover {
+  color: var(--success);
+  background: var(--success-subtle);
+  border-color: var(--success);
 }
 
 /* ============================================

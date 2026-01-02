@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 
 interface BeadsTask {
   id: string
@@ -15,6 +15,16 @@ interface BeadsPanelProps {
   onToggle: () => void
 }
 
+// Storage key for panel height
+const BEADS_HEIGHT_KEY = 'beads-panel-height'
+const DEFAULT_HEIGHT = 200
+const MIN_HEIGHT = 100
+const MAX_HEIGHT = 500
+
+// Cache tasks per project path to avoid reload flicker when switching
+const tasksCache = new Map<string, BeadsTask[]>()
+const beadsStatusCache = new Map<string, { installed: boolean; initialized: boolean }>()
+
 export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProps) {
   const [beadsInstalled, setBeadsInstalled] = useState(false)
   const [beadsInitialized, setBeadsInitialized] = useState(false)
@@ -28,6 +38,12 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   const [installError, setInstallError] = useState<string | null>(null)
   const [needsPython, setNeedsPython] = useState(false)
   const [installStatus, setInstallStatus] = useState<string | null>(null)
+  const [panelHeight, setPanelHeight] = useState(() => {
+    const saved = localStorage.getItem(BEADS_HEIGHT_KEY)
+    return saved ? parseInt(saved, 10) : DEFAULT_HEIGHT
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
 
   const loadTasks = useCallback(async (showLoading = true) => {
     if (!projectPath) return
@@ -39,11 +55,13 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
       const status = await window.electronAPI.beadsCheck(projectPath)
       setBeadsInstalled(status.installed)
       setBeadsInitialized(status.initialized)
+      beadsStatusCache.set(projectPath, status)
 
       if (status.installed && status.initialized) {
         const result = await window.electronAPI.beadsList(projectPath)
         if (result.success && result.tasks) {
           setTasks(result.tasks)
+          tasksCache.set(projectPath, result.tasks)
         } else {
           setError(result.error || 'Failed to load tasks')
         }
@@ -133,17 +151,35 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
     return cleanup
   }, [])
 
-  // Clear tasks immediately when project changes to avoid showing stale data
+  // When project changes, load from cache immediately then refresh in background
   useEffect(() => {
-    setTasks([])
-    setBeadsInitialized(false)
-    setBeadsInstalled(false)
     setError(null)
+    if (projectPath) {
+      // Load from cache instantly if available
+      const cachedTasks = tasksCache.get(projectPath)
+      const cachedStatus = beadsStatusCache.get(projectPath)
+      if (cachedTasks && cachedStatus) {
+        setTasks(cachedTasks)
+        setBeadsInstalled(cachedStatus.installed)
+        setBeadsInitialized(cachedStatus.initialized)
+      } else {
+        // No cache - clear and show loading
+        setTasks([])
+        setBeadsInitialized(false)
+        setBeadsInstalled(false)
+      }
+    } else {
+      setTasks([])
+      setBeadsInitialized(false)
+      setBeadsInstalled(false)
+    }
   }, [projectPath])
 
   useEffect(() => {
     if (projectPath && isExpanded) {
-      loadTasks(true)
+      // Show loading only if no cached data
+      const hasCachedData = tasksCache.has(projectPath)
+      loadTasks(!hasCachedData)
       // Auto-refresh every 10 seconds (silent, no loading state)
       const interval = setInterval(() => loadTasks(false), 10000)
       return () => clearInterval(interval)
@@ -212,6 +248,51 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
     }
   }
 
+  const handleClearCompleted = async () => {
+    if (!projectPath) return
+
+    const closedTasks = tasks.filter(t => t.status === 'closed')
+    for (const task of closedTasks) {
+      try {
+        await window.electronAPI.beadsDelete(projectPath, task.id)
+      } catch (e) {
+        // Silently continue on error
+      }
+    }
+    await loadTasks()
+  }
+
+  // Resize handlers
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    resizeRef.current = { startY: e.clientY, startHeight: panelHeight }
+    setIsResizing(true)
+  }
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return
+      // Dragging up = larger panel (negative delta)
+      const delta = resizeRef.current.startY - e.clientY
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, resizeRef.current.startHeight + delta))
+      setPanelHeight(newHeight)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      localStorage.setItem(BEADS_HEIGHT_KEY, String(panelHeight))
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing, panelHeight])
+
   const getPriorityClass = (priority?: number) => {
     if (priority === 0) return 'priority-critical'
     if (priority === 1) return 'priority-high'
@@ -235,6 +316,11 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
 
       {isExpanded && (
         <div className="beads-content">
+          <div
+            className={`beads-resize-handle ${isResizing ? 'active' : ''}`}
+            onMouseDown={handleResizeStart}
+            title="Drag to resize"
+          />
           {!projectPath && (
             <div className="beads-empty">Select a project to view tasks</div>
           )}
@@ -288,7 +374,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
 
           {projectPath && beadsInitialized && !loading && !error && (
             <>
-              <div className="beads-tasks">
+              <div className="beads-tasks" style={{ maxHeight: `${panelHeight}px` }}>
                 {tasks.length === 0 ? (
                   <div className="beads-empty">No ready tasks</div>
                 ) : (
@@ -360,7 +446,16 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                   >
                     + Add Task
                   </button>
-                  <button className="beads-refresh-btn" onClick={loadTasks} title="Refresh">
+                  {tasks.some(t => t.status === 'closed') && (
+                    <button
+                      className="beads-clear-btn"
+                      onClick={handleClearCompleted}
+                      title="Clear completed tasks"
+                    >
+                      ✓
+                    </button>
+                  )}
+                  <button className="beads-refresh-btn" onClick={() => loadTasks()} title="Refresh">
                     ↻
                   </button>
                 </div>

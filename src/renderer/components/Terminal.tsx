@@ -288,15 +288,20 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
       const rect = containerRef.current.getBoundingClientRect()
       // Only fit if container is visible and has reasonable dimensions
       if (rect.width > 50 && rect.height > 50) {
+        // Check if at bottom BEFORE fit (fit can change scroll position)
+        const wasAtBottom = !userScrolledUpRef.current
+
         fitAddonRef.current.fit()
         const dims = fitAddonRef.current.proposeDimensions()
         if (dims && dims.cols > 0 && dims.rows > 0) {
           window.electronAPI.resizePty(ptyId, dims.cols, dims.rows)
         }
 
-        // Stay at bottom unless user scrolled up
-        if (!userScrolledUpRef.current) {
-          terminalRef.current.scrollToBottom()
+        // Restore scroll position - use requestAnimationFrame to ensure it happens after xterm's internal updates
+        if (wasAtBottom) {
+          requestAnimationFrame(() => {
+            terminalRef.current?.scrollToBottom()
+          })
         }
       }
     }
@@ -334,14 +339,18 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
 
         const rect = containerRef.current.getBoundingClientRect()
         if (rect.width > 50 && rect.height > 50) {
+          const wasAtBottom = !userScrolledUpRef.current
+
           fitAddonRef.current.fit()
           const dims = fitAddonRef.current.proposeDimensions()
           if (dims && dims.cols > 0 && dims.rows > 0) {
             window.electronAPI.resizePty(ptyId, dims.cols, dims.rows)
           }
-          // Stay at bottom unless user scrolled up
-          if (!userScrolledUpRef.current) {
-            terminalRef.current.scrollToBottom()
+          // Restore scroll position after xterm updates
+          if (wasAtBottom) {
+            requestAnimationFrame(() => {
+              terminalRef.current?.scrollToBottom()
+            })
           }
         }
         terminalRef.current?.focus()
