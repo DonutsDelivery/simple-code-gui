@@ -706,6 +706,15 @@ ipcMain.handle('beads:start', async (_, { cwd, taskId }: { cwd: string; taskId: 
   }
 })
 
+ipcMain.handle('beads:update', async (_, { cwd, taskId, status }: { cwd: string; taskId: string; status: string }) => {
+  try {
+    await execAsync(`bd update ${taskId} --status ${status}`, { ...getBeadsExecOptions(), cwd })
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e.message }
+  }
+})
+
 // Check if pipx is available (preferred for CLI tools)
 async function checkPipxInstalled(): Promise<boolean> {
   try {

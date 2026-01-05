@@ -49,6 +49,7 @@ export interface ElectronAPI {
   beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: any; error?: string }>
   beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
   beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
+  beadsUpdate: (cwd: string, taskId: string, status: string) => Promise<{ success: boolean; error?: string }>
 
   // TTS instructions (CLAUDE.md)
   ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
@@ -191,6 +192,7 @@ const api: ElectronAPI = {
   beadsComplete: (cwd, taskId) => ipcRenderer.invoke('beads:complete', { cwd, taskId }),
   beadsDelete: (cwd, taskId) => ipcRenderer.invoke('beads:delete', { cwd, taskId }),
   beadsStart: (cwd, taskId) => ipcRenderer.invoke('beads:start', { cwd, taskId }),
+  beadsUpdate: (cwd, taskId, status) => ipcRenderer.invoke('beads:update', { cwd, taskId, status }),
 
   // TTS instructions (CLAUDE.md)
   ttsInstallInstructions: (projectPath) => ipcRenderer.invoke('tts:installInstructions', projectPath),

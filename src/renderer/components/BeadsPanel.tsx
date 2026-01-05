@@ -267,6 +267,26 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
     }
   }
 
+  const handleCycleStatus = async (taskId: string, currentStatus: string) => {
+    if (!projectPath) return
+
+    // Cycle: open → in_progress → closed → open
+    const nextStatus = currentStatus === 'open' ? 'in_progress'
+      : currentStatus === 'in_progress' ? 'closed'
+      : 'open'
+
+    try {
+      const result = await window.electronAPI.beadsUpdate(projectPath, taskId, nextStatus)
+      if (result.success) {
+        loadTasks()
+      } else {
+        setError(result.error || 'Failed to update task status')
+      }
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
   const handleClearCompleted = async () => {
     if (!projectPath) return
 
@@ -422,9 +442,16 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                         <div className={`beads-task-title ${task.status === 'closed' ? 'completed' : ''}`} title={task.title}>{task.title}</div>
                         <div className="beads-task-meta">
                           <span className="beads-task-id">{task.id}</span>
-                          <span className={`beads-task-status status-${task.status}`}>
+                          <button
+                            className={`beads-task-status status-${task.status}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCycleStatus(task.id, task.status)
+                            }}
+                            title="Click to cycle status"
+                          >
                             {task.status === 'in_progress' ? 'In Progress' : task.status === 'closed' ? 'Done' : 'Open'}
-                          </span>
+                          </button>
                         </div>
                       </div>
                       <button

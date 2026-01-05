@@ -2907,6 +2907,17 @@ html, body, #root {
 .beads-task-status {
   font-size: 11px;
   font-weight: 500;
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.beads-task-status:hover {
+  background: var(--bg-tertiary);
+  transform: scale(1.05);
 }
 
 .beads-task-status.status-open {
@@ -3251,31 +3262,45 @@ html, body, #root {
 
 .voice-slider {
   flex: 1;
-  height: 4px;
+  height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--border-color);
-  border-radius: 2px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
   cursor: pointer;
+  border: 1px solid var(--border-color);
 }
 
 .voice-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
-  background: var(--text-primary);
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.voice-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
 }
 
 .voice-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  background: var(--text-primary);
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
   border: none;
+}
+
+.voice-slider-value {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
 }
 
 .voice-option-checkbox {
