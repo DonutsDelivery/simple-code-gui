@@ -3653,3 +3653,171 @@ html, body, #root {
 .action-icon-btn.not-ready {
   opacity: 0.5;
 }
+
+/* ============================================
+   Terminal Menu (Arrow Expanding)
+   ============================================ */
+
+.terminal-content-wrapper {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-menu-container {
+  position: absolute;
+  bottom: 10px;
+  right: 22px;  /* Avoid scrollbar */
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+/* Arrow toggle button */
+.terminal-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(4px);
+  opacity: 0.5;
+}
+
+.terminal-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: var(--border-default);
+  opacity: 1;
+}
+
+.terminal-menu-toggle.expanded {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.terminal-menu-toggle .arrow-icon {
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: transform var(--transition-fast);
+}
+
+.terminal-menu-toggle:hover .arrow-icon,
+.terminal-menu-toggle.expanded .arrow-icon {
+  color: var(--text-primary);
+}
+
+.terminal-menu-toggle.expanded .arrow-icon {
+  transform: rotate(180deg);
+}
+
+/* Expanded menu bar */
+.terminal-menu-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  animation: menuSlideIn 0.15s ease;
+}
+
+@keyframes menuSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Category container */
+.terminal-menu-category {
+  position: relative;
+}
+
+/* Category button */
+.terminal-menu-category-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+.terminal-menu-category-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.terminal-menu-category-btn.active {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.terminal-menu-category-btn .dropdown-arrow {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+/* Dropdown menu (portal version - rendered to body) */
+.terminal-menu-dropdown-portal {
+  min-width: 160px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: menuFadeIn 0.12s ease;
+  z-index: 10000;  /* Above all other content */
+}
+
+@keyframes menuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Menu items */
+.terminal-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.terminal-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.terminal-menu-item:active {
+  background: var(--bg-active);
+}

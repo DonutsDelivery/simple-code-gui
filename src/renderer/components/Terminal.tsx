@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { Theme } from '../themes'
 import { useVoice } from '../contexts/VoiceContext'
+import { TerminalMenu } from './TerminalMenu'
 
 // Global buffer to persist terminal data across HMR remounts
 // Use window to persist across module re-execution during HMR
@@ -153,6 +154,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
   const silentModeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ttsBufferRef = useRef('')  // Buffer for accumulating TTS tags across chunks
 
+  // Summary capture for "Summarize & Clear" feature
+  const summaryBufferRef = useRef('')
+  const capturingSummaryRef = useRef(false)
+  const [pendingSummary, setPendingSummary] = useState<string | null>(null)
+
   // Keep refs in sync
   useEffect(() => {
     voiceOutputEnabledRef.current = voiceOutputEnabled
@@ -161,6 +167,31 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
   useEffect(() => {
     isActiveRef.current = isActive
   }, [isActive])
+
+  // Handle pending summary - trigger /clear and paste
+  useEffect(() => {
+    if (pendingSummary) {
+      const summaryToSend = pendingSummary  // Capture value before clearing state
+      console.log('[Summary] useEffect triggered, running /clear, summary length:', summaryToSend.length)
+      // Run /clear
+      window.electronAPI.writePty(ptyId, '/clear')
+      setTimeout(() => {
+        console.log('[Summary] Sending enter for /clear')
+        window.electronAPI.writePty(ptyId, '\r')
+        // After /clear, paste summary
+        setTimeout(() => {
+          console.log('[Summary] Pasting summary:', summaryToSend.substring(0, 50) + '...')
+          window.electronAPI.writePty(ptyId, summaryToSend)
+          // Wait longer after pasting to let terminal render, then send enter
+          setTimeout(() => {
+            console.log('[Summary] Sending enter to submit')
+            window.electronAPI.writePty(ptyId, '\r')
+          }, 500)
+        }, 1500)
+      }, 100)
+      setPendingSummary(null)
+    }
+  }, [pendingSummary, ptyId])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -368,8 +399,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         }
       }
 
-      // Always strip «tts» markers from display (Claude always uses them now)
-      let displayData = data.replace(/«\/?tts»/g, '')
+      // Always strip «tts» markers and summary markers from display
+      let displayData = data.replace(/«\/?tts»/g, '').replace(/===SUMMARY_(START|END)===/g, '')
 
       // TTS: Buffer chunks and extract complete tags (tags may span multiple chunks)
       const cleanChunk = stripAnsi(data)
@@ -419,6 +450,63 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
       if (spokenContentRef.current.size > 1000) {
         const entries = Array.from(spokenContentRef.current)
         spokenContentRef.current = new Set(entries.slice(-500))
+      }
+
+      // Summary capture for "Summarize & Clear" feature
+      // Debug: log every data chunk to see if capture flag is set
+      if (cleanChunk.includes('SUMMARY') || capturingSummaryRef.current) {
+        console.log('[Summary] Data received, capturing:', capturingSummaryRef.current, 'chunk has SUMMARY:', cleanChunk.includes('SUMMARY'))
+      }
+      if (capturingSummaryRef.current) {
+        summaryBufferRef.current += cleanChunk
+        console.log('[Summary] Buffer length:', summaryBufferRef.current.length, 'chunk length:', cleanChunk.length)
+
+        // Log buffer when it reaches certain sizes
+        if (summaryBufferRef.current.length > 100 && summaryBufferRef.current.length < 200) {
+          console.log('[Summary] Buffer @100:', summaryBufferRef.current)
+        }
+
+        // Check if markers are present anywhere in buffer (using === markers, not XML)
+        const hasStart = summaryBufferRef.current.includes('===SUMMARY_START===')
+        const hasEnd = summaryBufferRef.current.includes('===SUMMARY_END===')
+        if (hasStart && hasEnd) {
+          const startIdx = summaryBufferRef.current.indexOf('===SUMMARY_START===')
+          const endIdx = summaryBufferRef.current.indexOf('===SUMMARY_END===')
+          console.log('[Summary] Both markers found! start@', startIdx, 'end@', endIdx, 'distance:', endIdx - startIdx)
+        } else if (hasStart || hasEnd) {
+          console.log('[Summary] Partial markers - start:', hasStart, 'end:', hasEnd)
+        }
+
+        // Check for complete summary markers - use GREEDY match to get from first START to LAST END
+        // This avoids issues if the summary content itself mentions the markers
+        const summaryMatch = summaryBufferRef.current.match(/===SUMMARY_START===([\s\S]*)===SUMMARY_END===/)
+        if (summaryMatch) {
+          // Remove any nested markers from the content
+          let summary = summaryMatch[1].trim()
+          console.log('[Summary] RAW match length:', summary.length, 'first 100:', summary.substring(0, 100))
+          summary = summary.replace(/===SUMMARY_(START|END)===/g, '')
+          console.log('[Summary] After strip length:', summary.length)
+          console.log('[Summary] Content:', summary.substring(0, 200))
+
+          // Minimum length check - a real summary should be substantial (>100 chars)
+          // If too short, Claude might be explaining the format rather than giving the actual summary
+          if (summary.length < 100) {
+            console.log('[Summary] Match too short (' + summary.length + ' chars), continuing capture...')
+            // Continue capturing - don't stop yet
+          } else {
+            // Stop capturing once we have a substantial match
+            capturingSummaryRef.current = false
+            summaryBufferRef.current = ''
+            setPendingSummary(summary)
+          }
+        }
+
+        // Limit buffer size to prevent unbounded growth (200KB should be plenty)
+        if (summaryBufferRef.current.length > 200000) {
+          console.log('[Summary] Buffer limit reached, stopping capture')
+          capturingSummaryRef.current = false
+          summaryBufferRef.current = ''
+        }
       }
 
       terminal.write(displayData)
@@ -603,13 +691,86 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
     e.dataTransfer.dropEffect = 'copy'
   }
 
+  const handleMenuCommand = (command: string) => {
+    switch (command) {
+      case 'summarize':
+        // Start capture immediately - prompt doesn't have literal markers so won't match
+        summaryBufferRef.current = ''
+        capturingSummaryRef.current = true
+        console.log('[Summary] Capture enabled for ptyId:', ptyId)
+        // Prompt describes markers without using them literally
+        const summarizePrompt = 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.'
+        window.electronAPI.writePty(ptyId, summarizePrompt)
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'clear':
+        // Run /clear command
+        window.electronAPI.writePty(ptyId, '/clear')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'help':
+        window.electronAPI.writePty(ptyId, '/help')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'compact':
+        window.electronAPI.writePty(ptyId, '/compact')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'cost':
+        window.electronAPI.writePty(ptyId, '/cost')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'status':
+        window.electronAPI.writePty(ptyId, '/status')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'model':
+        window.electronAPI.writePty(ptyId, '/model')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'config':
+        window.electronAPI.writePty(ptyId, '/config')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'doctor':
+        window.electronAPI.writePty(ptyId, '/doctor')
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
+      case 'cancel':
+        // Send Escape to cancel current operation
+        window.electronAPI.writePty(ptyId, '\x1b')
+        break
+    }
+  }
+
   return (
-    <div
-      ref={containerRef}
-      style={{ height: '100%', width: '100%' }}
-      onMouseDown={onFocus}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-    />
+    <div className="terminal-content-wrapper">
+      <div
+        ref={containerRef}
+        style={{ height: '100%', width: '100%' }}
+        onMouseDown={onFocus}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      />
+      <TerminalMenu ptyId={ptyId} onCommand={handleMenuCommand} />
+    </div>
   )
 }
