@@ -801,6 +801,17 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
           window.electronAPI.writePty(ptyId, '\r')
         }, 100)
         break
+      case 'stopwork':
+        // Gracefully stop auto work loop after current task
+        autoWorkModeRef.current = false
+        console.log('[AutoWork] Mode disabled - will stop after current task')
+        // Tell Claude to finish current task but not continue
+        const stopPrompt = 'When you finish the current task, do NOT output the AUTOWORK_CONTINUE marker. Just complete this task and wait for further input.'
+        window.electronAPI.writePty(ptyId, stopPrompt)
+        setTimeout(() => {
+          window.electronAPI.writePty(ptyId, '\r')
+        }, 100)
+        break
       case 'cancel':
         // Send Escape to cancel current operation and disable auto work mode
         autoWorkModeRef.current = false
