@@ -45,7 +45,7 @@ export interface ElectronAPI {
   beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
   beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
   beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: any; error?: string }>
-  beadsCreate: (cwd: string, title: string, description?: string, priority?: number) => Promise<{ success: boolean; task?: any; error?: string }>
+  beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: any; error?: string }>
   beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: any; error?: string }>
   beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
   beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
@@ -191,7 +191,7 @@ const api: ElectronAPI = {
   beadsReady: (cwd) => ipcRenderer.invoke('beads:ready', cwd),
   beadsList: (cwd) => ipcRenderer.invoke('beads:list', cwd),
   beadsShow: (cwd, taskId) => ipcRenderer.invoke('beads:show', { cwd, taskId }),
-  beadsCreate: (cwd, title, description, priority) => ipcRenderer.invoke('beads:create', { cwd, title, description, priority }),
+  beadsCreate: (cwd, title, description, priority, type, labels) => ipcRenderer.invoke('beads:create', { cwd, title, description, priority, type, labels }),
   beadsComplete: (cwd, taskId) => ipcRenderer.invoke('beads:complete', { cwd, taskId }),
   beadsDelete: (cwd, taskId) => ipcRenderer.invoke('beads:delete', { cwd, taskId }),
   beadsStart: (cwd, taskId) => ipcRenderer.invoke('beads:start', { cwd, taskId }),

@@ -35,7 +35,7 @@ declare global {
       beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
       beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
       beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: any; error?: string }>
-      beadsCreate: (cwd: string, title: string, description?: string, priority?: number) => Promise<{ success: boolean; task?: any; error?: string }>
+      beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: any; error?: string }>
       beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: any; error?: string }>
       beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
       beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>

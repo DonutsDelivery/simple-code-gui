@@ -31,8 +31,12 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   const [tasks, setTasks] = useState<BeadsTask[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskType, setNewTaskType] = useState<'task' | 'bug' | 'feature' | 'epic' | 'chore'>('task')
+  const [newTaskPriority, setNewTaskPriority] = useState<number>(2)
+  const [newTaskDescription, setNewTaskDescription] = useState('')
+  const [newTaskLabels, setNewTaskLabels] = useState('')
   const [initializing, setInitializing] = useState(false)
   const [installing, setInstalling] = useState<'beads' | 'python' | null>(null)
   const [installError, setInstallError] = useState<string | null>(null)
@@ -193,29 +197,26 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
     if (!projectPath || !newTaskTitle.trim()) return
 
     try {
-      let title = newTaskTitle.trim()
-      let description: string | undefined
+      const title = newTaskTitle.trim()
+      const description = newTaskDescription.trim() || undefined
+      const labels = newTaskLabels.trim() || undefined
 
-      // If over 500 chars, split into title and description
-      if (title.length > 500) {
-        // Try to split at first sentence end, or at 100 chars
-        const firstSentence = title.match(/^[^.!?]+[.!?]/)
-        if (firstSentence && firstSentence[0].length <= 100) {
-          title = firstSentence[0].trim()
-          description = newTaskTitle.trim().slice(firstSentence[0].length).trim()
-        } else {
-          // Split at ~100 chars at word boundary
-          const cutoff = title.slice(0, 100).lastIndexOf(' ')
-          const splitAt = cutoff > 50 ? cutoff : 100
-          title = title.slice(0, splitAt).trim()
-          description = newTaskTitle.trim().slice(splitAt).trim()
-        }
-      }
-
-      const result = await window.electronAPI.beadsCreate(projectPath, title, description)
+      const result = await window.electronAPI.beadsCreate(
+        projectPath,
+        title,
+        description,
+        newTaskPriority,
+        newTaskType,
+        labels
+      )
       if (result.success) {
+        // Reset form
         setNewTaskTitle('')
-        setShowCreateForm(false)
+        setNewTaskType('task')
+        setNewTaskPriority(2)
+        setNewTaskDescription('')
+        setNewTaskLabels('')
+        setShowCreateModal(false)
         loadTasks()
       } else {
         setError(result.error || 'Failed to create task')
@@ -529,52 +530,115 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                 )}
               </div>
 
-              {showCreateForm ? (
-                <div className="beads-create-form">
-                  <textarea
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Task title or description..."
-                    autoFocus
-                    rows={2}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        handleCreateTask()
-                      }
-                      if (e.key === 'Escape') setShowCreateForm(false)
-                    }}
-                  />
-                  <div className="beads-create-footer">
-                    <span className={`beads-char-count ${newTaskTitle.length > 500 ? 'over-limit' : ''}`}>
-                      {newTaskTitle.length > 500 ? `${newTaskTitle.length}/500 (will split)` : `${newTaskTitle.length}`}
-                    </span>
-                    <div className="beads-create-actions">
-                      <button onClick={handleCreateTask}>Add</button>
-                      <button onClick={() => setShowCreateForm(false)}>Cancel</button>
+              <div className="beads-actions-row">
+                <button
+                  className="beads-add-btn"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  + Add Task
+                </button>
+                {tasks.some(t => t.status === 'closed') && (
+                  <button
+                    className="beads-clear-btn"
+                    onClick={handleClearCompleted}
+                    title="Clear completed tasks"
+                  >
+                    ✓
+                  </button>
+                )}
+                <button className="beads-refresh-btn" onClick={() => loadTasks()} title="Refresh">
+                  ↻
+                </button>
+              </div>
+
+              {showCreateModal && (
+                <div className="beads-modal-overlay" onClick={() => setShowCreateModal(false)}>
+                  <div className="beads-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="beads-modal-header">
+                      <h3>Create Task</h3>
+                      <button className="beads-modal-close" onClick={() => setShowCreateModal(false)}>×</button>
+                    </div>
+                    <div className="beads-modal-body">
+                      <div className="beads-form-group">
+                        <label htmlFor="task-title">Title *</label>
+                        <input
+                          id="task-title"
+                          type="text"
+                          value={newTaskTitle}
+                          onChange={(e) => setNewTaskTitle(e.target.value)}
+                          placeholder="Task title..."
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newTaskTitle.trim()) {
+                              e.preventDefault()
+                              handleCreateTask()
+                            }
+                            if (e.key === 'Escape') setShowCreateModal(false)
+                          }}
+                        />
+                      </div>
+                      <div className="beads-form-row">
+                        <div className="beads-form-group">
+                          <label htmlFor="task-type">Type</label>
+                          <select
+                            id="task-type"
+                            value={newTaskType}
+                            onChange={(e) => setNewTaskType(e.target.value as typeof newTaskType)}
+                          >
+                            <option value="task">Task</option>
+                            <option value="bug">Bug</option>
+                            <option value="feature">Feature</option>
+                            <option value="epic">Epic</option>
+                            <option value="chore">Chore</option>
+                          </select>
+                        </div>
+                        <div className="beads-form-group">
+                          <label htmlFor="task-priority">Priority</label>
+                          <select
+                            id="task-priority"
+                            value={newTaskPriority}
+                            onChange={(e) => setNewTaskPriority(parseInt(e.target.value))}
+                          >
+                            <option value="0">P0 - Critical</option>
+                            <option value="1">P1 - High</option>
+                            <option value="2">P2 - Medium</option>
+                            <option value="3">P3 - Low</option>
+                            <option value="4">P4 - Lowest</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="beads-form-group">
+                        <label htmlFor="task-description">Description</label>
+                        <textarea
+                          id="task-description"
+                          value={newTaskDescription}
+                          onChange={(e) => setNewTaskDescription(e.target.value)}
+                          placeholder="Optional description..."
+                          rows={3}
+                        />
+                      </div>
+                      <div className="beads-form-group">
+                        <label htmlFor="task-labels">Labels</label>
+                        <input
+                          id="task-labels"
+                          type="text"
+                          value={newTaskLabels}
+                          onChange={(e) => setNewTaskLabels(e.target.value)}
+                          placeholder="Comma-separated labels..."
+                        />
+                      </div>
+                    </div>
+                    <div className="beads-modal-footer">
+                      <button className="beads-btn-cancel" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                      <button
+                        className="beads-btn-create"
+                        onClick={handleCreateTask}
+                        disabled={!newTaskTitle.trim()}
+                      >
+                        Create
+                      </button>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="beads-actions-row">
-                  <button
-                    className="beads-add-btn"
-                    onClick={() => setShowCreateForm(true)}
-                  >
-                    + Add Task
-                  </button>
-                  {tasks.some(t => t.status === 'closed') && (
-                    <button
-                      className="beads-clear-btn"
-                      onClick={handleClearCompleted}
-                      title="Clear completed tasks"
-                    >
-                      ✓
-                    </button>
-                  )}
-                  <button className="beads-refresh-btn" onClick={() => loadTasks()} title="Refresh">
-                    ↻
-                  </button>
                 </div>
               )}
             </>

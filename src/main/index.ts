@@ -666,11 +666,13 @@ ipcMain.handle('beads:show', async (_, { cwd, taskId }: { cwd: string; taskId: s
   }
 })
 
-ipcMain.handle('beads:create', async (_, { cwd, title, description, priority }: { cwd: string; title: string; description?: string; priority?: number }) => {
+ipcMain.handle('beads:create', async (_, { cwd, title, description, priority, type, labels }: { cwd: string; title: string; description?: string; priority?: number; type?: string; labels?: string }) => {
   try {
     let cmd = `bd create "${title.replace(/"/g, '\\"')}"`
     if (description) cmd += ` -d "${description.replace(/"/g, '\\"')}"`
     if (priority !== undefined) cmd += ` -p ${priority}`
+    if (type) cmd += ` -t ${type}`
+    if (labels) cmd += ` -l "${labels.replace(/"/g, '\\"')}"`
     cmd += ' --json'
     const { stdout } = await execAsync(cmd, { ...getBeadsExecOptions(), cwd })
     return { success: true, task: JSON.parse(stdout) }
