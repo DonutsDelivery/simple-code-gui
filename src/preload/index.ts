@@ -146,6 +146,9 @@ export interface ElectronAPI {
   // App utilities
   isDebugMode: () => Promise<boolean>
   refresh: () => Promise<void>
+
+  // Custom commands
+  commandsSave: (name: string, content: string, projectPath: string | null) => Promise<{ success: boolean; path?: string; error?: string }>
 }
 
 const api: ElectronAPI = {
@@ -293,7 +296,10 @@ const api: ElectronAPI = {
 
   // App utilities
   isDebugMode: () => ipcRenderer.invoke('app:isDebugMode'),
-  refresh: () => ipcRenderer.invoke('app:refresh')
+  refresh: () => ipcRenderer.invoke('app:refresh'),
+
+  // Custom commands
+  commandsSave: (name, content, projectPath) => ipcRenderer.invoke('commands:save', { name, content, projectPath })
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

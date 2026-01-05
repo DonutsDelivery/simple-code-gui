@@ -694,6 +694,7 @@ export function TiledTerminalView({
                   isActive={true}
                   theme={theme}
                   onFocus={() => onFocusTab(tab.id)}
+                  projectPath={tab.projectPath}
                 />
               </div>
             </div>

@@ -1307,6 +1307,110 @@ html, body, #root {
 }
 
 /* ============================================
+   Custom Command Modal
+   ============================================ */
+
+.custom-command-modal {
+  width: 600px;
+  max-width: 90vw;
+}
+
+.custom-command-modal .command-name-input {
+  display: flex;
+  align-items: center;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.custom-command-modal .command-prefix {
+  padding: var(--space-sm) var(--space-md);
+  padding-right: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.custom-command-modal .command-name-input input {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  padding-left: var(--space-xs);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+}
+
+.custom-command-modal .scope-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.custom-command-modal .scope-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.custom-command-modal .scope-option:hover:not(.disabled) {
+  border-color: var(--border-hover);
+}
+
+.custom-command-modal .scope-option.selected {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.custom-command-modal .scope-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.custom-command-modal .scope-option input[type="radio"] {
+  margin: 0;
+}
+
+.custom-command-modal .scope-label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.custom-command-modal .scope-path {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.custom-command-modal textarea {
+  width: 100%;
+  padding: var(--space-md);
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.custom-command-modal textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+/* ============================================
    Voice Browser Modal
    ============================================ */
 

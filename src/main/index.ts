@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, session } from 'electron'
 import { join } from 'path'
 import { mkdirSync, existsSync, writeFileSync, appendFileSync } from 'fs'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 import { spawn, exec } from 'child_process'
 import { promisify } from 'util'
 
@@ -1223,4 +1223,38 @@ ipcMain.handle('window:close', () => {
 
 ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false
+})
+
+// Custom commands
+ipcMain.handle('commands:save', async (_, { name, content, projectPath }: { name: string; content: string; projectPath: string | null }) => {
+  try {
+    // Determine the commands directory
+    let commandsDir: string
+    if (projectPath) {
+      // Project-level: .claude/commands/
+      commandsDir = join(projectPath, '.claude', 'commands')
+    } else {
+      // Global: ~/.claude/commands/
+      commandsDir = join(homedir(), '.claude', 'commands')
+    }
+
+    // Create directory if it doesn't exist
+    if (!existsSync(commandsDir)) {
+      mkdirSync(commandsDir, { recursive: true })
+    }
+
+    // Write the command file
+    const filePath = join(commandsDir, `${name}.md`)
+
+    // Check if file already exists
+    if (existsSync(filePath)) {
+      return { success: false, error: `Command "${name}" already exists` }
+    }
+
+    writeFileSync(filePath, content, 'utf8')
+
+    return { success: true, path: filePath }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
 })

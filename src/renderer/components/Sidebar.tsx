@@ -554,6 +554,44 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         isExpanded={beadsExpanded}
         onToggle={() => setBeadsExpanded(!beadsExpanded)}
       />
+      {voiceOutputEnabled && (
+        <div className="voice-options">
+          <div className="voice-slider-row">
+            <span className="voice-option-icon" title="Volume">🔊</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="voice-slider"
+            />
+            <span className="voice-slider-value">{Math.round(volume * 100)}%</span>
+          </div>
+          <div className="voice-slider-row">
+            <span className="voice-option-icon" title="Speed">⏩</span>
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+              className="voice-slider"
+            />
+            <span className="voice-slider-value">{speed.toFixed(1)}x</span>
+          </div>
+          <label className="voice-option-checkbox" title="Skip to latest message instead of queuing">
+            <input
+              type="checkbox"
+              checked={skipOnNew}
+              onChange={(e) => setSkipOnNew(e.target.checked)}
+            />
+            <span>Skip to new</span>
+          </label>
+        </div>
+      )}
       <div className="sidebar-actions">
         <VoiceControls
           activeTabId={activeTabId}
@@ -612,44 +650,6 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           ⚙️
         </button>
       </div>
-      {voiceOutputEnabled && (
-        <div className="voice-options">
-          <div className="voice-slider-row">
-            <span className="voice-option-icon" title="Volume">🔊</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))}
-              className="voice-slider"
-              title={`Volume: ${Math.round(volume * 100)}%`}
-            />
-          </div>
-          <div className="voice-slider-row">
-            <span className="voice-option-icon" title="Speed">⏩</span>
-            <input
-              type="range"
-              min="0.5"
-              max="2"
-              step="0.1"
-              value={speed}
-              onChange={(e) => setSpeed(parseFloat(e.target.value))}
-              className="voice-slider"
-              title={`Speed: ${speed.toFixed(1)}x`}
-            />
-          </div>
-          <label className="voice-option-checkbox" title="Skip to latest message instead of queuing">
-            <input
-              type="checkbox"
-              checked={skipOnNew}
-              onChange={(e) => setSkipOnNew(e.target.checked)}
-            />
-            <span>Skip to new</span>
-          </label>
-        </div>
-      )}
       <div
         className="sidebar-resize-handle"
         onMouseDown={handleMouseDown}

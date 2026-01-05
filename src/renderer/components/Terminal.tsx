@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css'
 import { Theme } from '../themes'
 import { useVoice } from '../contexts/VoiceContext'
 import { TerminalMenu, AutoWorkOptions } from './TerminalMenu'
+import { CustomCommandModal } from './CustomCommandModal'
 
 // Global buffer to persist terminal data across HMR remounts
 // Use window to persist across module re-execution during HMR
@@ -71,6 +72,7 @@ interface TerminalProps {
   isActive: boolean
   theme: Theme
   onFocus?: () => void
+  projectPath?: string | null
 }
 
 // Strip ANSI escape codes and terminal control sequences from text
@@ -139,11 +141,14 @@ function isClaudeProseResponse(text: string): boolean {
   return true
 }
 
-export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
+export function Terminal({ ptyId, isActive, theme, onFocus, projectPath }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const userScrolledUpRef = useRef(false)
+
+  // Custom command modal state
+  const [showCustomCommandModal, setShowCustomCommandModal] = useState(false)
 
   // Voice TTS integration
   const { voiceOutputEnabled, speakText } = useVoice()
@@ -165,6 +170,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
   const autoWorkAskQuestionsRef = useRef(false)  // Encourages asking questions
   const autoWorkPauseForReviewRef = useRef(false)  // Waits for user input before next task
   const autoWorkFinalEvaluationRef = useRef(false)  // Provides testing instructions when done
+  const autoWorkGitCommitRef = useRef(false)  // Git commit after each task
   const [pendingAutoWorkContinue, setPendingAutoWorkContinue] = useState(false)
   const [awaitingUserReview, setAwaitingUserReview] = useState(false)  // Waiting for user to approve
 
@@ -182,12 +188,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
     // Build the "no tasks" completion message based on finalEvaluation option
     let noTasksAction = 'say "All beads tasks complete!" and stop'
     if (autoWorkFinalEvaluationRef.current) {
-      noTasksAction = 'run "bd list --status=closed" to see all completed tasks from this session. For each completed task, provide: 1) A brief summary of what was implemented, 2) How to test it (specific steps), 3) What to look for to verify it works. End with a checklist the user can follow to evaluate all the work.'
+      noTasksAction = 'run "bd list --status=closed" to see all completed tasks from this session. For each completed task, provide: 1) A brief summary of what was implemented, 2) How to test it (specific steps), 3) What to look for to verify it works. Include any potential bugs, edge cases, or issues discovered during implementation. End with a checklist the user can follow to evaluate all the work.'
     }
 
     let prompt = `Run bd ready to check for tasks. If no tasks are available, ${noTasksAction} Otherwise, pick ONE task to work on, complete it fully, close it with bd close <id>`
     if (autoWorkAskQuestionsRef.current) {
       prompt = `Run bd ready to check for tasks. If no tasks are available, ${noTasksAction} Otherwise, pick ONE task to work on. Before starting, ask any clarifying questions you have about the requirements. Work on the task, asking questions as needed. When complete, close it with bd close <id>`
+    }
+    // Git commit after each task
+    if (autoWorkGitCommitRef.current) {
+      prompt += '. After closing the task, commit the changes to git with a descriptive message mentioning the task ID (e.g., "Implement feature X [beads-abc]") and push to remote'
     }
     if (autoWorkPauseForReviewRef.current) {
       prompt += ', then say "Task complete. Review the changes and provide feedback, or use Continue to Next Task to proceed."'
@@ -854,6 +864,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         autoWorkAskQuestionsRef.current = options?.askQuestions ?? false
         autoWorkPauseForReviewRef.current = options?.pauseForReview ?? false
         autoWorkFinalEvaluationRef.current = options?.finalEvaluation ?? false
+        autoWorkGitCommitRef.current = options?.gitCommitEachTask ?? false
         setAwaitingUserReview(false)
         console.log('[AutoWork] Mode enabled with options:', options)
 
@@ -899,6 +910,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         autoWorkAskQuestionsRef.current = false
         autoWorkPauseForReviewRef.current = false
         autoWorkFinalEvaluationRef.current = false
+        autoWorkGitCommitRef.current = false
         setAwaitingUserReview(false)
         console.log('[AutoWork] Mode disabled - will stop after current task')
         // Tell Claude to finish current task but not continue
@@ -915,9 +927,14 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         autoWorkAskQuestionsRef.current = false
         autoWorkPauseForReviewRef.current = false
         autoWorkFinalEvaluationRef.current = false
+        autoWorkGitCommitRef.current = false
         setAwaitingUserReview(false)
         console.log('[AutoWork] Mode disabled by cancel')
         window.electronAPI.writePty(ptyId, '\x1b')
+        break
+      case 'addcommand':
+        // Open custom command modal
+        setShowCustomCommandModal(true)
         break
     }
   }
@@ -932,6 +949,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus }: TerminalProps) {
         onDragOver={handleDragOver}
       />
       <TerminalMenu ptyId={ptyId} onCommand={handleMenuCommand} />
+      <CustomCommandModal
+        isOpen={showCustomCommandModal}
+        onClose={() => setShowCustomCommandModal(false)}
+        projectPath={projectPath || null}
+      />
     </div>
   )
 }

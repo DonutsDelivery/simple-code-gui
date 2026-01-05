@@ -11,6 +11,7 @@ export interface AutoWorkOptions {
   askQuestions: boolean
   pauseForReview: boolean
   finalEvaluation: boolean
+  gitCommitEachTask: boolean
 }
 
 interface MenuItem {
@@ -34,6 +35,7 @@ const defaultAutoWorkOptions: AutoWorkOptions = {
   askQuestions: false,
   pauseForReview: false,
   finalEvaluation: false,
+  gitCommitEachTask: false,
 }
 
 export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
@@ -84,6 +86,8 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
         { id: 'model', label: '/model' },
         { id: 'config', label: '/config' },
         { id: 'doctor', label: '/doctor' },
+        { id: 'divider-cmd', label: '─────────────' },
+        { id: 'addcommand', label: '+ Add Custom Command' },
       ],
     },
     {
@@ -96,6 +100,7 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
         { id: 'toggle-questions', label: 'Ask Questions', isToggle: true, toggleKey: 'askQuestions' },
         { id: 'toggle-review', label: 'Pause for Review', isToggle: true, toggleKey: 'pauseForReview' },
         { id: 'toggle-evaluation', label: 'Final Evaluation', isToggle: true, toggleKey: 'finalEvaluation' },
+        { id: 'toggle-git', label: 'Git Commit Each Task', isToggle: true, toggleKey: 'gitCommitEachTask' },
         { id: 'divider2', label: '─────────────' },
         { id: 'continuework', label: 'Continue to Next Task' },
         { id: 'stopwork', label: 'Stop After Task' },

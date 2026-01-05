@@ -583,6 +583,7 @@ function App() {
                       isActive={tab.id === activeTabId}
                       theme={currentTheme}
                       onFocus={() => setLastFocusedTabId(tab.id)}
+                      projectPath={tab.projectPath}
                     />
                   </div>
                 ))}
