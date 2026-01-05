@@ -186,16 +186,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath }: Termi
   // Build autowork prompt based on current options
   const buildAutoWorkPrompt = () => {
     // Build the "no tasks" completion message based on finalEvaluation option
-    let noTasksAction = 'say "All beads tasks complete!" and stop'
+    let noTasksAction = 'commit all changes to git with a summary message and push to remote, then say "All beads tasks complete!" and stop'
     if (autoWorkFinalEvaluationRef.current) {
-      noTasksAction = 'run "bd list --status=closed" to see all completed tasks from this session. For each completed task, provide: 1) A brief summary of what was implemented, 2) How to test it (specific steps), 3) What to look for to verify it works. Include any potential bugs, edge cases, or issues discovered during implementation. End with a checklist the user can follow to evaluate all the work.'
+      noTasksAction = 'commit all changes to git with a summary message and push to remote. Then run "bd list --status=closed" to see all completed tasks from this session. For each completed task, provide: 1) A brief summary of what was implemented, 2) How to test it (specific steps), 3) What to look for to verify it works. Include any potential bugs, edge cases, or issues discovered during implementation. End with a checklist the user can follow to evaluate all the work.'
     }
 
     let prompt = `Run bd ready to check for tasks. If no tasks are available, ${noTasksAction} Otherwise, pick ONE task to work on, complete it fully, close it with bd close <id>`
     if (autoWorkAskQuestionsRef.current) {
       prompt = `Run bd ready to check for tasks. If no tasks are available, ${noTasksAction} Otherwise, pick ONE task to work on. Before starting, ask any clarifying questions you have about the requirements. Work on the task, asking questions as needed. When complete, close it with bd close <id>`
     }
-    // Git commit after each task
+    // Git commit after each task (in addition to final commit)
     if (autoWorkGitCommitRef.current) {
       prompt += '. After closing the task, commit the changes to git with a descriptive message mentioning the task ID (e.g., "Implement feature X [beads-abc]") and push to remote'
     }
