@@ -349,7 +349,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
 
     setShowDetailModal(true)
     setDetailLoading(true)
-    setEditingDetail(false)
+    setEditingDetail(true)
 
     try {
       const result = await window.electronAPI.beadsShow(projectPath, task.id)
