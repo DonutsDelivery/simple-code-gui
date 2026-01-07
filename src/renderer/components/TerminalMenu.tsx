@@ -206,6 +206,40 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
     }
   }
 
+  // Update dropdown position after it renders (to get its height for upward positioning)
+  useEffect(() => {
+    if (openDropdown && dropdownPos && dropdownRef.current) {
+      const dropdown = dropdownRef.current
+      const dropdownHeight = dropdown.offsetHeight
+      const dropdownWidth = dropdown.offsetWidth
+      const viewportWidth = window.innerWidth
+
+      // Position above the button (open upwards)
+      let top = dropdownPos.top - dropdownHeight
+      let left = dropdownPos.left
+
+      // Keep within viewport horizontally
+      if (left + dropdownWidth > viewportWidth - 10) {
+        left = viewportWidth - dropdownWidth - 10
+      }
+      if (left < 10) {
+        left = 10
+      }
+
+      // If not enough space above, position below
+      if (top < 10) {
+        const btn = categoryRefs.current.get(openDropdown)
+        if (btn) {
+          top = dropdownPos.top + btn.offsetHeight
+        }
+      }
+
+      dropdown.style.top = `${top}px`
+      dropdown.style.left = `${left}px`
+      dropdown.style.opacity = '1'
+    }
+  }, [openDropdown, dropdownPos])
+
   // Render dropdown via portal to escape overflow:hidden
   const renderDropdown = () => {
     if (!openDropdown || !dropdownPos) return null
@@ -213,42 +247,13 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
     const category = menuCategories.find(c => c.id === openDropdown)
     if (!category) return null
 
+    // Initial style - invisible until useEffect positions it
     const dropdownStyle: React.CSSProperties = {
       position: 'fixed',
+      top: 0,
+      left: 0,
       opacity: 0,
-      pointerEvents: 'none'
-    }
-
-    if (dropdownRef.current) {
-      const rect = dropdownRef.current.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
-      const viewportHeight = window.innerHeight
-
-      let left = dropdownPos.left
-      if (left + rect.width > viewportWidth - 10) {
-        left = viewportWidth - rect.width - 10
-      }
-      if (left < 10) {
-        left = 10
-      }
-
-      let top = dropdownPos.top
-      const btn = categoryRefs.current.get(openDropdown)
-      if (btn) {
-        top += btn.offsetHeight
-      }
-
-      if (top + rect.height > viewportHeight - 10) {
-        top = dropdownPos.top - rect.height
-      }
-      if (top < 10) {
-        top = 10
-      }
-
-      dropdownStyle.left = left
-      dropdownStyle.top = top
-      dropdownStyle.opacity = 1
-      dropdownStyle.pointerEvents = 'auto'
+      zIndex: 10000,
     }
 
     return ReactDOM.createPortal(
@@ -303,7 +308,7 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
                   onClick={() => toggleDropdown(category.id)}
                 >
                   {category.label}
-                  <span className="dropdown-arrow">▼</span>
+                  <span className="dropdown-arrow">▲</span>
                 </button>
               </div>
             ))}
