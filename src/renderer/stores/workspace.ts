@@ -12,6 +12,7 @@ export interface Project {
   color?: string
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
+  backend?: 'default' | 'claude' | 'gemini'
 }
 
 export interface OpenTab {
@@ -20,6 +21,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
+  backend?: string
 }
 
 interface WorkspaceState {

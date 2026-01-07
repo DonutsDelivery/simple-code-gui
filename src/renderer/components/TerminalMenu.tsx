@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom'
 interface TerminalMenuProps {
   ptyId: string
   onCommand: (command: string, options?: AutoWorkOptions) => void
+  currentBackend: string
+  onBackendChange: (backend: string) => void
 }
 
 export interface AutoWorkOptions {
@@ -38,7 +40,7 @@ const defaultAutoWorkOptions: AutoWorkOptions = {
   gitCommitEachTask: false,
 }
 
-export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
+export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange }: TerminalMenuProps) {
   // Default to expanded, persist state across restarts
   const [isExpanded, setIsExpanded] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -114,6 +116,14 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
         { id: 'cancel', label: 'Cancel Request' },
       ],
     },
+    {
+      id: 'backend',
+      label: 'Backend',
+      items: [
+        { id: 'claude', label: 'Claude' },
+        { id: 'gemini', label: 'Gemini' },
+      ],
+    },
   ]
 
   // Close dropdown (not the bar) when clicking outside
@@ -148,9 +158,15 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [openDropdown, isExpanded])
 
-  const handleMenuAction = (item: MenuItem) => {
+  const handleMenuAction = (item: MenuItem, categoryId?: string) => {
     if (item.id.startsWith('divider')) {
       return // Do nothing for dividers
+    }
+
+    if (categoryId === 'backend') {
+      onBackendChange(item.id)
+      setOpenDropdown(null)
+      return
     }
 
     if (item.isToggle && item.toggleKey) {
@@ -196,14 +212,49 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
     const category = menuCategories.find(c => c.id === openDropdown)
     if (!category) return null
 
+    const dropdownStyle: React.CSSProperties = {
+      position: 'fixed',
+      opacity: 0,
+      pointerEvents: 'none'
+    }
+
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+
+      let left = dropdownPos.left
+      if (left + rect.width > viewportWidth - 10) {
+        left = viewportWidth - rect.width - 10
+      }
+      if (left < 10) {
+        left = 10
+      }
+
+      let top = dropdownPos.top
+      const btn = categoryRefs.current.get(openDropdown)
+      if (btn) {
+        top += btn.offsetHeight
+      }
+
+      if (top + rect.height > viewportHeight - 10) {
+        top = dropdownPos.top - rect.height
+      }
+      if (top < 10) {
+        top = 10
+      }
+
+      dropdownStyle.left = left
+      dropdownStyle.top = top
+      dropdownStyle.opacity = 1
+      dropdownStyle.pointerEvents = 'auto'
+    }
+
     return ReactDOM.createPortal(
       <div
+        ref={dropdownRef}
         className="terminal-menu-dropdown-portal"
-        style={{
-          position: 'fixed',
-          bottom: `calc(100vh - ${dropdownPos.top}px + 4px)`,
-          left: dropdownPos.left,
-        }}
+        style={dropdownStyle}
       >
         {category.items.map((item) => {
           if (item.id.startsWith('divider')) {
@@ -220,8 +271,8 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
           return (
             <button
               key={item.id}
-              className={`terminal-menu-item ${isToggle ? 'toggle-item' : ''} ${isChecked ? 'checked' : ''}`}
-              onClick={() => handleMenuAction(item)}
+              className={`terminal-menu-item ${isToggle ? 'toggle-item' : ''} ${isChecked ? 'checked' : ''} ${category.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
+              onClick={() => handleMenuAction(item, category.id)}
             >
               {isToggle && (
                 <span className="toggle-indicator">{isChecked ? '✓' : ' '}</span>
@@ -274,3 +325,4 @@ export function TerminalMenu({ ptyId, onCommand }: TerminalMenuProps) {
     </>
   )
 }
+

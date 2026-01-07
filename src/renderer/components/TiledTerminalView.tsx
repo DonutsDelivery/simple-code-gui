@@ -15,6 +15,7 @@ interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
+  backend?: string
 }
 
 interface Project {
@@ -695,6 +696,7 @@ export function TiledTerminalView({
                   theme={theme}
                   onFocus={() => onFocusTab(tab.id)}
                   projectPath={tab.projectPath}
+                  backend={tab.backend}
                 />
               </div>
             </div>

@@ -7,6 +7,9 @@ export interface Settings {
   voiceVolume?: number
   voiceSpeed?: number
   voiceSkipOnNew?: boolean
+  autoAcceptTools?: string[]
+  permissionMode?: string
+  backend?: string
 }
 
 export interface ElectronAPI {
@@ -112,8 +115,10 @@ export interface ElectronAPI {
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void
+  setPtyBackend: (id: string, backend: string) => Promise<void>
   onPtyData: (id: string, callback: (data: string) => void) => () => void
   onPtyExit: (id: string, callback: (code: number) => void) => () => void
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: string }) => void) => () => void
 
   // API Server
   apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
@@ -249,6 +254,7 @@ const api: ElectronAPI = {
   writePty: (id, data) => ipcRenderer.send('pty:write', { id, data }),
   resizePty: (id, cols, rows) => ipcRenderer.send('pty:resize', { id, cols, rows }),
   killPty: (id) => ipcRenderer.send('pty:kill', id),
+  setPtyBackend: (id, backend) => ipcRenderer.invoke('pty:set-backend', { id, backend }),
 
   onPtyData: (id, callback) => {
     const handler = (_: any, data: string) => callback(data)
@@ -260,6 +266,12 @@ const api: ElectronAPI = {
     const handler = (_: any, code: number) => callback(code)
     ipcRenderer.on(`pty:exit:${id}`, handler)
     return () => ipcRenderer.removeListener(`pty:exit:${id}`, handler)
+  },
+
+  onPtyRecreated: (callback) => {
+    const handler = (_: any, data: { oldId: string; newId: string; backend: string }) => callback(data)
+    ipcRenderer.on('pty:recreated', handler)
+    return () => ipcRenderer.removeListener('pty:recreated', handler)
   },
 
   // API Server

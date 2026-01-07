@@ -9,6 +9,7 @@ interface ClaudeProcess {
   pty: pty.IPty
   cwd: string
   sessionId?: string
+  backend?: string
 }
 
 function getEnhancedEnv(): { [key: string]: string } {
@@ -43,6 +44,44 @@ function getEnhancedEnv(): { [key: string]: string } {
 
   console.log('Enhanced PATH for PTY:', enhancedPath.substring(0, 200) + '...')
   return env
+}
+
+// Find executable for the given backend
+function findExecutable(backend: string = 'claude'): string {
+  if (backend === 'gemini') {
+    return findGeminiExecutable()
+  }
+  return findClaudeExecutable()
+}
+
+// Find gemini executable - on Windows, npm installs .cmd files
+function findGeminiExecutable(): string {
+  if (!isWindows) {
+    return 'gemini'
+  }
+
+  // On Windows, check for gemini.cmd in portable npm-global first
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    const geminiCmd = path.join(dir, 'gemini.cmd')
+    if (fs.existsSync(geminiCmd)) {
+      console.log('Found Gemini at (portable):', geminiCmd)
+      return geminiCmd
+    }
+  }
+
+  // Then check for gemini.cmd in system npm paths
+  const additionalPaths = getAdditionalPaths()
+  for (const dir of additionalPaths) {
+    const geminiCmd = path.join(dir, 'gemini.cmd')
+    if (fs.existsSync(geminiCmd)) {
+      console.log('Found Gemini at:', geminiCmd)
+      return geminiCmd
+    }
+  }
+
+  // Fall back to just 'gemini' and let PATH resolve it
+  return 'gemini'
 }
 
 // Find claude executable - on Windows, npm installs .cmd files
@@ -80,7 +119,7 @@ export class PtyManager {
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
   private exitCallbacks: Map<string, (code: number) => void> = new Map()
 
-  spawn(cwd: string, sessionId?: string, autoAcceptTools?: string[], permissionMode?: string, model?: string): string {
+  spawn(cwd: string, sessionId?: string, autoAcceptTools?: string[], permissionMode?: string, model?: string, backend?: string): string {
     const id = crypto.randomUUID()
 
     const args: string[] = []
@@ -105,8 +144,8 @@ export class PtyManager {
       }
     }
 
-    const claudeExe = findClaudeExecutable()
-    console.log('Spawning Claude:', claudeExe, 'in', cwd, 'with args:', args)
+    const exe = findExecutable(backend)
+    console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)
 
     const ptyOptions: pty.IPtyForkOptions = {
       name: 'xterm-256color',
@@ -122,13 +161,14 @@ export class PtyManager {
       (ptyOptions as any).useConpty = false;
     }
 
-    const shell = pty.spawn(claudeExe, args, ptyOptions)
+    const shell = pty.spawn(exe, args, ptyOptions)
 
     const proc: ClaudeProcess = {
       id,
       pty: shell,
       cwd,
-      sessionId
+      sessionId,
+      backend
     }
 
     this.processes.set(id, proc)
@@ -197,6 +237,10 @@ export class PtyManager {
       this.kill(id)
     }
     this.processes.clear()
+  }
+
+  getProcess(id: string): ClaudeProcess | undefined {
+    return this.processes.get(id)
   }
 
   onData(id: string, callback: (data: string) => void): void {

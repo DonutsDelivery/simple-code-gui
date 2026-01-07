@@ -55,6 +55,11 @@ const PERMISSION_MODES = [
   { label: 'Bypass All', value: 'bypassPermissions', desc: 'Skip all permission checks' },
 ]
 
+const BACKEND_MODES = [
+  { label: 'Claude', value: 'claude', desc: 'Use Claude for code generation' },
+  { label: 'Gemini', value: 'gemini', desc: 'Use Gemini for code generation' },
+]
+
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -67,6 +72,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
   const [autoAcceptTools, setAutoAcceptTools] = useState<string[]>([])
   const [permissionMode, setPermissionMode] = useState('default')
   const [customTool, setCustomTool] = useState('')
+  const [backend, setBackend] = useState('claude')
 
   // Voice context for active whisper model
   const { whisperModel: activeWhisperModel, setWhisperModel: setActiveWhisperModel } = useVoice()
@@ -118,6 +124,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
         setSelectedTheme(settings.theme || 'default')
         setAutoAcceptTools(settings.autoAcceptTools || [])
         setPermissionMode(settings.permissionMode || 'default')
+        setBackend(settings.backend || 'claude')
       })
 
       // Load voice settings (active voice)
@@ -165,7 +172,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
   }
 
   const handleSave = async () => {
-    await window.electronAPI.saveSettings({ defaultProjectDir, theme: selectedTheme, autoAcceptTools, permissionMode })
+    await window.electronAPI.saveSettings({ defaultProjectDir, theme: selectedTheme, autoAcceptTools, permissionMode, backend })
     // Save voice settings including XTTS quality settings
     await window.electronAPI.voiceApplySettings?.({
       ttsVoice: selectedVoice,
@@ -470,6 +477,28 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
                     value={mode.value}
                     checked={permissionMode === mode.value}
                     onChange={(e) => setPermissionMode(e.target.value)}
+                  />
+                  <span className="mode-label">{mode.label}</span>
+                  <span className="mode-desc">{mode.desc}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Backend</label>
+            <p className="form-hint">
+              The backend to use for the terminal sessions.
+            </p>
+            <div className="permission-mode-options">
+              {BACKEND_MODES.map((mode) => (
+                <label key={mode.value} className={`permission-mode-option ${backend === mode.value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="backend"
+                    value={mode.value}
+                    checked={backend === mode.value}
+                    onChange={(e) => setBackend(e.target.value)}
                   />
                   <span className="mode-label">{mode.label}</span>
                   <span className="mode-desc">{mode.desc}</span>

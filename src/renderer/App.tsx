@@ -45,6 +45,7 @@ declare global {
       killPty: (id: string) => void
       onPtyData: (id: string, callback: (data: string) => void) => () => void
       onPtyExit: (id: string, callback: (code: number) => void) => () => void
+      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: string }) => void) => () => void
       // API Server
       apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
       apiStop: (projectPath: string) => Promise<{ success: boolean }>
@@ -135,6 +136,7 @@ function App() {
   }>({ status: 'idle' })
   const [sidebarWidth, setSidebarWidth] = useState(280)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [settings, setSettings] = useState<{ defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string; backend?: string } | null>(null)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
 
@@ -154,6 +156,7 @@ function App() {
 
         // Load and apply theme
         const settings = await window.electronAPI.getSettings()
+        setSettings(settings)
         const theme = getThemeById(settings.theme || 'default')
         applyTheme(theme)
         setCurrentTheme(theme)
@@ -229,7 +232,8 @@ function App() {
                 projectPath: savedTab.projectPath,
                 sessionId: sessionIdToRestore,
                 title: titleToRestore,
-                ptyId
+                ptyId,
+                backend: settings?.backend || 'claude'
               })
               // Track this session as now open
               if (sessionIdToRestore) {
@@ -351,7 +355,8 @@ function App() {
           id: ptyId,
           projectPath,
           title,
-          ptyId
+          ptyId,
+          backend: settings?.backend || 'claude'
         })
       } catch (e: any) {
         console.error('Failed to spawn PTY for API request:', e)
@@ -360,6 +365,24 @@ function App() {
 
     return unsubscribe
   }, [addTab])
+
+  // Listen for PTY recreation events
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onPtyRecreated(({ oldId, newId, backend }) => {
+      console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
+      // Find the tab with the old ID
+      const tab = useWorkspaceStore.getState().openTabs.find(t => t.id === oldId)
+      if (tab) {
+        // Update the tab with the new ID and backend
+        updateTab(oldId, { id: newId, ptyId: newId, backend })
+        // If it was the active tab, update the active tab ID
+        if (useWorkspaceStore.getState().activeTabId === oldId) {
+          setActiveTab(newId)
+        }
+      }
+    })
+    return unsubscribe
+  }, [updateTab, setActiveTab])
 
   const handleAddProject = useCallback(async () => {
     const path = await window.electronAPI.addProject()
@@ -396,7 +419,8 @@ function App() {
         projectPath,
         sessionId,
         title,
-        ptyId
+        ptyId,
+        backend: settings?.backend || 'claude'
       })
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
@@ -601,17 +625,17 @@ function App() {
                     key={tab.id}
                     className={`terminal-wrapper ${tab.id === activeTabId ? 'active' : ''}`}
                   >
-                    <Terminal
-                      ptyId={tab.id}
-                      isActive={tab.id === activeTabId}
-                      theme={currentTheme}
-                      onFocus={() => setLastFocusedTabId(tab.id)}
-                      projectPath={tab.projectPath}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
+                                    <Terminal
+                                      ptyId={tab.id}
+                                      isActive={tab.id === activeTabId}
+                                      theme={currentTheme}
+                                      onFocus={() => setLastFocusedTabId(tab.id)}
+                                      projectPath={tab.projectPath}
+                                      backend={tab.backend}
+                                    />
+                                  </div>
+                                ))}
+                              </div>            ) : (
               <TiledTerminalView
                 tabs={openTabs}
                 projects={projects}

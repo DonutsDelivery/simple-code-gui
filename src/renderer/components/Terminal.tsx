@@ -73,6 +73,7 @@ interface TerminalProps {
   theme: Theme
   onFocus?: () => void
   projectPath?: string | null
+  backend?: string
 }
 
 // Strip ANSI escape codes and terminal control sequences from text
@@ -141,7 +142,7 @@ function isClaudeProseResponse(text: string): boolean {
   return true
 }
 
-export function Terminal({ ptyId, isActive, theme, onFocus, projectPath }: TerminalProps) {
+export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -149,6 +150,10 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath }: Termi
 
   // Custom command modal state
   const [showCustomCommandModal, setShowCustomCommandModal] = useState(false)
+
+  const handleBackendChange = (newBackend: string) => {
+    window.electronAPI.setPtyBackend(ptyId, newBackend)
+  }
 
   // Voice TTS integration
   const { voiceOutputEnabled, speakText } = useVoice()
@@ -948,7 +953,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath }: Termi
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       />
-      <TerminalMenu ptyId={ptyId} onCommand={handleMenuCommand} />
+      <TerminalMenu
+        ptyId={ptyId}
+        onCommand={handleMenuCommand}
+        currentBackend={backend || 'claude'}
+        onBackendChange={handleBackendChange}
+      />
       <CustomCommandModal
         isOpen={showCustomCommandModal}
         onClose={() => setShowCustomCommandModal(false)}

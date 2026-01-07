@@ -277,11 +277,19 @@ ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model }: { cwd: string; sessio
     const project = workspace.projects.find(p => p.path === cwd)
     const autoAcceptTools = project?.autoAcceptTools
     const permissionMode = project?.permissionMode
+
+    // Get backend from global settings
+    const settings = sessionStore.getSettings()
+    const backend = settings.backend || 'claude'
+
+    // If backend is gemini, always start a new session, ignore sessionId
+    const effectiveSessionId = backend === 'claude' ? sessionId : undefined;
+
     // Use provided model (from API) or fall back to pending prompt's model
     const pending = pendingApiPrompts.get(cwd)
     const effectiveModel = model || pending?.model
 
-    const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode, effectiveModel)
+    const id = ptyManager.spawn(cwd, effectiveSessionId, autoAcceptTools, permissionMode, effectiveModel, backend)
 
     // Track PTY to project mapping
     ptyToProject.set(id, cwd)
@@ -338,6 +346,39 @@ ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; row
 ipcMain.on('pty:kill', (_, id: string) => {
   ptyToProject.delete(id)
   ptyManager.kill(id)
+})
+
+ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: string }) => {
+  const process = ptyManager.getProcess(oldId)
+  if (!process) {
+    return
+  }
+
+  const { cwd, sessionId, backend: oldBackend } = process
+
+  let effectiveSessionId = sessionId;
+  if (oldBackend !== newBackend) {
+    effectiveSessionId = undefined;
+  }
+  ptyManager.kill(oldId)
+
+  const newId = ptyManager.spawn(cwd, effectiveSessionId, undefined, undefined, undefined, newBackend)
+  const projectPath = ptyToProject.get(oldId)
+  if (projectPath) {
+    ptyToProject.set(newId, projectPath)
+    ptyToProject.delete(oldId)
+  }
+
+  ptyManager.onData(newId, (data) => {
+    mainWindow?.webContents.send(`pty:data:${newId}`, data)
+  })
+
+  ptyManager.onExit(newId, (code) => {
+    mainWindow?.webContents.send(`pty:exit:${newId}`, code)
+    ptyToProject.delete(newId)
+  })
+
+  mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend })
 })
 
 // Debug logging to file
