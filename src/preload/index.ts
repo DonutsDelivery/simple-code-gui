@@ -9,7 +9,7 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'claude' | 'gemini' | 'codex'
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode'
 }
 
 export interface ElectronAPI {
@@ -40,6 +40,18 @@ export interface ElectronAPI {
   gitInstall: () => Promise<{ success: boolean; error?: string; method?: string; message?: string }>
   pythonInstall: () => Promise<{ success: boolean; error?: string; method?: string }>
   onInstallProgress: (callback: (data: { type: string; status: string; percent?: number }) => void) => () => void
+
+  // Gemini CLI
+  geminiCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
+  geminiInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
+
+  // Codex CLI
+  codexCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
+  codexInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
+
+  // OpenCode CLI
+  opencodeCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
+  opencodeInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
 
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
@@ -192,6 +204,18 @@ const api: ElectronAPI = {
     ipcRenderer.on('install:progress', handler)
     return () => ipcRenderer.removeListener('install:progress', handler)
   },
+
+  // Gemini CLI
+  geminiCheck: () => ipcRenderer.invoke('gemini:check'),
+  geminiInstall: () => ipcRenderer.invoke('gemini:install'),
+
+  // Codex CLI
+  codexCheck: () => ipcRenderer.invoke('codex:check'),
+  codexInstall: () => ipcRenderer.invoke('codex:install'),
+
+  // OpenCode CLI
+  opencodeCheck: () => ipcRenderer.invoke('opencode:check'),
+  opencodeInstall: () => ipcRenderer.invoke('opencode:install'),
 
   // Beads
   beadsCheck: (cwd) => ipcRenderer.invoke('beads:check', cwd),

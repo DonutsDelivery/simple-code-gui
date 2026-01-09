@@ -1,4 +1,4 @@
-export type BackendId = 'claude' | 'gemini' | 'codex'
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode'
 
 export interface CommandMenuItem {
   id: string
@@ -71,15 +71,34 @@ const codexCommandItems: CommandMenuItem[] = [
   { id: 'addcommand', label: '+ Add Custom Command' },
 ]
 
+const opencodeCommandItems: CommandMenuItem[] = [
+  { id: 'help', label: '/help', command: '/help' },
+  { id: 'clear', label: '/clear', command: '/clear' },
+  { id: 'stats', label: '/stats', command: '/stats' },
+  { id: 'model', label: '/model', command: '/model' },
+  { id: 'session', label: '/session', command: '/session' },
+  { id: 'mcp', label: '/mcp', command: '/mcp' },
+  { id: 'agent', label: '/agent', command: '/agent' },
+  { id: 'divider-opencode', label: '─────────────' },
+  { id: 'auth', label: '/auth', command: '/auth' },
+  { id: 'export', label: '/export', command: '/export' },
+  { id: 'import', label: '/import', command: '/import' },
+  { id: 'github', label: '/github', command: '/github' },
+  { id: 'quit', label: '/quit', command: '/quit' },
+  { id: 'divider-cmd', label: '─────────────' },
+  { id: 'addcommand', label: '+ Add Custom Command' },
+]
+
 const backendCommandItems: Record<BackendId, CommandMenuItem[]> = {
   claude: claudeCommandItems,
   gemini: geminiCommandItems,
   codex: codexCommandItems,
+  opencode: opencodeCommandItems,
 }
 
 const normalizeBackend = (backend?: string): BackendId | null => {
   if (!backend || backend === 'default') return 'claude'
-  if (backend === 'claude' || backend === 'gemini' || backend === 'codex') {
+  if (backend === 'claude' || backend === 'gemini' || backend === 'codex' || backend === 'opencode') {
     return backend
   }
   return null

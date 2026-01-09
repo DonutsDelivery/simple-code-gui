@@ -688,6 +688,198 @@ ipcMain.handle('claude:install', async () => {
   }
 })
 
+// Gemini CLI installation check and management
+let geminiAvailable: boolean | null = null
+
+async function checkGeminiInstalled(): Promise<boolean> {
+  if (geminiAvailable !== null) return geminiAvailable
+  try {
+    await execAsync('gemini --version', getExecOptions())
+    geminiAvailable = true
+  } catch {
+    geminiAvailable = false
+  }
+  return geminiAvailable
+}
+
+ipcMain.handle('gemini:check', async () => {
+  const installed = await checkGeminiInstalled()
+  const npmInstalled = await checkNpmInstalled()
+  return { installed, npmInstalled }
+})
+
+ipcMain.handle('gemini:install', async () => {
+  try {
+    // Reset cache so we re-check after install
+    geminiAvailable = null
+
+    // Check if portable npm is available
+    const portableNpm = getPortableNpmPath()
+    if (portableNpm) {
+      // Use portable npm
+      mainWindow?.webContents.send('install:progress', { type: 'gemini', status: 'Installing Gemini CLI...', percent: 10 })
+      const npmPath = portableNpm
+      await execAsync(`"${npmPath}" install -g @google/gemini-cli`, { ...getExecOptions(), timeout: 300000 })
+
+      // Update portable bin dirs
+      const portableDirs = getPortableBinDirs()
+      setPortableBinDirs(portableDirs)
+
+      mainWindow?.webContents.send('install:progress', { type: 'gemini', status: 'Verifying installation...', percent: 90 })
+      const installed = await checkGeminiInstalled()
+      mainWindow?.webContents.send('install:progress', { type: 'gemini', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+      return { success: installed, error: installed ? undefined : 'Installation completed but gemini command not found' }
+    }
+
+    // Fallback to system npm
+    const hasNpm = await checkNpmInstalled()
+    if (!hasNpm) {
+      return { success: false, error: 'npm is not installed. Please install Node.js first.', needsNode: true }
+    }
+
+    // Install Gemini CLI globally via npm
+    mainWindow?.webContents.send('install:progress', { type: 'gemini', status: 'Installing Gemini CLI...', percent: 10 })
+    await execAsync('npm install -g @google/gemini-cli', { ...getExecOptions(), timeout: 300000 })
+
+    // Verify installation
+    mainWindow?.webContents.send('install:progress', { type: 'gemini', status: 'Verifying installation...', percent: 90 })
+    const installed = await checkGeminiInstalled()
+    mainWindow?.webContents.send('install:progress', { type: 'gemini', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+    return { success: installed, error: installed ? undefined : 'Installation completed but gemini command not found' }
+  } catch (e: any) {
+    geminiAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// Codex CLI installation check and management
+let codexAvailable: boolean | null = null
+
+async function checkCodexInstalled(): Promise<boolean> {
+  if (codexAvailable !== null) return codexAvailable
+  try {
+    await execAsync('codex --version', getExecOptions())
+    codexAvailable = true
+  } catch {
+    codexAvailable = false
+  }
+  return codexAvailable
+}
+
+ipcMain.handle('codex:check', async () => {
+  const installed = await checkCodexInstalled()
+  const npmInstalled = await checkNpmInstalled()
+  return { installed, npmInstalled }
+})
+
+ipcMain.handle('codex:install', async () => {
+  try {
+    // Reset cache so we re-check after install
+    codexAvailable = null
+
+    // Check if portable npm is available
+    const portableNpm = getPortableNpmPath()
+    if (portableNpm) {
+      // Use portable npm
+      mainWindow?.webContents.send('install:progress', { type: 'codex', status: 'Installing Codex CLI...', percent: 10 })
+      const npmPath = portableNpm
+      await execAsync(`"${npmPath}" install -g @openai/codex`, { ...getExecOptions(), timeout: 300000 })
+
+      // Update portable bin dirs
+      const portableDirs = getPortableBinDirs()
+      setPortableBinDirs(portableDirs)
+
+      mainWindow?.webContents.send('install:progress', { type: 'codex', status: 'Verifying installation...', percent: 90 })
+      const installed = await checkCodexInstalled()
+      mainWindow?.webContents.send('install:progress', { type: 'codex', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+      return { success: installed, error: installed ? undefined : 'Installation completed but codex command not found' }
+    }
+
+    // Fallback to system npm
+    const hasNpm = await checkNpmInstalled()
+    if (!hasNpm) {
+      return { success: false, error: 'npm is not installed. Please install Node.js first.', needsNode: true }
+    }
+
+    // Install Codex CLI globally via npm
+    mainWindow?.webContents.send('install:progress', { type: 'codex', status: 'Installing Codex CLI...', percent: 10 })
+    await execAsync('npm install -g @openai/codex', { ...getExecOptions(), timeout: 300000 })
+
+    // Verify installation
+    mainWindow?.webContents.send('install:progress', { type: 'codex', status: 'Verifying installation...', percent: 90 })
+    const installed = await checkCodexInstalled()
+    mainWindow?.webContents.send('install:progress', { type: 'codex', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+    return { success: installed, error: installed ? undefined : 'Installation completed but codex command not found' }
+  } catch (e: any) {
+    codexAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// OpenCode CLI installation check and management
+let opencodeAvailable: boolean | null = null
+
+async function checkOpenCodeInstalled(): Promise<boolean> {
+  if (opencodeAvailable !== null) return opencodeAvailable
+  try {
+    await execAsync('opencode --version', getExecOptions())
+    opencodeAvailable = true
+  } catch {
+    opencodeAvailable = false
+  }
+  return opencodeAvailable
+}
+
+ipcMain.handle('opencode:check', async () => {
+  const installed = await checkOpenCodeInstalled()
+  const npmInstalled = await checkNpmInstalled()
+  return { installed, npmInstalled }
+})
+
+ipcMain.handle('opencode:install', async () => {
+  try {
+    // Reset cache so we re-check after install
+    opencodeAvailable = null
+
+    // Check if portable npm is available
+    const portableNpm = getPortableNpmPath()
+    if (portableNpm) {
+      // Use portable npm
+      mainWindow?.webContents.send('install:progress', { type: 'opencode', status: 'Installing OpenCode CLI...', percent: 10 })
+      const npmPath = portableNpm
+      await execAsync(`"${npmPath}" install -g opencode-ai`, { ...getExecOptions(), timeout: 300000 })
+
+      // Update portable bin dirs
+      const portableDirs = getPortableBinDirs()
+      setPortableBinDirs(portableDirs)
+
+      mainWindow?.webContents.send('install:progress', { type: 'opencode', status: 'Verifying installation...', percent: 90 })
+      const installed = await checkOpenCodeInstalled()
+      mainWindow?.webContents.send('install:progress', { type: 'opencode', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+      return { success: installed, error: installed ? undefined : 'Installation completed but opencode command not found' }
+    }
+
+    // Fallback to system npm
+    const hasNpm = await checkNpmInstalled()
+    if (!hasNpm) {
+      return { success: false, error: 'npm is not installed. Please install Node.js first.', needsNode: true }
+    }
+
+    // Install OpenCode CLI globally via npm
+    mainWindow?.webContents.send('install:progress', { type: 'opencode', status: 'Installing OpenCode CLI...', percent: 10 })
+    await execAsync('npm install -g opencode-ai', { ...getExecOptions(), timeout: 300000 })
+
+    // Verify installation
+    mainWindow?.webContents.send('install:progress', { type: 'opencode', status: 'Verifying installation...', percent: 90 })
+    const installed = await checkOpenCodeInstalled()
+    mainWindow?.webContents.send('install:progress', { type: 'opencode', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+    return { success: installed, error: installed ? undefined : 'Installation completed but opencode command not found' }
+  } catch (e: any) {
+    opencodeAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
 // Beads integration
 let beadsAvailable: boolean | null = null
 

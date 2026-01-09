@@ -14,7 +14,7 @@ export interface Project {
   color?: string              // Project color for visual identification
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' // Per-project backend (overrides global)
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' // Per-project backend (overrides global)
 }
 
 export interface OpenTab {
@@ -52,7 +52,7 @@ export interface Settings {
   theme: string
   autoAcceptTools?: string[]  // List of tool patterns to auto-accept (e.g., "Bash(git:*)", "Read", "Write")
   permissionMode?: string     // Permission mode: default, acceptEdits, dontAsk, bypassPermissions
-  backend?: 'claude' | 'gemini' | 'codex'
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode'
   voiceOutputEnabled?: boolean
   voiceVolume?: number
   voiceSpeed?: number

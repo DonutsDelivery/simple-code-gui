@@ -54,6 +54,9 @@ function findExecutable(backend: string = 'claude'): string {
   if (backend === 'codex') {
     return findCodexExecutable()
   }
+  if (backend === 'opencode') {
+    return findOpenCodeExecutable()
+  }
   return findClaudeExecutable()
 }
 
@@ -115,6 +118,36 @@ function findCodexExecutable(): string {
 
   // Fall back to just 'codex' and let PATH resolve it
   return 'codex'
+}
+
+// Find opencode executable - on Windows, npm installs .cmd files
+function findOpenCodeExecutable(): string {
+  if (!isWindows) {
+    return 'opencode'
+  }
+
+  // On Windows, check for opencode.cmd in portable npm-global first
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    const opencodeCmd = path.join(dir, 'opencode.cmd')
+    if (fs.existsSync(opencodeCmd)) {
+      console.log('Found OpenCode at (portable):', opencodeCmd)
+      return opencodeCmd
+    }
+  }
+
+  // Then check for opencode.cmd in system npm paths
+  const additionalPaths = getAdditionalPaths()
+  for (const dir of additionalPaths) {
+    const opencodeCmd = path.join(dir, 'opencode.cmd')
+    if (fs.existsSync(opencodeCmd)) {
+      console.log('Found OpenCode at:', opencodeCmd)
+      return opencodeCmd
+    }
+  }
+
+  // Fall back to just 'opencode' and let PATH resolve it
+  return 'opencode'
 }
 
 // Find claude executable - on Windows, npm installs .cmd files

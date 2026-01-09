@@ -116,6 +116,7 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
         { id: 'claude', label: 'Claude' },
         { id: 'gemini', label: 'Gemini' },
         { id: 'codex', label: 'Codex' },
+        { id: 'opencode', label: 'OpenCode' },
       ],
     },
   ]
