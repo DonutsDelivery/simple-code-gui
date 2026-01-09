@@ -9,11 +9,11 @@ const execAsync = promisify(exec)
 
 // Set app name and WM_CLASS for proper Linux taskbar integration
 // Must be done before app is ready
-app.setName('simple-claude-gui')
+app.setName('simple-code-gui')
 if (process.platform === 'linux') {
   // Set the WM_CLASS to match the .desktop file's StartupWMClass
-  app.commandLine.appendSwitch('class', 'simple-claude-gui')
-  app.commandLine.appendSwitch('name', 'simple-claude-gui')
+  app.commandLine.appendSwitch('class', 'simple-code-gui')
+  app.commandLine.appendSwitch('name', 'simple-code-gui')
 }
 
 // Enable GPU acceleration for better rendering performance
@@ -634,7 +634,7 @@ ipcMain.handle('git:install', async () => {
           timeout: 300000  // 5 minutes
         })
         mainWindow?.webContents.send('install:progress', { type: 'git', status: 'Git installed!', percent: 100 })
-        return { success: true, method: 'winget', message: 'Git installed! Please restart Simple Claude GUI.' }
+        return { success: true, method: 'winget', message: 'Git installed! Please restart Simple Code GUI.' }
       } catch (e: any) {
         console.log('Winget install failed, falling back to download:', e.message)
       }
@@ -646,7 +646,7 @@ ipcMain.handle('git:install', async () => {
     return {
       success: false,
       method: 'download',
-      message: 'Please download and install Git for Windows, then restart Simple Claude GUI.'
+      message: 'Please download and install Git for Windows, then restart Simple Code GUI.'
     }
   } catch (e: any) {
     return { success: false, error: e.message }

@@ -393,7 +393,7 @@ export async function installBeadsBinary(onProgress?: (status: string, percent?:
 
     const releaseUrl = 'https://api.github.com/repos/steveyegge/beads/releases/latest'
     const releaseInfo = await new Promise<any>((resolve, reject) => {
-      https.get(releaseUrl, { headers: { 'User-Agent': 'simple-claude-gui' } }, (res) => {
+      https.get(releaseUrl, { headers: { 'User-Agent': 'simple-code-gui' } }, (res) => {
         let data = ''
         res.on('data', chunk => data += chunk)
         res.on('end', () => {

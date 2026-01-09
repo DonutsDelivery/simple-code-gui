@@ -1,5 +1,5 @@
-appId: com.simple-claude-gui.app
-productName: Simple Claude GUI
+appId: com.simple-code-gui.app
+productName: Simple Code GUI
 directories:
   buildResources: resources
   output: dist-build
@@ -20,24 +20,24 @@ linux:
     - rpm
   category: Development
   icon: resources/icon.png
-  executableName: simple-claude-gui
+  executableName: simple-code-gui
   desktop:
-    StartupWMClass: simple-claude-gui
-  synopsis: Multi-session Claude Code terminal manager
-  description: Desktop app for managing multiple Claude Code sessions across projects
+    StartupWMClass: simple-code-gui
+  synopsis: Multi-backend AI coding assistant GUI
+  description: Desktop app for managing multiple AI coding assistant sessions across projects
 
 appImage:
-  artifactName: Simple-Claude-GUI-${version}.${ext}
+  artifactName: Simple-Code-GUI-${version}.${ext}
 
 deb:
-  artifactName: Simple-Claude-GUI-${version}.${ext}
+  artifactName: Simple-Code-GUI-${version}.${ext}
   depends:
     - libnotify4
     - libxtst6
     - libnss3
 
 rpm:
-  artifactName: Simple-Claude-GUI-${version}.${ext}
+  artifactName: Simple-Code-GUI-${version}.${ext}
 
 mac:
   target:
@@ -45,7 +45,7 @@ mac:
     - zip
   category: public.app-category.developer-tools
   icon: resources/icon.png
-  artifactName: Simple-Claude-GUI-${version}-${arch}.${ext}
+  artifactName: Simple-Code-GUI-${version}-${arch}.${ext}
 
 win:
   target:
@@ -53,22 +53,22 @@ win:
     - portable
     - appx
   icon: resources/icon.ico
-  artifactName: Simple-Claude-GUI-${version}-${arch}.${ext}
+  artifactName: Simple-Code-GUI-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: Simple-Claude-GUI-Setup-${version}.${ext}
+  artifactName: Simple-Code-GUI-Setup-${version}.${ext}
 
 portable:
-  artifactName: Simple-Claude-GUI-Portable-${version}.${ext}
+  artifactName: Simple-Code-GUI-Portable-${version}.${ext}
 
 appx:
-  applicationId: SimpleClaudeGUI
+  applicationId: SimpleCodeGUI
   displayName: Simple Claude GUI
-  identityName: SimpleClaudeGUI
+  identityName: SimpleCodeGUI
   publisher: CN=DonutsDelivery
   publisherDisplayName: DonutsDelivery
   languages:
     - en-US
-  artifactName: Simple-Claude-GUI-Store-${version}.${ext}
+  artifactName: Simple-Code-GUI-Store-${version}.${ext}

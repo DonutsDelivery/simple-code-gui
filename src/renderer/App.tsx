@@ -487,7 +487,7 @@ function App() {
       if (result.success) {
         if (result.method === 'download') {
           // User needs to complete manual install
-          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Claude GUI.')
+          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Code GUI.')
         } else {
           // winget install succeeded, re-check npm
           setNpmInstalled(true)
@@ -529,9 +529,9 @@ function App() {
       const result = await window.electronAPI.gitInstall()
       if (result.success) {
         setGitBashInstalled(true)
-        setInstallMessage(result.message || 'Git installed! Please restart Simple Claude GUI.')
+        setInstallMessage(result.message || 'Git installed! Please restart Simple Code GUI.')
       } else if (result.method === 'download') {
-        setInstallMessage(result.message || 'Please download and install Git, then restart Simple Claude GUI.')
+        setInstallMessage(result.message || 'Please download and install Git, then restart Simple Code GUI.')
       } else {
         setInstallError(result.error || 'Installation failed')
       }
@@ -677,7 +677,7 @@ function App() {
           </>
         ) : (
           <div className="empty-state">
-            <h2>Simple Claude GUI</h2>
+            <h2>Simple Code GUI</h2>
             <p>Add a project from the sidebar, then click a session to open it</p>
           </div>
         )}

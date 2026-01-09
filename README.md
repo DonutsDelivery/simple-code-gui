@@ -1,33 +1,53 @@
-# Simple Claude GUI
+<p align="center">
+  <img src="assets/header-gui-v3.png" alt="simple-code-gui" width="600">
+</p>
 
-A desktop app for managing multiple [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions across different projects in a single window.
+<p align="center">
+  <a href="https://discord.gg/ZhvPhXrdZ4"><img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <img src="https://img.shields.io/github/v/release/DonutsDelivery/simple-code-gui" alt="GitHub Release">
+  <img src="https://img.shields.io/github/downloads/DonutsDelivery/simple-code-gui/total" alt="Downloads">
+  <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron">
+  <img src="https://img.shields.io/aur/version/simple-code-gui" alt="AUR">
+</p>
 
-Stop juggling terminal tabs. Simple Claude GUI lets you run Claude Code on multiple projects simultaneously, instantly resume past conversations, and switch between sessions with a click. Paste images directly, track tasks with Beads integration, and customize with 9 themes.
+A desktop GUI for managing multiple AI coding assistant sessions across different projects in a single window. Supports **Claude Code**, **Gemini CLI**, **Codex**, and **OpenCode**.
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/ZhvPhXrdZ4) - Help, feature requests, and discussions
+Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants on multiple projects simultaneously, instantly resume past conversations, and switch between sessions with a click. Features voice input/output, image pasting, task tracking with Beads integration, and 9 color themes.
 
-![GitHub Release](https://img.shields.io/github/v/release/DonutsDelivery/simple-claude-gui)
-![Downloads](https://img.shields.io/github/downloads/DonutsDelivery/simple-claude-gui/total)
-![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron)
-![AUR](https://img.shields.io/aur/version/simple-claude-gui)
-
-![Screenshot](assets/screenshot.png)
+![Main Interface - Tiled View](assets/main.png)
 
 ## Features
 
+### Multi-Backend Support
+- **Claude Code** - Anthropic's Claude AI assistant
+- **Gemini CLI** - Google's Gemini AI
+- **Codex** - OpenAI Codex
+- **OpenCode** - Open source alternative
+
 ### Session Management
-- **Tabbed Interface** - Multiple Claude sessions open simultaneously
+- **Tabbed Interface** - Multiple AI sessions open simultaneously
 - **Session Resume** - Pick up conversations where you left off
-- **Session Discovery** - Auto-finds existing sessions from `~/.claude`
+- **Session Discovery** - Auto-finds existing sessions
 - **Tiled View** - See multiple terminals side-by-side (toggle with grid button)
 - **Workspace Persistence** - Restores your open tabs and layout on restart
+
+![Tabbed Interface](assets/main%20tabbed.png)
 
 ### Project Organization
 - **Project Sidebar** - Save and organize project folders for quick access
 - **Create Projects** - Make new project directories without leaving the app
 - **Session History** - Expand projects to see all past sessions with timestamps
 - **Project Icons** - Custom emoji icons for each project
+- **Per-Project Settings** - Override global settings per project (backend, permissions, voice)
 - **Run Executable** - Launch your app directly from the sidebar
+
+![Per-Project Settings](assets/per-project%20settings.png)
+
+### Voice Features
+- **Speech-to-Text** - Whisper models for voice input (tiny to large)
+- **Text-to-Speech** - Piper voices and XTTS voice clones for spoken responses
+- **Voice Cloning** - Clone your own voice for personalized TTS
+- **Speed Control** - Adjust TTS playback speed
 
 ### Terminal
 - **GPU Acceleration** - WebGL-accelerated rendering for smooth terminal output
@@ -39,12 +59,12 @@ Stop juggling terminal tabs. Simple Claude GUI lets you run Claude Code on multi
 
 ### Customization
 - **9 Color Themes** - Including RGB Gamer mode with animations
-- **Settings Panel** - Configure themes and default project directory
+- **Settings Panel** - Configure themes, permissions, backend, and voice
 - **Window Memory** - Remembers size and position
 
 <p>
-<img src="assets/settings.png" width="400" alt="Settings">
-<img src="assets/screenshot-gamer.png" width="400" alt="RGB Gamer Theme">
+<img src="assets/settings 1.png" width="400" alt="Settings - Themes & Permissions">
+<img src="assets/settings 2.png" width="400" alt="Settings - Voice">
 </p>
 
 ### Task Tracking (Beads Integration)
@@ -52,6 +72,8 @@ Stop juggling terminal tabs. Simple Claude GUI lets you run Claude Code on multi
 - **Create Tasks** - Add tasks with title, description, and priority
 - **Track Progress** - Start, complete, and delete tasks
 - **Auto-Refresh** - Task list updates automatically
+
+![Beads Task Panel & TTS Controls](assets/beads%20and%20tts%20settings.png)
 
 ### Setup & Updates
 - **Auto-Install Dependencies** - Installs Claude Code, Node.js, Git if missing
@@ -62,7 +84,7 @@ Stop juggling terminal tabs. Simple Claude GUI lets you run Claude Code on multi
 
 ### Windows / macOS / Linux
 
-Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-claude-gui/releases):
+Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-code-gui/releases):
 
 | Platform | Download |
 |----------|----------|
@@ -73,14 +95,14 @@ Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-claude-
 ### Arch Linux (AUR)
 
 ```bash
-yay -S simple-claude-gui
+yay -S simple-code-gui
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/DonutsDelivery/simple-claude-gui.git
-cd simple-claude-gui
+git clone https://github.com/DonutsDelivery/simple-code-gui.git
+cd simple-code-gui
 npm install
 npm run dev
 ```

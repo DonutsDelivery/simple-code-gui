@@ -4,7 +4,7 @@ interface TitleBarProps {
   title?: string
 }
 
-export function TitleBar({ title = 'Simple Claude GUI' }: TitleBarProps) {
+export function TitleBar({ title = 'Simple Code GUI' }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
 
   useEffect(() => {

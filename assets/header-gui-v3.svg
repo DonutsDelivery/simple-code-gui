@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 180">
+  <defs>
+    <linearGradient id="textGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4ade80"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="windowGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e2e"/>
+      <stop offset="100%" style="stop-color:#181825"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Window frame -->
+  <rect x="20" y="15" width="460" height="150" rx="12" fill="url(#windowGrad3)" stroke="#313244" stroke-width="2"/>
+
+  <!-- Window dots -->
+  <circle cx="45" cy="35" r="6" fill="#f38ba8"/>
+  <circle cx="65" cy="35" r="6" fill="#f9e2af"/>
+  <circle cx="85" cy="35" r="6" fill="#a6e3a1"/>
+
+  <!-- Icon: Overlapping chat bubbles (multiple AI backends) -->
+  <rect x="45" y="65" width="35" height="28" rx="6" fill="#f38ba8" opacity="0.8"/>
+  <rect x="60" y="78" width="35" height="28" rx="6" fill="#f9e2af" opacity="0.8"/>
+  <rect x="75" y="91" width="35" height="28" rx="6" fill="#4ade80" opacity="0.9"/>
+
+  <!-- Text: App name -->
+  <text x="140" y="95" font-family="Source Code Pro, monospace" font-size="36" font-weight="700" fill="url(#textGrad3)">simple-code-gui</text>
+
+  <!-- Tagline -->
+  <text x="140" y="125" font-family="Source Code Pro, monospace" font-size="14" font-weight="400" fill="#6c7086">Multi-backend AI coding assistant</text>
+</svg>
