@@ -80,11 +80,11 @@ function getCategoryGradient(categoryProjects: Project[]): string {
     .filter(Boolean) as string[]
 
   if (colors.length === 0) return 'transparent'
-  if (colors.length === 1) return `${colors[0]}30`
+  if (colors.length === 1) return `${colors[0]}50`
 
-  // Create linear gradient with 30% opacity colors for better visibility
+  // Create linear gradient with 50% opacity colors for better visibility
   const stops = colors.map((c, i) =>
-    `${c}30 ${(i / (colors.length - 1)) * 100}%`
+    `${c}50 ${(i / (colors.length - 1)) * 100}%`
   ).join(', ')
 
   return `linear-gradient(135deg, ${stops})`
