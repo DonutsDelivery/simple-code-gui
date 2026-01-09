@@ -29,13 +29,19 @@ export function clearTerminalBuffer(ptyId: string) {
 // Debug flag - set to true to log scroll events
 const DEBUG_SCROLL = false
 
-// Suppress known xterm WebGL initialization race condition error
-// This error occurs when WebGL addon triggers viewport sync before render service is ready
-// The error is harmless - WebGL still initializes correctly
+// Suppress known xterm WebGL race condition errors
+// These errors occur during WebGL addon initialization/disposal but are harmless
 if (typeof window !== 'undefined' && !(window as any).__XTERM_ERROR_HANDLER__) {
   (window as any).__XTERM_ERROR_HANDLER__ = true
   window.addEventListener('error', (event) => {
+    // Suppress dimensions error during WebGL init (viewport sync before render service ready)
     if (event.message?.includes("Cannot read properties of undefined (reading 'dimensions')") &&
+        event.filename?.includes('xterm')) {
+      event.preventDefault()
+      return true
+    }
+    // Suppress _isDisposed error during WebGL disposal (race condition during terminal cleanup)
+    if (event.message?.includes("Cannot read properties of undefined (reading '_isDisposed')") &&
         event.filename?.includes('xterm')) {
       event.preventDefault()
       return true
@@ -310,6 +316,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     // Track whether terminal is disposed to prevent accessing disposed terminal in async callbacks
     let disposed = false
+    // Store reference to WebGL addon for explicit disposal before terminal
+    let webglAddonRef: { dispose: () => void } | null = null
 
     // Reset TTS state for this terminal session
     silentModeRef.current = true
@@ -378,7 +386,9 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         if (disposed) return
         try {
           const webglAddon = new WebglAddon()
+          webglAddonRef = webglAddon  // Store reference for cleanup
           webglAddon.onContextLoss(() => {
+            webglAddonRef = null
             webglAddon.dispose()
           })
           terminal.loadAddon(webglAddon)
@@ -771,7 +781,21 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       if (resizeTimeout) clearTimeout(resizeTimeout)
       if (silentModeTimeoutRef.current) clearTimeout(silentModeTimeoutRef.current)
       resizeObserver.disconnect()
-      terminal.dispose()
+      // Dispose WebGL addon first to avoid race condition during terminal disposal
+      if (webglAddonRef) {
+        try {
+          webglAddonRef.dispose()
+        } catch {
+          // Ignore disposal errors - addon may already be partially disposed
+        }
+        webglAddonRef = null
+      }
+      // Wrap terminal disposal in try-catch as safety net for any remaining race conditions
+      try {
+        terminal.dispose()
+      } catch {
+        // Ignore disposal errors
+      }
     }
   }, [ptyId])
 
