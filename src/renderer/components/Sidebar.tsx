@@ -73,21 +73,37 @@ interface OpenTab {
   sessionId?: string
 }
 
+// Calculate relative luminance of a hex color
+function getLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+
+  const toLinear = (c: number) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+}
+
 // Helper to calculate gradient from project colors
-function getCategoryGradient(categoryProjects: Project[]): string {
+function getCategoryGradient(categoryProjects: Project[]): { background: string; textDark: boolean } {
   const colors = categoryProjects
     .map(p => p.color)
     .filter(Boolean) as string[]
 
-  if (colors.length === 0) return 'transparent'
-  if (colors.length === 1) return `${colors[0]}50`
+  if (colors.length === 0) return { background: 'transparent', textDark: false }
 
-  // Create linear gradient with 50% opacity colors for better visibility
+  // Calculate average luminance to determine text color
+  const avgLuminance = colors.reduce((sum, c) => sum + getLuminance(c), 0) / colors.length
+  const textDark = avgLuminance > 0.4  // Use dark text for bright backgrounds
+
+  if (colors.length === 1) return { background: `${colors[0]}CC`, textDark }
+
+  // Create linear gradient with ~80% opacity colors (CC = 204/255 ≈ 80%)
   const stops = colors.map((c, i) =>
-    `${c}50 ${(i / (colors.length - 1)) * 100}%`
+    `${c}CC ${(i / (colors.length - 1)) * 100}%`
   ).join(', ')
 
-  return `linear-gradient(135deg, ${stops})`
+  return { background: `linear-gradient(135deg, ${stops})`, textDark }
 }
 
 interface SidebarProps {
@@ -708,7 +724,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
         {/* Render categories */}
         {sortedCategories.map((category) => {
           const categoryProjects = projectsByCategory[category.id] || []
-          const gradient = getCategoryGradient(categoryProjects)
+          const { background: gradient, textDark } = getCategoryGradient(categoryProjects)
 
           return (
             <div
@@ -721,7 +737,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
               )}
 
               <div
-                className={`category-header ${category.collapsed ? 'collapsed' : ''} ${draggedCategory === category.id ? 'dragging' : ''}`}
+                className={`category-header ${category.collapsed ? 'collapsed' : ''} ${draggedCategory === category.id ? 'dragging' : ''} ${textDark ? 'text-dark' : ''}`}
                 style={{ background: gradient }}
                 draggable={!editingCategory}
                 onDragStart={(e) => handleCategoryDragStart(e, category.id)}
