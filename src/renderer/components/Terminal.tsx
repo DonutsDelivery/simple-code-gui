@@ -338,6 +338,25 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     terminal.open(containerRef.current)
 
+    // Load WebGL addon after terminal has dimensions (defer to avoid timing issues)
+    requestAnimationFrame(() => {
+      fitAddon.fit()
+      import('@xterm/addon-webgl').then(({ WebglAddon }) => {
+        try {
+          const webglAddon = new WebglAddon()
+          webglAddon.onContextLoss(() => {
+            webglAddon.dispose()
+          })
+          terminal.loadAddon(webglAddon)
+          console.log('Terminal GPU acceleration: WebGL enabled')
+        } catch (e) {
+          console.warn('Terminal GPU acceleration: WebGL failed, using canvas:', e)
+        }
+      }).catch(e => {
+        console.warn('Terminal GPU acceleration: WebGL unavailable, using canvas:', e)
+      })
+    })
+
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 

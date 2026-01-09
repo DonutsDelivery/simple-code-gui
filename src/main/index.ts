@@ -15,6 +15,10 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('class', 'simple-claude-gui')
   app.commandLine.appendSwitch('name', 'simple-claude-gui')
 }
+
+// Enable GPU acceleration for better rendering performance
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
 import { PtyManager } from './pty-manager'
 import { SessionStore } from './session-store'
 import { discoverSessions } from './session-discovery'

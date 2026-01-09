@@ -70,6 +70,81 @@
   box-sizing: border-box;
 }
 
+/* ============================================
+   GPU Acceleration & Performance
+   ============================================ */
+
+/* Force GPU compositing for the app shell */
+.app {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* GPU-accelerated scrolling containers */
+.sidebar-content,
+.project-sessions,
+.settings-section,
+.modal-body,
+.beads-list,
+.voice-list,
+.theme-grid,
+.icon-grid {
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+}
+
+/* GPU layer promotion for animated elements */
+.modal-content,
+.context-menu,
+.terminal-menu-panel,
+.dropdown-menu,
+.tile-header {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Optimized tile rendering */
+.terminal-tile {
+  will-change: transform;
+  contain: layout style paint;
+  transform: translateZ(0);
+}
+
+/* GPU-accelerated buttons with transforms */
+button,
+.btn,
+.sidebar-btn,
+.project-btn,
+.tab-close,
+.tile-close {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Contain layout for independent sections */
+.sidebar,
+.main-content,
+.terminal-container,
+.terminal-tiled-custom {
+  contain: layout style;
+}
+
+/* Optimize terminal wrapper layers */
+.terminal-wrapper {
+  contain: strict;
+  transform: translateZ(0);
+}
+
+/* GPU-accelerated resize handles */
+.tile-edge-resize,
+.tile-corner-resize,
+.sidebar-resize-handle {
+  will-change: background;
+  transform: translateZ(0);
+}
+
 html, body, #root {
   height: 100%;
   background: var(--bg-base);

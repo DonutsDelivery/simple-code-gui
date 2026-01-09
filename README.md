@@ -30,6 +30,7 @@ Stop juggling terminal tabs. Simple Claude GUI lets you run Claude Code on multi
 - **Run Executable** - Launch your app directly from the sidebar
 
 ### Terminal
+- **GPU Acceleration** - WebGL-accelerated rendering for smooth terminal output
 - **Image & File Paste** - Paste screenshots and copied files with Ctrl+V
 - **Drag & Drop** - Drop files from file manager into terminal
 - **Smart Ctrl+C** - Copies selection if text selected, sends SIGINT otherwise
