@@ -434,6 +434,31 @@ html, body, #root {
   font-family: var(--font-mono);
 }
 
+.project-tasks {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.project-tasks .task-count {
+  color: var(--accent-primary);
+}
+
+.project-tasks .task-in-progress {
+  color: var(--accent-warning, #f59e0b);
+  font-size: 11px;
+}
+
+.project-tasks .task-done {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 /* ============================================
    Sessions List
    ============================================ */

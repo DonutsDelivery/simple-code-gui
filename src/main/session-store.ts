@@ -31,6 +31,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface TileLayout {

@@ -201,39 +201,40 @@ function App() {
               // Always install TTS instructions so Claude uses <tts> tags
               await window.electronAPI.ttsInstallInstructions?.(savedTab.projectPath)
 
-              // Always restore to the most recent sessions for this project
-              let sessionIdToRestore: string | undefined
               const projectName = savedTab.projectPath.split(/[/\\]/).pop() || savedTab.projectPath
               let titleToRestore = savedTab.title || `${projectName} - New`
 
-              let sessionsForProject = sessionsCache.get(savedTab.projectPath)
-              if (!sessionsForProject) {
-                const list = await window.electronAPI.discoverSessions(savedTab.projectPath)
-                sessionsForProject = { list, nextIndex: 0 }
-                sessionsCache.set(savedTab.projectPath, sessionsForProject)
-              }
-
-              const list = sessionsForProject.list || []
-              for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
-                const candidate = list[i]
-                if (!usedSessionIds.has(candidate.sessionId)) {
-                  sessionIdToRestore = candidate.sessionId
-                  titleToRestore = `${projectName} - ${candidate.slug}`
-                  sessionsForProject.nextIndex = i + 1
-                  break
-                }
-              }
-
-              // Skip if we ran out of sessions to restore for this project
-              if (!sessionIdToRestore) {
-                continue
-              }
-
               // Get project and determine effective backend for restored tab
               const projectForTab = workspace.projects?.find(p => p.path === savedTab.projectPath)
-              const effectiveBackendForTab = projectForTab?.backend && projectForTab.backend !== 'default'
-                ? projectForTab.backend
-                : settings?.backend || 'claude'
+              const savedBackend = savedTab.backend && savedTab.backend !== 'default'
+                ? savedTab.backend
+                : undefined
+              const effectiveBackendForTab = savedBackend
+                || (projectForTab?.backend && projectForTab.backend !== 'default'
+                  ? projectForTab.backend
+                  : settings?.backend || 'claude')
+
+              let sessionIdToRestore: string | undefined = savedTab.sessionId
+
+              if (!sessionIdToRestore && effectiveBackendForTab === 'claude') {
+                let sessionsForProject = sessionsCache.get(savedTab.projectPath)
+                if (!sessionsForProject) {
+                  const list = await window.electronAPI.discoverSessions(savedTab.projectPath)
+                  sessionsForProject = { list, nextIndex: 0 }
+                  sessionsCache.set(savedTab.projectPath, sessionsForProject)
+                }
+
+                const list = sessionsForProject.list || []
+                for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
+                  const candidate = list[i]
+                  if (!usedSessionIds.has(candidate.sessionId)) {
+                    sessionIdToRestore = candidate.sessionId
+                    titleToRestore = `${projectName} - ${candidate.slug}`
+                    sessionsForProject.nextIndex = i + 1
+                    break
+                  }
+                }
+              }
 
               const ptyId = await window.electronAPI.spawnPty(
                 savedTab.projectPath,
@@ -254,7 +255,9 @@ function App() {
                 ptyId,
                 backend: effectiveBackendForTab
               })
-              usedSessionIds.add(sessionIdToRestore)
+              if (sessionIdToRestore) {
+                usedSessionIds.add(sessionIdToRestore)
+              }
             } catch (e) {
             }
           }
@@ -312,7 +315,8 @@ function App() {
           id: t.id,
           projectPath: t.projectPath,
           sessionId: t.sessionId,
-          title: t.title
+          title: t.title,
+          backend: t.backend
         })),
         activeTabId,
         viewMode,

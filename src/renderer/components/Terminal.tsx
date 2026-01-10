@@ -279,26 +279,20 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       const shouldContinueAutoWork = autoWorkWithSummaryRef.current  // Check if in autowork-with-summary mode
       console.log('[Summary] useEffect triggered, running /clear, summary length:', summaryToSend.length, 'autowork:', shouldContinueAutoWork)
       const didClear = sendBackendCommand('clear')
-      const clearDelay = didClear ? 1500 : 0
+      const clearDelay = didClear ? 2000 : 100  // Increased delay, minimum 100ms even without clear
       setTimeout(() => {
         console.log('[Summary] Pasting summary:', summaryToSend.substring(0, 50) + '...')
-        window.electronAPI.writePty(ptyId, summaryToSend)
-        // Wait longer after pasting to let terminal render, then send enter
-        setTimeout(() => {
-          console.log('[Summary] Sending enter to submit')
-          window.electronAPI.writePty(ptyId, '\r')
-          // If in autowork-with-summary mode, send the work prompt after summary
-          if (shouldContinueAutoWork) {
-            setTimeout(() => {
-              console.log('[AutoWork+Summary] Sending work prompt after summary')
-              const autoworkPrompt = buildAutoWorkPrompt()
-              window.electronAPI.writePty(ptyId, autoworkPrompt)
-              setTimeout(() => {
-                window.electronAPI.writePty(ptyId, '\r')
-              }, 100)
-            }, 1000)
-          }
-        }, 500)
+        // Combine prompt + Enter in single write to avoid race conditions
+        window.electronAPI.writePty(ptyId, summaryToSend + '\r')
+        // If in autowork-with-summary mode, send the work prompt after summary
+        if (shouldContinueAutoWork) {
+          setTimeout(() => {
+            console.log('[AutoWork+Summary] Sending work prompt after summary')
+            const autoworkPrompt = buildAutoWorkPrompt()
+            // Combine prompt + Enter in single write
+            window.electronAPI.writePty(ptyId, autoworkPrompt + '\r')
+          }, 2000)  // Wait longer for summary to be processed
+        }
       }, clearDelay)
       setPendingSummary(null)
     }
@@ -309,14 +303,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     if (pendingAutoWorkContinue) {
       console.log('[AutoWork] Continuation triggered, running /clear')
       const didClear = sendBackendCommand('clear')
-      const clearDelay = didClear ? 1500 : 0
+      const clearDelay = didClear ? 2000 : 100  // Increased delay, minimum 100ms
       setTimeout(() => {
         console.log('[AutoWork] Sending continuation prompt')
         const continuePrompt = buildAutoWorkPrompt()
-        window.electronAPI.writePty(ptyId, continuePrompt)
-        setTimeout(() => {
-          window.electronAPI.writePty(ptyId, '\r')
-        }, 100)
+        // Combine prompt + Enter in single write to avoid race conditions
+        window.electronAPI.writePty(ptyId, continuePrompt + '\r')
       }, clearDelay)
       setPendingAutoWorkContinue(false)
     }
@@ -496,6 +488,14 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     }
 
     terminal.onData((data) => {
+      // Ignore terminal control sequences (not real user input):
+      // - Cursor position responses: ESC [ row ; col R
+      // - Focus in: ESC [ I
+      // - Focus out: ESC [ O
+      if (data.startsWith('\x1b[') && (data.endsWith('R') || data === '\x1b[I' || data === '\x1b[O')) {
+        return // Don't count as user input, don't send to PTY
+      }
+
       // User has typed something - now safe to enable TTS for responses
       if (silentModeRef.current) {
         silentModeRef.current = false
@@ -635,11 +635,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
         if (looksLikeProse && !spokenContentRef.current.has(content)) {
           spokenContentRef.current.add(content)
-          // Only speak if voice enabled, tab active, and not in silent mode (startup grace period)
+          // Only speak if: voice enabled, tab active, and not in silent mode (user has typed)
           if (voiceOutputEnabledRef.current && isActiveRef.current && !silentModeRef.current) {
             speakText(content)
           }
-          // During silent mode, content is tracked but not spoken - prevents reading old messages
+          // Before conditions are met, content is tracked but not spoken - prevents reading old/startup messages
         }
       }
 
@@ -704,11 +704,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
           // With summaries: trigger summarize flow which will then continue autowork
           summaryBufferRef.current = ''
           capturingSummaryRef.current = true
-          const summarizePrompt = 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.'
-          window.electronAPI.writePty(ptyId, summarizePrompt)
-          setTimeout(() => {
-            window.electronAPI.writePty(ptyId, '\r')
-          }, 100)
+          // Combine prompt + Enter in single write to avoid race conditions
+          window.electronAPI.writePty(ptyId, 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.\r')
         } else {
           // Without summaries: just clear and continue
           setPendingAutoWorkContinue(true)
@@ -935,11 +932,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         capturingSummaryRef.current = true
         console.log('[Summary] Capture enabled for ptyId:', ptyId)
         // Prompt describes markers without using them literally
-        const summarizePrompt = 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.'
-        window.electronAPI.writePty(ptyId, summarizePrompt)
-        setTimeout(() => {
-          window.electronAPI.writePty(ptyId, '\r')
-        }, 100)
+        // Combine prompt + Enter in single write to avoid race conditions
+        window.electronAPI.writePty(ptyId, 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.\r')
         break
       case 'autowork':
         // Enable auto work mode with options
@@ -952,35 +946,41 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         setAwaitingUserReview(false)
         console.log('[AutoWork] Mode enabled with options:', options)
 
-        const didClear = sendBackendCommand('clear')
-        const clearDelay = didClear ? 1500 : 0
-        setTimeout(() => {
-          window.electronAPI.writePty(ptyId, buildAutoWorkPrompt())
+        {
+          const didClear = sendBackendCommand('clear')
+          const clearDelay = didClear ? 2000 : 100  // Increased delay, minimum 100ms
           setTimeout(() => {
-            window.electronAPI.writePty(ptyId, '\r')
-          }, 100)
-        }, clearDelay)
+            console.log('[AutoWork] Sending initial prompt')
+            // Combine prompt + Enter in single write to avoid race conditions
+            window.electronAPI.writePty(ptyId, buildAutoWorkPrompt() + '\r')
+          }, clearDelay)
+        }
         break
       case 'continuework':
-        // Continue to next task (used after pause for review)
-        if (awaitingUserReview) {
-          console.log('[AutoWork] User approved, continuing to next task')
-          setAwaitingUserReview(false)
+        // Continue to next task - works whether awaiting review or not
+        console.log('[AutoWork] Continue to next task requested, awaitingReview:', awaitingUserReview, 'autoWorkMode:', autoWorkModeRef.current)
+        setAwaitingUserReview(false)
+        // If autowork mode is active, continue to next task
+        if (autoWorkModeRef.current) {
           if (autoWorkWithSummaryRef.current) {
             // With summaries: trigger summarize flow
             summaryBufferRef.current = ''
             capturingSummaryRef.current = true
-            const summarizePrompt = 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.'
-            window.electronAPI.writePty(ptyId, summarizePrompt)
-            setTimeout(() => {
-              window.electronAPI.writePty(ptyId, '\r')
-            }, 100)
+            // Combine prompt + Enter in single write
+            window.electronAPI.writePty(ptyId, 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.\r')
           } else {
             // Without summaries: just clear and continue
             setPendingAutoWorkContinue(true)
           }
         } else {
-          console.log('[AutoWork] Not awaiting review, ignoring continue')
+          // Not in autowork mode - start fresh autowork with current options
+          console.log('[AutoWork] Not in autowork mode, starting fresh')
+          autoWorkModeRef.current = true
+          const didClear = sendBackendCommand('clear')
+          const clearDelay = didClear ? 2000 : 100
+          setTimeout(() => {
+            window.electronAPI.writePty(ptyId, buildAutoWorkPrompt() + '\r')
+          }, clearDelay)
         }
         break
       case 'stopwork':
@@ -994,11 +994,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         setAwaitingUserReview(false)
         console.log('[AutoWork] Mode disabled - will stop after current task')
         // Tell Claude to finish current task but not continue
-        const stopPrompt = 'When you finish the current task, do NOT output the AUTOWORK_CONTINUE marker. Just complete this task and wait for further input.'
-        window.electronAPI.writePty(ptyId, stopPrompt)
-        setTimeout(() => {
-          window.electronAPI.writePty(ptyId, '\r')
-        }, 100)
+        // Combine prompt + Enter in single write
+        window.electronAPI.writePty(ptyId, 'When you finish the current task, do NOT output the AUTOWORK_CONTINUE marker. Just complete this task and wait for further input.\r')
         break
       case 'cancel':
         // Send Escape to cancel current operation and disable auto work mode

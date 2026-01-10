@@ -97,11 +97,11 @@ function getCategoryGradient(categoryProjects: Project[]): { background: string;
   const avgLuminance = colors.reduce((sum, c) => sum + getLuminance(c), 0) / colors.length
   const textDark = avgLuminance > 0.4  // Use dark text for bright backgrounds
 
-  if (colors.length === 1) return { background: `${colors[0]}CC`, textDark }
+  if (colors.length === 1) return { background: `${colors[0]}66`, textDark }
 
-  // Create linear gradient with ~80% opacity colors (CC = 204/255 ≈ 80%)
+  // Create linear gradient with ~40% opacity colors (66 = 102/255 ≈ 40%)
   const stops = colors.map((c, i) =>
-    `${c}CC ${(i / (colors.length - 1)) * 100}%`
+    `${c}66 ${(i / (colors.length - 1)) * 100}%`
   ).join(', ')
 
   return { background: `linear-gradient(135deg, ${stops})`, textDark }
@@ -173,6 +173,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [dropTarget, setDropTarget] = useState<{ type: 'category' | 'project' | 'uncategorized'; id: string | null; position?: 'before' | 'after' } | null>(null)
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [extensionBrowserModal, setExtensionBrowserModal] = useState<{ project: Project } | null>(null)
+  const [taskCounts, setTaskCounts] = useState<Record<string, { open: number; inProgress: number }>>({})
   const sidebarRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const categoryEditInputRef = useRef<HTMLInputElement>(null)
@@ -478,6 +479,33 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
       })
     }
   }, [contextMenu])
+
+  // Fetch task counts for all projects
+  useEffect(() => {
+    const fetchTaskCounts = async () => {
+      const counts: Record<string, { open: number; inProgress: number }> = {}
+      for (const project of projects) {
+        try {
+          const status = await window.electronAPI.beadsCheck(project.path)
+          if (status.installed && status.initialized) {
+            const result = await window.electronAPI.beadsList(project.path)
+            if (result.success && result.tasks) {
+              const open = result.tasks.filter((t: { status: string }) => t.status === 'open').length
+              const inProgress = result.tasks.filter((t: { status: string }) => t.status === 'in_progress').length
+              counts[project.path] = { open, inProgress }
+            }
+          }
+        } catch {
+          // Silently ignore errors for individual projects
+        }
+      }
+      setTaskCounts(counts)
+    }
+    fetchTaskCounts()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchTaskCounts, 30000)
+    return () => clearInterval(interval)
+  }, [projects])
 
   const handleOpenProjectSettings = async (project: Project) => {
     // Fetch global settings to show comparison
@@ -851,7 +879,22 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                               {project.name}
                             </div>
                           )}
-                          <div className="project-path" title={project.path}>{project.path}</div>
+                          {taskCounts[project.path] ? (
+                            <div className="project-tasks" title={project.path}>
+                              {taskCounts[project.path].open + taskCounts[project.path].inProgress > 0 ? (
+                                <>
+                                  <span className="task-count">{taskCounts[project.path].open + taskCounts[project.path].inProgress} tasks</span>
+                                  {taskCounts[project.path].inProgress > 0 && (
+                                    <span className="task-in-progress">({taskCounts[project.path].inProgress} active)</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="task-count task-done">No open tasks</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="project-path" title={project.path}>{project.path}</div>
+                          )}
                         </div>
                         {project.executable && (
                           <button
@@ -977,7 +1020,22 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         {project.name}
                       </div>
                     )}
-                    <div className="project-path" title={project.path}>{project.path}</div>
+                    {taskCounts[project.path] ? (
+                      <div className="project-tasks" title={project.path}>
+                        {taskCounts[project.path].open + taskCounts[project.path].inProgress > 0 ? (
+                          <>
+                            <span className="task-count">{taskCounts[project.path].open + taskCounts[project.path].inProgress} tasks</span>
+                            {taskCounts[project.path].inProgress > 0 && (
+                              <span className="task-in-progress">({taskCounts[project.path].inProgress} active)</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="task-count task-done">No open tasks</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="project-path" title={project.path}>{project.path}</div>
+                    )}
                   </div>
                   {project.executable && (
                     <button

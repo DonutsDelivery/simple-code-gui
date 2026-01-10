@@ -335,8 +335,8 @@ ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: strin
         ? project.backend
         : (globalSettings.backend || 'claude')
 
-    // Determine effective sessionId: Only use if backend is 'claude', otherwise start fresh
-    const effectiveSessionId = (effectiveBackend === 'claude') ? sessionId : undefined;
+    // Determine effective sessionId: honor stored session IDs for all backends
+    const effectiveSessionId = sessionId;
 
     // Use provided model (from API) or fall back to pending prompt's model
     const pending = pendingApiPrompts.get(cwd)

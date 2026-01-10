@@ -226,6 +226,103 @@ function findAiderExecutable(): string {
   return 'aider'
 }
 
+// Build backend-specific permission arguments
+// Maps our internal permission modes to each backend's CLI flags
+function buildPermissionArgs(backend: string = 'claude', permissionMode?: string, autoAcceptTools?: string[]): string[] {
+  const args: string[] = []
+
+  switch (backend) {
+    case 'claude':
+      // Claude Code: --permission-mode and --allowedTools
+      if (permissionMode && permissionMode !== 'default') {
+        args.push('--permission-mode', permissionMode)
+      }
+      if (autoAcceptTools && autoAcceptTools.length > 0) {
+        for (const tool of autoAcceptTools) {
+          args.push('--allowedTools', tool)
+        }
+      }
+      break
+
+    case 'gemini':
+      // Gemini CLI: --approval-mode (default/auto_edit/yolo) and --allowed-tools
+      // See: https://geminicli.com/docs/get-started/configuration/
+      if (permissionMode) {
+        switch (permissionMode) {
+          case 'acceptEdits':
+            args.push('--approval-mode', 'auto_edit')
+            break
+          case 'dontAsk':
+          case 'bypassPermissions':
+            args.push('--approval-mode', 'yolo')
+            break
+          // 'default' mode = no flag needed
+        }
+      }
+      if (autoAcceptTools && autoAcceptTools.length > 0) {
+        // Gemini uses comma-separated list for --allowed-tools
+        args.push('--allowed-tools', autoAcceptTools.join(','))
+      }
+      break
+
+    case 'codex':
+      // Codex CLI: --full-auto or --dangerously-bypass-approvals-and-sandbox
+      // See: https://developers.openai.com/codex/cli/reference/
+      if (permissionMode) {
+        switch (permissionMode) {
+          case 'acceptEdits':
+          case 'dontAsk':
+            args.push('--full-auto')
+            break
+          case 'bypassPermissions':
+            args.push('--dangerously-bypass-approvals-and-sandbox')
+            break
+          // 'default' mode = no flag needed
+        }
+      }
+      // Codex doesn't support per-tool auto-accept via CLI flags
+      break
+
+    case 'opencode':
+      // OpenCode: --allowedTools (comma-separated, non-interactive mode auto-approves)
+      // See: https://opencode.ai/docs/permissions/
+      if (autoAcceptTools && autoAcceptTools.length > 0) {
+        args.push('--allowedTools', autoAcceptTools.join(','))
+      }
+      // OpenCode permission mode is configured in config file, not CLI flags
+      // In non-interactive mode, all permissions are auto-approved anyway
+      break
+
+    case 'aider':
+      // Aider doesn't have permission flags - it uses --yes for auto-confirm
+      if (permissionMode && permissionMode !== 'default') {
+        args.push('--yes')
+      }
+      break
+  }
+
+  return args
+}
+
+function buildResumeArgs(backend: string = 'claude', sessionId?: string): string[] {
+  if (!sessionId) {
+    return []
+  }
+  switch (backend) {
+    case 'gemini':
+      return ['--resume', sessionId]
+    case 'codex':
+      return ['--resume', sessionId]
+    case 'opencode':
+      return ['--session', sessionId]
+    case 'aider':
+      return ['--restore', sessionId]
+    case 'claude':
+    default:
+      return ['-r', sessionId]
+  }
+}
+
 export class PtyManager {
   private processes: Map<string, ClaudeProcess> = new Map()
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
@@ -235,26 +332,16 @@ export class PtyManager {
     const id = crypto.randomUUID()
 
     const args: string[] = []
-    if (sessionId) {
-      args.push('-r', sessionId)
-    }
+    args.push(...buildResumeArgs(backend || 'claude', sessionId))
 
     // Add model if specified (and not default)
     if (model && model !== 'default') {
       args.push('--model', model)
     }
 
-    // Add permission mode if configured (and not default)
-    if (permissionMode && permissionMode !== 'default') {
-      args.push('--permission-mode', permissionMode)
-    }
-
-    // Add auto-accept tools if configured
-    if (autoAcceptTools && autoAcceptTools.length > 0) {
-      for (const tool of autoAcceptTools) {
-        args.push('--allowedTools', tool)
-      }
-    }
+    // Add backend-specific permission arguments
+    const permissionArgs = buildPermissionArgs(backend || 'claude', permissionMode, autoAcceptTools)
+    args.push(...permissionArgs)
 
     const exe = findExecutable(backend)
     console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)

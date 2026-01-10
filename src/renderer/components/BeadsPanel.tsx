@@ -20,6 +20,9 @@ interface BeadsPanelProps {
   projectPath: string | null
   isExpanded: boolean
   onToggle: () => void
+  onStartTaskInNewTab?: (prompt: string) => void
+  onSendToCurrentTab?: (prompt: string) => void
+  currentTabPtyId?: string | null
 }
 
 // Storage key for panel height
@@ -32,7 +35,7 @@ const MAX_HEIGHT = 500
 const tasksCache = new Map<string, BeadsTask[]>()
 const beadsStatusCache = new Map<string, { installed: boolean; initialized: boolean }>()
 
-export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProps) {
+export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNewTab, onSendToCurrentTab, currentTabPtyId }: BeadsPanelProps) {
   const [beadsInstalled, setBeadsInstalled] = useState(false)
   const [beadsInitialized, setBeadsInitialized] = useState(false)
   const [tasks, setTasks] = useState<BeadsTask[]>([])
@@ -55,6 +58,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   })
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
+  const currentProjectRef = useRef<string | null>(null) // Track current project to avoid race conditions
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -74,31 +78,99 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   const [browserFilter, setBrowserFilter] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all')
   const [browserSort, setBrowserSort] = useState<'priority' | 'created' | 'status'>('priority')
 
+  // Start task dropdown state
+  const [startDropdownTaskId, setStartDropdownTaskId] = useState<string | null>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null)
+  const startDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (startDropdownRef.current && !startDropdownRef.current.contains(e.target as Node)) {
+        setStartDropdownTaskId(null)
+      }
+    }
+    if (startDropdownTaskId) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [startDropdownTaskId])
+
+  // Handle start button click with position calculation
+  const handleStartButtonClick = (e: React.MouseEvent, taskId: string) => {
+    if (startDropdownTaskId === taskId) {
+      setStartDropdownTaskId(null)
+      setDropdownPosition(null)
+    } else {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      setDropdownPosition({ top: rect.bottom + 4, left: rect.left })
+      setStartDropdownTaskId(taskId)
+    }
+  }
+
+  // Format task as a prompt for the AI
+  const formatTaskPrompt = (task: BeadsTask): string => {
+    let prompt = `Work on this task:\n\n**${task.title}** (${task.id})`
+    if (task.description) {
+      prompt += `\n\nDescription:\n${task.description}`
+    }
+    if (task.issue_type) {
+      prompt += `\n\nType: ${task.issue_type}`
+    }
+    if (task.priority !== undefined) {
+      const priorityLabels = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
+      prompt += `\nPriority: ${priorityLabels[task.priority] || task.priority}`
+    }
+    prompt += '\n\nPlease analyze this task and begin working on it. Update the task status to in_progress when you start.'
+    return prompt
+  }
+
   const loadTasks = useCallback(async (showLoading = true) => {
     if (!projectPath) return
+
+    // Capture the project path at the start of this async operation
+    const loadingForProject = projectPath
 
     if (showLoading) setLoading(true)
     setError(null)
 
     try {
-      const status = await window.electronAPI.beadsCheck(projectPath)
+      const status = await window.electronAPI.beadsCheck(loadingForProject)
+
+      // Check if project changed while we were loading - if so, discard results
+      if (currentProjectRef.current !== loadingForProject) {
+        return
+      }
+
       setBeadsInstalled(status.installed)
       setBeadsInitialized(status.initialized)
-      beadsStatusCache.set(projectPath, status)
+      beadsStatusCache.set(loadingForProject, status)
 
       if (status.installed && status.initialized) {
-        const result = await window.electronAPI.beadsList(projectPath)
+        const result = await window.electronAPI.beadsList(loadingForProject)
+
+        // Check again after the second async call
+        if (currentProjectRef.current !== loadingForProject) {
+          return
+        }
+
         if (result.success && result.tasks) {
           setTasks(result.tasks)
-          tasksCache.set(projectPath, result.tasks)
+          tasksCache.set(loadingForProject, result.tasks)
         } else {
           setError(result.error || 'Failed to load tasks')
         }
       }
     } catch (e) {
-      setError(String(e))
+      // Only set error if still on the same project
+      if (currentProjectRef.current === loadingForProject) {
+        setError(String(e))
+      }
     } finally {
-      setLoading(false)
+      // Only clear loading if still on the same project
+      if (currentProjectRef.current === loadingForProject) {
+        setLoading(false)
+      }
     }
   }, [projectPath])
 
@@ -182,6 +254,9 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
 
   // When project changes, immediately clear and refresh
   useEffect(() => {
+    // Update ref immediately so async operations can check against it
+    currentProjectRef.current = projectPath
+
     setError(null)
     if (projectPath) {
       // Always clear first to avoid showing stale data from wrong project
@@ -613,7 +688,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                       ) : (
                         <button
                           className="beads-task-start"
-                          onClick={() => handleStartTask(task.id)}
+                          onClick={(e) => handleStartButtonClick(e, task.id)}
                           title="Start task"
                         >
                           ▶
@@ -992,7 +1067,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                           ) : (
                             <button
                               className="beads-task-start"
-                              onClick={() => handleStartTask(task.id)}
+                              onClick={(e) => handleStartButtonClick(e, task.id)}
                               title="Start task"
                             >
                               ▶
@@ -1078,6 +1153,47 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
               )}
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Start task dropdown portal */}
+      {startDropdownTaskId && dropdownPosition && ReactDOM.createPortal(
+        <div
+          ref={startDropdownRef}
+          className="beads-start-dropdown"
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+        >
+          <button
+            className="beads-start-option"
+            onClick={() => {
+              const task = tasks.find(t => t.id === startDropdownTaskId)
+              if (task && onStartTaskInNewTab) {
+                onStartTaskInNewTab(formatTaskPrompt(task))
+              }
+              setStartDropdownTaskId(null)
+              setShowBrowser(false)
+            }}
+          >
+            <span className="beads-start-icon">+</span>
+            Start in new tab
+          </button>
+          <button
+            className="beads-start-option"
+            onClick={() => {
+              const task = tasks.find(t => t.id === startDropdownTaskId)
+              if (task && onSendToCurrentTab && currentTabPtyId) {
+                onSendToCurrentTab(formatTaskPrompt(task))
+              }
+              setStartDropdownTaskId(null)
+              setShowBrowser(false)
+            }}
+            disabled={!currentTabPtyId}
+            title={!currentTabPtyId ? 'No active terminal tab' : ''}
+          >
+            <span className="beads-start-icon">→</span>
+            Send to current tab
+          </button>
         </div>,
         document.body
       )}
