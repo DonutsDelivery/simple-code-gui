@@ -6,7 +6,6 @@ import { Terminal, clearTerminalBuffer } from './components/Terminal'
 import { TiledTerminalView, TileLayout } from './components/TiledTerminalView'
 import { SettingsModal } from './components/SettingsModal'
 import { MakeProjectModal } from './components/MakeProjectModal'
-import { QuickActionsMenu } from './components/QuickActionsMenu'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
@@ -653,10 +652,6 @@ function App() {
                   onCloseTab={handleCloseTab}
                 />
               )}
-              <QuickActionsMenu
-                projectPath={openTabs.find(t => t.id === activeTabId)?.projectPath || null}
-                ptyId={activeTabId}
-              />
               <button
                 className="view-toggle-btn"
                 onClick={() => setViewMode(viewMode === 'tabs' ? 'tiled' : 'tabs')}

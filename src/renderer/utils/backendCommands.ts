@@ -16,6 +16,8 @@ const claudeCommandItems: CommandMenuItem[] = [
   { id: 'model', label: '/model', command: '/model' },
   { id: 'config', label: '/config', command: '/config' },
   { id: 'doctor', label: '/doctor', command: '/doctor' },
+  { id: 'divider-plugins', label: '─────────────' },
+  { id: 'plugin-list', label: '/plugin list', command: '/plugin list' },
   { id: 'divider-cmd', label: '─────────────' },
   { id: 'addcommand', label: '+ Add Custom Command' },
 ]
