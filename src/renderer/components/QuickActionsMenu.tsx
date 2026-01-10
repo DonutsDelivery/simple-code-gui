@@ -104,6 +104,16 @@ export function QuickActionsMenu({ projectPath, ptyId, onOpenExtensions }: Quick
           className="quick-actions-menu"
           style={{ top: menuPos.top, left: menuPos.left }}
         >
+          {/* Built-in plugin commands */}
+          <button
+            className="quick-actions-item"
+            onClick={() => handleCommand('/plugin list')}
+          >
+            <span className="cmd">/plugin list</span>
+            <span className="ext">Built-in</span>
+          </button>
+          <div className="quick-actions-divider" />
+
           {loading ? (
             <div className="quick-actions-loading">Loading...</div>
           ) : commands.length > 0 ? (
@@ -120,13 +130,7 @@ export function QuickActionsMenu({ projectPath, ptyId, onOpenExtensions }: Quick
               ))}
               <div className="quick-actions-divider" />
             </>
-          ) : (
-            <div className="quick-actions-empty">
-              No commands available.
-              <br />
-              <small>Install extensions to add commands.</small>
-            </div>
-          )}
+          ) : null}
           {onOpenExtensions && (
             <button
               className="quick-actions-item manage"
