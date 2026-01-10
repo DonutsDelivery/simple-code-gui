@@ -436,7 +436,15 @@ class VoiceManager {
     if (fs.existsSync(binaryPath)) return binaryPath
     // Also check direct path
     const directPath = path.join(piperDir, binaryName)
-    return fs.existsSync(directPath) ? directPath : null
+    if (fs.existsSync(directPath)) return directPath
+    // Also check system PATH (e.g., /usr/bin/piper from package manager)
+    if (!isWindows) {
+      const systemPaths = ['/usr/bin/piper', '/usr/local/bin/piper']
+      for (const sysPath of systemPaths) {
+        if (fs.existsSync(sysPath)) return sysPath
+      }
+    }
+    return null
   }
 
   isPiperInstalled(): boolean {
@@ -599,9 +607,21 @@ class VoiceManager {
     }
 
     // Use getAnyVoicePath to support built-in, downloaded, and custom voices
-    const voicePaths = this.getAnyVoicePath(this.currentTTSVoice)
+    let voicePaths = this.getAnyVoicePath(this.currentTTSVoice)
     if (!voicePaths) {
-      return { success: false, error: 'Voice not installed' }
+      // Current voice not found - try to fall back to any available voice
+      const availableVoices = this.getInstalledPiperVoices()
+      for (const voice of availableVoices) {
+        voicePaths = this.getAnyVoicePath(voice)
+        if (voicePaths) {
+          this.currentTTSVoice = voice // Update to the found voice
+          break
+        }
+      }
+      if (!voicePaths) {
+        // Only error if truly no voices available
+        return { success: false, error: 'No voices installed' }
+      }
     }
 
     try {
