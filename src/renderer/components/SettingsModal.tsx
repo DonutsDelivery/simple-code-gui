@@ -60,6 +60,7 @@ const BACKEND_MODES = [
   { label: 'Gemini', value: 'gemini', desc: 'Use Gemini for code generation' },
   { label: 'Codex', value: 'codex', desc: 'Use Codex for code generation' },
   { label: 'OpenCode', value: 'opencode', desc: 'Use OpenCode for code generation' },
+  { label: 'Aider', value: 'aider', desc: 'Use Aider AI pair programmer' },
 ]
 
 interface SettingsModalProps {

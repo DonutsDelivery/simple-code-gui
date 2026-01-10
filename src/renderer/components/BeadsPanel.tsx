@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import ReactDOM from 'react-dom'
 
 interface BeadsTask {
   id: string
@@ -67,6 +68,11 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
   const [editDetailDescription, setEditDetailDescription] = useState('')
   const [editDetailPriority, setEditDetailPriority] = useState<number>(2)
   const [editDetailStatus, setEditDetailStatus] = useState<string>('open')
+
+  // Browser modal state
+  const [showBrowser, setShowBrowser] = useState(false)
+  const [browserFilter, setBrowserFilter] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all')
+  const [browserSort, setBrowserSort] = useState<'priority' | 'created' | 'status'>('priority')
 
   const loadTasks = useCallback(async (showLoading = true) => {
     if (!projectPath) return
@@ -463,15 +469,66 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
     return 'priority-low'
   }
 
+  const getPriorityLabel = (priority?: number) => {
+    if (priority === 0) return 'Critical'
+    if (priority === 1) return 'High'
+    if (priority === 2) return 'Medium'
+    if (priority === 3) return 'Low'
+    return 'Lowest'
+  }
+
+  // Filter and sort tasks for browser view
+  const getFilteredTasks = () => {
+    let filtered = [...tasks]
+
+    // Apply filter
+    if (browserFilter !== 'all') {
+      filtered = filtered.filter(t => t.status === browserFilter)
+    }
+
+    // Apply sort
+    filtered.sort((a, b) => {
+      if (browserSort === 'priority') {
+        return (a.priority ?? 2) - (b.priority ?? 2)
+      }
+      if (browserSort === 'status') {
+        const statusOrder = { open: 0, in_progress: 1, closed: 2 }
+        return (statusOrder[a.status as keyof typeof statusOrder] ?? 0) -
+               (statusOrder[b.status as keyof typeof statusOrder] ?? 0)
+      }
+      if (browserSort === 'created') {
+        const aDate = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bDate = b.created_at ? new Date(b.created_at).getTime() : 0
+        return bDate - aDate // newest first
+      }
+      return 0
+    })
+
+    return filtered
+  }
+
+  const handleOpenBrowser = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (projectPath && beadsInitialized) {
+      setShowBrowser(true)
+    }
+  }
+
   // Split on both / and \ for cross-platform support
   const projectName = projectPath ? projectPath.split(/[/\\]/).pop() : null
 
   return (
     <div className="beads-panel">
-      <div className="beads-header" onClick={onToggle}>
-        <span className="beads-toggle">{isExpanded ? '▼' : '▶'}</span>
+      <div className="beads-header">
+        <span className="beads-toggle" onClick={onToggle} title={isExpanded ? 'Collapse list' : 'Expand list'}>
+          {isExpanded ? '▼' : '▶'}
+        </span>
         <span className="beads-icon">📿</span>
-        <span className="beads-title">
+        <span
+          className={`beads-title ${projectPath && beadsInitialized ? 'clickable' : ''}`}
+          onClick={handleOpenBrowser}
+          title={projectPath && beadsInitialized ? 'Open task browser' : ''}
+        >
           Beads{projectName ? `: ${projectName}` : ''}
         </span>
         {tasks.length > 0 && <span className="beads-count">{tasks.length}</span>}
@@ -634,7 +691,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                 </button>
               </div>
 
-              {showCreateModal && (
+              {showCreateModal && ReactDOM.createPortal(
                 <div className="beads-modal-overlay" onClick={() => setShowCreateModal(false)}>
                   <div className="beads-modal" onClick={(e) => e.stopPropagation()}>
                     <div className="beads-modal-header">
@@ -722,10 +779,11 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                       </button>
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
 
-              {showDetailModal && (
+              {showDetailModal && ReactDOM.createPortal(
                 <div className="beads-modal-overlay" onClick={handleCloseDetail}>
                   <div className="beads-modal beads-detail-modal" onClick={(e) => e.stopPropagation()}>
                     <div className="beads-modal-header">
@@ -848,11 +906,180 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle }: BeadsPanelProp
                       )}
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </>
           )}
         </div>
+      )}
+
+      {/* Browser Modal - Full task browser */}
+      {showBrowser && ReactDOM.createPortal(
+        <div className="beads-modal-overlay" onClick={() => setShowBrowser(false)}>
+          <div className="beads-browser-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="beads-browser-header">
+              <div className="beads-browser-title-row">
+                <span className="beads-icon">📿</span>
+                <h2>Beads Tasks</h2>
+                <span className="beads-browser-project">{projectName}</span>
+              </div>
+              <button className="beads-modal-close" onClick={() => setShowBrowser(false)}>×</button>
+            </div>
+
+            <div className="beads-browser-toolbar">
+              <div className="beads-browser-filters">
+                <label>Filter:</label>
+                <select
+                  value={browserFilter}
+                  onChange={(e) => setBrowserFilter(e.target.value as typeof browserFilter)}
+                >
+                  <option value="all">All ({tasks.length})</option>
+                  <option value="open">Open ({tasks.filter(t => t.status === 'open').length})</option>
+                  <option value="in_progress">In Progress ({tasks.filter(t => t.status === 'in_progress').length})</option>
+                  <option value="closed">Closed ({tasks.filter(t => t.status === 'closed').length})</option>
+                </select>
+              </div>
+              <div className="beads-browser-sort">
+                <label>Sort:</label>
+                <select
+                  value={browserSort}
+                  onChange={(e) => setBrowserSort(e.target.value as typeof browserSort)}
+                >
+                  <option value="priority">Priority</option>
+                  <option value="status">Status</option>
+                  <option value="created">Created</option>
+                </select>
+              </div>
+              <div className="beads-browser-actions">
+                <button className="beads-refresh-btn" onClick={() => loadTasks()} title="Refresh">↻</button>
+                <button
+                  className="beads-btn-create"
+                  onClick={() => {
+                    setShowBrowser(false)
+                    setShowCreateModal(true)
+                  }}
+                >
+                  + New Task
+                </button>
+              </div>
+            </div>
+
+            <div className="beads-browser-content">
+              {getFilteredTasks().length === 0 ? (
+                <div className="beads-browser-empty">
+                  {browserFilter === 'all' ? 'No tasks yet' : `No ${browserFilter.replace('_', ' ')} tasks`}
+                </div>
+              ) : (
+                <div className="beads-browser-list">
+                  {getFilteredTasks().map((task) => (
+                    <div
+                      key={task.id}
+                      className={`beads-browser-item ${getPriorityClass(task.priority)} status-${task.status}`}
+                    >
+                      <div className="beads-browser-item-header">
+                        <div className="beads-browser-item-status">
+                          {task.status === 'closed' ? (
+                            <span className="beads-task-done">✓</span>
+                          ) : task.status === 'in_progress' ? (
+                            <button
+                              className="beads-task-check"
+                              onClick={() => handleCompleteTask(task.id)}
+                              title="Mark complete"
+                            >
+                              ○
+                            </button>
+                          ) : (
+                            <button
+                              className="beads-task-start"
+                              onClick={() => handleStartTask(task.id)}
+                              title="Start task"
+                            >
+                              ▶
+                            </button>
+                          )}
+                        </div>
+                        <div className="beads-browser-item-title-row">
+                          <span
+                            className={`beads-browser-item-title ${task.status === 'closed' ? 'completed' : ''}`}
+                            onClick={() => handleOpenDetail(task)}
+                          >
+                            {task.title}
+                          </span>
+                          <span className="beads-browser-item-id">{task.id}</span>
+                        </div>
+                        <div className="beads-browser-item-actions">
+                          <button
+                            className={`beads-browser-status-btn status-${task.status}`}
+                            onClick={() => handleCycleStatus(task.id, task.status)}
+                            title="Click to cycle status"
+                          >
+                            {task.status === 'in_progress' ? 'In Progress' : task.status === 'closed' ? 'Done' : 'Open'}
+                          </button>
+                          <button
+                            className="beads-task-delete"
+                            onClick={() => handleDeleteTask(task.id)}
+                            title="Delete task"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="beads-browser-item-meta">
+                        <span className={`beads-browser-priority ${getPriorityClass(task.priority)}`}>
+                          P{task.priority ?? 2} {getPriorityLabel(task.priority)}
+                        </span>
+                        {task.issue_type && (
+                          <span className="beads-browser-type">{task.issue_type}</span>
+                        )}
+                        {task.created_at && (
+                          <span className="beads-browser-date">
+                            {new Date(task.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        {(task.dependency_count ?? 0) > 0 && (
+                          <span className="beads-browser-blocked">
+                            🚫 Blocked by {task.dependency_count}
+                          </span>
+                        )}
+                        {(task.dependent_count ?? 0) > 0 && (
+                          <span className="beads-browser-blocking">
+                            ⛔ Blocking {task.dependent_count}
+                          </span>
+                        )}
+                      </div>
+
+                      {task.description && (
+                        <div className="beads-browser-item-desc">
+                          {task.description}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="beads-browser-footer">
+              <span className="beads-browser-stats">
+                {tasks.filter(t => t.status === 'open').length} open,
+                {' '}{tasks.filter(t => t.status === 'in_progress').length} in progress,
+                {' '}{tasks.filter(t => t.status === 'closed').length} closed
+              </span>
+              {tasks.some(t => t.status === 'closed') && (
+                <button
+                  className="beads-clear-btn"
+                  onClick={handleClearCompleted}
+                  title="Clear completed tasks"
+                >
+                  Clear Completed
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

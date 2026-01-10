@@ -323,17 +323,20 @@ function App() {
   }, [projects, openTabs, activeTabId, loading, viewMode, tileLayout, categories])
 
   // Poll for session IDs - update tabs without sessions and detect when sessions change (e.g., after /clear)
+  // Now async and parallel so it doesn't block the UI
   useEffect(() => {
     const pollInterval = setInterval(async () => {
-      for (const tab of openTabs) {
+      if (openTabs.length === 0) return
+
+      // Run discovery in parallel for all tabs (async so non-blocking)
+      await Promise.all(openTabs.map(async (tab) => {
         try {
           const sessions = await window.electronAPI.discoverSessions(tab.projectPath)
           if (sessions.length > 0) {
-            // Get the most recent session
             const mostRecent = sessions[0]
 
             // Skip if this tab already has the most recent session
-            if (tab.sessionId === mostRecent.sessionId) continue
+            if (tab.sessionId === mostRecent.sessionId) return
 
             // Check if we already have this session in another tab
             const alreadyOpen = openTabs.some(t => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
@@ -348,8 +351,8 @@ function App() {
         } catch (e) {
           console.error('Failed to discover sessions for tab:', e)
         }
-      }
-    }, 3000) // Poll every 3 seconds
+      }))
+    }, 5000) // Poll every 5 seconds
 
     return () => clearInterval(pollInterval)
   }, [openTabs, updateTab])

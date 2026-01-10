@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
+import { existsSync } from 'fs'
+import { readdir, readFile, stat } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 
@@ -30,7 +31,7 @@ function encodeProjectPath(projectPath: string): string {
     .replace(/ /g, '-')      // Replace spaces with -
 }
 
-export function discoverSessions(projectPath: string): ClaudeSession[] {
+export async function discoverSessions(projectPath: string): Promise<ClaudeSession[]> {
   const claudeDir = join(homedir(), '.claude', 'projects')
   const encodedPath = encodeProjectPath(projectPath)
   const projectSessionsDir = join(claudeDir, encodedPath)
@@ -42,57 +43,60 @@ export function discoverSessions(projectPath: string): ClaudeSession[] {
   const sessions: ClaudeSession[] = []
 
   try {
-    const files = readdirSync(projectSessionsDir)
+    const files = await readdir(projectSessionsDir)
 
-    for (const file of files) {
-      // Session files are UUID.jsonl, skip agent files
-      if (!file.endsWith('.jsonl') || file.startsWith('agent-')) {
-        continue
-      }
+    // Process files in parallel for better performance
+    const results = await Promise.all(
+      files
+        .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
+        .map(async (file) => {
+          const sessionId = file.replace('.jsonl', '')
+          const filePath = join(projectSessionsDir, file)
 
-      const sessionId = file.replace('.jsonl', '')
-      const filePath = join(projectSessionsDir, file)
-
-      try {
-        const stat = statSync(filePath)
-        const content = readFileSync(filePath, 'utf-8')
-        const lines = content.split('\n').filter(line => line.trim())
-
-        // Look for slug and check if session has actual conversation
-        let slug = sessionId.slice(0, 8)
-        let cwd = projectPath
-        let hasConversation = false
-
-        for (const line of lines) {
           try {
-            const data = JSON.parse(line)
-            if (data.slug) slug = data.slug
-            if (data.cwd) cwd = data.cwd
-            // Check if this is an actual conversation message
-            if (data.type && CONVERSATION_TYPES.includes(data.type)) {
-              hasConversation = true
+            const fileStat = await stat(filePath)
+            const content = await readFile(filePath, 'utf-8')
+            const lines = content.split('\n').filter(line => line.trim())
+
+            // Look for slug and check if session has actual conversation
+            let slug = sessionId.slice(0, 8)
+            let cwd = projectPath
+            let hasConversation = false
+
+            for (const line of lines) {
+              try {
+                const data = JSON.parse(line)
+                if (data.slug) slug = data.slug
+                if (data.cwd) cwd = data.cwd
+                if (data.type && CONVERSATION_TYPES.includes(data.type)) {
+                  hasConversation = true
+                }
+              } catch {
+                // Skip non-JSON lines
+              }
             }
-          } catch {
-            // Skip non-JSON lines
+
+            if (!hasConversation) {
+              return null
+            }
+
+            return {
+              sessionId,
+              slug,
+              lastModified: fileStat.mtimeMs,
+              cwd,
+              fileSize: fileStat.size
+            }
+          } catch (e) {
+            console.error(`Failed to parse session ${file}:`, e)
+            return null
           }
-        }
-
-        // Skip sessions without actual conversation content
-        if (!hasConversation) {
-          continue
-        }
-
-        sessions.push({
-          sessionId,
-          slug,
-          lastModified: stat.mtimeMs,
-          cwd,
-          fileSize: stat.size
         })
-      } catch (e) {
-        // Skip invalid session files
-        console.error(`Failed to parse session ${file}:`, e)
-      }
+    )
+
+    // Filter out nulls and add to sessions
+    for (const result of results) {
+      if (result) sessions.push(result)
     }
   } catch (e) {
     console.error('Failed to read sessions directory:', e)

@@ -159,7 +159,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
     apiError?: string
     ttsVoice: string  // empty string means use global
     ttsEngine: 'piper' | 'xtts' | ''  // empty string means use global
-    backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+    backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   } | null>(null)
   const [installedVoices, setInstalledVoices] = useState<Array<{ key: string; displayName: string; source: string }>>([])
   const [globalVoiceSettings, setGlobalVoiceSettings] = useState<{ voice: string; engine: string }>({ voice: '', engine: '' })
@@ -1421,7 +1421,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         name="projectBackend"
                         value="default"
                         checked={projectSettingsModal.backend === 'default'}
-                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' })}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
                       />
                       <span className="mode-label">Use global default</span>
                       <span className="mode-desc">Uses the backend selected in the main settings.</span>
@@ -1432,7 +1432,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         name="projectBackend"
                         value="claude"
                         checked={projectSettingsModal.backend === 'claude'}
-                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' })}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
                       />
                       <span className="mode-label">Claude</span>
                       <span className="mode-desc">Forces this project to use Claude.</span>
@@ -1443,7 +1443,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         name="projectBackend"
                         value="gemini"
                         checked={projectSettingsModal.backend === 'gemini'}
-                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' })}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
                       />
                       <span className="mode-label">Gemini</span>
                       <span className="mode-desc">Forces this project to use Gemini.</span>
@@ -1454,7 +1454,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         name="projectBackend"
                         value="codex"
                         checked={projectSettingsModal.backend === 'codex'}
-                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' })}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
                       />
                       <span className="mode-label">Codex</span>
                       <span className="mode-desc">Forces this project to use Codex.</span>
@@ -1465,10 +1465,21 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
                         name="projectBackend"
                         value="opencode"
                         checked={projectSettingsModal.backend === 'opencode'}
-                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' })}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
                       />
                       <span className="mode-label">OpenCode</span>
                       <span className="mode-desc">Forces this project to use OpenCode.</span>
+                    </label>
+                    <label className={`permission-mode-option ${projectSettingsModal.backend === 'aider' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="projectBackend"
+                        value="aider"
+                        checked={projectSettingsModal.backend === 'aider'}
+                        onChange={(e) => setProjectSettingsModal({ ...projectSettingsModal, backend: e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' })}
+                      />
+                      <span className="mode-label">Aider</span>
+                      <span className="mode-desc">Forces this project to use Aider.</span>
                     </label>
                   </div>
                 </div>

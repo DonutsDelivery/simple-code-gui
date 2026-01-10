@@ -11,7 +11,7 @@ import { resolveBackendCommand } from '../utils/backendCommands'
 // Global buffer to persist terminal data across HMR remounts
 // Use window to persist across module re-execution during HMR
 const BUFFER_KEY = '__TERMINAL_BUFFERS__'
-const MAX_BUFFER_CHUNKS = 5000 // Limit buffer size to prevent memory issues
+const MAX_BUFFER_CHUNKS = 1000 // Limit buffer size to prevent memory issues and GC pauses
 
 // Get or create the global buffer map (survives HMR)
 function getTerminalBuffers(): Map<string, string[]> {
@@ -28,6 +28,17 @@ export function clearTerminalBuffer(ptyId: string) {
 
 // Debug flag - set to true to log scroll events
 const DEBUG_SCROLL = false
+
+// Set to false to disable WebGL and use canvas renderer (for debugging)
+const ENABLE_WEBGL = true
+
+// Pre-compiled regex patterns for hot path (PTY data processing)
+const TTS_GUILLEMET_REGEX = /«\/?tts»/g
+const SUMMARY_MARKER_DISPLAY_REGEX = /===SUMMARY_(START|END)===/g
+const TTS_TAG_REGEX = /(?:«tts»|<tts>)([\s\S]*?)(?:«\/tts»|<\/tts>)/g
+const CODE_PATTERN_REGEX = /[{}()\[\];=`$]|^\s*\/\/|^\s*#|function\s|const\s|let\s|var\s/
+const SUMMARY_EXTRACT_REGEX = /===SUMMARY_START===([\s\S]*)===SUMMARY_END===/
+const AUTOWORK_MARKER_REGEX = /===AUTOWORK_CONTINUE===/g
 
 // Suppress known xterm WebGL race condition errors
 // These errors occur during WebGL addon initialization/disposal but are harmless
@@ -326,10 +337,10 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     const t = theme.terminal
     const terminal = new XTerm({
-      cursorBlink: true,
+      cursorBlink: false, // Disabled to reduce constant repaints - re-enable if not the cause
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
-      scrollback: 10000,
+      scrollback: 5000,
       allowProposedApi: true,
       cols: 120,
       rows: 30,
@@ -365,7 +376,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     // Load WebGL addon after terminal is fully initialized
     // Use setTimeout to allow xterm's internal render service to initialize
-    setTimeout(() => {
+    if (ENABLE_WEBGL) setTimeout(() => {
       if (disposed) return
 
       // Ensure terminal has valid dimensions before loading WebGL
@@ -471,7 +482,19 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       fitAddon.fit()
     })
 
-    // Handle terminal input - also enables TTS after first user input
+    // Handle terminal input - batch keystrokes to reduce IPC overhead
+    // Use a 16ms (one frame) buffer to batch rapid keystrokes
+    let inputBuffer = ''
+    let inputFlushTimeout: ReturnType<typeof setTimeout> | null = null
+
+    const flushInput = () => {
+      if (inputBuffer) {
+        window.electronAPI.writePty(ptyId, inputBuffer)
+        inputBuffer = ''
+      }
+      inputFlushTimeout = null
+    }
+
     terminal.onData((data) => {
       // User has typed something - now safe to enable TTS for responses
       if (silentModeRef.current) {
@@ -480,7 +503,21 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         // This prevents old messages from being spoken if they complete after user types
         ttsBufferRef.current = ''
       }
-      window.electronAPI.writePty(ptyId, data)
+
+      // Buffer the input
+      inputBuffer += data
+
+      // Flush immediately for control characters (Enter, Ctrl+C, etc.)
+      // These need low latency for responsiveness
+      if (data.length === 1 && data.charCodeAt(0) < 32) {
+        if (inputFlushTimeout) {
+          clearTimeout(inputFlushTimeout)
+        }
+        flushInput()
+      } else if (!inputFlushTimeout) {
+        // Schedule flush for regular characters
+        inputFlushTimeout = setTimeout(flushInput, 16)
+      }
     })
 
     // Handle copy/paste keyboard shortcuts and prevent arrow key scrolling
@@ -558,8 +595,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     // Handle PTY output - always scroll to bottom unless user explicitly scrolled up
     let firstData = true
+    let scrollPending = false  // Throttle scrollToBottom to once per frame
 
     const cleanupData = window.electronAPI.onPtyData(ptyId, (data) => {
+      // Performance debugging - uncomment to log timing
+      // const t0 = performance.now()
+
       // Store data in buffer for HMR recovery
       const buf = getTerminalBuffers().get(ptyId)
       if (buf) {
@@ -571,7 +612,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       }
 
       // Only strip «tts» guillemet markers from display (keep <tts> angle brackets visible to show when Claude uses wrong format)
-      let displayData = data.replace(/«\/?tts»/g, '').replace(/===SUMMARY_(START|END)===/g, '')
+      let displayData = data.replace(TTS_GUILLEMET_REGEX, '').replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
 
       // TTS: Buffer chunks and extract complete tags (tags may span multiple chunks)
       const cleanChunk = stripAnsi(data)
@@ -579,16 +620,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       ttsBufferRef.current += cleanChunk
 
       // Extract all complete TTS markers from buffer (support both «tts»...«/tts» and <tts>...</tts>)
-      const tagRegex = /(?:«tts»|<tts>)([\s\S]*?)(?:«\/tts»|<\/tts>)/g
+      TTS_TAG_REGEX.lastIndex = 0  // Reset stateful regex
       let match
       let lastIndex = 0
 
-      while ((match = tagRegex.exec(ttsBufferRef.current)) !== null) {
+      while ((match = TTS_TAG_REGEX.exec(ttsBufferRef.current)) !== null) {
         lastIndex = match.index + match[0].length
         const content = match[1].trim()
 
         // Skip if content looks like code (has brackets, semicolons, etc.)
-        const looksLikeCode = /[{}()\[\];=`$]|^\s*\/\/|^\s*#|function\s|const\s|let\s|var\s/.test(content)
+        const looksLikeCode = CODE_PATTERN_REGEX.test(content)
         // Skip if content is too short or has weird characters
         const looksLikeProse = content.length > 5 && /^[a-zA-Z]/.test(content) && !looksLikeCode
 
@@ -624,57 +665,30 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       }
 
       // Summary capture for "Summarize & Clear" feature
-      // Debug: log every data chunk to see if capture flag is set
-      if (cleanChunk.includes('SUMMARY') || capturingSummaryRef.current) {
-        console.log('[Summary] Data received, capturing:', capturingSummaryRef.current, 'chunk has SUMMARY:', cleanChunk.includes('SUMMARY'))
-      }
       if (capturingSummaryRef.current) {
         summaryBufferRef.current += cleanChunk
-        console.log('[Summary] Buffer length:', summaryBufferRef.current.length, 'chunk length:', cleanChunk.length)
-
-        // Log buffer when it reaches certain sizes
-        if (summaryBufferRef.current.length > 100 && summaryBufferRef.current.length < 200) {
-          console.log('[Summary] Buffer @100:', summaryBufferRef.current)
-        }
-
-        // Check if markers are present anywhere in buffer (using === markers, not XML)
-        const hasStart = summaryBufferRef.current.includes('===SUMMARY_START===')
-        const hasEnd = summaryBufferRef.current.includes('===SUMMARY_END===')
-        if (hasStart && hasEnd) {
-          const startIdx = summaryBufferRef.current.indexOf('===SUMMARY_START===')
-          const endIdx = summaryBufferRef.current.indexOf('===SUMMARY_END===')
-          console.log('[Summary] Both markers found! start@', startIdx, 'end@', endIdx, 'distance:', endIdx - startIdx)
-        } else if (hasStart || hasEnd) {
-          console.log('[Summary] Partial markers - start:', hasStart, 'end:', hasEnd)
-        }
 
         // Check for complete summary markers - use GREEDY match to get from first START to LAST END
         // This avoids issues if the summary content itself mentions the markers
-        const summaryMatch = summaryBufferRef.current.match(/===SUMMARY_START===([\s\S]*)===SUMMARY_END===/)
+        const summaryMatch = summaryBufferRef.current.match(SUMMARY_EXTRACT_REGEX)
         if (summaryMatch) {
           // Remove any nested markers from the content
           let summary = summaryMatch[1].trim()
-          console.log('[Summary] RAW match length:', summary.length, 'first 100:', summary.substring(0, 100))
-          summary = summary.replace(/===SUMMARY_(START|END)===/g, '')
-          console.log('[Summary] After strip length:', summary.length)
-          console.log('[Summary] Content:', summary.substring(0, 200))
+          summary = summary.replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
 
           // Minimum length check - a real summary should be substantial (>100 chars)
           // If too short, Claude might be explaining the format rather than giving the actual summary
-          if (summary.length < 100) {
-            console.log('[Summary] Match too short (' + summary.length + ' chars), continuing capture...')
-            // Continue capturing - don't stop yet
-          } else {
+          if (summary.length >= 100) {
             // Stop capturing once we have a substantial match
             capturingSummaryRef.current = false
             summaryBufferRef.current = ''
             setPendingSummary(summary)
           }
+          // If too short, continue capturing
         }
 
         // Limit buffer size to prevent unbounded growth (200KB should be plenty)
         if (summaryBufferRef.current.length > 200000) {
-          console.log('[Summary] Buffer limit reached, stopping capture')
           capturingSummaryRef.current = false
           summaryBufferRef.current = ''
         }
@@ -682,18 +696,14 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
       // Auto Work Loop - detect continuation marker
       if (autoWorkModeRef.current && cleanChunk.includes('===AUTOWORK_CONTINUE===')) {
-        console.log('[AutoWork] Continuation marker detected! withSummary:', autoWorkWithSummaryRef.current, 'pauseForReview:', autoWorkPauseForReviewRef.current)
-
         if (autoWorkPauseForReviewRef.current) {
           // Pause for review: wait for user input before continuing
-          console.log('[AutoWork] Pausing for user review')
           setAwaitingUserReview(true)
           // Don't auto-continue - user will trigger continuation manually
         } else if (autoWorkWithSummaryRef.current) {
           // With summaries: trigger summarize flow which will then continue autowork
           summaryBufferRef.current = ''
           capturingSummaryRef.current = true
-          console.log('[AutoWork+Summary] Starting summary capture')
           const summarizePrompt = 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.'
           window.electronAPI.writePty(ptyId, summarizePrompt)
           setTimeout(() => {
@@ -706,13 +716,19 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       }
 
       // Strip autowork marker from display
-      displayData = displayData.replace(/===AUTOWORK_CONTINUE===/g, '')
+      displayData = displayData.replace(AUTOWORK_MARKER_REGEX, '')
 
       terminal.write(displayData)
 
-      // Always scroll to bottom unless user has scrolled up
-      if (!userScrolledUpRef.current) {
-        terminal.scrollToBottom()
+      // Throttle scrollToBottom to once per animation frame (prevents lag during fast output)
+      if (!userScrolledUpRef.current && !scrollPending) {
+        scrollPending = true
+        requestAnimationFrame(() => {
+          scrollPending = false
+          if (!disposed && !userScrolledUpRef.current) {
+            terminal.scrollToBottom()
+          }
+        })
       }
 
       // Resize on first data to ensure PTY has correct dimensions
@@ -779,6 +795,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       cleanupData()
       cleanupExit()
       if (resizeTimeout) clearTimeout(resizeTimeout)
+      if (inputFlushTimeout) clearTimeout(inputFlushTimeout)
       if (silentModeTimeoutRef.current) clearTimeout(silentModeTimeoutRef.current)
       resizeObserver.disconnect()
       // Dispose WebGL addon first to avoid race condition during terminal disposal

@@ -57,6 +57,9 @@ function findExecutable(backend: string = 'claude'): string {
   if (backend === 'opencode') {
     return findOpenCodeExecutable()
   }
+  if (backend === 'aider') {
+    return findAiderExecutable()
+  }
   return findClaudeExecutable()
 }
 
@@ -178,6 +181,49 @@ function findClaudeExecutable(): string {
 
   // Fall back to just 'claude' and let PATH resolve it
   return 'claude'
+}
+
+// Find aider executable - pip installs to Scripts on Windows, bin on Unix
+function findAiderExecutable(): string {
+  if (!isWindows) {
+    return 'aider'
+  }
+
+  // On Windows, check for aider.exe in portable Python Scripts first
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    // pip installs to Scripts directory on Windows
+    const aiderExe = path.join(dir, 'aider.exe')
+    if (fs.existsSync(aiderExe)) {
+      console.log('Found Aider at (portable):', aiderExe)
+      return aiderExe
+    }
+    // Also check parent/Scripts (if dir is the node bin)
+    const scriptsDir = path.join(path.dirname(dir), 'Scripts')
+    const aiderInScripts = path.join(scriptsDir, 'aider.exe')
+    if (fs.existsSync(aiderInScripts)) {
+      console.log('Found Aider at (Scripts):', aiderInScripts)
+      return aiderInScripts
+    }
+  }
+
+  // Check common Python Scripts locations
+  const pythonPaths = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts'),
+    path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts'),
+    path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts'),
+  ]
+  for (const dir of pythonPaths) {
+    const aiderExe = path.join(dir, 'aider.exe')
+    if (fs.existsSync(aiderExe)) {
+      console.log('Found Aider at:', aiderExe)
+      return aiderExe
+    }
+  }
+
+  // Fall back to just 'aider' and let PATH resolve it
+  return 'aider'
 }
 
 export class PtyManager {

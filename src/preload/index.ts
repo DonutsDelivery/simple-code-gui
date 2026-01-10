@@ -9,7 +9,7 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface ElectronAPI {
@@ -52,6 +52,14 @@ export interface ElectronAPI {
   // OpenCode CLI
   opencodeCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
   opencodeInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
+
+  // Aider CLI
+  aiderCheck: () => Promise<{ installed: boolean; pipInstalled: boolean }>
+  aiderInstall: () => Promise<{ success: boolean; error?: string; needsPython?: boolean }>
+
+  // Get Shit Done (GSD) - Claude Code workflow addon
+  gsdCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
+  gsdInstall: () => Promise<{ success: boolean; error?: string }>
 
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
@@ -216,6 +224,14 @@ const api: ElectronAPI = {
   // OpenCode CLI
   opencodeCheck: () => ipcRenderer.invoke('opencode:check'),
   opencodeInstall: () => ipcRenderer.invoke('opencode:install'),
+
+  // Aider CLI
+  aiderCheck: () => ipcRenderer.invoke('aider:check'),
+  aiderInstall: () => ipcRenderer.invoke('aider:install'),
+
+  // Get Shit Done (GSD) - Claude Code workflow addon
+  gsdCheck: () => ipcRenderer.invoke('gsd:check'),
+  gsdInstall: () => ipcRenderer.invoke('gsd:install'),
 
   // Beads
   beadsCheck: (cwd) => ipcRenderer.invoke('beads:check', cwd),

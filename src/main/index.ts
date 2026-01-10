@@ -213,6 +213,43 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Migrate data from old app name if needed
+  const oldConfigDir = join(app.getPath('appData'), 'simple-claude-gui', 'config')
+  const newConfigDir = join(app.getPath('userData'), 'config')
+  const oldWorkspace = join(oldConfigDir, 'workspace.json')
+  const newWorkspace = join(newConfigDir, 'workspace.json')
+
+  // Check if old workspace exists and new one is empty/missing
+  if (existsSync(oldWorkspace)) {
+    const { statSync, copyFileSync, readFileSync } = require('fs')
+    const oldSize = statSync(oldWorkspace).size
+    let shouldMigrate = false
+
+    if (!existsSync(newWorkspace)) {
+      shouldMigrate = true
+    } else {
+      const newSize = statSync(newWorkspace).size
+      // Migrate if old has substantial data and new is nearly empty
+      if (oldSize > 500 && newSize < 500) {
+        shouldMigrate = true
+      }
+    }
+
+    if (shouldMigrate) {
+      console.log('Migrating workspace from simple-claude-gui to simple-code-gui...')
+      mkdirSync(newConfigDir, { recursive: true })
+      copyFileSync(oldWorkspace, newWorkspace)
+
+      // Also migrate voice settings if present
+      const oldVoice = join(app.getPath('appData'), 'simple-claude-gui', 'voice-settings.json')
+      const newVoice = join(app.getPath('userData'), 'voice-settings.json')
+      if (existsSync(oldVoice) && !existsSync(newVoice)) {
+        copyFileSync(oldVoice, newVoice)
+      }
+      console.log('Migration complete')
+    }
+  }
+
   // Initialize portable deps PATH
   const portableDirs = getPortableBinDirs()
   setPortableBinDirs(portableDirs)
@@ -880,6 +917,117 @@ ipcMain.handle('opencode:install', async () => {
     return { success: installed, error: installed ? undefined : 'Installation completed but opencode command not found' }
   } catch (e: any) {
     opencodeAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// Aider CLI installation check and management
+let aiderAvailable: boolean | null = null
+
+async function checkAiderInstalled(): Promise<boolean> {
+  if (aiderAvailable !== null) return aiderAvailable
+  try {
+    await execAsync('aider --version', getExecOptions())
+    aiderAvailable = true
+  } catch {
+    aiderAvailable = false
+  }
+  return aiderAvailable
+}
+
+ipcMain.handle('aider:check', async () => {
+  const installed = await checkAiderInstalled()
+  const pipInstalled = await checkPipInstalled()
+  return { installed, pipInstalled }
+})
+
+ipcMain.handle('aider:install', async () => {
+  try {
+    // Reset cache so we re-check after install
+    aiderAvailable = null
+
+    // Check if portable pip is available
+    const portablePip = getPortablePipPath()
+    if (portablePip) {
+      // Use portable pip
+      mainWindow?.webContents.send('install:progress', { type: 'aider', status: 'Installing Aider...', percent: 10 })
+      await execAsync(`"${portablePip}" install aider-chat`, { ...getExecOptions(), timeout: 600000 })
+
+      // Update portable bin dirs
+      const portableDirs = getPortableBinDirs()
+      setPortableBinDirs(portableDirs)
+
+      mainWindow?.webContents.send('install:progress', { type: 'aider', status: 'Verifying installation...', percent: 90 })
+      const installed = await checkAiderInstalled()
+      mainWindow?.webContents.send('install:progress', { type: 'aider', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+      return { success: installed, error: installed ? undefined : 'Installation completed but aider command not found' }
+    }
+
+    // Fallback to system pip
+    const hasPip = await checkPipInstalled()
+    if (!hasPip) {
+      return { success: false, error: 'pip is not installed. Please install Python first.', needsPython: true }
+    }
+
+    // Install Aider via pip (try pip3 first, then pip)
+    mainWindow?.webContents.send('install:progress', { type: 'aider', status: 'Installing Aider...', percent: 10 })
+    try {
+      await execAsync('pip3 install aider-chat', { ...getExecOptions(), timeout: 600000 })
+    } catch {
+      await execAsync('pip install aider-chat', { ...getExecOptions(), timeout: 600000 })
+    }
+
+    // Verify installation
+    mainWindow?.webContents.send('install:progress', { type: 'aider', status: 'Verifying installation...', percent: 90 })
+    const installed = await checkAiderInstalled()
+    mainWindow?.webContents.send('install:progress', { type: 'aider', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+    return { success: installed, error: installed ? undefined : 'Installation completed but aider command not found' }
+  } catch (e: any) {
+    aiderAvailable = null
+    return { success: false, error: e.message }
+  }
+})
+
+// Get Shit Done (GSD) - Claude Code workflow addon
+// GSD installs slash commands to ~/.claude/commands/ that enhance Claude Code's workflow
+
+function checkGSDInstalled(): boolean {
+  // Check if GSD commands exist in global Claude commands directory
+  const gsdCommandsDir = join(homedir(), '.claude', 'commands')
+  const gsdMarkerFile = join(gsdCommandsDir, 'gsd:new-project.md')
+  return existsSync(gsdMarkerFile)
+}
+
+ipcMain.handle('gsd:check', async () => {
+  const installed = checkGSDInstalled()
+  const npmInstalled = await checkNpmInstalled()
+  return { installed, npmInstalled }
+})
+
+ipcMain.handle('gsd:install', async () => {
+  try {
+    mainWindow?.webContents.send('install:progress', { type: 'gsd', status: 'Installing Get Shit Done...', percent: 10 })
+
+    // Check if portable npm is available
+    const portableNpm = getPortableNpmPath()
+    const npmCmd = portableNpm ? `"${portableNpm}"` : 'npm'
+
+    // Run npx to install GSD (--yes to auto-accept, global install)
+    mainWindow?.webContents.send('install:progress', { type: 'gsd', status: 'Running GSD installer...', percent: 30 })
+
+    // GSD installs slash commands to ~/.claude/commands/
+    // We use npx with --yes to skip confirmation
+    await execAsync(`npx --yes get-shit-done-cc --global`, { ...getExecOptions(), timeout: 300000 })
+
+    mainWindow?.webContents.send('install:progress', { type: 'gsd', status: 'Verifying installation...', percent: 90 })
+    const installed = checkGSDInstalled()
+    mainWindow?.webContents.send('install:progress', { type: 'gsd', status: installed ? 'Installed!' : 'Failed', percent: 100 })
+
+    return {
+      success: installed,
+      error: installed ? undefined : 'Installation completed but GSD commands not found. Try running: npx get-shit-done-cc'
+    }
+  } catch (e: any) {
     return { success: false, error: e.message }
   }
 })
