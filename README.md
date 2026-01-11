@@ -89,7 +89,7 @@ Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-code-gu
 | Platform | Download |
 |----------|----------|
 | Windows | `.exe` installer or portable |
-| macOS | `.dmg` (Apple Silicon) |
+| macOS (untested)| `.dmg` (Apple Silicon) |
 | Linux | `.AppImage` or `.deb` |
 
 ### Arch Linux (AUR)
