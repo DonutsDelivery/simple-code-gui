@@ -1263,6 +1263,38 @@ html, body, #root {
   cursor: grabbing;
 }
 
+/* Drop zone overlay for tile rearrangement */
+.drop-zone-overlay {
+  backdrop-filter: blur(2px);
+  animation: dropZoneFadeIn 100ms ease;
+}
+
+@keyframes dropZoneFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.drop-zone-label {
+  animation: dropZoneLabelFadeIn 150ms ease;
+}
+
+@keyframes dropZoneLabelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .terminal-wrapper {
   position: absolute;
   top: 8px;
@@ -1642,6 +1674,95 @@ html, body, #root {
 .custom-command-modal textarea:focus {
   outline: none;
   border-color: var(--accent-primary);
+}
+
+/* ============================================
+   CLAUDE.md Editor Modal
+   ============================================ */
+
+.claudemd-editor-modal {
+  width: 700px;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.claudemd-editor-modal .modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.claudemd-editor-modal .modal-subtitle {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.claudemd-editor-modal .modal-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.claudemd-editor-modal .loading-state {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.claudemd-editor-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.claudemd-editor-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.claudemd-editor-header label {
+  margin: 0;
+}
+
+.new-file-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: var(--accent-primary);
+  color: var(--bg-base);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.claudemd-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 300px;
+  padding: var(--space-md);
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.claudemd-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.claudemd-textarea::placeholder {
+  color: var(--text-tertiary);
 }
 
 /* ============================================

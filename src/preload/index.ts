@@ -175,6 +175,10 @@ export interface ElectronAPI {
   // Custom commands
   commandsSave: (name: string, content: string, projectPath: string | null) => Promise<{ success: boolean; path?: string; error?: string }>
 
+  // CLAUDE.md editor
+  claudeMdRead: (projectPath: string) => Promise<{ success: boolean; content?: string; exists?: boolean; error?: string }>
+  claudeMdSave: (projectPath: string, content: string) => Promise<{ success: boolean; error?: string }>
+
   // Auto Work mode marker (for hooks)
   autoworkSetActive: (projectPath: string) => Promise<{ success: boolean }>
   autoworkClearActive: (projectPath: string) => Promise<{ success: boolean }>
@@ -437,6 +441,10 @@ const api: ElectronAPI = {
 
   // Custom commands
   commandsSave: (name, content, projectPath) => ipcRenderer.invoke('commands:save', { name, content, projectPath }),
+
+  // CLAUDE.md editor
+  claudeMdRead: (projectPath) => ipcRenderer.invoke('claudemd:read', projectPath),
+  claudeMdSave: (projectPath, content) => ipcRenderer.invoke('claudemd:save', { projectPath, content }),
 
   // Auto Work mode marker (for hooks) - placeholder implementations
   autoworkSetActive: (projectPath) => ipcRenderer.invoke('autowork:setActive', projectPath),

@@ -1702,6 +1702,38 @@ ipcMain.handle('commands:save', async (_, { name, content, projectPath }: { name
   }
 })
 
+// ==================== CLAUDE.MD EDITOR ====================
+
+ipcMain.handle('claudemd:read', async (_, projectPath: string) => {
+  try {
+    const claudeMdPath = join(projectPath, '.claude', 'CLAUDE.md')
+    if (existsSync(claudeMdPath)) {
+      const content = require('fs').readFileSync(claudeMdPath, 'utf8')
+      return { success: true, content, exists: true }
+    }
+    return { success: true, content: '', exists: false }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('claudemd:save', async (_, { projectPath, content }: { projectPath: string; content: string }) => {
+  try {
+    const claudeDir = join(projectPath, '.claude')
+    const claudeMdPath = join(claudeDir, 'CLAUDE.md')
+
+    // Create .claude directory if it doesn't exist
+    if (!existsSync(claudeDir)) {
+      mkdirSync(claudeDir, { recursive: true })
+    }
+
+    writeFileSync(claudeMdPath, content, 'utf8')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
 // ==================== EXTENSIONS ====================
 
 // Registry

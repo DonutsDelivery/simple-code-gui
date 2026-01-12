@@ -497,7 +497,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       }
 
       // User has typed something - now safe to enable TTS for responses
-      if (silentModeRef.current) {
+      // BUT: Ignore Enter and arrow keys - these are used to navigate TOS dialogs
+      // that may appear before the chat loads, and shouldn't trigger TTS
+      const isEnterKey = data === '\r' || data === '\n'
+      const isArrowKey = data === '\x1b[A' || data === '\x1b[B' || data === '\x1b[C' || data === '\x1b[D'
+      if (silentModeRef.current && !isEnterKey && !isArrowKey) {
         silentModeRef.current = false
         // Clear TTS buffer to discard any partial tags from session restoration
         // This prevents old messages from being spoken if they complete after user types

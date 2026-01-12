@@ -5,6 +5,7 @@ import { ProjectIcon } from './ProjectIcon'
 import { BeadsPanel } from './BeadsPanel'
 import { VoiceControls } from './VoiceControls'
 import { ExtensionBrowser } from './ExtensionBrowser'
+import { ClaudeMdEditor } from './ClaudeMdEditor'
 import { useVoice } from '../contexts/VoiceContext'
 
 // Tool patterns for quick selection
@@ -173,6 +174,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
   const [dropTarget, setDropTarget] = useState<{ type: 'category' | 'project' | 'uncategorized'; id: string | null; position?: 'before' | 'after' } | null>(null)
   const [isDebugMode, setIsDebugMode] = useState(false)
   const [extensionBrowserModal, setExtensionBrowserModal] = useState<{ project: Project } | null>(null)
+  const [claudeMdEditorModal, setClaudeMdEditorModal] = useState<{ project: Project } | null>(null)
   const [taskCounts, setTaskCounts] = useState<Record<string, { open: number; inProgress: number }>>({})
   const sidebarRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
@@ -1275,6 +1277,12 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           }}>
             <span className="icon">🧩</span> Extensions...
           </button>
+          <button onClick={() => {
+            setClaudeMdEditorModal({ project: contextMenu.project })
+            setContextMenu(null)
+          }}>
+            <span className="icon">📝</span> Edit CLAUDE.md
+          </button>
           <div className="context-menu-divider" />
           <div className="context-menu-label">Color</div>
           <div className="color-picker-row">
@@ -1650,6 +1658,17 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           projectPath={extensionBrowserModal.project.path}
           projectName={extensionBrowserModal.project.name}
           onClose={() => setExtensionBrowserModal(null)}
+        />,
+        document.body
+      )}
+
+      {/* CLAUDE.md Editor Modal */}
+      {claudeMdEditorModal && ReactDOM.createPortal(
+        <ClaudeMdEditor
+          isOpen={true}
+          projectPath={claudeMdEditorModal.project.path}
+          projectName={claudeMdEditorModal.project.name}
+          onClose={() => setClaudeMdEditorModal(null)}
         />,
         document.body
       )}
