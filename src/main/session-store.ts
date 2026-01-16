@@ -14,6 +14,7 @@ export interface Project {
   name: string
   executable?: string
   apiPort?: number  // Port for HTTP API to send prompts to terminal
+  apiAutoStart?: boolean  // Whether to auto-start API when session opens (default: false)
   apiSessionMode?: 'existing' | 'new-keep' | 'new-close'  // How API requests handle sessions
   apiModel?: 'default' | 'opus' | 'sonnet' | 'haiku'  // Model for API-triggered sessions
   autoAcceptTools?: string[]  // Per-project tool patterns to auto-accept

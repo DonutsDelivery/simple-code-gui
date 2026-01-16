@@ -17,7 +17,7 @@ interface ProjectItemProps {
   dropTarget: DropTarget | null
   editInputRef: React.RefObject<HTMLInputElement | null>
   onToggleExpand: (e: React.MouseEvent) => void
-  onOpenSession: (sessionId?: string, slug?: string) => void
+  onOpenSession: (sessionId?: string, slug?: string, isNewSession?: boolean) => void
   onRunExecutable: () => void
   onCloseProjectTabs: () => void
   onContextMenu: (e: React.MouseEvent) => void
@@ -153,7 +153,7 @@ export function ProjectItem({
         <div className="sessions-list">
           <div
             className="session-item new-session"
-            onClick={() => onOpenSession()}
+            onClick={() => onOpenSession(undefined, undefined, true)}
           >
             <span>+</span>
             <span>New Session</span>

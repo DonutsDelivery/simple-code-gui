@@ -4482,6 +4482,193 @@ html, body, #root {
 }
 
 /* ============================================
+   GSD Status Widget
+   ============================================ */
+
+.gsd-status {
+  border-top: 1px solid var(--border-color);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.gsd-status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.gsd-status-header:hover {
+  background: var(--bg-hover);
+}
+
+.gsd-toggle {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 12px;
+}
+
+.gsd-icon {
+  font-size: 14px;
+}
+
+.gsd-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gsd-progress-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.gsd-status-content {
+  padding: var(--space-xs) var(--space-xs) var(--space-xs) 24px;
+}
+
+.gsd-empty,
+.gsd-loading {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: var(--space-sm);
+}
+
+.gsd-empty p {
+  margin: 0 0 var(--space-sm) 0;
+}
+
+.gsd-progress-section {
+  margin-bottom: var(--space-sm);
+}
+
+.gsd-progress-bar {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: var(--space-xs);
+}
+
+.gsd-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.gsd-progress-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.gsd-current-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-xs);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.gsd-phase-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gsd-phase-name {
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gsd-actions-row {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.gsd-action-btn {
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.gsd-action-btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.gsd-action-btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.gsd-action-btn.secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  flex: 0;
+  padding: var(--space-xs);
+}
+
+.gsd-action-btn.secondary:hover {
+  background: var(--bg-hover);
+}
+
+.gsd-empty .gsd-action-btn {
+  margin-top: var(--space-xs);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.gsd-empty .gsd-action-btn:hover {
+  background: var(--bg-hover);
+}
+
+.gsd-install-error {
+  color: #f66;
+  font-size: 10px;
+  margin: var(--space-xs) 0;
+  word-break: break-word;
+}
+
+.gsd-install-buttons {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: center;
+}
+
+.gsd-install-buttons .gsd-action-btn {
+  margin-top: 0;
+}
+
+.gsd-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ============================================
    Version Indicator
    ============================================ */
 

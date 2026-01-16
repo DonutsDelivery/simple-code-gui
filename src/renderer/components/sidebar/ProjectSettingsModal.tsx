@@ -69,6 +69,19 @@ export function ProjectSettingsModal({
             </div>
 
             <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.apiAutoStart}
+                  onChange={(e) => onChange({ apiAutoStart: e.target.checked })}
+                  disabled={!state.apiPort}
+                />
+                <span>Auto-start API on session open</span>
+              </label>
+              <p className="form-hint">When enabled, the API server starts automatically when you open a session for this project.</p>
+            </div>
+
+            <div className="form-group">
               <label>Session Mode</label>
               <p className="form-hint">How API requests handle terminal sessions.</p>
               <div className={`session-mode-options ${!state.apiPort ? 'disabled' : ''}`}>

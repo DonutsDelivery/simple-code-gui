@@ -27,6 +27,7 @@ import {
   registerVoiceHandlers,
   registerExtensionHandlers,
   registerWindowHandlers,
+  registerGsdHandlers,
 } from './ipc'
 
 const IS_DEBUG_MODE = process.argv.includes('--debug') || process.env.DEBUG_MODE === '1'
@@ -245,6 +246,7 @@ registerBeadsHandlers(getMainWindow)
 registerVoiceHandlers(getMainWindow)
 registerExtensionHandlers()
 registerWindowHandlers(getMainWindow)
+registerGsdHandlers()
 
 // Workspace management
 ipcMain.handle('workspace:get', () => sessionStore.getWorkspace())
@@ -282,7 +284,7 @@ ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: strin
     ptyToProject.set(id, cwd)
     ptyToBackend.set(id, effectiveBackend)
 
-    if (project?.apiPort && !apiServerManager.isRunning(cwd)) {
+    if (project?.apiPort && project.apiAutoStart && !apiServerManager.isRunning(cwd)) {
       apiServerManager.start(cwd, project.apiPort)
     }
 

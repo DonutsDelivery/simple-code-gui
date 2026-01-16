@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Project, useWorkspaceStore } from '../stores/workspace.js'
 import { BeadsPanel } from './BeadsPanel.js'
+import { GSDStatus } from './GSDStatus.js'
 import { VoiceControls } from './VoiceControls.js'
 import { ExtensionBrowser } from './ExtensionBrowser.js'
 import { ClaudeMdEditor } from './ClaudeMdEditor.js'
@@ -348,6 +349,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
     setProjectSettingsModal({
       project,
       apiPort: project.apiPort?.toString() || '',
+      apiAutoStart: project.apiAutoStart || false,
       apiSessionMode: project.apiSessionMode || 'existing',
       apiModel: project.apiModel || 'default',
       tools: project.autoAcceptTools || [],
@@ -390,6 +392,7 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
 
     onUpdateProject(projectSettingsModal.project.path, {
       apiPort: newPort,
+      apiAutoStart: projectSettingsModal.apiAutoStart || undefined,
       apiSessionMode: projectSettingsModal.apiSessionMode !== 'existing' ? projectSettingsModal.apiSessionMode : undefined,
       apiModel: projectSettingsModal.apiModel !== 'default' ? projectSettingsModal.apiModel : undefined,
       autoAcceptTools: projectSettingsModal.tools.length > 0 ? projectSettingsModal.tools : undefined,
@@ -491,9 +494,12 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
       dropTarget={dropTarget}
       editInputRef={editInputRef}
       onToggleExpand={(e) => toggleProject(e, project.path)}
-      onOpenSession={(sessionId, slug) => {
+      onOpenSession={(sessionId, slug, isNewSession) => {
         if (sessionId) {
           onOpenSession(project.path, sessionId, slug)
+        } else if (isNewSession) {
+          // Explicit "New Session" click - always create a new session
+          onOpenSession(project.path)
         } else {
           openMostRecentSession(project.path)
         }
@@ -641,6 +647,16 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
           }
         }}
         currentTabPtyId={focusedTabPtyId}
+      />
+
+      <GSDStatus
+        projectPath={beadsProjectPath}
+        onCommand={(cmd) => {
+          if (focusedTabPtyId) {
+            window.electronAPI.writePty(focusedTabPtyId, cmd)
+            setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+          }
+        }}
       />
 
       {voiceOutputEnabled && (

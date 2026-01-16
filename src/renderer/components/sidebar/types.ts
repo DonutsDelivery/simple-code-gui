@@ -35,6 +35,7 @@ export interface SidebarProps {
 export interface ProjectSettingsModalState {
   project: Project
   apiPort: string
+  apiAutoStart: boolean
   apiSessionMode: 'existing' | 'new-keep' | 'new-close'
   apiModel: 'default' | 'opus' | 'sonnet' | 'haiku'
   tools: string[]

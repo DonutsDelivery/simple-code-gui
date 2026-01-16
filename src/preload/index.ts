@@ -60,6 +60,19 @@ export interface ElectronAPI {
   // Get Shit Done (GSD) - Claude Code workflow addon
   gsdCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
   gsdInstall: () => Promise<{ success: boolean; error?: string }>
+  gsdProjectCheck: (cwd: string) => Promise<{ initialized: boolean }>
+  gsdGetProgress: (cwd: string) => Promise<{
+    success: boolean
+    data?: {
+      initialized: boolean
+      currentPhase: string | null
+      currentPhaseNumber: number | null
+      totalPhases: number
+      completedPhases: number
+      phases: Array<{ number: number; title: string; completed: boolean }>
+    }
+    error?: string
+  }>
 
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
@@ -317,6 +330,8 @@ const api: ElectronAPI = {
   // Get Shit Done (GSD) - Claude Code workflow addon
   gsdCheck: () => ipcRenderer.invoke('gsd:check'),
   gsdInstall: () => ipcRenderer.invoke('gsd:install'),
+  gsdProjectCheck: (cwd) => ipcRenderer.invoke('gsd:projectCheck', cwd),
+  gsdGetProgress: (cwd) => ipcRenderer.invoke('gsd:getProgress', cwd),
 
   // Beads
   beadsCheck: (cwd) => ipcRenderer.invoke('beads:check', cwd),

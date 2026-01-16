@@ -599,7 +599,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
     // Handle PTY output - always scroll to bottom unless user explicitly scrolled up
     let firstData = true
-    let scrollPending = false  // Throttle scrollToBottom to once per frame
+    let scrollDebounceTimeout: ReturnType<typeof setTimeout> | null = null  // Debounce scroll for rapid content
 
     const cleanupData = window.electronAPI.onPtyData(ptyId, (data) => {
       // Performance debugging - uncomment to log timing
@@ -721,15 +721,18 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
 
       terminal.write(displayData)
 
-      // Throttle scrollToBottom to once per animation frame (prevents lag during fast output)
-      if (!userScrolledUpRef.current && !scrollPending) {
-        scrollPending = true
-        requestAnimationFrame(() => {
-          scrollPending = false
+      // Debounce scrollToBottom to prevent visual jitter during rapid parallel output
+      // Using a timer instead of RAF allows content to settle before scrolling
+      if (!userScrolledUpRef.current) {
+        if (scrollDebounceTimeout) {
+          clearTimeout(scrollDebounceTimeout)
+        }
+        scrollDebounceTimeout = setTimeout(() => {
+          scrollDebounceTimeout = null
           if (!disposed && !userScrolledUpRef.current) {
             terminal.scrollToBottom()
           }
-        })
+        }, 32)  // ~2 frames - allows rapid content to accumulate before scrolling
       }
 
       // Resize on first data to ensure PTY has correct dimensions
@@ -797,6 +800,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       cleanupExit()
       if (resizeTimeout) clearTimeout(resizeTimeout)
       if (inputFlushTimeout) clearTimeout(inputFlushTimeout)
+      if (scrollDebounceTimeout) clearTimeout(scrollDebounceTimeout)
       if (silentModeTimeoutRef.current) clearTimeout(silentModeTimeoutRef.current)
       resizeObserver.disconnect()
       // Dispose WebGL addon first to avoid race condition during terminal disposal
