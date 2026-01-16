@@ -12,7 +12,7 @@ export function VoiceControls({
 }: VoiceControlsProps) {
   const {
     // Voice Output
-    voiceOutputEnabled, setVoiceOutputEnabled, isSpeaking, stopSpeaking,
+    voiceOutputEnabled, setVoiceOutputEnabled, isSpeaking, stopSpeaking, volume,
     // Voice Input
     isRecording, isModelLoading, isModelLoaded, modelLoadProgress, modelLoadStatus,
     currentTranscription, startRecording, stopRecording
@@ -99,6 +99,7 @@ export function VoiceControls({
               const blob = new Blob([audioData], { type: 'audio/wav' })
               const url = URL.createObjectURL(blob)
               const audio = new Audio(url)
+              audio.volume = volume
               audio.play().catch(e => console.error('Play failed:', e))
             }
           })

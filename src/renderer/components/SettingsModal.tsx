@@ -77,8 +77,8 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
   const [customTool, setCustomTool] = useState('')
   const [backend, setBackend] = useState('claude')
 
-  // Voice context for active whisper model
-  const { whisperModel: activeWhisperModel, setWhisperModel: setActiveWhisperModel } = useVoice()
+  // Voice context for active whisper model and volume
+  const { whisperModel: activeWhisperModel, setWhisperModel: setActiveWhisperModel, volume: voiceVolume } = useVoice()
 
   // Extensions state
   const [installedExtensions, setInstalledExtensions] = useState<Array<{ id: string; name: string; type: string }>>([])
@@ -287,6 +287,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
         )
         if (result?.success && result.audioData) {
           const audio = new Audio(`data:audio/wav;base64,${result.audioData}`)
+          audio.volume = voiceVolume
           audio.onended = () => {
             setPlayingPreview(null)
             previewAudioRef.current = null
@@ -314,6 +315,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
     const sampleUrl = getSampleUrl(voiceKey)
     if (sampleUrl) {
       const audio = new Audio(sampleUrl)
+      audio.volume = voiceVolume
       audio.onended = () => {
         setPlayingPreview(null)
         previewAudioRef.current = null
@@ -351,6 +353,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange }: SettingsModalP
 
       if (result?.success && result.audioData) {
         const audio = new Audio(`data:audio/wav;base64,${result.audioData}`)
+        audio.volume = voiceVolume
         audio.onended = () => {
           setPlayingPreview(null)
           previewAudioRef.current = null

@@ -68,6 +68,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const isProcessingRef = useRef(false)
   const voiceOutputEnabledRef = useRef(voiceOutputEnabled)
   const skipOnNewRef = useRef(skipOnNew)
+  const volumeRef = useRef(volume)  // Track volume for processQueue closure
   // Per-project voice override
   const projectVoiceRef = useRef<ProjectVoiceSettings | null>(null)
   const globalVoiceRef = useRef<{ voice: string; engine: string } | null>(null)
@@ -117,6 +118,10 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     skipOnNewRef.current = skipOnNew
   }, [skipOnNew])
+
+  useEffect(() => {
+    volumeRef.current = volume
+  }, [volume])
 
   // Save a single voice setting
   const saveVoiceSetting = useCallback(async (key: string, value: boolean | number) => {
@@ -195,7 +200,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
             const blob = new Blob([audioData], { type: 'audio/wav' })
             const url = URL.createObjectURL(blob)
             const audio = new Audio(url)
-            audio.volume = volume
+            audio.volume = volumeRef.current
             audioRef.current = audio
 
             audio.onended = () => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useVoice } from '../contexts/VoiceContext'
 
 interface VoiceCatalogEntry {
   key: string
@@ -58,6 +59,7 @@ function getSampleUrl(voiceKey: string): string | null {
 }
 
 export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrowserModalProps) {
+  const { volume: voiceVolume } = useVoice()
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([])
   const [installed, setInstalled] = useState<InstalledVoice[]>([])
   const [xttsVoices, setXttsVoices] = useState<XTTSVoice[]>([])
@@ -323,6 +325,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     }
 
     const audio = new Audio(sampleUrl)
+    audio.volume = voiceVolume
     let intentionallyStopped = false
 
     audio.onended = () => {
@@ -432,6 +435,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       if (result.success && result.dataUrl) {
         // Play the extracted clip using data URL
         const audio = new Audio(result.dataUrl)
+        audio.volume = voiceVolume
         audio.onended = () => {
           setCropPreviewAudio(null)
         }
