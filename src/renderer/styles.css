@@ -1573,6 +1573,68 @@ html, body, #root {
 }
 
 /* ============================================
+   Delete Confirmation Modal
+   ============================================ */
+
+.delete-confirm-modal {
+  width: 380px;
+}
+
+.delete-confirm-modal .modal-body {
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.delete-confirm-modal .modal-body p {
+  margin: 0 0 var(--space-sm) 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.delete-confirm-modal .modal-body .hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.delete-confirm-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-xl);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.delete-confirm-modal .modal-actions button {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.delete-confirm-modal .modal-actions button.secondary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+
+.delete-confirm-modal .modal-actions button.secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.delete-confirm-modal .modal-actions button.danger {
+  background: var(--danger);
+  border: 1px solid var(--danger);
+  color: white;
+}
+
+.delete-confirm-modal .modal-actions button.danger:hover {
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
+}
+
+/* ============================================
    Custom Command Modal
    ============================================ */
 

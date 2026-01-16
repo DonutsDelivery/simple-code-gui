@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { ProjectSettingsModalState, InstalledVoice } from './types'
-import { COMMON_TOOLS, PERMISSION_MODES, API_SESSION_MODES, API_MODELS } from './constants'
+import { ProjectSettingsModalState, InstalledVoice } from './types.js'
+import { COMMON_TOOLS, PERMISSION_MODES, API_SESSION_MODES, API_MODELS } from './constants.js'
 
 interface ProjectSettingsModalProps {
   state: ProjectSettingsModalState

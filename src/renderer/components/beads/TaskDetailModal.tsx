@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { BeadsTask, getPriorityClass, formatStatusLabel } from './types'
+import { BeadsTask, getPriorityClass, formatStatusLabel } from './types.js'
 
 interface TaskDetailModalProps {
   show: boolean

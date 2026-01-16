@@ -34,14 +34,13 @@ const cliCache = new Map<string, boolean | null>()
 async function checkCliInstalled(command: string): Promise<boolean> {
   const cached = cliCache.get(command)
   if (cached !== null && cached !== undefined) return cached
-  try {
-    await execAsync(`${command} --version`, getExecOptions())
-    cliCache.set(command, true)
-    return true
-  } catch {
-    cliCache.set(command, false)
-    return false
-  }
+
+  const installed = await execAsync(`${command} --version`, getExecOptions())
+    .then(() => true)
+    .catch(() => false)
+
+  cliCache.set(command, installed)
+  return installed
 }
 
 function resetCliCache(command: string): void {
@@ -85,22 +84,16 @@ let claudeAvailable: boolean | null = null
 
 async function checkClaudeInstalled(): Promise<boolean> {
   if (claudeAvailable !== null) return claudeAvailable
-  try {
-    await execAsync('claude --version', getExecOptions())
-    claudeAvailable = true
-  } catch {
-    claudeAvailable = false
-  }
+  claudeAvailable = await execAsync('claude --version', getExecOptions())
+    .then(() => true)
+    .catch(() => false)
   return claudeAvailable
 }
 
 async function checkNpmInstalled(): Promise<boolean> {
-  try {
-    await execAsync('npm --version', getExecOptions())
-    return true
-  } catch {
-    return false
-  }
+  return execAsync('npm --version', getExecOptions())
+    .then(() => true)
+    .catch(() => false)
 }
 
 function checkGitBashInstalled(): boolean {
@@ -119,26 +112,20 @@ function checkGitBashInstalled(): boolean {
 
 async function checkWingetInstalled(): Promise<boolean> {
   if (!isWindows) return false
-  try {
-    await execAsync('winget --version', getExecOptions())
-    return true
-  } catch {
-    return false
-  }
+  return execAsync('winget --version', getExecOptions())
+    .then(() => true)
+    .catch(() => false)
 }
 
 async function checkPipInstalled(): Promise<boolean> {
-  try {
-    await execAsync('pip3 --version', getExecOptions())
-    return true
-  } catch {
-    try {
-      await execAsync('pip --version', getExecOptions())
-      return true
-    } catch {
-      return false
-    }
-  }
+  const pip3Available = await execAsync('pip3 --version', getExecOptions())
+    .then(() => true)
+    .catch(() => false)
+  if (pip3Available) return true
+
+  return execAsync('pip --version', getExecOptions())
+    .then(() => true)
+    .catch(() => false)
 }
 
 function checkGSDInstalled(): boolean {

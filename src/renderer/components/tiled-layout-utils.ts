@@ -33,7 +33,7 @@ interface TileRow {
   tiles: TileLayout[]
 }
 
-const MIN_SIZE = 10
+export const MIN_SIZE = 10
 const EPSILON = 1
 
 function tilesOverlap(a: TileLayout, b: TileLayout): boolean {
@@ -422,4 +422,3 @@ export function findTilesOnDivider(
   })
 }
 
-export { MIN_SIZE }

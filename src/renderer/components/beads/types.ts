@@ -21,10 +21,12 @@ export const MIN_HEIGHT = 100
 export const MAX_HEIGHT = 500
 
 export function getPriorityClass(priority?: number): string {
-  if (priority === 0) return 'priority-critical'
-  if (priority === 1) return 'priority-high'
-  if (priority === 2) return 'priority-medium'
-  return 'priority-low'
+  switch (priority) {
+    case 0: return 'priority-critical'
+    case 1: return 'priority-high'
+    case 2: return 'priority-medium'
+    default: return 'priority-low'
+  }
 }
 
 export function getPriorityLabel(priority?: number): string {
@@ -32,9 +34,11 @@ export function getPriorityLabel(priority?: number): string {
 }
 
 export function formatStatusLabel(status: string): string {
-  if (status === 'in_progress') return 'In Progress'
-  if (status === 'closed') return 'Done'
-  return 'Open'
+  switch (status) {
+    case 'in_progress': return 'In Progress'
+    case 'closed': return 'Done'
+    default: return 'Open'
+  }
 }
 
 export function formatTaskPrompt(task: BeadsTask): string {

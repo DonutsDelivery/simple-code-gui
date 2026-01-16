@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { Terminal } from './Terminal'
-import { Theme } from '../themes'
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { Terminal } from './Terminal.js'
+import { Theme } from '../themes.js'
 import {
   TileLayout,
   OpenTab,
@@ -14,9 +14,9 @@ import {
   computeDropZone,
   findTilesOnDivider,
   MIN_SIZE,
-} from './tiled-layout-utils'
+} from './tiled-layout-utils.js'
 
-export type { TileLayout } from './tiled-layout-utils'
+export type { TileLayout } from './tiled-layout-utils.js'
 
 interface Project {
   path: string
@@ -98,7 +98,7 @@ export function TiledTerminalView({
 
   const activeTabIdRef = useRef<string | null>(tabs.length > 0 ? tabs[tabs.length - 1].id : null)
 
-  const effectiveLayout = React.useMemo(() => {
+  const effectiveLayout = useMemo(() => {
     const { width, height } = containerSizeRef.current
 
     if (layout.length === 0) {
@@ -135,7 +135,7 @@ export function TiledTerminalView({
 
   effectiveLayoutRef.current = effectiveLayout
 
-  React.useEffect(() => {
+  useEffect(() => {
     const layoutIds = new Set(layout.map(l => l.id))
     const effectiveIds = new Set(effectiveLayout.map(l => l.id))
     const idsMatch = layoutIds.size === effectiveIds.size && [...layoutIds].every(id => effectiveIds.has(id))
@@ -157,25 +157,42 @@ export function TiledTerminalView({
     const edges = hovered.edge.includes('-') ? hovered.edge.split('-') : [hovered.edge]
     const EPSILON = 0.5
 
-    edges.forEach(edgeDir => {
-      effectiveLayout.forEach(other => {
-        if (other.id === tile.id) return
+    function hasVerticalOverlap(a: TileLayout, b: TileLayout): boolean {
+      return a.y < b.y + b.height - EPSILON && a.y + a.height > b.y + EPSILON
+    }
 
-        if (edgeDir === 'right' && Math.abs(other.x - (tile.x + tile.width)) < EPSILON) {
-          const overlapY = tile.y < other.y + other.height - EPSILON && tile.y + tile.height > other.y + EPSILON
-          if (overlapY) highlighted.add(`${other.id}-left`)
-        } else if (edgeDir === 'left' && Math.abs(other.x + other.width - tile.x) < EPSILON) {
-          const overlapY = tile.y < other.y + other.height - EPSILON && tile.y + tile.height > other.y + EPSILON
-          if (overlapY) highlighted.add(`${other.id}-right`)
-        } else if (edgeDir === 'bottom' && Math.abs(other.y - (tile.y + tile.height)) < EPSILON) {
-          const overlapX = tile.x < other.x + other.width - EPSILON && tile.x + tile.width > other.x + EPSILON
-          if (overlapX) highlighted.add(`${other.id}-top`)
-        } else if (edgeDir === 'top' && Math.abs(other.y + other.height - tile.y) < EPSILON) {
-          const overlapX = tile.x < other.x + other.width - EPSILON && tile.x + tile.width > other.x + EPSILON
-          if (overlapX) highlighted.add(`${other.id}-bottom`)
+    function hasHorizontalOverlap(a: TileLayout, b: TileLayout): boolean {
+      return a.x < b.x + b.width - EPSILON && a.x + a.width > b.x + EPSILON
+    }
+
+    for (const edgeDir of edges) {
+      for (const other of effectiveLayout) {
+        if (other.id === tile.id) continue
+
+        switch (edgeDir) {
+          case 'right':
+            if (Math.abs(other.x - (tile.x + tile.width)) < EPSILON && hasVerticalOverlap(tile, other)) {
+              highlighted.add(`${other.id}-left`)
+            }
+            break
+          case 'left':
+            if (Math.abs(other.x + other.width - tile.x) < EPSILON && hasVerticalOverlap(tile, other)) {
+              highlighted.add(`${other.id}-right`)
+            }
+            break
+          case 'bottom':
+            if (Math.abs(other.y - (tile.y + tile.height)) < EPSILON && hasHorizontalOverlap(tile, other)) {
+              highlighted.add(`${other.id}-top`)
+            }
+            break
+          case 'top':
+            if (Math.abs(other.y + other.height - tile.y) < EPSILON && hasHorizontalOverlap(tile, other)) {
+              highlighted.add(`${other.id}-bottom`)
+            }
+            break
         }
-      })
-    })
+      }
+    }
 
     return highlighted
   }, [effectiveLayout])
@@ -362,26 +379,35 @@ export function TiledTerminalView({
         })
       }
 
-      if (edge === 'right') {
-        moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
-      } else if (edge === 'left') {
-        moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-      } else if (edge === 'bottom') {
-        moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-      } else if (edge === 'top') {
-        moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-      } else if (edge === 'top-left') {
-        moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-        moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-      } else if (edge === 'top-right') {
-        moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-        moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
-      } else if (edge === 'bottom-left') {
-        moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-        moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-      } else if (edge === 'bottom-right') {
-        moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-        moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+      switch (edge) {
+        case 'right':
+          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+          break
+        case 'left':
+          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+          break
+        case 'bottom':
+          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+          break
+        case 'top':
+          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+          break
+        case 'top-left':
+          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+          break
+        case 'top-right':
+          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+          break
+        case 'bottom-left':
+          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+          break
+        case 'bottom-right':
+          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+          break
       }
 
       const newLayout = currentLayout.map(tile => tileUpdates.get(tile.id) || tile)
@@ -394,11 +420,26 @@ export function TiledTerminalView({
       document.body.style.userSelect = ''
     }
 
-    let cursor = 'default'
-    if (tileResizing.edge === 'right' || tileResizing.edge === 'left') cursor = 'ew-resize'
-    else if (tileResizing.edge === 'top' || tileResizing.edge === 'bottom') cursor = 'ns-resize'
-    else if (tileResizing.edge === 'top-left' || tileResizing.edge === 'bottom-right') cursor = 'nwse-resize'
-    else if (tileResizing.edge === 'top-right' || tileResizing.edge === 'bottom-left') cursor = 'nesw-resize'
+    function getCursorForEdge(edge: string): string {
+      switch (edge) {
+        case 'right':
+        case 'left':
+          return 'ew-resize'
+        case 'top':
+        case 'bottom':
+          return 'ns-resize'
+        case 'top-left':
+        case 'bottom-right':
+          return 'nwse-resize'
+        case 'top-right':
+        case 'bottom-left':
+          return 'nesw-resize'
+        default:
+          return 'default'
+      }
+    }
+
+    const cursor = getCursorForEdge(tileResizing.edge)
 
     document.body.style.cursor = cursor
     document.body.style.userSelect = 'none'

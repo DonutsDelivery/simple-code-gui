@@ -1,4 +1,4 @@
-import { Project } from '../../stores/workspace'
+import { Project } from '../../stores/workspace.js'
 
 export interface ClaudeSession {
   sessionId: string

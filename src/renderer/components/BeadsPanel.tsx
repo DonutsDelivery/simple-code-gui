@@ -25,15 +25,32 @@ interface BeadsPanelProps {
   currentTabPtyId?: string | null
 }
 
-// Storage key for panel height
 const BEADS_HEIGHT_KEY = 'beads-panel-height'
 const DEFAULT_HEIGHT = 200
 const MIN_HEIGHT = 100
 const MAX_HEIGHT = 500
 
-// Cache tasks per project path to avoid reload flicker when switching
+const PRIORITY_LABELS = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
+
 const tasksCache = new Map<string, BeadsTask[]>()
 const beadsStatusCache = new Map<string, { installed: boolean; initialized: boolean }>()
+
+function getPriorityClass(priority?: number): string {
+  if (priority === 0) return 'priority-critical'
+  if (priority === 1) return 'priority-high'
+  if (priority === 2) return 'priority-medium'
+  return 'priority-low'
+}
+
+function getPriorityLabel(priority?: number): string {
+  return PRIORITY_LABELS[priority ?? 4] || 'Lowest'
+}
+
+function formatStatusLabel(status: string): string {
+  if (status === 'in_progress') return 'In Progress'
+  if (status === 'closed') return 'Done'
+  return 'Open'
+}
 
 export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNewTab, onSendToCurrentTab, currentTabPtyId }: BeadsPanelProps) {
   const [beadsInstalled, setBeadsInstalled] = useState(false)
@@ -58,12 +75,11 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
   })
   const [isResizing, setIsResizing] = useState(false)
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null)
-  const currentProjectRef = useRef<string | null>(null) // Track current project to avoid race conditions
+  const currentProjectRef = useRef<string | null>(null)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
 
-  // Detail modal state
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailTask, setDetailTask] = useState<BeadsTask | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -73,17 +89,13 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
   const [editDetailPriority, setEditDetailPriority] = useState<number>(2)
   const [editDetailStatus, setEditDetailStatus] = useState<string>('open')
 
-  // Browser modal state
   const [showBrowser, setShowBrowser] = useState(false)
   const [browserFilter, setBrowserFilter] = useState<'all' | 'open' | 'in_progress' | 'closed'>('all')
   const [browserSort, setBrowserSort] = useState<'priority' | 'created' | 'status'>('priority')
 
-  // Start task dropdown state
   const [startDropdownTaskId, setStartDropdownTaskId] = useState<string | null>(null)
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null)
   const startDropdownRef = useRef<HTMLDivElement>(null)
-
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (startDropdownRef.current && !startDropdownRef.current.contains(e.target as Node)) {
@@ -96,7 +108,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
   }, [startDropdownTaskId])
 
-  // Handle start button click with position calculation
   const handleStartButtonClick = (e: React.MouseEvent, taskId: string) => {
     if (startDropdownTaskId === taskId) {
       setStartDropdownTaskId(null)
@@ -108,7 +119,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
   }
 
-  // Format task as a prompt for the AI
   const formatTaskPrompt = (task: BeadsTask): string => {
     let prompt = `Work on this task:\n\n**${task.title}** (${task.id})`
     if (task.description) {
@@ -118,8 +128,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
       prompt += `\n\nType: ${task.issue_type}`
     }
     if (task.priority !== undefined) {
-      const priorityLabels = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
-      prompt += `\nPriority: ${priorityLabels[task.priority] || task.priority}`
+      prompt += `\nPriority: ${getPriorityLabel(task.priority)}`
     }
     prompt += '\n\nPlease analyze this task and begin working on it. Update the task status to in_progress when you start.'
     return prompt
@@ -241,7 +250,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
   }
 
-  // Listen for install progress
   useEffect(() => {
     const cleanup = window.electronAPI.onInstallProgress((data) => {
       if (data.type === 'python') {
@@ -252,9 +260,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     return cleanup
   }, [])
 
-  // When project changes, immediately clear and refresh
   useEffect(() => {
-    // Update ref immediately so async operations can check against it
     currentProjectRef.current = projectPath
 
     setError(null)
@@ -371,7 +377,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
   const handleCycleStatus = async (taskId: string, currentStatus: string) => {
     if (!projectPath) return
 
-    // Cycle: open → in_progress → closed → open
     const nextStatus = currentStatus === 'open' ? 'in_progress'
       : currentStatus === 'in_progress' ? 'closed'
       : 'open'
@@ -506,7 +511,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     await loadTasks()
   }
 
-  // Resize handlers
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
     resizeRef.current = { startY: e.clientY, startHeight: panelHeight }
@@ -537,22 +541,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
   }, [isResizing, panelHeight])
 
-  const getPriorityClass = (priority?: number) => {
-    if (priority === 0) return 'priority-critical'
-    if (priority === 1) return 'priority-high'
-    if (priority === 2) return 'priority-medium'
-    return 'priority-low'
-  }
 
-  const getPriorityLabel = (priority?: number) => {
-    if (priority === 0) return 'Critical'
-    if (priority === 1) return 'High'
-    if (priority === 2) return 'Medium'
-    if (priority === 3) return 'Low'
-    return 'Lowest'
-  }
-
-  // Filter and sort tasks for browser view
   const getFilteredTasks = () => {
     let filtered = [...tasks]
 
@@ -589,7 +578,6 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
   }
 
-  // Split on both / and \ for cross-platform support
   const projectName = projectPath ? projectPath.split(/[/\\]/).pop() : null
 
   return (
@@ -729,7 +717,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
                             }}
                             title="Click to cycle status"
                           >
-                            {task.status === 'in_progress' ? 'In Progress' : task.status === 'closed' ? 'Done' : 'Open'}
+                            {formatStatusLabel(task.status)}
                           </button>
                         </div>
                       </div>
@@ -924,7 +912,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
                             <div className="beads-detail-title">{detailTask.title}</div>
                             <div className="beads-detail-meta">
                               <span className={`beads-detail-status status-${detailTask.status}`}>
-                                {detailTask.status === 'in_progress' ? 'In Progress' : detailTask.status === 'closed' ? 'Closed' : 'Open'}
+                                {formatStatusLabel(detailTask.status)}
                               </span>
                               <span className={`beads-detail-priority ${getPriorityClass(detailTask.priority)}`}>
                                 P{detailTask.priority ?? 2}
@@ -1089,7 +1077,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
                             onClick={() => handleCycleStatus(task.id, task.status)}
                             title="Click to cycle status"
                           >
-                            {task.status === 'in_progress' ? 'In Progress' : task.status === 'closed' ? 'Done' : 'Open'}
+                            {formatStatusLabel(task.status)}
                           </button>
                           <button
                             className="beads-task-delete"

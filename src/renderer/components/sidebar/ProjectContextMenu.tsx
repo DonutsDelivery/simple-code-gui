@@ -1,8 +1,8 @@
 import React, { useRef, useLayoutEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { Project, ProjectCategory } from '../../stores/workspace'
-import { adjustMenuPosition } from './utils'
-import { PROJECT_COLORS } from './constants'
+import { Project, ProjectCategory } from '../../stores/workspace.js'
+import { adjustMenuPosition } from './utils.js'
+import { PROJECT_COLORS } from './constants.js'
 
 interface ProjectContextMenuProps {
   x: number

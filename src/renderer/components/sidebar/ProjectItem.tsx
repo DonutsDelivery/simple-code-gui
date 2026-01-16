@@ -1,8 +1,8 @@
 import React from 'react'
-import { Project } from '../../stores/workspace'
-import { ProjectIcon } from '../ProjectIcon'
-import { ClaudeSession, DropTarget } from './types'
-import { formatDate } from './utils'
+import { Project } from '../../stores/workspace.js'
+import { ProjectIcon } from '../ProjectIcon.js'
+import { ClaudeSession, DropTarget } from './types.js'
+import { formatDate } from './utils.js'
 
 interface ProjectItemProps {
   project: Project

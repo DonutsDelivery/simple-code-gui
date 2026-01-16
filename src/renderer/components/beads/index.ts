@@ -1,3 +1,3 @@
-export * from './types'
-export { CreateTaskModal } from './CreateTaskModal'
-export { TaskDetailModal } from './TaskDetailModal'
+export * from './types.js'
+export { CreateTaskModal } from './CreateTaskModal.js'
+export { TaskDetailModal } from './TaskDetailModal.js'

@@ -29,7 +29,7 @@ import {
   registerWindowHandlers,
 } from './ipc'
 
-const isDebugMode = process.argv.includes('--debug') || process.env.DEBUG_MODE === '1'
+const IS_DEBUG_MODE = process.argv.includes('--debug') || process.env.DEBUG_MODE === '1'
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
@@ -50,8 +50,8 @@ const sessionStore = new SessionStore()
 const apiServerManager = new ApiServerManager()
 
 // PTY tracking
-const ptyToProject: Map<string, string> = new Map()
-const ptyToBackend: Map<string, string> = new Map()
+const ptyToProject = new Map<string, string>()
+const ptyToBackend = new Map<string, string>()
 
 // API prompt tracking
 interface PendingApiPrompt {
@@ -60,10 +60,10 @@ interface PendingApiPrompt {
   autoClose: boolean
   model?: string
 }
-const pendingApiPrompts: Map<string, PendingApiPrompt> = new Map()
-const autoCloseSessions: Set<string> = new Set()
+const pendingApiPrompts = new Map<string, PendingApiPrompt>()
+const autoCloseSessions = new Set<string>()
 
-const maybeRespondToCursorPositionRequest = (ptyId: string, data: string) => {
+function maybeRespondToCursorPositionRequest(ptyId: string, data: string): void {
   const backend = ptyToBackend.get(ptyId)
   if (!backend || backend === 'claude') return
   if (data.includes('\x1b[6n') || data.includes('\x1b[?6n')) {
@@ -78,13 +78,13 @@ apiServerManager.setSessionModeGetter((projectPath) => {
   return project?.apiSessionMode || 'existing'
 })
 
-const recentApiPrompts: Map<string, { prompt: string; timestamp: number }> = new Map()
+const recentApiPrompts = new Map<string, { prompt: string; timestamp: number }>()
 const DUPLICATE_WINDOW_MS = 2000
 
 apiServerManager.setPromptHandler(async (projectPath, prompt, sessionMode): Promise<PromptResult> => {
-  const recent = recentApiPrompts.get(projectPath)
   const now = Date.now()
-  if (recent && recent.prompt === prompt && (now - recent.timestamp) < DUPLICATE_WINDOW_MS) {
+  const recent = recentApiPrompts.get(projectPath)
+  if (recent && recent.prompt === prompt && now - recent.timestamp < DUPLICATE_WINDOW_MS) {
     console.log('API: Ignoring duplicate prompt for', projectPath)
     return { success: true, message: 'Duplicate prompt ignored' }
   }
@@ -94,8 +94,7 @@ apiServerManager.setPromptHandler(async (projectPath, prompt, sessionMode): Prom
     for (const [ptyId, path] of ptyToProject) {
       if (path === projectPath) {
         ptyManager.write(ptyId, prompt)
-        const targetPtyId = ptyId
-        setTimeout(() => ptyManager.write(targetPtyId, '\r'), 300)
+        setTimeout(() => ptyManager.write(ptyId, '\r'), 300)
         return { success: true, message: 'Prompt sent to existing terminal' }
       }
     }
@@ -370,7 +369,7 @@ ipcMain.handle('api:status', (_, projectPath: string) => ({
 // Settings management
 ipcMain.handle('settings:get', () => sessionStore.getSettings())
 ipcMain.handle('settings:save', (_, settings) => sessionStore.saveSettings(settings))
-ipcMain.handle('app:isDebugMode', () => isDebugMode)
+ipcMain.handle('app:isDebugMode', () => IS_DEBUG_MODE)
 ipcMain.handle('app:refresh', () => mainWindow?.webContents.reload())
 
 ipcMain.handle('settings:selectDirectory', async () => {

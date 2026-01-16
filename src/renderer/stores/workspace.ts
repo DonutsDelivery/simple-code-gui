@@ -17,11 +17,11 @@ export interface Project {
   autoAcceptTools?: string[]
   permissionMode?: string
   color?: string
-  ttsVoice?: string           // Per-project TTS voice (overrides global)
-  ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
+  ttsVoice?: string
+  ttsEngine?: 'piper' | 'xtts'
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
-  categoryId?: string         // Category this project belongs to
-  order?: number              // Order within category or uncategorized list
+  categoryId?: string
+  order?: number
 }
 
 export interface OpenTab {
@@ -50,9 +50,8 @@ interface WorkspaceState {
   setActiveTab: (id: string) => void
   clearTabs: () => void
 
-  // Category management
   setCategories: (categories: ProjectCategory[]) => void
-  addCategory: (name: string) => string  // Returns new category ID
+  addCategory: (name: string) => string
   updateCategory: (id: string, updates: Partial<ProjectCategory>) => void
   removeCategory: (id: string) => void
   reorderCategories: (ids: string[]) => void
@@ -60,8 +59,8 @@ interface WorkspaceState {
   reorderProjects: (categoryId: string | null, projectPaths: string[]) => void
 }
 
-// Generate unique ID for categories
-const generateCategoryId = () => `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+const generateCategoryId = (): string =>
+  `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   projects: [],
@@ -130,7 +129,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   clearTabs: () => set({ openTabs: [], activeTabId: null }),
 
-  // Category management
   setCategories: (categories) => set({ categories }),
 
   addCategory: (name) => {
@@ -154,7 +152,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   removeCategory: (id) => {
     const { categories, projects } = get()
-    // Remove category and unassign projects
     set({
       categories: categories.filter((c) => c.id !== id),
       projects: projects.map((p) =>
@@ -175,7 +172,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   moveProjectToCategory: (projectPath, categoryId) => {
     const { projects } = get()
-    // Find max order in target category (or uncategorized if categoryId is null)
     const categoryProjects = projects.filter((p) =>
       categoryId === null ? !p.categoryId : p.categoryId === categoryId
     )

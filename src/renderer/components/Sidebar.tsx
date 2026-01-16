@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Project, useWorkspaceStore } from '../stores/workspace'
-import { BeadsPanel } from './BeadsPanel'
-import { VoiceControls } from './VoiceControls'
-import { ExtensionBrowser } from './ExtensionBrowser'
-import { ClaudeMdEditor } from './ClaudeMdEditor'
-import { useVoice } from '../contexts/VoiceContext'
+import { Project, useWorkspaceStore } from '../stores/workspace.js'
+import { BeadsPanel } from './BeadsPanel.js'
+import { VoiceControls } from './VoiceControls.js'
+import { ExtensionBrowser } from './ExtensionBrowser.js'
+import { ClaudeMdEditor } from './ClaudeMdEditor.js'
+import { useVoice } from '../contexts/VoiceContext.js'
 import {
   ClaudeSession,
   SidebarProps,
@@ -18,7 +18,7 @@ import {
   ProjectSettingsModal,
   CategoryContextMenu,
   DeleteConfirmModal,
-} from './sidebar'
+} from './sidebar/index.js'
 
 export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onAddProject, onRemoveProject, onOpenSession, onSwitchToTab, onOpenSettings, onOpenMakeProject, onUpdateProject, onCloseProjectTabs, width, collapsed, onWidthChange, onCollapsedChange }: SidebarProps) {
   const { volume, setVolume, speed, setSpeed, skipOnNew, setSkipOnNew, voiceOutputEnabled } = useVoice()

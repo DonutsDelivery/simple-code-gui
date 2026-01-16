@@ -5,7 +5,6 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { getEnhancedPathWithPortable, setPortableBinDirs } from '../platform'
 import { getPortableBinDirs, installBeadsBinary, getBeadsBinaryPath } from '../portable-deps'
-import { getExecOptions } from './cli-handlers'
 
 const execAsync = promisify(exec)
 
@@ -25,12 +24,9 @@ function getBeadsExecOptions() {
 
 async function checkBeadsInstalled(): Promise<boolean> {
   if (beadsAvailable !== null) return beadsAvailable
-  try {
-    await execAsync('bd --version', getBeadsExecOptions())
-    beadsAvailable = true
-  } catch {
-    beadsAvailable = false
-  }
+  beadsAvailable = await execAsync('bd --version', getBeadsExecOptions())
+    .then(() => true)
+    .catch(() => false)
   return beadsAvailable
 }
 

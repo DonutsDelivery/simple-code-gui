@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { Project } from '../../stores/workspace'
+import { Project } from '../../stores/workspace.js'
 
 interface DeleteConfirmModalProps {
   project: Project
