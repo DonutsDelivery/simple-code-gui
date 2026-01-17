@@ -145,6 +145,19 @@ export function TiledTerminalView({
     }
   }, [effectiveLayout, layout, onLayoutChange])
 
+  // Force terminals to refit when tiled view mounts
+  // The resize events help trigger xterm fit after layout stabilizes
+  useEffect(() => {
+    const triggerRefit = () => {
+      window.dispatchEvent(new Event('resize'))
+    }
+    const timers = [
+      setTimeout(triggerRefit, 100),
+      setTimeout(triggerRefit, 300),
+    ]
+    return () => timers.forEach(clearTimeout)
+  }, [])
+
   const getHighlightedEdges = useCallback((hovered: { tileId: string; edge: string } | null): Set<string> => {
     const highlighted = new Set<string>()
     if (!hovered) return highlighted

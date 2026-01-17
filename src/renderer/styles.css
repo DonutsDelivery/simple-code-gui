@@ -1137,8 +1137,20 @@ html, body, #root {
   flex: 1;
   position: relative;
   min-height: 0;
-  padding: 4px;
+  padding: 2px;
   overflow: hidden;
+}
+
+/* Terminal wrapper adjustments within tiles - smaller padding for compact view */
+.tile-terminal .terminal-wrapper {
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+}
+
+.tile-terminal .terminal-wrapper .xterm {
+  padding: 4px;
 }
 
 /* Grid resize handles - between tiles */

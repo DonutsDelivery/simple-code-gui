@@ -692,7 +692,14 @@ function App() {
               )}
               <button
                 className="view-toggle-btn"
-                onClick={() => setViewMode(viewMode === 'tabs' ? 'tiled' : 'tabs')}
+                onClick={() => {
+                  const newMode = viewMode === 'tabs' ? 'tiled' : 'tabs'
+                  setViewMode(newMode)
+                  // Trigger resize events to force terminals to refit after view mode change
+                  setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+                  setTimeout(() => window.dispatchEvent(new Event('resize')), 150)
+                  setTimeout(() => window.dispatchEvent(new Event('resize')), 300)
+                }}
                 title={viewMode === 'tabs' ? 'Switch to tiled view' : 'Switch to tabs view'}
               >
                 {viewMode === 'tabs' ? '⊞' : '▭'}
