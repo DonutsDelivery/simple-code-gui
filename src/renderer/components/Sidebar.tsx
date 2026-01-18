@@ -114,8 +114,8 @@ export function Sidebar({ projects, openTabs, activeTabId, lastFocusedTabId, onA
     [focusedTab]
   )
   const beadsProjectPath = useMemo(
-    () => expandedProject || focusedProjectPath,
-    [expandedProject, focusedProjectPath]
+    () => focusedProjectPath || expandedProject,
+    [focusedProjectPath, expandedProject]
   )
 
   // Project handlers
