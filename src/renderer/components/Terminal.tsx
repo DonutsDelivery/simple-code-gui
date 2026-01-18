@@ -149,13 +149,15 @@ interface TerminalProps {
 }
 
 // Strip ANSI escape codes and terminal control sequences from text
+// Preserves spaces by replacing sequences with space (collapsed later)
 function stripAnsi(text: string): string {
   return text
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')  // CSI sequences
-    .replace(/\x1b\][^\x07]*\x07/g, '')      // OSC sequences (title, etc)
-    .replace(/\x1b\[\?[0-9;]*[a-zA-Z]/g, '') // Private sequences
-    .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, '') // String sequences
-    .replace(/[\x00-\x1f\x7f]/g, '')          // Control chars
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ' ')  // CSI sequences -> space
+    .replace(/\x1b\][^\x07]*\x07/g, ' ')      // OSC sequences (title, etc) -> space
+    .replace(/\x1b\[\?[0-9;]*[a-zA-Z]/g, ' ') // Private sequences -> space
+    .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, ' ') // String sequences -> space
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '') // Control chars (except tab, newline, CR)
+    .replace(/\s+/g, ' ')                     // Collapse multiple whitespace
 }
 
 // Detect if text is Claude's prose response (not tool output, code, or status)
