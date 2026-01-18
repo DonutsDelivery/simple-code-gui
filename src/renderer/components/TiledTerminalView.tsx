@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Terminal } from './Terminal.js'
+import { ErrorBoundary } from './ErrorBoundary.js'
 import { Theme } from '../themes.js'
 import {
   TileLayout,
@@ -326,105 +327,111 @@ export function TiledTerminalView({
   useEffect(() => {
     if (!tileResizing || !containerRef.current) return
 
+    let rafId: number | null = null
     const handleTileResizeMove = (e: MouseEvent) => {
       if (!containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      const {
-        edge,
-        tilesLeftOfRightDivider, tilesRightOfRightDivider,
-        tilesLeftOfLeftDivider, tilesRightOfLeftDivider,
-        tilesAboveBottomDivider, tilesBelowBottomDivider,
-        tilesAboveTopDivider, tilesBelowTopDivider,
-        rightDividerPos, leftDividerPos, bottomDividerPos, topDividerPos
-      } = tileResizing
-      const currentLayout = effectiveLayoutRef.current
+      if (rafId !== null) return // Skip if a frame is already pending
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (!containerRef.current) return
+        const rect = containerRef.current.getBoundingClientRect()
+        const {
+          edge,
+          tilesLeftOfRightDivider, tilesRightOfRightDivider,
+          tilesLeftOfLeftDivider, tilesRightOfLeftDivider,
+          tilesAboveBottomDivider, tilesBelowBottomDivider,
+          tilesAboveTopDivider, tilesBelowTopDivider,
+          rightDividerPos, leftDividerPos, bottomDividerPos, topDividerPos
+        } = tileResizing
+        const currentLayout = effectiveLayoutRef.current
 
-      const mouseXPercent = ((e.clientX - rect.left) / rect.width) * 100
-      const mouseYPercent = ((e.clientY - rect.top) / rect.height) * 100
+        const mouseXPercent = ((e.clientX - rect.left) / rect.width) * 100
+        const mouseYPercent = ((e.clientY - rect.top) / rect.height) * 100
 
-      const tileUpdates = new Map<string, TileLayout>()
+        const tileUpdates = new Map<string, TileLayout>()
 
-      const moveVerticalDivider = (originalPos: number, tilesLeft: TileLayout[], tilesRight: TileLayout[]) => {
-        if (originalPos < 1 || originalPos > 99) return
-        let minPos = MIN_SIZE
-        let maxPos = 100 - MIN_SIZE
-        tilesLeft.forEach(tile => { minPos = Math.max(minPos, tile.x + MIN_SIZE) })
-        tilesRight.forEach(tile => { maxPos = Math.min(maxPos, tile.x + tile.width - MIN_SIZE) })
-        const newPos = Math.max(minPos, Math.min(maxPos, mouseXPercent))
+        const moveVerticalDivider = (originalPos: number, tilesLeft: TileLayout[], tilesRight: TileLayout[]) => {
+          if (originalPos < 1 || originalPos > 99) return
+          let minPos = MIN_SIZE
+          let maxPos = 100 - MIN_SIZE
+          tilesLeft.forEach(tile => { minPos = Math.max(minPos, tile.x + MIN_SIZE) })
+          tilesRight.forEach(tile => { maxPos = Math.min(maxPos, tile.x + tile.width - MIN_SIZE) })
+          const newPos = Math.max(minPos, Math.min(maxPos, mouseXPercent))
 
-        tilesLeft.forEach(tile => {
-          const currentTile = currentLayout.find(t => t.id === tile.id) || tile
-          const existing = tileUpdates.get(tile.id) || { ...currentTile }
-          existing.width = newPos - tile.x
-          tileUpdates.set(tile.id, existing)
-        })
-        tilesRight.forEach(tile => {
-          const currentTile = currentLayout.find(t => t.id === tile.id) || tile
-          const existing = tileUpdates.get(tile.id) || { ...currentTile }
-          const originalRight = tile.x + tile.width
-          existing.x = newPos
-          existing.width = originalRight - newPos
-          tileUpdates.set(tile.id, existing)
-        })
-      }
+          tilesLeft.forEach(tile => {
+            const currentTile = currentLayout.find(t => t.id === tile.id) || tile
+            const existing = tileUpdates.get(tile.id) || { ...currentTile }
+            existing.width = newPos - tile.x
+            tileUpdates.set(tile.id, existing)
+          })
+          tilesRight.forEach(tile => {
+            const currentTile = currentLayout.find(t => t.id === tile.id) || tile
+            const existing = tileUpdates.get(tile.id) || { ...currentTile }
+            const originalRight = tile.x + tile.width
+            existing.x = newPos
+            existing.width = originalRight - newPos
+            tileUpdates.set(tile.id, existing)
+          })
+        }
 
-      const moveHorizontalDivider = (originalPos: number, tilesAbove: TileLayout[], tilesBelow: TileLayout[]) => {
-        if (originalPos < 1 || originalPos > 99) return
-        let minPos = MIN_SIZE
-        let maxPos = 100 - MIN_SIZE
-        tilesAbove.forEach(tile => { minPos = Math.max(minPos, tile.y + MIN_SIZE) })
-        tilesBelow.forEach(tile => { maxPos = Math.min(maxPos, tile.y + tile.height - MIN_SIZE) })
-        const newPos = Math.max(minPos, Math.min(maxPos, mouseYPercent))
+        const moveHorizontalDivider = (originalPos: number, tilesAbove: TileLayout[], tilesBelow: TileLayout[]) => {
+          if (originalPos < 1 || originalPos > 99) return
+          let minPos = MIN_SIZE
+          let maxPos = 100 - MIN_SIZE
+          tilesAbove.forEach(tile => { minPos = Math.max(minPos, tile.y + MIN_SIZE) })
+          tilesBelow.forEach(tile => { maxPos = Math.min(maxPos, tile.y + tile.height - MIN_SIZE) })
+          const newPos = Math.max(minPos, Math.min(maxPos, mouseYPercent))
 
-        tilesAbove.forEach(tile => {
-          const currentTile = currentLayout.find(t => t.id === tile.id) || tile
-          const existing = tileUpdates.get(tile.id) || { ...currentTile }
-          existing.height = newPos - tile.y
-          tileUpdates.set(tile.id, existing)
-        })
-        tilesBelow.forEach(tile => {
-          const currentTile = currentLayout.find(t => t.id === tile.id) || tile
-          const existing = tileUpdates.get(tile.id) || { ...currentTile }
-          const originalBottom = tile.y + tile.height
-          existing.y = newPos
-          existing.height = originalBottom - newPos
-          tileUpdates.set(tile.id, existing)
-        })
-      }
+          tilesAbove.forEach(tile => {
+            const currentTile = currentLayout.find(t => t.id === tile.id) || tile
+            const existing = tileUpdates.get(tile.id) || { ...currentTile }
+            existing.height = newPos - tile.y
+            tileUpdates.set(tile.id, existing)
+          })
+          tilesBelow.forEach(tile => {
+            const currentTile = currentLayout.find(t => t.id === tile.id) || tile
+            const existing = tileUpdates.get(tile.id) || { ...currentTile }
+            const originalBottom = tile.y + tile.height
+            existing.y = newPos
+            existing.height = originalBottom - newPos
+            tileUpdates.set(tile.id, existing)
+          })
+        }
 
-      switch (edge) {
-        case 'right':
-          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
-          break
-        case 'left':
-          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-          break
-        case 'bottom':
-          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-          break
-        case 'top':
-          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-          break
-        case 'top-left':
-          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-          break
-        case 'top-right':
-          moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
-          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
-          break
-        case 'bottom-left':
-          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-          moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
-          break
-        case 'bottom-right':
-          moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
-          moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
-          break
-      }
+        switch (edge) {
+          case 'right':
+            moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+            break
+          case 'left':
+            moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+            break
+          case 'bottom':
+            moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+            break
+          case 'top':
+            moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+            break
+          case 'top-left':
+            moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+            moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+            break
+          case 'top-right':
+            moveHorizontalDivider(topDividerPos, tilesAboveTopDivider, tilesBelowTopDivider)
+            moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+            break
+          case 'bottom-left':
+            moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+            moveVerticalDivider(leftDividerPos, tilesLeftOfLeftDivider, tilesRightOfLeftDivider)
+            break
+          case 'bottom-right':
+            moveHorizontalDivider(bottomDividerPos, tilesAboveBottomDivider, tilesBelowBottomDivider)
+            moveVerticalDivider(rightDividerPos, tilesLeftOfRightDivider, tilesRightOfRightDivider)
+            break
+        }
 
-      const newLayout = currentLayout.map(tile => tileUpdates.get(tile.id) || tile)
-      onLayoutChangeRef.current(newLayout)
+        const newLayout = currentLayout.map(tile => tileUpdates.get(tile.id) || tile)
+        onLayoutChangeRef.current(newLayout)
+      })
     }
 
     const handleTileResizeUp = () => {
@@ -460,6 +467,7 @@ export function TiledTerminalView({
     window.addEventListener('mouseup', handleTileResizeUp)
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
       window.removeEventListener('mousemove', handleTileResizeMove)
       window.removeEventListener('mouseup', handleTileResizeUp)
     }
@@ -529,14 +537,16 @@ export function TiledTerminalView({
             </div>
             <div className="tile-terminal">
               <div className="terminal-wrapper active">
-                <Terminal
-                  ptyId={tab.id}
-                  isActive={true}
-                  theme={theme}
-                  onFocus={() => onFocusTab(tab.id)}
-                  projectPath={tab.projectPath}
-                  backend={tab.backend}
-                />
+                <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
+                  <Terminal
+                    ptyId={tab.id}
+                    isActive={true}
+                    theme={theme}
+                    onFocus={() => onFocusTab(tab.id)}
+                    projectPath={tab.projectPath}
+                    backend={tab.backend}
+                  />
+                </ErrorBoundary>
               </div>
             </div>
             {draggedTile && draggedTile !== tile.id && (

@@ -2,87 +2,21 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
-import { Terminal, clearTerminalBuffer } from './components/Terminal'
+import { Terminal, clearTerminalBuffer, cleanupOrphanedBuffers } from './components/Terminal'
 import { TiledTerminalView, TileLayout } from './components/TiledTerminalView'
 import { SettingsModal } from './components/SettingsModal'
 import { MakeProjectModal } from './components/MakeProjectModal'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
+import { useModals } from './contexts/ModalContext'
+import { useInstallation, useUpdater, useViewState, AppSettings } from './hooks'
+import type { ElectronAPI } from '../preload/index'
 
 declare global {
   interface Window {
-    electronAPI: {
-      getWorkspace: () => Promise<any>
-      saveWorkspace: (workspace: any) => Promise<void>
-      addProject: () => Promise<string | null>
-      discoverSessions: (projectPath: string, backend?: 'claude' | 'opencode') => Promise<any[]>
-      getSettings: () => Promise<{ defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string; backend?: string }>
-      saveSettings: (settings: { defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string; backend?: string }) => Promise<void>
-      voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: string }>>
-      xttsGetVoices?: () => Promise<Array<{ id: string; name: string }>>
-      voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }>
-      voiceCheckWhisper?: () => Promise<{ installed: boolean; models: string[]; currentModel: string | null }>
-      voiceCheckTTS?: () => Promise<{ installed: boolean; voices: string[]; currentVoice: string | null }>
-      extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
-      voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => Promise<void>
-      voiceInstallWhisper?: (model: string) => Promise<void>
-      voiceInstallPiper?: () => Promise<void>
-      voiceInstallVoice?: (voice: string) => Promise<void>
-      voiceSpeak?: (text: string) => Promise<{ success: boolean; audioData?: string; error?: string }>
-      xttsSpeak?: (text: string, voiceId: string, lang: string) => Promise<{ success: boolean; audioData?: string; error?: string }>
-      voiceSetVoice?: (settings: { voice: string; engine: string }) => Promise<void>
-      selectDirectory: () => Promise<string | null>
-      createProject: (name: string, parentDir: string) => Promise<{ success: boolean; path?: string; error?: string }>
-      selectExecutable: () => Promise<string | null>
-      runExecutable: (executable: string, cwd: string) => Promise<{ success: boolean; error?: string }>
-      claudeCheck: () => Promise<{ installed: boolean; npmInstalled: boolean; gitBashInstalled: boolean }>
-      claudeInstall: () => Promise<{ success: boolean; error?: string; needsNode?: boolean }>
-      nodeInstall: () => Promise<{ success: boolean; error?: string; method?: string; message?: string }>
-      gitInstall: () => Promise<{ success: boolean; error?: string; method?: string; message?: string }>
-      pythonInstall: () => Promise<{ success: boolean; error?: string; method?: string }>
-      onInstallProgress: (callback: (data: { type: string; status: string; percent?: number }) => void) => () => void
-      beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
-      beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      beadsInstall: () => Promise<{ success: boolean; error?: string; method?: string; needsPython?: boolean }>
-      beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
-      beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: any[]; error?: string }>
-      beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: any; error?: string }>
-      beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: any; error?: string }>
-      beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: any; error?: string }>
-      beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-      beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: string) => Promise<string>
-      writePty: (id: string, data: string) => void
-      resizePty: (id: string, cols: number, rows: number) => void
-      killPty: (id: string) => void
-      onPtyData: (id: string, callback: (data: string) => void) => () => void
-      onPtyExit: (id: string, callback: (code: number) => void) => () => void
-      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: string }) => void) => () => void
-      // API Server
-      apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
-      apiStop: (projectPath: string) => Promise<{ success: boolean }>
-      apiStatus: (projectPath: string) => Promise<{ running: boolean; port?: number }>
-      onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
-      // Updater
-      getVersion: () => Promise<string>
-      checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
-      downloadUpdate: () => Promise<{ success: boolean; error?: string }>
-      installUpdate: () => void
-      onUpdaterStatus: (callback: (data: { status: string; version?: string; progress?: number; error?: string }) => void) => () => void
-      // Clipboard
-      readClipboardImage: () => Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }>
-      // TTS instructions
-      ttsInstallInstructions?: (projectPath: string) => Promise<{ success: boolean; error?: string }>
-      ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean; error?: string }>
-      // Window controls
-      windowMinimize: () => void
-      windowMaximize: () => void
-      windowClose: () => void
-      windowIsMaximized: () => Promise<boolean>
-      isDebugMode: () => Promise<boolean>
-      refresh: () => Promise<void>
-    }
+    electronAPI: ElectronAPI
   }
 }
 
@@ -106,6 +40,41 @@ function App() {
 
   const { voiceOutputEnabled, setProjectVoice } = useVoice()
   const voiceOutputEnabledRef = useRef(voiceOutputEnabled)
+
+  // Modal state from context
+  const { settingsOpen, makeProjectOpen, openSettings, closeSettings, openMakeProject, closeMakeProject } = useModals()
+
+  // Installation state from hook
+  const {
+    claudeInstalled,
+    npmInstalled,
+    gitBashInstalled,
+    installing,
+    installError,
+    installMessage,
+    checkInstallation,
+    handleInstallNode,
+    handleInstallGit,
+    handleInstallClaude
+  } = useInstallation()
+
+  // Updater state from hook
+  const { appVersion, updateStatus, downloadUpdate, installUpdate } = useUpdater()
+
+  // View state from hook
+  const {
+    viewMode,
+    tileLayout,
+    lastFocusedTabId,
+    sidebarWidth,
+    sidebarCollapsed,
+    setViewMode,
+    setTileLayout,
+    setLastFocusedTabId,
+    setSidebarWidth,
+    setSidebarCollapsed,
+    toggleViewMode
+  } = useViewState()
 
   // Keep ref in sync for callbacks
   useEffect(() => {
@@ -131,29 +100,10 @@ function App() {
     }
   }, [activeTabId, openTabs, projects, setProjectVoice])
 
+  // App-specific state that needs to stay in App.tsx
   const [loading, setLoading] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [makeProjectOpen, setMakeProjectOpen] = useState(false)
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0])
-  const [viewMode, setViewMode] = useState<'tabs' | 'tiled'>('tabs')
-  const [tileLayout, setTileLayout] = useState<TileLayout[]>([])
-  const [lastFocusedTabId, setLastFocusedTabId] = useState<string | null>(null)
-  const [claudeInstalled, setClaudeInstalled] = useState<boolean | null>(null)
-  const [npmInstalled, setNpmInstalled] = useState<boolean | null>(null)
-  const [gitBashInstalled, setGitBashInstalled] = useState<boolean | null>(null)
-  const [installing, setInstalling] = useState<'node' | 'git' | 'claude' | null>(null)
-  const [installError, setInstallError] = useState<string | null>(null)
-  const [installMessage, setInstallMessage] = useState<string | null>(null)
-  const [appVersion, setAppVersion] = useState<string>('')
-  const [updateStatus, setUpdateStatus] = useState<{
-    status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
-    version?: string
-    progress?: number
-    error?: string
-  }>({ status: 'idle' })
-  const [sidebarWidth, setSidebarWidth] = useState(280)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [settings, setSettings] = useState<{ defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string; backend?: string } | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
 
@@ -166,10 +116,7 @@ function App() {
     const loadWorkspace = async () => {
       try {
         // Check if Claude, npm, and git-bash are installed
-        const claudeStatus = await window.electronAPI.claudeCheck()
-        setClaudeInstalled(claudeStatus.installed)
-        setNpmInstalled(claudeStatus.npmInstalled)
-        setGitBashInstalled(claudeStatus.gitBashInstalled)
+        await checkInstallation()
 
         // Load and apply theme
         const settings = await window.electronAPI.getSettings()
@@ -278,6 +225,11 @@ function App() {
           }
         }
 
+        // Clean up orphaned terminal buffers from previous session/HMR
+        // This prevents unbounded memory growth from buffers with old PTY IDs
+        const activeTabIds = useWorkspaceStore.getState().openTabs.map(t => t.id)
+        cleanupOrphanedBuffers(activeTabIds)
+
         // Restore view mode (layout auto-generates based on tab count)
         if (workspace.viewMode) {
           setViewMode(workspace.viewMode)
@@ -289,22 +241,7 @@ function App() {
       setLoading(false)
     }
     loadWorkspace()
-
-    // Load app version
-    window.electronAPI.getVersion().then(setAppVersion).catch(console.error)
-
-    // Subscribe to updater events
-    const unsubscribe = window.electronAPI.onUpdaterStatus((data) => {
-      setUpdateStatus({
-        status: data.status as any,
-        version: data.version,
-        progress: data.progress,
-        error: data.error
-      })
-    })
-
-    return () => unsubscribe()
-  }, [addTab, clearTabs, projects, setProjects, setCategories, settings?.backend, updateTab, hadProjectsRef])
+  }, [addTab, clearTabs, checkInstallation, setProjects, setCategories, setViewMode])
 
   // Save workspace when it changes
   useEffect(() => {
@@ -342,37 +279,42 @@ function App() {
   }, [projects, openTabs, activeTabId, loading, viewMode, tileLayout, categories])
 
   // Poll for session IDs - update tabs without sessions and detect when sessions change (e.g., after /clear)
-  // Now async and parallel so it doesn't block the UI
+  // Uses 30s interval to reduce IPC overhead, only polls tabs that need session discovery
   useEffect(() => {
     const pollInterval = setInterval(async () => {
       if (openTabs.length === 0) return
 
-      // Run discovery in parallel for all tabs (async so non-blocking)
-      await Promise.all(openTabs.map(async (tab) => {
-        try {
-          const effectiveBackend = tab.backend === 'opencode' ? 'opencode' : 'claude'
-          const sessions = await window.electronAPI.discoverSessions(tab.projectPath, effectiveBackend)
-          if (sessions.length > 0) {
-            const mostRecent = sessions[0]
+      // Only poll tabs that don't have a session yet (reduces unnecessary IPC calls)
+      const tabsNeedingSession = openTabs.filter(tab => !tab.sessionId)
+      if (tabsNeedingSession.length === 0) return
 
-            // Skip if this tab already has the most recent session
-            if (tab.sessionId === mostRecent.sessionId) return
+      // Run discovery in parallel for tabs needing sessions (async so non-blocking)
+      try {
+        await Promise.all(tabsNeedingSession.map(async (tab) => {
+          try {
+            const effectiveBackend = tab.backend === 'opencode' ? 'opencode' : 'claude'
+            const sessions = await window.electronAPI.discoverSessions(tab.projectPath, effectiveBackend)
+            if (sessions.length > 0) {
+              const mostRecent = sessions[0]
 
-            // Check if we already have this session in another tab
-            const alreadyOpen = openTabs.some(t => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
-            if (!alreadyOpen) {
-              const projectName = tab.projectPath.split(/[/\\]/).pop() || tab.projectPath
-              updateTab(tab.id, {
-                sessionId: mostRecent.sessionId,
-                title: `${projectName} - ${mostRecent.slug}`
-              })
+              // Check if we already have this session in another tab
+              const alreadyOpen = openTabs.some(t => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
+              if (!alreadyOpen) {
+                const projectName = tab.projectPath.split(/[/\\]/).pop() || tab.projectPath
+                updateTab(tab.id, {
+                  sessionId: mostRecent.sessionId,
+                  title: `${projectName} - ${mostRecent.slug}`
+                })
+              }
             }
+          } catch (e) {
+            console.error('Failed to discover sessions for tab:', e)
           }
-        } catch (e) {
-          console.error('Failed to discover sessions for tab:', e)
-        }
-      }))
-    }, 5000) // Poll every 5 seconds
+        }))
+      } catch (e) {
+        console.error('Session discovery polling error:', e)
+      }
+    }, 30000) // Poll every 30 seconds (reduced from 5s to minimize IPC overhead)
 
     return () => clearInterval(pollInterval)
   }, [openTabs, updateTab])
@@ -530,73 +472,10 @@ function App() {
     handleOpenSession(projectPath, undefined, undefined, undefined, false)
   }, [addProject, handleOpenSession])
 
-  const handleInstallNode = useCallback(async () => {
-    setInstalling('node')
-    setInstallError(null)
-    setInstallMessage(null)
-    try {
-      const result = await window.electronAPI.nodeInstall()
-      if (result.success) {
-        if (result.method === 'download') {
-          // User needs to complete manual install
-          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Code GUI.')
-        } else {
-          // winget install succeeded, re-check npm
-          setNpmInstalled(true)
-          setInstallMessage('Node.js installed! Click "Install Claude Code" to continue.')
-        }
-      } else {
-        setInstallError(result.error || 'Installation failed')
-      }
-    } catch (e) {
-      setInstallError(String(e))
-    }
-    setInstalling(null)
-  }, [])
-
-  const handleInstallClaude = useCallback(async () => {
-    setInstalling('claude')
-    setInstallError(null)
-    setInstallMessage(null)
-    try {
-      const result = await window.electronAPI.claudeInstall()
-      if (result.success) {
-        setClaudeInstalled(true)
-      } else if (result.needsNode) {
-        setInstallError('Node.js is required. Click "Install Node.js" first.')
-      } else {
-        setInstallError(result.error || 'Installation failed')
-      }
-    } catch (e) {
-      setInstallError(String(e))
-    }
-    setInstalling(null)
-  }, [])
-
-  const handleInstallGit = useCallback(async () => {
-    setInstalling('git')
-    setInstallError(null)
-    setInstallMessage(null)
-    try {
-      const result = await window.electronAPI.gitInstall()
-      if (result.success) {
-        setGitBashInstalled(true)
-        setInstallMessage(result.message || 'Git installed! Please restart Simple Code GUI.')
-      } else if (result.method === 'download') {
-        setInstallMessage(result.message || 'Please download and install Git, then restart Simple Code GUI.')
-      } else {
-        setInstallError(result.error || 'Installation failed')
-      }
-    } catch (e) {
-      setInstallError(String(e))
-    }
-    setInstalling(null)
-  }, [])
-
   if (loading) {
     return (
       <div className="app">
-        <div className="empty-state">
+        <div className="empty-state" role="status" aria-live="polite">
           <p>Loading...</p>
         </div>
       </div>
@@ -616,8 +495,8 @@ function App() {
         onRemoveProject={removeProject}
         onOpenSession={handleOpenSession}
         onSwitchToTab={setActiveTab}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenMakeProject={() => setMakeProjectOpen(true)}
+        onOpenSettings={openSettings}
+        onOpenMakeProject={openMakeProject}
         onUpdateProject={updateProject}
         onCloseProjectTabs={handleCloseProjectTabs}
         width={sidebarWidth}
@@ -633,10 +512,10 @@ function App() {
               ? 'Claude Code needs to be installed to use this application.'
               : 'Claude Code requires Git (git-bash) on Windows.'}</p>
             {installError && (
-              <p className="error-message">{installError}</p>
+              <p className="error-message" role="alert" aria-live="assertive">{installError}</p>
             )}
             {installMessage && (
-              <p className="install-message">{installMessage}</p>
+              <p className="install-message" role="status" aria-live="polite">{installMessage}</p>
             )}
             <div className="install-buttons">
               {gitBashInstalled === false && (
@@ -692,17 +571,10 @@ function App() {
               )}
               <button
                 className="view-toggle-btn"
-                onClick={() => {
-                  const newMode = viewMode === 'tabs' ? 'tiled' : 'tabs'
-                  setViewMode(newMode)
-                  // Trigger resize events to force terminals to refit after view mode change
-                  setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-                  setTimeout(() => window.dispatchEvent(new Event('resize')), 150)
-                  setTimeout(() => window.dispatchEvent(new Event('resize')), 300)
-                }}
+                onClick={toggleViewMode}
                 title={viewMode === 'tabs' ? 'Switch to tiled view' : 'Switch to tabs view'}
               >
-                {viewMode === 'tabs' ? '⊞' : '▭'}
+                {viewMode === 'tabs' ? '\u229E' : '\u25AD'}
               </button>
             </div>
             {viewMode === 'tabs' ? (
@@ -712,26 +584,31 @@ function App() {
                     key={tab.id}
                     className={`terminal-wrapper ${tab.id === activeTabId ? 'active' : ''}`}
                   >
-                                    <Terminal
-                                      ptyId={tab.id}
-                                      isActive={tab.id === activeTabId}
-                                      theme={currentTheme}
-                                      onFocus={() => setLastFocusedTabId(tab.id)}
-                                      projectPath={tab.projectPath}
-                                      backend={tab.backend}
-                                    />
-                                  </div>
-                                ))}
-                              </div>            ) : (
-              <TiledTerminalView
-                tabs={openTabs}
-                projects={projects}
-                theme={currentTheme}
-                onCloseTab={handleCloseTab}
-                onFocusTab={setLastFocusedTabId}
-                layout={tileLayout}
-                onLayoutChange={setTileLayout}
-              />
+                    <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
+                      <Terminal
+                        ptyId={tab.id}
+                        isActive={tab.id === activeTabId}
+                        theme={currentTheme}
+                        onFocus={() => setLastFocusedTabId(tab.id)}
+                        projectPath={tab.projectPath}
+                        backend={tab.backend}
+                      />
+                    </ErrorBoundary>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ErrorBoundary componentName="TiledTerminalView">
+                <TiledTerminalView
+                  tabs={openTabs}
+                  projects={projects}
+                  theme={currentTheme}
+                  onCloseTab={handleCloseTab}
+                  onFocusTab={setLastFocusedTabId}
+                  layout={tileLayout}
+                  onLayoutChange={setTileLayout}
+                />
+              </ErrorBoundary>
             )}
           </>
         ) : (
@@ -744,14 +621,14 @@ function App() {
 
       <SettingsModal
         isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
         onThemeChange={setCurrentTheme}
         onSaved={(newSettings) => setSettings(newSettings)}
       />
 
       <MakeProjectModal
         isOpen={makeProjectOpen}
-        onClose={() => setMakeProjectOpen(false)}
+        onClose={closeMakeProject}
         onProjectCreated={handleProjectCreated}
       />
       </div>
@@ -763,37 +640,28 @@ function App() {
           {updateStatus.status === 'available' && (
             <button
               className="update-btn"
-              onClick={() => {
-                setUpdateStatus({ status: 'downloading', version: updateStatus.version, progress: 0 })
-                window.electronAPI.downloadUpdate().then(result => {
-                  if (!result.success) {
-                    setUpdateStatus({ status: 'error', error: result.error })
-                  }
-                }).catch(e => {
-                  setUpdateStatus({ status: 'error', error: String(e) })
-                })
-              }}
+              onClick={downloadUpdate}
               title={`Update to v${updateStatus.version}`}
             >
               Update available
             </button>
           )}
           {updateStatus.status === 'downloading' && (
-            <span className="update-progress">
+            <span className="update-progress" role="status" aria-live="polite" aria-atomic="true">
               Downloading... {Math.round(updateStatus.progress || 0)}%
             </span>
           )}
           {updateStatus.status === 'downloaded' && (
             <button
               className="update-btn ready"
-              onClick={() => window.electronAPI.installUpdate()}
+              onClick={installUpdate}
               title="Restart and install update"
             >
               Restart to update
             </button>
           )}
           {updateStatus.status === 'error' && (
-            <span className="update-error" title={updateStatus.error}>
+            <span className="update-error" role="alert" aria-live="assertive" title={updateStatus.error}>
               Update failed
             </span>
           )}
