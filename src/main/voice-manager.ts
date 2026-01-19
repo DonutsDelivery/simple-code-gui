@@ -1,305 +1,64 @@
-import { app } from 'electron'
+// Voice Manager - coordinates TTS and STT functionality
+
 import * as fs from 'fs'
-import * as path from 'path'
-import * as https from 'https'
-import { exec, spawn, ChildProcess } from 'child_process'
-import { promisify } from 'util'
-import { isWindows, isMac } from './platform'
-import { xttsManager } from './xtts-manager'
 
-const execAsync = promisify(exec)
+import { xttsManager } from './xtts-manager.js'
+import { voiceSettingsPath } from './voice/paths.js'
+import { logTTS } from './voice/debug.js'
+import {
+  getAnyVoicePath,
+  getInstalledVoices,
+  getCustomVoicesDir,
+  importCustomVoiceFiles,
+  removeCustomVoice,
+  getInstalledPiperVoices
+} from './voice/voice-discovery.js'
+import { fetchVoicesCatalog, downloadVoiceFromCatalog } from './voice/voice-catalog.js'
+import {
+  checkTTS,
+  installPiper,
+  downloadPiperVoice,
+  speak as piperSpeak,
+  stopSpeaking as piperStopSpeaking,
+  isPiperInstalled
+} from './voice/piper-tts.js'
+import {
+  checkWhisper,
+  downloadWhisperModel,
+  transcribe,
+  isWhisperModelInstalled,
+  getInstalledWhisperModels
+} from './voice/whisper-stt.js'
+import type {
+  WhisperModelName,
+  PiperVoiceName,
+  WhisperStatus,
+  TTSStatus,
+  VoiceSettings,
+  VoiceCatalogEntry,
+  InstalledVoice,
+  ProgressCallback
+} from './voice/types.js'
 
-// Directory structure
-const depsDir = path.join(app.getPath('userData'), 'deps')
-const whisperDir = path.join(depsDir, 'whisper')
-const whisperModelsDir = path.join(whisperDir, 'models')
-const piperDir = path.join(depsDir, 'piper')
-const piperVoicesDir = path.join(piperDir, 'voices')
-const customVoicesDir = path.join(piperDir, 'custom-voices')
-const voiceSettingsPath = path.join(app.getPath('userData'), 'voice-settings.json')
-const ttsDebugLogPath = path.join(app.getPath('userData'), 'tts-debug.log')
-
-// TTS Debug logging
-function logTTS(message: string, data?: unknown) {
-  const timestamp = new Date().toISOString()
-  const logLine = data
-    ? `[${timestamp}] ${message}: ${JSON.stringify(data, null, 2)}\n`
-    : `[${timestamp}] ${message}\n`
-  fs.appendFileSync(ttsDebugLogPath, logLine)
-}
-
-// Hugging Face API for voice catalog
-const VOICES_CATALOG_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json'
-const HF_BASE_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main'
-
-// Whisper models available for download (from ggerganov/whisper.cpp on Hugging Face)
-export const WHISPER_MODELS = {
-  'tiny.en': { file: 'ggml-tiny.en.bin', size: 75, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin' },
-  'base.en': { file: 'ggml-base.en.bin', size: 147, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin' },
-  'small.en': { file: 'ggml-small.en.bin', size: 488, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin' },
-  'medium.en': { file: 'ggml-medium.en.bin', size: 1500, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin' },
-  'large-v3': { file: 'ggml-large-v3.bin', size: 3000, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin' }
-} as const
-
-export type WhisperModelName = keyof typeof WHISPER_MODELS
-
-// Piper voices - only CC0/CC-BY licensed (commercially safe)
-// See: https://github.com/rhasspy/piper/blob/master/VOICES.md
-export const PIPER_VOICES = {
-  'en_US-libritts_r-medium': {
-    file: 'en_US-libritts_r-medium.onnx',
-    config: 'en_US-libritts_r-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx.json',
-    license: 'CC-BY-4.0',
-    description: 'LibriTTS-R (US English)'
-  },
-  'en_GB-jenny_dioco-medium': {
-    file: 'en_GB-jenny_dioco-medium.onnx',
-    config: 'en_GB-jenny_dioco-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx.json',
-    license: 'CC0',
-    description: 'Jenny DioCo (British)'
-  },
-  'en_US-ryan-medium': {
-    file: 'en_US-ryan-medium.onnx',
-    config: 'en_US-ryan-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json',
-    license: 'CC-BY-4.0',
-    description: 'Ryan (US English male)'
-  },
-  'en_US-amy-medium': {
-    file: 'en_US-amy-medium.onnx',
-    config: 'en_US-amy-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json',
-    license: 'CC-BY-4.0',
-    description: 'Amy (US English female)'
-  },
-  'en_US-arctic-medium': {
-    file: 'en_US-arctic-medium.onnx',
-    config: 'en_US-arctic-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/arctic/medium/en_US-arctic-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/arctic/medium/en_US-arctic-medium.onnx.json',
-    license: 'CC0',
-    description: 'Arctic (US English, multi-speaker)'
-  },
-  'en_GB-alan-medium': {
-    file: 'en_GB-alan-medium.onnx',
-    config: 'en_GB-alan-medium.onnx.json',
-    url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx',
-    configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json',
-    license: 'CC-BY-4.0',
-    description: 'Alan (British male)'
-  }
-} as const
-
-export type PiperVoiceName = keyof typeof PIPER_VOICES
-
-// Piper binary URLs
-const PIPER_BINARY_URLS = {
-  win32: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip',
-  darwin: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz',
-  linux: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz'
-}
-
-export interface WhisperStatus {
-  installed: boolean
-  models: WhisperModelName[]
-  currentModel: WhisperModelName | null
-}
-
-export interface TTSStatus {
-  installed: boolean
-  engine: 'piper' | 'xtts' | null
-  voices: string[]
-  currentVoice: string | null
-}
-
-export interface VoiceSettings {
-  whisperModel: WhisperModelName
-  ttsEngine: 'piper' | 'xtts'
-  ttsVoice: string
-  ttsSpeed: number  // 0.5 = slow, 1.0 = normal, 2.0 = fast (Piper length_scale is inverted)
-  microphoneId: string | null
-  readBehavior: 'immediate' | 'pause' | 'manual'
-  skipOnNew: boolean  // If true, interrupt current speech when new text arrives
-  // XTTS-specific settings
-  xttsTemperature: number  // 0.1-1.0, lower = more consistent, higher = more expressive (default 0.65)
-  xttsTopK: number  // 1-100, limits token selection diversity (default 50)
-  xttsTopP: number  // 0.1-1.0, nucleus sampling threshold (default 0.85)
-  xttsRepetitionPenalty: number  // 1.0-10.0, penalizes repetition (default 2.0)
-}
-
-// Voice catalog types (from Hugging Face API)
-export interface VoiceCatalogEntry {
-  key: string
-  name: string
-  language: {
-    code: string
-    family: string
-    region: string
-    name_native: string
-    name_english: string
-    country_english: string
-  }
-  quality: 'x_low' | 'low' | 'medium' | 'high'
-  num_speakers: number
-  speaker_id_map: Record<string, number>
-  files: Record<string, { size_bytes: number; md5_digest: string }>
-  aliases: string[]
-}
-
-export interface InstalledVoice {
-  key: string
-  displayName: string
-  source: 'builtin' | 'downloaded' | 'custom'
-  quality?: string
-  language?: string
-}
-
-export interface CustomVoiceMetadata {
-  voices: {
-    [key: string]: {
-      displayName: string
-      addedAt: number
-    }
-  }
-}
-
-// Ensure directories exist
-function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
-}
-
-// Download file with progress
-function downloadFile(url: string, destPath: string, onProgress?: (percent: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destPath)
-
-    const request = https.get(url, (response) => {
-      // Handle redirects (301, 302, 307, 308)
-      if (response.statusCode && [301, 302, 307, 308].includes(response.statusCode)) {
-        file.close()
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
-        const location = response.headers.location
-        if (!location) {
-          reject(new Error(`Redirect with no location header`))
-          return
-        }
-        const redirectUrl = location.startsWith('http') ? location : new URL(location, url).toString()
-        downloadFile(redirectUrl, destPath, onProgress)
-          .then(resolve)
-          .catch(reject)
-        return
-      }
-
-      if (response.statusCode !== 200) {
-        file.close()
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
-        reject(new Error(`Download failed with status ${response.statusCode}`))
-        return
-      }
-
-      const totalSize = parseInt(response.headers['content-length'] || '0', 10)
-      let downloaded = 0
-
-      response.on('data', (chunk) => {
-        downloaded += chunk.length
-        if (onProgress && totalSize > 0) {
-          onProgress(Math.round((downloaded / totalSize) * 100))
-        }
-      })
-
-      response.pipe(file)
-
-      file.on('finish', () => {
-        file.close()
-        resolve()
-      })
-
-      file.on('error', (err) => {
-        file.close()
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
-        reject(err)
-      })
-    })
-
-    request.on('error', (err) => {
-      file.close()
-      if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
-      reject(err)
-    })
-  })
-}
-
-// Fetch JSON from URL
-function fetchJson<T>(url: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, (response) => {
-      // Handle redirects (301, 302, 307, 308)
-      if (response.statusCode && [301, 302, 307, 308].includes(response.statusCode)) {
-        const location = response.headers.location
-        if (!location) {
-          reject(new Error(`Redirect with no location header`))
-          return
-        }
-        // Handle relative URLs
-        const redirectUrl = location.startsWith('http') ? location : new URL(location, url).toString()
-        fetchJson<T>(redirectUrl)
-          .then(resolve)
-          .catch(reject)
-        return
-      }
-
-      if (response.statusCode !== 200) {
-        reject(new Error(`HTTP ${response.statusCode}`))
-        return
-      }
-
-      let data = ''
-      response.on('data', chunk => data += chunk)
-      response.on('end', () => {
-        try {
-          resolve(JSON.parse(data))
-        } catch (e) {
-          reject(e)
-        }
-      })
-    })
-
-    request.on('error', reject)
-  })
-}
-
-// Extract archive
-async function extractArchive(archivePath: string, destDir: string): Promise<void> {
-  ensureDir(destDir)
-
-  if (isWindows) {
-    await execAsync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${destDir}' -Force"`, {
-      timeout: 120000
-    })
-  } else {
-    if (archivePath.endsWith('.tar.gz')) {
-      await execAsync(`tar -xzf "${archivePath}" -C "${destDir}"`, { timeout: 120000 })
-    } else {
-      await execAsync(`unzip -o "${archivePath}" -d "${destDir}"`, { timeout: 120000 })
-    }
-  }
-}
+// Re-export types and constants for backwards compatibility
+export { WHISPER_MODELS, PIPER_VOICES } from './voice/types.js'
+export type {
+  WhisperModelName,
+  PiperVoiceName,
+  WhisperStatus,
+  TTSStatus,
+  VoiceSettings,
+  VoiceCatalogEntry,
+  InstalledVoice,
+  CustomVoiceMetadata
+} from './voice/types.js'
 
 class VoiceManager {
   private currentWhisperModel: WhisperModelName = 'base.en'
   private currentTTSVoice: string = 'en_US-libritts_r-medium'
   private currentTTSEngine: 'piper' | 'xtts' = 'piper'
-  private currentXTTSVoice: string | null = null  // XTTS voice ID
+  private currentXTTSVoice: string | null = null
   private currentTTSSpeed: number = 1.0
-  private speakingProcess: ChildProcess | null = null
   // XTTS quality settings
   private xttsTemperature: number = 0.65
   private xttsTopK: number = 50
@@ -310,7 +69,6 @@ class VoiceManager {
     this.loadPersistedSettings()
   }
 
-  // Load voice settings from disk
   private loadPersistedSettings(): void {
     try {
       if (fs.existsSync(voiceSettingsPath)) {
@@ -330,7 +88,6 @@ class VoiceManager {
     }
   }
 
-  // Save voice settings to disk
   private savePersistedSettings(): void {
     try {
       const data = {
@@ -352,147 +109,50 @@ class VoiceManager {
 
   // ==================== WHISPER (STT) ====================
 
-  getWhisperModelPath(model: WhisperModelName): string {
-    return path.join(whisperModelsDir, WHISPER_MODELS[model].file)
-  }
-
-  isWhisperModelInstalled(model: WhisperModelName): boolean {
-    return fs.existsSync(this.getWhisperModelPath(model))
-  }
-
-  getInstalledWhisperModels(): WhisperModelName[] {
-    if (!fs.existsSync(whisperModelsDir)) return []
-    return (Object.keys(WHISPER_MODELS) as WhisperModelName[]).filter(model =>
-      this.isWhisperModelInstalled(model)
-    )
-  }
-
   async checkWhisper(): Promise<WhisperStatus> {
-    const models = this.getInstalledWhisperModels()
-    return {
-      installed: models.length > 0,
-      models,
-      currentModel: models.includes(this.currentWhisperModel) ? this.currentWhisperModel : models[0] || null
+    const status = await checkWhisper(this.currentWhisperModel)
+    if (status.currentModel && status.currentModel !== this.currentWhisperModel) {
+      this.currentWhisperModel = status.currentModel
     }
+    return status
   }
 
   async downloadWhisperModel(
     model: WhisperModelName,
-    onProgress?: (status: string, percent?: number) => void
+    onProgress?: ProgressCallback
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      ensureDir(whisperModelsDir)
-
-      const modelInfo = WHISPER_MODELS[model]
-      const modelPath = this.getWhisperModelPath(model)
-
-      onProgress?.(`Downloading Whisper ${model} model (${modelInfo.size}MB)...`, 0)
-
-      await downloadFile(modelInfo.url, modelPath, (percent) => {
-        onProgress?.(`Downloading Whisper ${model} model...`, percent)
-      })
-
+    const result = await downloadWhisperModel(model, onProgress)
+    if (result.success) {
       this.currentWhisperModel = model
-      onProgress?.('Whisper model installed successfully', 100)
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message }
     }
+    return result
   }
 
   setWhisperModel(model: WhisperModelName): void {
-    if (this.isWhisperModelInstalled(model)) {
+    if (isWhisperModelInstalled(model)) {
       this.currentWhisperModel = model
     }
   }
 
-  // Transcribe audio using whisper.cpp main binary
-  // For now, we'll save PCM to a temp WAV file and use whisper CLI
-  // In the future, we could use a Node.js binding for better performance
-  async transcribe(pcmData: Float32Array, sampleRate: number = 16000): Promise<{ success: boolean; text?: string; error?: string }> {
-    try {
-      // Use current model, or fall back to any installed model
-      let modelToUse = this.currentWhisperModel
-      if (!this.isWhisperModelInstalled(modelToUse)) {
-        const installed = this.getInstalledWhisperModels()
-        if (installed.length === 0) {
-          return { success: false, error: 'No Whisper model installed. Install one from Settings.' }
-        }
-        modelToUse = installed[0]
-        this.currentWhisperModel = modelToUse
-      }
-
-      const modelPath = this.getWhisperModelPath(modelToUse)
-
-      // Voice input transcription is not yet fully implemented
-      // The model is downloaded, but we need whisper.cpp binary to run inference
-      // For now, provide a helpful message
-      return {
-        success: false,
-        error: `Voice input coming soon! Model "${modelToUse}" is ready, but whisper.cpp binary integration is pending.`
-      }
-    } catch (e: any) {
-      return { success: false, error: e.message }
+  async transcribe(
+    pcmData: Float32Array,
+    sampleRate: number = 16000
+  ): Promise<{ success: boolean; text?: string; error?: string }> {
+    const result = await transcribe(pcmData, sampleRate, this.currentWhisperModel)
+    // Update current model if it changed
+    const installed = getInstalledWhisperModels()
+    if (installed.length > 0 && !isWhisperModelInstalled(this.currentWhisperModel)) {
+      this.currentWhisperModel = installed[0]
     }
+    return result
   }
 
   // ==================== PIPER (TTS) ====================
 
-  getPiperBinaryPath(): string | null {
-    const binaryName = isWindows ? 'piper.exe' : 'piper'
-    // Piper extracts to a 'piper' subdirectory
-    const binaryPath = path.join(piperDir, 'piper', binaryName)
-    if (fs.existsSync(binaryPath)) return binaryPath
-    // Also check direct path
-    const directPath = path.join(piperDir, binaryName)
-    if (fs.existsSync(directPath)) return directPath
-    // Also check system PATH (e.g., /usr/bin/piper from package manager)
-    if (!isWindows) {
-      const systemPaths = ['/usr/bin/piper', '/usr/local/bin/piper']
-      for (const sysPath of systemPaths) {
-        if (fs.existsSync(sysPath)) return sysPath
-      }
-    }
-    return null
-  }
-
-  isPiperInstalled(): boolean {
-    return this.getPiperBinaryPath() !== null
-  }
-
-  getPiperVoicePath(voice: string): { model: string; config: string } | null {
-    const voiceInfo = PIPER_VOICES[voice as PiperVoiceName]
-    if (!voiceInfo) return null
-
-    const modelPath = path.join(piperVoicesDir, voiceInfo.file)
-    const configPath = path.join(piperVoicesDir, voiceInfo.config)
-
-    if (fs.existsSync(modelPath) && fs.existsSync(configPath)) {
-      return { model: modelPath, config: configPath }
-    }
-    return null
-  }
-
-  getInstalledPiperVoices(): string[] {
-    if (!fs.existsSync(piperVoicesDir)) return []
-    return (Object.keys(PIPER_VOICES) as PiperVoiceName[]).filter(voice =>
-      this.getPiperVoicePath(voice) !== null
-    )
-  }
-
   async checkTTS(): Promise<TTSStatus> {
-    const piperInstalled = this.isPiperInstalled()
-    const voices = this.getInstalledPiperVoices()
-
-    return {
-      installed: piperInstalled && voices.length > 0,
-      engine: piperInstalled ? 'piper' : null,
-      voices,
-      currentVoice: voices.includes(this.currentTTSVoice) ? this.currentTTSVoice : voices[0] || null
-    }
+    return checkTTS(this.currentTTSVoice)
   }
 
-  // Combined status check for both Whisper and TTS in a single call
   async getFullVoiceStatus(): Promise<{ whisper: WhisperStatus; tts: TTSStatus }> {
     const [whisper, tts] = await Promise.all([
       this.checkWhisper(),
@@ -501,93 +161,30 @@ class VoiceManager {
     return { whisper, tts }
   }
 
-  async installPiper(onProgress?: (status: string, percent?: number) => void): Promise<{ success: boolean; error?: string }> {
-    try {
-      ensureDir(piperDir)
-
-      const platform = process.platform as 'win32' | 'darwin' | 'linux'
-      const url = PIPER_BINARY_URLS[platform]
-      if (!url) {
-        return { success: false, error: `Unsupported platform: ${platform}` }
-      }
-
-      const ext = isWindows ? '.zip' : '.tar.gz'
-      const archivePath = path.join(piperDir, `piper${ext}`)
-
-      onProgress?.('Downloading Piper TTS...', 0)
-      await downloadFile(url, archivePath, (percent) => {
-        onProgress?.('Downloading Piper TTS...', percent)
-      })
-
-      onProgress?.('Extracting Piper TTS...', undefined)
-      await extractArchive(archivePath, piperDir)
-
-      // Cleanup archive
-      fs.unlinkSync(archivePath)
-
-      // Make binary executable on Unix
-      if (!isWindows) {
-        const binaryPath = this.getPiperBinaryPath()
-        if (binaryPath) {
-          fs.chmodSync(binaryPath, 0o755)
-        }
-      }
-
-      if (!this.isPiperInstalled()) {
-        return { success: false, error: 'Piper extraction failed' }
-      }
-
-      onProgress?.('Piper TTS installed successfully', 100)
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
+  async installPiper(onProgress?: ProgressCallback): Promise<{ success: boolean; error?: string }> {
+    return installPiper(onProgress)
   }
 
   async downloadPiperVoice(
     voice: PiperVoiceName,
-    onProgress?: (status: string, percent?: number) => void
+    onProgress?: ProgressCallback
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      ensureDir(piperVoicesDir)
-
-      const voiceInfo = PIPER_VOICES[voice]
-      const modelPath = path.join(piperVoicesDir, voiceInfo.file)
-      const configPath = path.join(piperVoicesDir, voiceInfo.config)
-
-      onProgress?.(`Downloading voice: ${voiceInfo.description}...`, 0)
-
-      // Download model file
-      await downloadFile(voiceInfo.url, modelPath, (percent) => {
-        onProgress?.(`Downloading voice model...`, Math.round(percent * 0.9))
-      })
-
-      // Download config file
-      await downloadFile(voiceInfo.configUrl, configPath, () => {
-        onProgress?.(`Downloading voice config...`, 95)
-      })
-
+    const result = await downloadPiperVoice(voice, onProgress)
+    if (result.success) {
       this.currentTTSVoice = voice
-      onProgress?.('Voice installed successfully', 100)
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message }
     }
+    return result
   }
 
   setTTSVoice(voice: string, engine?: 'piper' | 'xtts'): void {
     if (engine === 'xtts') {
-      // Set XTTS voice
       this.currentXTTSVoice = voice
       this.currentTTSEngine = 'xtts'
       this.savePersistedSettings()
-    } else {
-      // Support built-in, downloaded, and custom Piper voices
-      if (this.getAnyVoicePath(voice)) {
-        this.currentTTSVoice = voice
-        this.currentTTSEngine = 'piper'
-        this.savePersistedSettings()
-      }
+    } else if (getAnyVoicePath(voice)) {
+      this.currentTTSVoice = voice
+      this.currentTTSEngine = 'piper'
+      this.savePersistedSettings()
     }
   }
 
@@ -600,12 +197,9 @@ class VoiceManager {
   }
 
   setTTSSpeed(speed: number): void {
-    // Clamp between 0.5 and 2.0
     this.currentTTSSpeed = Math.max(0.5, Math.min(2.0, speed))
   }
 
-  // Speak text using the current TTS engine
-  // Returns the audio data as base64
   async speak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }> {
     logTTS('speak() called', {
       textLength: text.length,
@@ -628,299 +222,39 @@ class VoiceManager {
     }
 
     // Use Piper TTS
-    const piperPath = this.getPiperBinaryPath()
-    if (!piperPath) {
-      logTTS('ERROR: Piper not installed')
-      return { success: false, error: 'Piper not installed' }
-    }
-
-    // Use getAnyVoicePath to support built-in, downloaded, and custom voices
-    let voicePaths = this.getAnyVoicePath(this.currentTTSVoice)
-    if (!voicePaths) {
-      // Current voice not found - try to fall back to any available voice
-      // Use getInstalledVoices() to include downloaded and custom voices
-      const availableVoices = this.getInstalledVoices()
-      for (const voice of availableVoices) {
-        voicePaths = this.getAnyVoicePath(voice.key)
-        if (voicePaths) {
-          this.currentTTSVoice = voice.key // Update to the found voice
-          break
-        }
-      }
-      if (!voicePaths) {
-        // Only error if truly no voices available
-        return { success: false, error: 'No voices installed' }
-      }
-    }
-
-    try {
-      const tempDir = app.getPath('temp')
-      const outputPath = path.join(tempDir, `tts_${Date.now()}.wav`)
-
-      // Piper takes text from stdin and outputs WAV to file
-      // length_scale: <1 = faster, >1 = slower. Convert from our speed (>1 = faster)
-      const lengthScale = 1.0 / this.currentTTSSpeed
-      const args = [
-        '--model', voicePaths.model,
-        '--output_file', outputPath,
-        '--length_scale', lengthScale.toFixed(2)
-      ]
-
-      logTTS('Spawning Piper', {
-        piperPath,
-        args,
-        lengthScale,
-        model: voicePaths.model,
-        outputPath
-      })
-
-      return new Promise((resolve) => {
-        const proc = spawn(piperPath, args)
-        this.speakingProcess = proc
-
-        let stderrOutput = ''
-        proc.stderr?.on('data', (data) => {
-          stderrOutput += data.toString()
-        })
-
-        logTTS('Writing text to Piper stdin', { textBytes: Buffer.byteLength(text, 'utf8') })
-        proc.stdin.write(text)
-        proc.stdin.end()
-
-        proc.on('close', (code) => {
-          this.speakingProcess = null
-          logTTS('Piper process closed', { code, stderrOutput: stderrOutput.substring(0, 500) })
-
-          if (code === 0 && fs.existsSync(outputPath)) {
-            // Read file and return as base64
-            const audioBuffer = fs.readFileSync(outputPath)
-            const audioData = audioBuffer.toString('base64')
-            logTTS('Audio generated successfully', {
-              audioSize: audioBuffer.length,
-              base64Length: audioData.length
-            })
-            // Clean up temp file
-            fs.unlinkSync(outputPath)
-            resolve({ success: true, audioData })
-          } else {
-            logTTS('ERROR: Piper failed', { code, stderrOutput })
-            resolve({ success: false, error: `Piper exited with code ${code}` })
-          }
-        })
-
-        proc.on('error', (err) => {
-          this.speakingProcess = null
-          logTTS('ERROR: Piper spawn error', { error: err.message })
-          resolve({ success: false, error: err.message })
-        })
-      })
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
+    return piperSpeak(text, this.currentTTSVoice, this.currentTTSSpeed)
   }
 
   stopSpeaking(): void {
-    // Stop Piper process if running
-    if (this.speakingProcess) {
-      this.speakingProcess.kill()
-      this.speakingProcess = null
-    }
-    // Also stop XTTS if it's speaking
+    piperStopSpeaking()
     xttsManager.stopSpeaking()
   }
 
-  // ==================== VOICE CATALOG (Browse & Download) ====================
-
-  private voicesCatalogCache: Record<string, VoiceCatalogEntry> | null = null
-  private catalogCacheTime: number = 0
-  private readonly CATALOG_CACHE_DURATION = 1000 * 60 * 10 // 10 minutes
+  // ==================== VOICE CATALOG ====================
 
   async fetchVoicesCatalog(forceRefresh: boolean = false): Promise<VoiceCatalogEntry[]> {
-    try {
-      // Use cache if fresh (unless force refresh requested)
-      const now = Date.now()
-      if (!forceRefresh && this.voicesCatalogCache && (now - this.catalogCacheTime) < this.CATALOG_CACHE_DURATION) {
-        return Object.values(this.voicesCatalogCache)
-      }
-
-      // Fetch from Hugging Face
-      const catalog = await fetchJson<Record<string, VoiceCatalogEntry>>(VOICES_CATALOG_URL)
-      this.voicesCatalogCache = catalog
-      this.catalogCacheTime = now
-
-      return Object.values(catalog)
-    } catch (e: any) {
-      console.error('Failed to fetch voice catalog:', e)
-      // Return cached data if available, even if stale
-      if (this.voicesCatalogCache) {
-        return Object.values(this.voicesCatalogCache)
-      }
-      throw e
-    }
+    return fetchVoicesCatalog(forceRefresh)
   }
 
   async downloadVoiceFromCatalog(
     voiceKey: string,
-    onProgress?: (status: string, percent?: number) => void
+    onProgress?: ProgressCallback
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Fetch catalog if not cached
-      if (!this.voicesCatalogCache) {
-        await this.fetchVoicesCatalog()
-      }
-
-      const voiceEntry = this.voicesCatalogCache?.[voiceKey]
-      if (!voiceEntry) {
-        return { success: false, error: `Voice "${voiceKey}" not found in catalog` }
-      }
-
-      ensureDir(piperVoicesDir)
-
-      // Find .onnx and .onnx.json files
-      const files = Object.entries(voiceEntry.files)
-      const onnxFile = files.find(([p]) => p.endsWith('.onnx') && !p.endsWith('.onnx.json'))
-      const configFile = files.find(([p]) => p.endsWith('.onnx.json'))
-
-      if (!onnxFile || !configFile) {
-        return { success: false, error: 'Voice files not found in catalog entry' }
-      }
-
-      const [onnxPath, onnxMeta] = onnxFile
-      const [configPath] = configFile
-
-      // Construct file names and URLs
-      const onnxFileName = path.basename(onnxPath)
-      const configFileName = path.basename(configPath)
-      const onnxUrl = `${HF_BASE_URL}/${onnxPath}`
-      const configUrl = `${HF_BASE_URL}/${configPath}`
-
-      const localOnnxPath = path.join(piperVoicesDir, onnxFileName)
-      const localConfigPath = path.join(piperVoicesDir, configFileName)
-
-      // Download model file (larger, show progress)
-      const sizeMB = Math.round(onnxMeta.size_bytes / (1024 * 1024))
-      onProgress?.(`Downloading ${voiceEntry.name} (${sizeMB}MB)...`, 0)
-
-      await downloadFile(onnxUrl, localOnnxPath, (percent) => {
-        onProgress?.(`Downloading voice model...`, Math.round(percent * 0.9))
-      })
-
-      // Download config file
-      onProgress?.('Downloading config...', 95)
-      await downloadFile(configUrl, localConfigPath)
-
-      onProgress?.('Voice installed successfully', 100)
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
+    return downloadVoiceFromCatalog(voiceKey, onProgress)
   }
 
   getInstalledVoices(): InstalledVoice[] {
-    const installed: InstalledVoice[] = []
-
-    // Get built-in voices (from PIPER_VOICES constant)
-    for (const [key, info] of Object.entries(PIPER_VOICES)) {
-      const voicePath = this.getPiperVoicePath(key)
-      if (voicePath) {
-        installed.push({
-          key,
-          displayName: info.description,
-          source: 'builtin',
-          quality: 'medium',
-          language: key.startsWith('en_US') ? 'English (US)' : 'English (UK)'
-        })
-      }
-    }
-
-    // Scan voices directory for downloaded voices not in PIPER_VOICES
-    if (fs.existsSync(piperVoicesDir)) {
-      const files = fs.readdirSync(piperVoicesDir)
-      const onnxFiles = files.filter(f => f.endsWith('.onnx') && !f.endsWith('.onnx.json'))
-
-      for (const onnxFile of onnxFiles) {
-        const key = onnxFile.replace('.onnx', '')
-        // Skip if already in built-in
-        if (key in PIPER_VOICES) continue
-
-        const configFile = `${key}.onnx.json`
-        if (files.includes(configFile)) {
-          // Parse language from key (e.g., "de_DE-thorsten-medium" -> "German")
-          const langCode = key.split('-')[0]
-          const quality = key.split('-').pop() || 'medium'
-
-          installed.push({
-            key,
-            displayName: key.replace(/-/g, ' ').replace(/_/g, ' '),
-            source: 'downloaded',
-            quality,
-            language: langCode
-          })
-        }
-      }
-    }
-
-    // Scan custom voices directory
-    if (fs.existsSync(customVoicesDir)) {
-      const metadataPath = path.join(customVoicesDir, 'custom-voices.json')
-      let metadata: CustomVoiceMetadata = { voices: {} }
-      if (fs.existsSync(metadataPath)) {
-        try {
-          metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
-        } catch { /* ignore */ }
-      }
-
-      const files = fs.readdirSync(customVoicesDir)
-      const onnxFiles = files.filter(f => f.endsWith('.onnx') && !f.endsWith('.onnx.json'))
-
-      for (const onnxFile of onnxFiles) {
-        const key = `custom:${onnxFile.replace('.onnx', '')}`
-        const configFile = onnxFile.replace('.onnx', '.onnx.json')
-        if (files.includes(configFile)) {
-          const baseKey = onnxFile.replace('.onnx', '')
-          installed.push({
-            key,
-            displayName: metadata.voices[baseKey]?.displayName || baseKey,
-            source: 'custom'
-          })
-        }
-      }
-    }
-
-    return installed
+    return getInstalledVoices()
   }
 
-  // Get voice path for any installed voice (built-in, downloaded, or custom)
   getAnyVoicePath(voiceKey: string): { model: string; config: string } | null {
-    // Check if it's a custom voice
-    if (voiceKey.startsWith('custom:')) {
-      const baseKey = voiceKey.replace('custom:', '')
-      const modelPath = path.join(customVoicesDir, `${baseKey}.onnx`)
-      const configPath = path.join(customVoicesDir, `${baseKey}.onnx.json`)
-      if (fs.existsSync(modelPath) && fs.existsSync(configPath)) {
-        return { model: modelPath, config: configPath }
-      }
-      return null
-    }
-
-    // Check built-in voices first
-    const builtinPath = this.getPiperVoicePath(voiceKey)
-    if (builtinPath) return builtinPath
-
-    // Check downloaded voices
-    const modelPath = path.join(piperVoicesDir, `${voiceKey}.onnx`)
-    const configPath = path.join(piperVoicesDir, `${voiceKey}.onnx.json`)
-    if (fs.existsSync(modelPath) && fs.existsSync(configPath)) {
-      return { model: modelPath, config: configPath }
-    }
-
-    return null
+    return getAnyVoicePath(voiceKey)
   }
 
   // ==================== CUSTOM VOICE IMPORT ====================
 
   getCustomVoicesDir(): string {
-    return customVoicesDir
+    return getCustomVoicesDir()
   }
 
   async importCustomVoiceFiles(
@@ -928,82 +262,16 @@ class VoiceManager {
     configPath: string,
     displayName?: string
   ): Promise<{ success: boolean; voiceKey?: string; error?: string }> {
-    try {
-      ensureDir(customVoicesDir)
-
-      // Validate files exist
-      if (!fs.existsSync(onnxPath)) {
-        return { success: false, error: 'ONNX model file not found' }
-      }
-      if (!fs.existsSync(configPath)) {
-        return { success: false, error: 'Config file not found' }
-      }
-
-      // Get base name from onnx file
-      const baseName = path.basename(onnxPath, '.onnx')
-      const destOnnx = path.join(customVoicesDir, `${baseName}.onnx`)
-      const destConfig = path.join(customVoicesDir, `${baseName}.onnx.json`)
-
-      // Copy files
-      fs.copyFileSync(onnxPath, destOnnx)
-      fs.copyFileSync(configPath, destConfig)
-
-      // Update metadata
-      const metadataPath = path.join(customVoicesDir, 'custom-voices.json')
-      let metadata: CustomVoiceMetadata = { voices: {} }
-      if (fs.existsSync(metadataPath)) {
-        try {
-          metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
-        } catch { /* ignore */ }
-      }
-
-      metadata.voices[baseName] = {
-        displayName: displayName || baseName,
-        addedAt: Date.now()
-      }
-
-      fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
-
-      return { success: true, voiceKey: `custom:${baseName}` }
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
+    return importCustomVoiceFiles(onnxPath, configPath, displayName)
   }
 
   removeCustomVoice(voiceKey: string): { success: boolean; error?: string } {
-    try {
-      if (!voiceKey.startsWith('custom:')) {
-        return { success: false, error: 'Can only remove custom voices' }
-      }
-
-      const baseName = voiceKey.replace('custom:', '')
-      const onnxPath = path.join(customVoicesDir, `${baseName}.onnx`)
-      const configPath = path.join(customVoicesDir, `${baseName}.onnx.json`)
-
-      if (fs.existsSync(onnxPath)) fs.unlinkSync(onnxPath)
-      if (fs.existsSync(configPath)) fs.unlinkSync(configPath)
-
-      // Update metadata
-      const metadataPath = path.join(customVoicesDir, 'custom-voices.json')
-      if (fs.existsSync(metadataPath)) {
-        try {
-          const metadata: CustomVoiceMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
-          delete metadata.voices[baseName]
-          fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
-        } catch { /* ignore */ }
-      }
-
-      return { success: true }
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
+    return removeCustomVoice(voiceKey)
   }
 
   // ==================== SETTINGS ====================
 
   getSettings(): VoiceSettings {
-    // Return the active voice based on current engine
-    // When engine is XTTS, return the XTTS voice; otherwise return Piper voice
     const activeVoice = this.currentTTSEngine === 'xtts' && this.currentXTTSVoice
       ? this.currentXTTSVoice
       : this.currentTTSVoice
@@ -1013,7 +281,7 @@ class VoiceManager {
       ttsEngine: this.currentTTSEngine,
       ttsVoice: activeVoice,
       ttsSpeed: this.currentTTSSpeed,
-      microphoneId: null, // Retrieved from renderer
+      microphoneId: null,
       readBehavior: 'immediate',
       skipOnNew: false,
       xttsTemperature: this.xttsTemperature,
@@ -1031,13 +299,11 @@ class VoiceManager {
       this.setTTSEngine(settings.ttsEngine)
     }
     if (settings.ttsVoice) {
-      // Pass engine so XTTS voices get set to currentXTTSVoice
       this.setTTSVoice(settings.ttsVoice, settings.ttsEngine)
     }
     if (settings.ttsSpeed !== undefined) {
       this.setTTSSpeed(settings.ttsSpeed)
     }
-    // XTTS quality settings
     if (settings.xttsTemperature !== undefined) {
       this.xttsTemperature = Math.max(0.1, Math.min(1.0, settings.xttsTemperature))
     }
@@ -1050,10 +316,42 @@ class VoiceManager {
     if (settings.xttsRepetitionPenalty !== undefined) {
       this.xttsRepetitionPenalty = Math.max(1.0, Math.min(10.0, settings.xttsRepetitionPenalty))
     }
-    // Persist settings to disk
     this.savePersistedSettings()
+  }
+
+  // ==================== LEGACY API COMPATIBILITY ====================
+  // These methods delegate to the discovery module but are kept for API compatibility
+
+  getWhisperModelPath(model: WhisperModelName): string {
+    const { getWhisperModelPath } = require('./voice/whisper-stt.js')
+    return getWhisperModelPath(model)
+  }
+
+  isWhisperModelInstalled(model: WhisperModelName): boolean {
+    return isWhisperModelInstalled(model)
+  }
+
+  getInstalledWhisperModels(): WhisperModelName[] {
+    return getInstalledWhisperModels()
+  }
+
+  getPiperBinaryPath(): string | null {
+    const { getPiperBinaryPath } = require('./voice/piper-tts.js')
+    return getPiperBinaryPath()
+  }
+
+  isPiperInstalled(): boolean {
+    return isPiperInstalled()
+  }
+
+  getPiperVoicePath(voice: string): { model: string; config: string } | null {
+    const { getPiperVoicePath } = require('./voice/voice-discovery.js')
+    return getPiperVoicePath(voice)
+  }
+
+  getInstalledPiperVoices(): string[] {
+    return getInstalledPiperVoices()
   }
 }
 
-// Export singleton instance
 export const voiceManager = new VoiceManager()

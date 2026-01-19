@@ -1,52 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useVoice } from '../contexts/VoiceContext'
-import { getSampleUrl } from '../utils/voiceUtils'
-
-interface VoiceCatalogEntry {
-  key: string
-  name: string
-  language: {
-    code: string
-    name_english: string
-    country_english: string
-  }
-  quality: string
-  num_speakers: number
-  files: Record<string, { size_bytes: number }>
-}
-
-interface InstalledVoice {
-  key: string
-  displayName: string
-  source: 'builtin' | 'downloaded' | 'custom'
-  quality?: string
-  language?: string
-}
-
-interface XTTSVoice {
-  id: string
-  name: string
-  language: string
-  createdAt: number
-}
-
-interface XTTSSampleVoice {
-  id: string
-  name: string
-  language: string
-  file: string
-  installed: boolean
-}
-
-interface XTTSLanguage {
-  code: string
-  name: string
-}
-
-// Extended HTMLAudioElement with custom stop function for clean cleanup
-interface ExtendedAudioElement extends HTMLAudioElement {
-  _stop?: () => void
-}
+import { useVoice } from '../contexts/VoiceContext.js'
+import { getSampleUrl } from '../utils/voiceUtils.js'
+import { VoiceFilters } from './VoiceFilters.js'
+import { VoiceList } from './VoiceList.js'
+import { XttsCreateDialog } from './XttsCreateDialog.js'
+import type {
+  VoiceCatalogEntry,
+  InstalledVoice,
+  XTTSVoice,
+  XTTSSampleVoice,
+  XTTSLanguage,
+  ExtendedAudioElement,
+  CombinedVoice,
+  ModelFilter
+} from './VoiceBrowserTypes.js'
 
 interface VoiceBrowserModalProps {
   isOpen: boolean
@@ -54,7 +21,7 @@ interface VoiceBrowserModalProps {
   onVoiceSelect?: (voiceKey: string, engine: 'piper' | 'xtts') => void
 }
 
-export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrowserModalProps) {
+export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrowserModalProps): React.ReactElement | null {
   const { volume: voiceVolume } = useVoice()
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([])
   const [installed, setInstalled] = useState<InstalledVoice[]>([])
@@ -65,37 +32,35 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [modelFilter, setModelFilter] = useState<'all' | 'piper' | 'xtts'>('all')
+  const [modelFilter, setModelFilter] = useState<ModelFilter>('all')
   const [languageFilter, setLanguageFilter] = useState('all')
   const [qualityFilter, setQualityFilter] = useState('all')
   const [downloading, setDownloading] = useState<string | null>(null)
   const [playingPreview, setPlayingPreview] = useState<string | null>(null)
   const [previewAudio, setPreviewAudio] = useState<ExtendedAudioElement | null>(null)
-
-  // XTTS voice creation state
   const [showCreateXtts, setShowCreateXtts] = useState(false)
-  const [createXttsName, setCreateXttsName] = useState('')
-  const [createXttsLanguage, setCreateXttsLanguage] = useState('en')
-  const [createXttsAudioPath, setCreateXttsAudioPath] = useState('')
-  const [creatingXtts, setCreatingXtts] = useState(false)
-  const [installingXtts, setInstallingXtts] = useState(false)
 
-  // Audio cropping state
-  const [mediaPath, setMediaPath] = useState('')
-  const [mediaDuration, setMediaDuration] = useState(0)
-  const [cropStart, setCropStart] = useState(0)
-  const [cropEnd, setCropEnd] = useState(0)
-  const [extracting, setExtracting] = useState(false)
-  const [cropPreviewAudio, setCropPreviewAudio] = useState<HTMLAudioElement | null>(null)
-
-  // Load catalog and installed voices
   useEffect(() => {
     if (isOpen) {
       loadData()
     }
   }, [isOpen])
 
-  const loadData = async (forceRefresh: boolean = false) => {
+  // Stop preview when modal closes
+  useEffect(() => {
+    if (!isOpen && previewAudio) {
+      if (previewAudio._stop) {
+        previewAudio._stop()
+      } else {
+        previewAudio.pause()
+        previewAudio.src = ''
+      }
+      setPreviewAudio(null)
+      setPlayingPreview(null)
+    }
+  }, [isOpen])
+
+  async function loadData(forceRefresh: boolean = false): Promise<void> {
     setLoading(true)
     setError(null)
 
@@ -121,34 +86,18 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     }
   }
 
-  // Get unique languages from catalog
   const languages = useMemo(() => {
     const langSet = new Set<string>()
     catalog.forEach((v) => langSet.add(v.language.name_english))
-    // Add XTTS languages
     xttsLanguages.forEach((l) => langSet.add(l.name))
     return Array.from(langSet).sort()
   }, [catalog, xttsLanguages])
 
-  // Get unique qualities
   const qualities = useMemo(() => {
     const qualSet = new Set<string>()
     catalog.forEach((v) => qualSet.add(v.quality))
     return Array.from(qualSet).sort()
   }, [catalog])
-
-  // Combined voice list
-  interface CombinedVoice {
-    key: string
-    name: string
-    language: string
-    quality: string
-    size: number
-    engine: 'piper' | 'xtts'
-    installed: boolean
-    isDownloading: boolean
-    createdAt?: number
-  }
 
   const filteredVoices = useMemo(() => {
     const combined: CombinedVoice[] = []
@@ -175,9 +124,8 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       })
     }
 
-    // Add XTTS voices (user-created clones and downloadable samples)
+    // Add XTTS voices
     if (modelFilter === 'all' || modelFilter === 'xtts') {
-      // User-created XTTS voices
       xttsVoices.forEach((v) => {
         const langName = xttsLanguages.find((l) => l.code === v.language)?.name || v.language
         combined.push({
@@ -193,9 +141,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
         })
       })
 
-      // XTTS sample voices from Hugging Face
       xttsSampleVoices.forEach((v) => {
-        // Skip if already shown as user voice (was downloaded)
         if (xttsVoices.some((uv) => uv.id === v.id)) return
         const langName = xttsLanguages.find((l) => l.code === v.language)?.name || v.language
         combined.push({
@@ -211,28 +157,23 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       })
     }
 
-    // Apply filters
     return combined
       .filter((v) => {
-        // Search filter
         if (searchQuery) {
           const q = searchQuery.toLowerCase()
           if (!v.name.toLowerCase().includes(q) && !v.key.toLowerCase().includes(q) && !v.language.toLowerCase().includes(q)) {
             return false
           }
         }
-        // Language filter
         if (languageFilter !== 'all' && !v.language.toLowerCase().includes(languageFilter.toLowerCase())) {
           return false
         }
-        // Quality filter
         if (qualityFilter !== 'all' && v.quality !== qualityFilter) {
           return false
         }
         return true
       })
       .sort((a, b) => {
-        // Sort installed first, then by engine, then by language, then by name
         if (a.installed !== b.installed) return a.installed ? -1 : 1
         if (a.engine !== b.engine) return a.engine === 'xtts' ? -1 : 1
         if (a.language !== b.language) return a.language.localeCompare(b.language)
@@ -240,15 +181,12 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       })
   }, [catalog, installed, xttsVoices, xttsSampleVoices, xttsLanguages, searchQuery, modelFilter, languageFilter, qualityFilter, downloading])
 
-  // Download a voice (Piper or XTTS sample)
-  const handleDownload = async (voiceKey: string, engine: 'piper' | 'xtts') => {
+  async function handleDownload(voiceKey: string, engine: 'piper' | 'xtts'): Promise<void> {
     setDownloading(voiceKey)
     try {
       if (engine === 'xtts') {
-        // Download XTTS sample voice
         const result = await window.electronAPI.xttsDownloadSampleVoice(voiceKey)
         if (result.success) {
-          // Reload XTTS voices and samples
           const [voices, samples] = await Promise.all([
             window.electronAPI.xttsGetVoices(),
             window.electronAPI.xttsGetSampleVoices()
@@ -259,7 +197,6 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
           setError(result.error || 'Download failed')
         }
       } else {
-        // Download Piper voice
         const result = await window.electronAPI.voiceDownloadFromCatalog(voiceKey)
         if (result.success) {
           const installedData = await window.electronAPI.voiceGetInstalled()
@@ -274,8 +211,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     setDownloading(null)
   }
 
-  // Import custom Piper voice
-  const handleImportCustom = async () => {
+  async function handleImportCustom(): Promise<void> {
     const result = await window.electronAPI.voiceImportCustom()
     if (result.success) {
       const installedData = await window.electronAPI.voiceGetInstalled()
@@ -285,24 +221,20 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     }
   }
 
-  // Open custom voices folder
-  const handleOpenFolder = () => {
+  function handleOpenFolder(): void {
     window.electronAPI.voiceOpenCustomFolder()
   }
 
-  // Select a voice
-  const handleSelect = (voice: CombinedVoice) => {
+  function handleSelect(voice: CombinedVoice): void {
     if (voice.installed) {
       onVoiceSelect?.(voice.key, voice.engine)
       onClose()
     }
   }
 
-  // Play audio preview
-  const handlePreview = (voiceKey: string, e: React.MouseEvent) => {
+  function handlePreview(voiceKey: string, e: React.MouseEvent): void {
     e.stopPropagation()
 
-    // Stop current preview if playing
     if (previewAudio) {
       if (previewAudio._stop) {
         previewAudio._stop()
@@ -313,7 +245,6 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       setPreviewAudio(null)
     }
 
-    // If clicking the same voice, just stop
     if (playingPreview === voiceKey) {
       setPlayingPreview(null)
       return
@@ -334,7 +265,6 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       setPreviewAudio(null)
     }
     audio.onerror = () => {
-      // Don't show error if we intentionally stopped (setting src = '' triggers error)
       if (!intentionallyStopped) {
         setPlayingPreview(null)
         setPreviewAudio(null)
@@ -342,7 +272,6 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
       }
     }
 
-    // Mark as intentionally stopped when we clean up
     audio._stop = () => {
       intentionallyStopped = true
       audio.pause()
@@ -354,22 +283,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     setPlayingPreview(voiceKey)
   }
 
-  // Stop preview when modal closes
-  React.useEffect(() => {
-    if (!isOpen && previewAudio) {
-      if (previewAudio._stop) {
-        previewAudio._stop()
-      } else {
-        previewAudio.pause()
-        previewAudio.src = ''
-      }
-      setPreviewAudio(null)
-      setPlayingPreview(null)
-    }
-  }, [isOpen])
-
-  // Delete an XTTS voice
-  const handleDeleteXtts = async (voiceId: string, e: React.MouseEvent) => {
+  async function handleDeleteXtts(voiceId: string, e: React.MouseEvent): Promise<void> {
     e.stopPropagation()
     if (!confirm('Delete this voice clone?')) return
     const result = await window.electronAPI.xttsDeleteVoice(voiceId)
@@ -380,9 +294,7 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     }
   }
 
-  // Install XTTS
-  const handleInstallXtts = async () => {
-    setInstallingXtts(true)
+  async function handleInstallXtts(): Promise<void> {
     setError(null)
     try {
       const result = await window.electronAPI.xttsInstall()
@@ -394,121 +306,22 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'XTTS installation failed')
     }
-    setInstallingXtts(false)
   }
 
-  // Select audio for XTTS
-  const handleSelectAudio = async () => {
-    const result = await window.electronAPI.xttsSelectAudio()
-    if (result.success && result.path) {
-      setCreateXttsAudioPath(result.path)
-    }
-  }
-
-  // Format seconds to MM:SS
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
-  // Select media file for cropping
-  const handleSelectMedia = async () => {
-    const result = await window.electronAPI.xttsSelectMediaFile()
-    if (result.success && result.path) {
-      setMediaPath(result.path)
-      setMediaDuration(result.duration || 0)
-      setCropStart(0)
-      setCropEnd(Math.min(result.duration || 30, 30)) // Default to first 30 seconds
-    }
-  }
-
-  // Preview the cropped section
-  const handleCropPreview = async () => {
-    if (!mediaPath || cropStart >= cropEnd) return
-
-    // Stop existing preview
-    if (cropPreviewAudio) {
-      cropPreviewAudio.pause()
-      cropPreviewAudio.src = ''
-      setCropPreviewAudio(null)
-    }
-
-    // Extract clip to temp file
-    setExtracting(true)
-    try {
-      const result = await window.electronAPI.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
-      if (result.success && result.dataUrl) {
-        // Play the extracted clip using data URL
-        const audio = new Audio(result.dataUrl)
-        audio.volume = voiceVolume
-        audio.onended = () => {
-          setCropPreviewAudio(null)
-        }
-        audio.play()
-        setCropPreviewAudio(audio)
-      } else {
-        setError(result.error || 'Failed to extract audio clip')
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to extract audio clip')
-    }
-    setExtracting(false)
-  }
-
-  // Stop crop preview
-  const handleStopCropPreview = () => {
-    if (cropPreviewAudio) {
-      cropPreviewAudio.pause()
-      cropPreviewAudio.src = ''
-      setCropPreviewAudio(null)
-    }
-  }
-
-  // Use cropped audio as reference
-  const handleUseCroppedAudio = async () => {
-    if (!mediaPath || cropStart >= cropEnd) return
-
-    setExtracting(true)
-    try {
-      const result = await window.electronAPI.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
-      if (result.success && result.outputPath) {
-        setCreateXttsAudioPath(result.outputPath)
-        // Clear media cropping state
-        setMediaPath('')
-        setMediaDuration(0)
-        setCropStart(0)
-        setCropEnd(0)
-      } else {
-        setError(result.error || 'Failed to extract audio clip')
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to extract audio clip')
-    }
-    setExtracting(false)
-  }
-
-  // Create XTTS voice
-  const handleCreateXtts = async () => {
-    if (!createXttsName.trim() || !createXttsAudioPath) return
-    setCreatingXtts(true)
+  async function handleCreateXttsVoice(name: string, language: string, audioPath: string): Promise<void> {
     setError(null)
     try {
-      const result = await window.electronAPI.xttsCreateVoice(createXttsAudioPath, createXttsName.trim(), createXttsLanguage)
+      const result = await window.electronAPI.xttsCreateVoice(audioPath, name, language)
       if (result.success) {
         const voices = await window.electronAPI.xttsGetVoices()
         setXttsVoices(voices)
         setShowCreateXtts(false)
-        setCreateXttsName('')
-        setCreateXttsAudioPath('')
-        setCreateXttsLanguage('en')
       } else {
         setError(result.error || 'Failed to create voice')
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create voice')
     }
-    setCreatingXtts(false)
   }
 
   if (!isOpen) return null
@@ -523,45 +336,20 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
           </button>
         </div>
 
-        <div className="voice-browser-filters">
-          <input
-            type="text"
-            className="voice-search"
-            placeholder="Search voices..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <select className="voice-filter" value={modelFilter} onChange={(e) => setModelFilter(e.target.value as 'all' | 'piper' | 'xtts')}>
-            <option value="all">All Models</option>
-            <option value="piper">Piper</option>
-            <option value="xtts">XTTS Clones</option>
-          </select>
-          <select className="voice-filter" value={languageFilter} onChange={(e) => setLanguageFilter(e.target.value)}>
-            <option value="all">All Languages</option>
-            {languages.map((lang) => (
-              <option key={lang} value={lang}>
-                {lang}
-              </option>
-            ))}
-          </select>
-          <select className="voice-filter" value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)}>
-            <option value="all">All Quality</option>
-            {qualities.map((q) => (
-              <option key={q} value={q}>
-                {q}
-              </option>
-            ))}
-            <option value="clone">clone</option>
-          </select>
-          <button
-            className="btn-secondary voice-refresh-btn"
-            onClick={() => loadData(true)}
-            disabled={loading}
-            title="Refresh catalog from server"
-          >
-            Refresh
-          </button>
-        </div>
+        <VoiceFilters
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          modelFilter={modelFilter}
+          onModelFilterChange={setModelFilter}
+          languageFilter={languageFilter}
+          onLanguageFilterChange={setLanguageFilter}
+          qualityFilter={qualityFilter}
+          onQualityFilterChange={setQualityFilter}
+          languages={languages}
+          qualities={qualities}
+          onRefresh={() => loadData(true)}
+          loading={loading}
+        />
 
         <div className="voice-browser-content">
           {loading ? (
@@ -574,74 +362,14 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
               </button>
             </div>
           ) : (
-            <>
-              <div className="voice-browser-header">
-                <span className="voice-col-model">Model</span>
-                <span className="voice-col-name">Name</span>
-                <span className="voice-col-lang">Language</span>
-                <span className="voice-col-quality">Quality</span>
-                <span className="voice-col-size">Size</span>
-                <span className="voice-col-preview">Preview</span>
-                <span className="voice-col-action"></span>
-              </div>
-              <div className="voice-browser-list">
-                {filteredVoices.map((voice) => (
-                  <div
-                    key={`${voice.engine}-${voice.key}`}
-                    className={`voice-browser-row ${voice.installed ? 'installed' : ''}`}
-                    onClick={() => handleSelect(voice)}
-                    title={voice.key}
-                  >
-                    <span className="voice-col-model">
-                      <span className={`voice-model-badge ${voice.engine}`}>{voice.engine === 'piper' ? 'Piper' : 'XTTS'}</span>
-                    </span>
-                    <span className="voice-col-name">{voice.name}</span>
-                    <span className="voice-col-lang">{voice.language}</span>
-                    <span className="voice-col-quality">{voice.quality}</span>
-                    <span className="voice-col-size">{voice.size > 0 ? `${voice.size} MB` : '--'}</span>
-                    <span className="voice-col-preview">
-                      {voice.engine === 'piper' && getSampleUrl(voice.key) && (
-                        <button
-                          className={`voice-preview-btn ${playingPreview === voice.key ? 'playing' : ''}`}
-                          onClick={(e) => handlePreview(voice.key, e)}
-                          title={playingPreview === voice.key ? 'Stop preview' : 'Play preview'}
-                        >
-                          {playingPreview === voice.key ? '⏹' : '▶'}
-                        </button>
-                      )}
-                    </span>
-                    <span className="voice-col-action">
-                      {voice.installed ? (
-                        voice.engine === 'xtts' ? (
-                          <button
-                            className="voice-delete-btn"
-                            onClick={(e) => handleDeleteXtts(voice.key, e)}
-                            title="Delete voice clone"
-                          >
-                            Delete
-                          </button>
-                        ) : (
-                          <span className="voice-installed-badge">Installed</span>
-                        )
-                      ) : voice.isDownloading ? (
-                        <span className="voice-downloading">Downloading...</span>
-                      ) : (
-                        <button
-                          className="voice-download-btn"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDownload(voice.key, voice.engine)
-                          }}
-                        >
-                          Download
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                ))}
-                {filteredVoices.length === 0 && <div className="voice-browser-empty">No voices match your filters</div>}
-              </div>
-            </>
+            <VoiceList
+              voices={filteredVoices}
+              playingPreview={playingPreview}
+              onSelect={handleSelect}
+              onPreview={handlePreview}
+              onDownload={handleDownload}
+              onDeleteXtts={handleDeleteXtts}
+            />
           )}
         </div>
 
@@ -660,173 +388,16 @@ export function VoiceBrowserModal({ isOpen, onClose, onVoiceSelect }: VoiceBrows
           <div className="voice-browser-stats">{!loading && `Showing ${filteredVoices.length} voices`}</div>
         </div>
 
-        {/* XTTS Voice Creation Dialog */}
         {showCreateXtts && (
-          <div className="voice-create-dialog">
-            <div className="voice-create-content">
-              <div className="voice-create-header">
-                <h3>Create XTTS Voice Clone</h3>
-                <button className="modal-close" onClick={() => setShowCreateXtts(false)}>&times;</button>
-              </div>
-              {!xttsStatus.installed ? (
-                <div className="xtts-install-prompt">
-                  <p>XTTS requires Python and the TTS library to be installed.</p>
-                  {xttsStatus.error && <p className="error-text selectable">{xttsStatus.error}</p>}
-                  <button className="btn-primary" onClick={handleInstallXtts} disabled={installingXtts}>
-                    {installingXtts ? 'Installing...' : 'Install XTTS Dependencies'}
-                  </button>
-                  <p className="note-text">This will install the TTS library via pip (~2GB)</p>
-                  <button className="btn-secondary" onClick={() => setShowCreateXtts(false)} style={{ marginTop: 12 }}>
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="form-group">
-                    <label>Voice Name</label>
-                    <input
-                      type="text"
-                      value={createXttsName}
-                      onChange={(e) => setCreateXttsName(e.target.value)}
-                      placeholder="My Voice Clone"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Language</label>
-                    <select value={createXttsLanguage} onChange={(e) => setCreateXttsLanguage(e.target.value)}>
-                      {xttsLanguages.map((lang) => (
-                        <option key={lang.code} value={lang.code}>
-                          {lang.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Audio source section */}
-                  <div className="form-group">
-                    <label>Reference Audio (6-30 seconds recommended)</label>
-
-                    {/* Option 1: Direct audio file */}
-                    <div className="audio-select-row">
-                      <input type="text" value={createXttsAudioPath} readOnly placeholder="Select an audio file..." />
-                      <button className="btn-secondary" onClick={handleSelectAudio}>
-                        Browse...
-                      </button>
-                    </div>
-
-                    {/* Option 2: Import from video/audio and crop */}
-                    <div className="audio-crop-section">
-                      <div className="audio-crop-header">
-                        <span className="note-text">Or extract from video/audio:</span>
-                        <button className="btn-secondary btn-small" onClick={handleSelectMedia}>
-                          Import Media...
-                        </button>
-                      </div>
-
-                      {mediaPath && (
-                        <div className="audio-crop-controls">
-                          <div className="crop-file-info">
-                            <span className="crop-filename">{mediaPath.split('/').pop()}</span>
-                            <span className="crop-duration">Duration: {formatTime(mediaDuration)}</span>
-                          </div>
-
-                          {/* Visual range slider for clip selection */}
-                          <div className="crop-range-container">
-                            <div className="crop-range-labels">
-                              <span>{formatTime(cropStart)}</span>
-                              <span className="crop-length-badge">{formatTime(cropEnd - cropStart)}</span>
-                              <span>{formatTime(cropEnd)}</span>
-                            </div>
-                            <div className="crop-range-track">
-                              <div
-                                className="crop-range-selection"
-                                style={{
-                                  left: `${(cropStart / mediaDuration) * 100}%`,
-                                  width: `${((cropEnd - cropStart) / mediaDuration) * 100}%`
-                                }}
-                              />
-                              <input
-                                type="range"
-                                className="crop-range-input crop-range-start"
-                                min={0}
-                                max={mediaDuration}
-                                step={0.1}
-                                value={cropStart}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value)
-                                  if (val < cropEnd - 3) setCropStart(Math.max(0, val))
-                                }}
-                              />
-                              <input
-                                type="range"
-                                className="crop-range-input crop-range-end"
-                                min={0}
-                                max={mediaDuration}
-                                step={0.1}
-                                value={cropEnd}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value)
-                                  if (val > cropStart + 3) setCropEnd(Math.min(mediaDuration, val))
-                                }}
-                              />
-                            </div>
-                            <div className="crop-range-ticks">
-                              <span>0:00</span>
-                              <span>{formatTime(mediaDuration / 2)}</span>
-                              <span>{formatTime(mediaDuration)}</span>
-                            </div>
-                          </div>
-
-                          <div className="crop-actions">
-                            {cropPreviewAudio ? (
-                              <button className="btn-secondary btn-small" onClick={handleStopCropPreview}>
-                                ⏹ Stop
-                              </button>
-                            ) : (
-                              <button
-                                className="btn-secondary btn-small"
-                                onClick={handleCropPreview}
-                                disabled={extracting || cropStart >= cropEnd}
-                              >
-                                {extracting ? 'Extracting...' : '▶ Preview'}
-                              </button>
-                            )}
-                            <button
-                              className="btn-primary btn-small"
-                              onClick={handleUseCroppedAudio}
-                              disabled={extracting || cropStart >= cropEnd}
-                            >
-                              Use This Clip
-                            </button>
-                            <button
-                              className="btn-secondary btn-small"
-                              onClick={() => { setMediaPath(''); setMediaDuration(0); }}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="note-text">Use a clean recording of the voice you want to clone</p>
-                  </div>
-                  <div className="dialog-actions">
-                    <button className="btn-secondary" onClick={() => setShowCreateXtts(false)}>
-                      Cancel
-                    </button>
-                    <button
-                      className="btn-primary"
-                      onClick={handleCreateXtts}
-                      disabled={creatingXtts || !createXttsName.trim() || !createXttsAudioPath}
-                    >
-                      {creatingXtts ? 'Creating...' : 'Create Voice'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <XttsCreateDialog
+            xttsStatus={xttsStatus}
+            xttsLanguages={xttsLanguages}
+            voiceVolume={voiceVolume}
+            onClose={() => setShowCreateXtts(false)}
+            onInstallXtts={handleInstallXtts}
+            onCreateVoice={handleCreateXttsVoice}
+            onError={setError}
+          />
         )}
       </div>
     </div>

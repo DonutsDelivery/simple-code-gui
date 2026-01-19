@@ -178,10 +178,13 @@ function App() {
 
               let sessionIdToRestore: string | undefined = savedTab.sessionId
 
-              if (!sessionIdToRestore && effectiveBackendForTab === 'claude') {
+              // Always discover sessions to find the most recent one
+              // This handles cases where session changed after save (e.g., user did /clear)
+              if (effectiveBackendForTab === 'claude' || effectiveBackendForTab === 'opencode') {
                 let sessionsForProject = sessionsCache.get(savedTab.projectPath)
                 if (!sessionsForProject) {
-                  const list = await window.electronAPI.discoverSessions(savedTab.projectPath, effectiveBackendForTab === 'opencode' ? 'opencode' : 'claude')
+                  const backendForDiscovery = effectiveBackendForTab === 'opencode' ? 'opencode' : 'claude'
+                  const list = await window.electronAPI.discoverSessions(savedTab.projectPath, backendForDiscovery)
                   sessionsForProject = { list, nextIndex: 0 }
                   sessionsCache.set(savedTab.projectPath, sessionsForProject)
                 }
@@ -190,6 +193,7 @@ function App() {
                 for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
                   const candidate = list[i]
                   if (!usedSessionIds.has(candidate.sessionId)) {
+                    // Use discovered session (most recent not already in use)
                     sessionIdToRestore = candidate.sessionId
                     titleToRestore = `${projectName} - ${candidate.slug}`
                     sessionsForProject.nextIndex = i + 1
