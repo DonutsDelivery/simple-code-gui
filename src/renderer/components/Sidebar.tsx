@@ -235,6 +235,16 @@ export function Sidebar({
     setTimeout(() => categoryEditInputRef.current?.select(), 0)
   }
 
+  const handleOpenCategoryAsProject = async (categoryName: string) => {
+    const metaPath = await window.electronAPI.getCategoryMetaPath(categoryName)
+    onOpenSession(metaPath)
+  }
+
+  const handleOpenAllProjects = async () => {
+    const metaPath = await window.electronAPI.getMetaProjectsPath()
+    onOpenSession(metaPath)
+  }
+
   const handleStartCategoryRename = (
     category: ReturnType<typeof useWorkspaceStore.getState>['categories'][0]
   ) => {
@@ -533,6 +543,23 @@ export function Sidebar({
             </button>
           </div>
           <div className="projects-list">
+            {/* All Projects meta-entry at top */}
+            <div
+              className="meta-project-header"
+              role="button"
+              tabIndex={0}
+              onClick={handleOpenAllProjects}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handleOpenAllProjects()
+                }
+              }}
+            >
+              <span className="meta-project-icon">⚡</span>
+              <span className="meta-project-name">All Projects</span>
+            </div>
+
             {sortedCategories.map((category) => {
               const categoryProjects = projectsByCategory[category.id] || []
               const { background: gradient, textDark } = getCategoryGradient(categoryProjects)
@@ -559,6 +586,7 @@ export function Sidebar({
                     draggedCategory={draggedCategory}
                     draggedProject={draggedProject}
                     onToggleCollapse={() => toggleCategoryCollapse(category.id)}
+                    onOpenAsProject={() => handleOpenCategoryAsProject(category.name)}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
@@ -821,6 +849,23 @@ export function Sidebar({
         </button>
       </div>
       <div className="projects-list">
+        {/* All Projects meta-entry at top */}
+        <div
+          className="meta-project-header"
+          role="button"
+          tabIndex={0}
+          onClick={handleOpenAllProjects}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleOpenAllProjects()
+            }
+          }}
+        >
+          <span className="meta-project-icon">⚡</span>
+          <span className="meta-project-name">All Projects</span>
+        </div>
+
         {sortedCategories.map((category) => {
           const categoryProjects = projectsByCategory[category.id] || []
           const { background: gradient, textDark } = getCategoryGradient(categoryProjects)
@@ -847,6 +892,7 @@ export function Sidebar({
                 draggedCategory={draggedCategory}
                 draggedProject={draggedProject}
                 onToggleCollapse={() => toggleCategoryCollapse(category.id)}
+                onOpenAsProject={() => handleOpenCategoryAsProject(category.name)}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   e.stopPropagation()

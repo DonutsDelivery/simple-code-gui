@@ -26,6 +26,7 @@ if (app.isPackaged) {
 import { PtyManager } from './pty-manager'
 import { SessionStore } from './session-store'
 import { discoverSessions } from './session-discovery'
+import { getMetaProjectsPath } from './meta-project-sync'
 import { ApiServerManager, PromptResult } from './api-server'
 import { getEnhancedPathWithPortable, setPortableBinDirs } from './platform'
 import { getPortableBinDirs } from './portable-deps'
@@ -398,6 +399,13 @@ registerGsdHandlers()
 // Workspace management
 ipcMain.handle('workspace:get', () => sessionStore.getWorkspace())
 ipcMain.handle('workspace:save', (_, workspace) => sessionStore.saveWorkspace(workspace))
+ipcMain.handle('workspace:getMetaProjectsPath', () => getMetaProjectsPath())
+ipcMain.handle('workspace:getCategoryMetaPath', (_, categoryName: string) => {
+  const basePath = getMetaProjectsPath()
+  // Sanitize category name for filesystem
+  const safeName = categoryName.replace(/[/\\:*?"<>|]/g, '_')
+  return join(basePath, safeName)
+})
 ipcMain.handle('workspace:addProject', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openDirectory'],

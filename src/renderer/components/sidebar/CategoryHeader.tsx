@@ -14,6 +14,7 @@ interface CategoryHeaderProps {
   draggedCategory: string | null
   draggedProject: string | null
   onToggleCollapse: () => void
+  onOpenAsProject: () => void
   onContextMenu: (e: React.MouseEvent) => void
   onDragStart: (e: React.DragEvent) => void
   onDragEnd: () => void
@@ -40,6 +41,7 @@ export const CategoryHeader = React.memo(function CategoryHeader({
   draggedCategory,
   draggedProject,
   onToggleCollapse,
+  onOpenAsProject,
   onContextMenu,
   onDragStart,
   onDragEnd,
@@ -78,18 +80,34 @@ export const CategoryHeader = React.memo(function CategoryHeader({
           onCategoryDrop(e)
         }
       }}
-      onClick={onToggleCollapse}
+      onClick={onOpenAsProject}
       onKeyDown={(e) => {
         if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
-          onToggleCollapse()
+          onOpenAsProject()
         }
       }}
       onContextMenu={onContextMenu}
       aria-expanded={!isCollapsed}
       aria-label={`${category.name} category`}
     >
-      <span className="expand-arrow" aria-hidden="true">
+      <span
+        className="expand-arrow"
+        aria-hidden="true"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleCollapse()
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggleCollapse()
+          }
+        }}
+      >
         {isCollapsed ? '▶' : '▼'}
       </span>
       {isEditing ? (

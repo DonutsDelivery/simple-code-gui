@@ -124,6 +124,8 @@ export interface ElectronAPI {
   getWorkspace: () => Promise<Workspace>
   saveWorkspace: (workspace: Workspace) => Promise<void>
   addProject: () => Promise<string | null>
+  getMetaProjectsPath: () => Promise<string>
+  getCategoryMetaPath: (categoryName: string) => Promise<string>
 
   // Sessions
   discoverSessions: (projectPath: string, backend?: 'claude' | 'opencode') => Promise<Session[]>
@@ -398,6 +400,8 @@ const api: ElectronAPI = {
   getWorkspace: () => ipcRenderer.invoke('workspace:get'),
   saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace),
   addProject: () => ipcRenderer.invoke('workspace:addProject'),
+  getMetaProjectsPath: () => ipcRenderer.invoke('workspace:getMetaProjectsPath'),
+  getCategoryMetaPath: (categoryName) => ipcRenderer.invoke('workspace:getCategoryMetaPath', categoryName),
 
   // Session discovery
   discoverSessions: (projectPath, backend) => ipcRenderer.invoke('sessions:discover', projectPath, backend),

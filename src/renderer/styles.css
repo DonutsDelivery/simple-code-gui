@@ -646,6 +646,51 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.category-header .expand-arrow {
+  cursor: pointer;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.category-header .expand-arrow:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.category-header.text-dark .expand-arrow:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Meta-project header (All Projects) */
+.meta-project-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  margin: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.meta-project-header:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.meta-project-icon {
+  font-size: 14px;
+}
+
+.meta-project-name {
+  flex: 1;
+}
+
 .category-projects {
   overflow: visible;
   animation: slideDown 0.2s ease;
