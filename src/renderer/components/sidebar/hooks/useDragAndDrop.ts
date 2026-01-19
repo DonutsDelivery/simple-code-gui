@@ -53,6 +53,8 @@ export function useDragAndDrop({
     setDraggedProject(projectPath)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', projectPath)
+    // Also set custom type so TiledTerminalView can detect sidebar project drags
+    e.dataTransfer.setData('application/x-sidebar-project', projectPath)
   }, [])
 
   const handleProjectDragEnd = useCallback(() => {

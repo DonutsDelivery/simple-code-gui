@@ -17,7 +17,8 @@ import {
   MIN_SIZE,
 } from './tiled-layout-utils.js'
 
-export type { TileLayout } from './tiled-layout-utils.js'
+export type { TileLayout, DropZone } from './tiled-layout-utils.js'
+export { splitTile, addTileToLayout } from './tiled-layout-utils.js'
 
 interface Project {
   path: string
@@ -33,6 +34,7 @@ interface TiledTerminalViewProps {
   onFocusTab: (id: string) => void
   layout: TileLayout[]
   onLayoutChange: (layout: TileLayout[]) => void
+  onOpenSessionAtPosition?: (projectPath: string, dropZone: DropZone | null) => void
 }
 
 export function TiledTerminalView({
@@ -42,7 +44,8 @@ export function TiledTerminalView({
   onCloseTab,
   onFocusTab,
   layout,
-  onLayoutChange
+  onLayoutChange,
+  onOpenSessionAtPosition
 }: TiledTerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const containerSizeRef = useRef({ width: 1920, height: 1080 })
@@ -70,6 +73,7 @@ export function TiledTerminalView({
   }, [])
 
   const [draggedTile, setDraggedTile] = useState<string | null>(null)
+  const [draggedSidebarProject, setDraggedSidebarProject] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [currentDropZone, setCurrentDropZone] = useState<DropZone | null>(null)
   const [tileResizing, setTileResizing] = useState<{
@@ -223,7 +227,30 @@ export function TiledTerminalView({
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
 
-    if (!draggedTile || !containerRef.current) return
+    if (!containerRef.current) return
+
+    // Check if this is a sidebar project drag
+    const isSidebarProjectDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
+
+    if (isSidebarProjectDrag) {
+      // Get the project path from dataTransfer (may be empty during dragover due to security)
+      // We'll get the actual path on drop
+      if (!draggedSidebarProject) {
+        setDraggedSidebarProject('pending') // Mark that a sidebar project drag is in progress
+      }
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 100
+      const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+
+      // For sidebar project drags, we compute drop zones without excluding any tile
+      const zone = computeDropZone(effectiveLayout, null, mouseX, mouseY)
+      setCurrentDropZone(zone)
+      setDropTarget(zone?.targetTileId || null)
+      return
+    }
+
+    if (!draggedTile) return
 
     const rect = containerRef.current.getBoundingClientRect()
     const mouseX = ((e.clientX - rect.left) / rect.width) * 100
@@ -232,7 +259,7 @@ export function TiledTerminalView({
     const zone = computeDropZone(effectiveLayout, draggedTile, mouseX, mouseY)
     setCurrentDropZone(zone)
     setDropTarget(zone?.targetTileId || null)
-  }, [draggedTile, effectiveLayout])
+  }, [draggedTile, draggedSidebarProject, effectiveLayout])
 
   const handleContainerDragLeave = (e: React.DragEvent) => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -241,6 +268,7 @@ export function TiledTerminalView({
       if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
         setCurrentDropZone(null)
         setDropTarget(null)
+        setDraggedSidebarProject(null)
       }
     }
   }
@@ -273,6 +301,18 @@ export function TiledTerminalView({
 
   const handleContainerDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
+
+    // Check if this is a sidebar project drop
+    const sidebarProjectPath = e.dataTransfer.getData('application/x-sidebar-project')
+    if (sidebarProjectPath && onOpenSessionAtPosition) {
+      // Open the project at the drop position
+      onOpenSessionAtPosition(sidebarProjectPath, currentDropZone)
+      setDraggedSidebarProject(null)
+      setDropTarget(null)
+      setCurrentDropZone(null)
+      return
+    }
+
     const sourceTileId = e.dataTransfer.getData('text/plain')
 
     if (sourceTileId && currentDropZone) {
@@ -284,10 +324,11 @@ export function TiledTerminalView({
     setDraggedTile(null)
     setDropTarget(null)
     setCurrentDropZone(null)
-  }, [currentDropZone, effectiveLayout, tabs, onLayoutChange, applyDropZone])
+  }, [currentDropZone, effectiveLayout, tabs, onLayoutChange, applyDropZone, onOpenSessionAtPosition])
 
   const handleDragEnd = () => {
     setDraggedTile(null)
+    setDraggedSidebarProject(null)
     setDropTarget(null)
     setCurrentDropZone(null)
   }
@@ -549,15 +590,31 @@ export function TiledTerminalView({
                 </ErrorBoundary>
               </div>
             </div>
-            {draggedTile && draggedTile !== tile.id && (
+            {((draggedTile && draggedTile !== tile.id) || draggedSidebarProject) && (
               <div
                 className="tile-drop-overlay"
                 style={{
                   position: 'absolute', inset: 0, zIndex: 50,
-                  background: isDropTarget ? 'rgba(var(--accent-rgb), 0.3)' : 'transparent',
+                  background: isDropTarget
+                    ? (draggedSidebarProject ? 'rgba(34, 197, 94, 0.2)' : 'rgba(var(--accent-rgb), 0.3)')
+                    : 'transparent',
                   borderRadius: 'var(--radius-sm)', pointerEvents: 'auto'
                 }}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(tile.id) }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  // Compute the drop zone based on cursor position within this tile
+                  if (!containerRef.current) {
+                    setDropTarget(tile.id)
+                    return
+                  }
+                  const rect = containerRef.current.getBoundingClientRect()
+                  const mouseX = ((e.clientX - rect.left) / rect.width) * 100
+                  const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+                  const zone = computeDropZone(effectiveLayout, draggedTile, mouseX, mouseY)
+                  setCurrentDropZone(zone)
+                  setDropTarget(zone?.targetTileId || tile.id)
+                }}
                 onDragLeave={(e) => { e.preventDefault(); setDropTarget(null) }}
                 onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleContainerDrop(e) }}
               />
@@ -598,7 +655,7 @@ export function TiledTerminalView({
         )
       })}
 
-      {draggedTile && currentDropZone && (
+      {(draggedTile || draggedSidebarProject) && currentDropZone && (
         <div
           className="drop-zone-overlay"
           style={{
@@ -607,7 +664,11 @@ export function TiledTerminalView({
             top: `calc(${currentDropZone.bounds.y}% + ${GAP}px)`,
             width: `calc(${currentDropZone.bounds.width}% - ${GAP}px)`,
             height: `calc(${currentDropZone.bounds.height}% - ${GAP}px)`,
-            background: currentDropZone.type === 'swap' ? 'rgba(var(--accent-rgb), 0.3)' : 'rgba(59, 130, 246, 0.35)',
+            background: draggedSidebarProject
+              ? 'rgba(34, 197, 94, 0.35)' // Green for new project
+              : currentDropZone.type === 'swap'
+                ? 'rgba(var(--accent-rgb), 0.3)'
+                : 'rgba(59, 130, 246, 0.35)',
             border: '2px dashed var(--accent)',
             borderRadius: 'var(--radius-sm)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -619,7 +680,9 @@ export function TiledTerminalView({
             textShadow: '0 1px 3px rgba(0,0,0,0.6)', background: 'rgba(0,0,0,0.5)',
             padding: '4px 10px', borderRadius: '4px'
           }}>
-            {dropZoneLabels[currentDropZone.type]}
+            {draggedSidebarProject
+              ? (currentDropZone.type === 'swap' ? 'Open Here' : `Open ${dropZoneLabels[currentDropZone.type].replace('Add ', '')}`)
+              : dropZoneLabels[currentDropZone.type]}
           </span>
         </div>
       )}

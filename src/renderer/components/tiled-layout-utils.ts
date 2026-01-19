@@ -361,11 +361,12 @@ export function addTileToLayout(
 
 export function computeDropZone(
   layout: TileLayout[],
-  draggedTileId: string,
+  draggedTileId: string | null,
   mouseX: number,
   mouseY: number
 ): DropZone | null {
-  const EDGE_THRESHOLD = 0.2
+  // 30% edge threshold makes it easier to trigger split zones
+  const EDGE_THRESHOLD = 0.30
 
   const targetTile = layout.find(t =>
     t.id !== draggedTileId &&
@@ -381,18 +382,30 @@ export function computeDropZone(
   let type: DropZoneType = 'swap'
   let bounds = { x: targetTile.x, y: targetTile.y, width: targetTile.width, height: targetTile.height }
 
-  if (relY < EDGE_THRESHOLD) {
-    type = 'split-top'
-    bounds = { x: targetTile.x, y: targetTile.y, width: targetTile.width, height: targetTile.height / 2 }
-  } else if (relY > 1 - EDGE_THRESHOLD) {
-    type = 'split-bottom'
-    bounds = { x: targetTile.x, y: targetTile.y + targetTile.height / 2, width: targetTile.width, height: targetTile.height / 2 }
-  } else if (relX < EDGE_THRESHOLD) {
-    type = 'split-left'
-    bounds = { x: targetTile.x, y: targetTile.y, width: targetTile.width / 2, height: targetTile.height }
-  } else if (relX > 1 - EDGE_THRESHOLD) {
-    type = 'split-right'
-    bounds = { x: targetTile.x + targetTile.width / 2, y: targetTile.y, width: targetTile.width / 2, height: targetTile.height }
+  // Calculate distances to each edge (0 = at edge, 0.5 = at center)
+  const distToLeft = relX
+  const distToRight = 1 - relX
+  const distToTop = relY
+  const distToBottom = 1 - relY
+
+  // Find the closest edge
+  const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom)
+
+  // Only trigger split zone if we're within the threshold
+  if (minDist < EDGE_THRESHOLD) {
+    if (minDist === distToTop) {
+      type = 'split-top'
+      bounds = { x: targetTile.x, y: targetTile.y, width: targetTile.width, height: targetTile.height / 2 }
+    } else if (minDist === distToBottom) {
+      type = 'split-bottom'
+      bounds = { x: targetTile.x, y: targetTile.y + targetTile.height / 2, width: targetTile.width, height: targetTile.height / 2 }
+    } else if (minDist === distToLeft) {
+      type = 'split-left'
+      bounds = { x: targetTile.x, y: targetTile.y, width: targetTile.width / 2, height: targetTile.height }
+    } else if (minDist === distToRight) {
+      type = 'split-right'
+      bounds = { x: targetTile.x + targetTile.width / 2, y: targetTile.y, width: targetTile.width / 2, height: targetTile.height }
+    }
   }
 
   return { type, targetTileId: targetTile.id, bounds }

@@ -3,10 +3,12 @@ import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
 import { Terminal, clearTerminalBuffer, cleanupOrphanedBuffers } from './components/Terminal'
-import { TiledTerminalView, TileLayout } from './components/TiledTerminalView'
+import { TiledTerminalView, TileLayout, DropZone, splitTile, addTileToLayout } from './components/TiledTerminalView'
 import { SettingsModal } from './components/SettingsModal'
 import { MakeProjectModal } from './components/MakeProjectModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { MobileApp } from './components/mobile/MobileApp'
+import { HostQRDisplay } from './components/HostQRDisplay'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
@@ -86,17 +88,7 @@ function App() {
 
   // Early return for mobile/web context without Electron
   if (!isElectronAvailable) {
-    return (
-      <div className="app">
-        <div className="empty-state">
-          <h2>Mobile App</h2>
-          <p>Connect to your desktop host to start using Claude Terminal.</p>
-          <p className="install-note">
-            Scan the QR code shown on your desktop app to connect.
-          </p>
-        </div>
-      </div>
-    )
+    return <MobileApp />
   }
 
   // Apply per-project voice settings when active tab changes
@@ -123,6 +115,7 @@ function App() {
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+  const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
   const terminalContainerRef = useRef<HTMLDivElement>(null)
@@ -485,6 +478,73 @@ function App() {
     }
   }, [addTab, openTabs, projects, setActiveTab, settings?.backend, settings])
 
+  // Handler for opening a project session at a specific position in the tiled layout
+  const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null) => {
+    // Get project and determine effective backend
+    const project = projects.find(p => p.path === projectPath)
+    const effectiveBackend = project?.backend && project.backend !== 'default'
+      ? project.backend
+      : settings?.backend || 'claude'
+
+    // Discover the most recent session for this project
+    let sessionId: string | undefined
+    let slug: string | undefined
+    try {
+      const sessions = await window.electronAPI.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
+      if (sessions.length > 0) {
+        const [mostRecent] = sessions
+        // Check if already open
+        const existingTab = openTabs.find(tab => tab.sessionId === mostRecent.sessionId)
+        if (existingTab) {
+          setActiveTab(existingTab.id)
+          return
+        }
+        sessionId = mostRecent.sessionId
+        slug = mostRecent.slug
+      }
+    } catch (e) {
+      console.error('Failed to discover sessions for project:', e)
+    }
+
+    const projectName = projectPath.split(/[/\\]/).pop() || projectPath
+    const title = slug ? `${projectName} - ${slug}` : `${projectName} - New`
+
+    try {
+      await window.electronAPI.ttsInstallInstructions?.(projectPath)
+      const ptyId = await window.electronAPI.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
+
+      // Calculate the new layout based on the drop zone
+      let newLayout: TileLayout[]
+      if (dropZone && dropZone.type !== 'swap') {
+        // Split the target tile to position the new tab
+        const direction = dropZone.type.replace('split-', '') as 'top' | 'bottom' | 'left' | 'right'
+        newLayout = splitTile(tileLayout, dropZone.targetTileId, ptyId, direction)
+      } else if (dropZone && dropZone.type === 'swap') {
+        // For swap, just add to the layout normally (will be positioned later)
+        newLayout = addTileToLayout(tileLayout, ptyId, dropZone.targetTileId, 1920, 1080)
+      } else {
+        // No drop zone, add to layout normally
+        newLayout = addTileToLayout(tileLayout, ptyId, null, 1920, 1080)
+      }
+
+      // Set the layout first, then add the tab
+      setTileLayout(newLayout)
+
+      addTab({
+        id: ptyId,
+        projectPath,
+        sessionId,
+        title,
+        ptyId,
+        backend: effectiveBackend
+      })
+    } catch (e: any) {
+      console.error('Failed to spawn PTY:', e)
+      const errorMsg = e?.message || String(e)
+      alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
+    }
+  }, [addTab, openTabs, projects, setActiveTab, settings?.backend, tileLayout, setTileLayout])
+
   const handleCloseTab = useCallback((tabId: string) => {
     window.electronAPI.killPty(tabId)
     clearTerminalBuffer(tabId)
@@ -538,6 +598,7 @@ function App() {
         onCollapsedChange={setSidebarCollapsed}
         isMobileOpen={mobileDrawerOpen}
         onMobileClose={closeMobileDrawer}
+        onOpenMobileConnect={() => setMobileConnectOpen(true)}
       />
       <div className="main-content">
         {claudeInstalled === false || gitBashInstalled === false ? (
@@ -645,6 +706,7 @@ function App() {
                   onFocusTab={setLastFocusedTabId}
                   layout={tileLayout}
                   onLayoutChange={setTileLayout}
+                  onOpenSessionAtPosition={handleOpenSessionAtPosition}
                 />
               </ErrorBoundary>
             )}
@@ -669,6 +731,21 @@ function App() {
         onClose={closeMakeProject}
         onProjectCreated={handleProjectCreated}
       />
+
+      {/* Mobile Connect Modal (QR Code) */}
+      {mobileConnectOpen && (
+        <div className="modal-overlay" onClick={() => setMobileConnectOpen(false)}>
+          <div className="modal mobile-connect-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Connect Mobile Device</h3>
+              <button className="modal-close" onClick={() => setMobileConnectOpen(false)}>×</button>
+            </div>
+            <div className="modal-content">
+              <HostQRDisplay port={38470} />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Version indicator */}
