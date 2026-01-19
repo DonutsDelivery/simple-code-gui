@@ -600,31 +600,15 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     if (closedTasks.length === 0) return
 
     // Optimistic update: immediately remove all closed tasks from UI
-    const previousTasks = [...tasks]
     const updatedTasks = tasks.filter(t => t.status !== 'closed')
     setTasks(updatedTasks)
     tasksCache.set(projectPath, updatedTasks)
 
-    try {
-      // Delete all closed tasks in parallel
-      const results = await Promise.all(
-        closedTasks.map(task => window.electronAPI.beadsDelete(projectPath, task.id))
-      )
-
-      // Check if any failed
-      const failures = results.filter(r => !r.success)
-      if (failures.length > 0) {
-        // Revert and reload to get accurate state
-        setTasks(previousTasks)
-        tasksCache.set(projectPath, previousTasks)
-        await loadTasks()
-      }
-    } catch (e) {
-      // Revert on error
-      setTasks(previousTasks)
-      tasksCache.set(projectPath, previousTasks)
-      setError(String(e))
-    }
+    // Delete all closed tasks in parallel - don't revert on failure
+    // The file watcher will sync the correct state
+    await Promise.allSettled(
+      closedTasks.map(task => window.electronAPI.beadsDelete(projectPath, task.id))
+    )
   }
 
   const handleResizeStart = (e: React.MouseEvent) => {
