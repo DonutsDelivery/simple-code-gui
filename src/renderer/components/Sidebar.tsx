@@ -5,6 +5,8 @@ import { GSDStatus } from './GSDStatus.js'
 import { ExtensionBrowser } from './ExtensionBrowser.js'
 import { ClaudeMdEditor } from './ClaudeMdEditor.js'
 import { useVoice } from '../contexts/VoiceContext.js'
+import { useIsMobile } from '../hooks/useIsMobile.js'
+import { useSwipeGesture } from '../hooks/useSwipeGesture.js'
 import {
   SidebarProps,
   getCategoryGradient,
@@ -39,7 +41,11 @@ export function Sidebar({
   collapsed,
   onWidthChange,
   onCollapsedChange,
+  isMobileOpen,
+  onMobileClose,
 }: SidebarProps): React.ReactElement | null {
+  // Mobile detection
+  const { isMobile } = useIsMobile()
   const { volume, setVolume, speed, setSpeed, skipOnNew, setSkipOnNew, voiceOutputEnabled } =
     useVoice()
 
@@ -124,6 +130,12 @@ export function Sidebar({
   const sidebarRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const categoryEditInputRef = useRef<HTMLInputElement>(null)
+
+  // Swipe to close on mobile (swipe left to close drawer)
+  useSwipeGesture(sidebarRef, {
+    onSwipeLeft: isMobile && isMobileOpen ? onMobileClose : undefined,
+    threshold: 50,
+  })
 
   // Computed values
   const focusedTabId = lastFocusedTabId || activeTabId
@@ -459,7 +471,8 @@ export function Sidebar({
     ]
   )
 
-  if (collapsed) {
+  // On mobile, don't render collapsed state - use drawer instead
+  if (collapsed && !isMobile) {
     return (
       <div className="sidebar collapsed" ref={sidebarRef}>
         <button
@@ -471,6 +484,318 @@ export function Sidebar({
           ▶
         </button>
       </div>
+    )
+  }
+
+  // Handle backdrop click on mobile
+  const handleBackdropClick = () => {
+    if (isMobile && onMobileClose) {
+      onMobileClose()
+    }
+  }
+
+  // Mobile drawer classes
+  const sidebarClasses = isMobile
+    ? `sidebar ${isMobileOpen ? 'mobile-drawer-open' : ''}`
+    : 'sidebar'
+
+  // Mobile: render backdrop + drawer
+  if (isMobile) {
+    return (
+      <>
+        {/* Backdrop overlay */}
+        <div
+          className={`mobile-drawer-backdrop ${isMobileOpen ? 'visible' : ''}`}
+          onClick={handleBackdropClick}
+        />
+
+        {/* Sidebar drawer */}
+        <div className={sidebarClasses} ref={sidebarRef}>
+          {/* Close button for mobile drawer */}
+          <button
+            className="mobile-drawer-close"
+            onClick={onMobileClose}
+            title="Close sidebar"
+            aria-label="Close sidebar"
+          >
+            ✕
+          </button>
+
+          <div className="sidebar-header">
+            Projects
+            <button
+              className="add-category-btn"
+              onClick={handleAddCategory}
+              title="Add category"
+              aria-label="Add category"
+            >
+              +
+            </button>
+          </div>
+          <div className="projects-list">
+            {sortedCategories.map((category) => {
+              const categoryProjects = projectsByCategory[category.id] || []
+              const { background: gradient, textDark } = getCategoryGradient(categoryProjects)
+
+              return (
+                <div
+                  key={category.id}
+                  className={`category-container ${dropTarget?.type === 'category' && dropTarget.id === category.id && !dropTarget.position ? 'drop-target' : ''}`}
+                >
+                  {dropTarget?.type === 'category' &&
+                    dropTarget.id === category.id &&
+                    dropTarget.position === 'before' && <div className="drop-indicator" />}
+
+                  <CategoryHeader
+                    category={category}
+                    projectCount={categoryProjects.length}
+                    gradient={gradient}
+                    textDark={textDark}
+                    isCollapsed={category.collapsed || false}
+                    isDragging={draggedCategory === category.id}
+                    isEditing={editingCategory?.id === category.id}
+                    editingName={editingCategory?.id === category.id ? editingCategory.name : ''}
+                    editInputRef={categoryEditInputRef}
+                    draggedCategory={draggedCategory}
+                    draggedProject={draggedProject}
+                    onToggleCollapse={() => toggleCategoryCollapse(category.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setCategoryContextMenu({ x: e.clientX, y: e.clientY, category })
+                    }}
+                    onDragStart={(e) => handleCategoryDragStart(e, category.id)}
+                    onDragEnd={handleCategoryDragEnd}
+                    onCategoryHeaderDragOver={(e, position) =>
+                      handleCategoryHeaderDragOver(e, category.id, position)
+                    }
+                    onCategoryDragOver={(e) => handleCategoryDragOver(e, category.id)}
+                    onCategoryHeaderDrop={(e) => handleCategoryHeaderDrop(e, category.id)}
+                    onCategoryDrop={(e) => handleCategoryDrop(e, category.id)}
+                    onStartRename={() => handleStartCategoryRename(category)}
+                    onEditingChange={(name) => setEditingCategory({ id: category.id, name })}
+                    onRenameSubmit={handleCategoryRenameSubmit}
+                    onRenameKeyDown={handleCategoryRenameKeyDown}
+                  />
+
+                  {dropTarget?.type === 'category' &&
+                    dropTarget.id === category.id &&
+                    dropTarget.position === 'after' && <div className="drop-indicator" />}
+
+                  {!category.collapsed && (
+                    <div className="category-projects">
+                      <VirtualizedProjectList
+                        projects={categoryProjects}
+                        expandedProject={expandedProject}
+                        sessions={sessions}
+                        renderItem={renderProjectItem}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {(projectsByCategory['uncategorized']?.length > 0 || sortedCategories.length > 0) && (
+              <div
+                className={`uncategorized-section ${dropTarget?.type === 'uncategorized' ? 'drop-target' : ''}`}
+                onDragOver={(e) => handleCategoryDragOver(e, null)}
+                onDrop={(e) => handleCategoryDrop(e, null)}
+              >
+                {sortedCategories.length > 0 && projectsByCategory['uncategorized']?.length > 0 && (
+                  <div className="uncategorized-header">Uncategorized</div>
+                )}
+                {projectsByCategory['uncategorized'] && (
+                  <VirtualizedProjectList
+                    projects={projectsByCategory['uncategorized']}
+                    expandedProject={expandedProject}
+                    sessions={sessions}
+                    renderItem={renderProjectItem}
+                  />
+                )}
+              </div>
+            )}
+
+            {projects.length === 0 && (
+              <div className="empty-projects">
+                No projects yet.
+                <br />
+                Click + to add one.
+              </div>
+            )}
+            <div className="project-add-buttons">
+              <button
+                className="add-project-btn"
+                onClick={onOpenMakeProject}
+                title="Create new project from scratch"
+              >
+                + make
+              </button>
+              <button className="add-project-btn" onClick={onAddProject} title="Add existing project folder">
+                + add
+              </button>
+            </div>
+          </div>
+
+          <BeadsPanel
+            projectPath={beadsProjectPath}
+            isExpanded={beadsExpanded}
+            onToggle={() => setBeadsExpanded(!beadsExpanded)}
+            onStartTaskInNewTab={(prompt) => {
+              if (beadsProjectPath) onOpenSession(beadsProjectPath, undefined, undefined, prompt, true)
+            }}
+            onSendToCurrentTab={(prompt) => {
+              if (focusedTabPtyId) {
+                window.electronAPI.writePty(focusedTabPtyId, prompt)
+                setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+              }
+            }}
+            currentTabPtyId={focusedTabPtyId}
+          />
+
+          <GSDStatus
+            projectPath={beadsProjectPath}
+            onCommand={(cmd) => {
+              if (focusedTabPtyId) {
+                window.electronAPI.writePty(focusedTabPtyId, cmd)
+                setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+              }
+            }}
+          />
+
+          {voiceOutputEnabled && (
+            <VoiceOptionsPanel
+              volume={volume}
+              speed={speed}
+              skipOnNew={skipOnNew}
+              onVolumeChange={setVolume}
+              onSpeedChange={setSpeed}
+              onSkipOnNewChange={setSkipOnNew}
+            />
+          )}
+
+          <SidebarActions
+            activeTabId={activeTabId}
+            focusedProject={focusedProject}
+            apiStatus={focusedProjectPath ? apiStatus[focusedProjectPath] : undefined}
+            isDebugMode={isDebugMode}
+            onOpenSettings={onOpenSettings}
+            onOpenProjectSettings={async (project) => {
+              await handleOpenProjectSettings(project)
+              setContextMenu(null)
+            }}
+            onToggleApi={async (project) => {
+              await handleToggleApi(project)
+              setContextMenu(null)
+            }}
+          />
+
+          {/* Context Menu */}
+          {contextMenu && (
+            <ProjectContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              project={contextMenu.project}
+              categories={categories}
+              onClose={() => setContextMenu(null)}
+              onRunExecutable={() => handleRunExecutable(contextMenu.project)}
+              onSelectExecutable={() => handleSelectExecutable(contextMenu.project)}
+              onClearExecutable={() => handleClearExecutable(contextMenu.project)}
+              onOpenSettings={async () => {
+                await handleOpenProjectSettings(contextMenu.project)
+                setContextMenu(null)
+              }}
+              onOpenExtensions={() => {
+                setExtensionBrowserModal({ project: contextMenu.project })
+                setContextMenu(null)
+              }}
+              onEditClaudeMd={() => {
+                setClaudeMdEditorModal({ project: contextMenu.project })
+                setContextMenu(null)
+              }}
+              onUpdateColor={(color) => onUpdateProject(contextMenu.project.path, { color })}
+              onMoveToCategory={(categoryId) =>
+                moveProjectToCategory(contextMenu.project.path, categoryId)
+              }
+              onCreateCategory={() => {
+                const newId = addCategory('New Category')
+                moveProjectToCategory(contextMenu.project.path, newId)
+                setContextMenu(null)
+                setEditingCategory({ id: newId, name: 'New Category' })
+                setTimeout(() => categoryEditInputRef.current?.select(), 0)
+              }}
+              onDelete={() => {
+                setDeleteConfirmModal({ project: contextMenu.project })
+                setContextMenu(null)
+              }}
+            />
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {deleteConfirmModal && (
+            <DeleteConfirmModal
+              project={deleteConfirmModal.project}
+              onClose={() => setDeleteConfirmModal(null)}
+              onConfirm={() => {
+                onRemoveProject(deleteConfirmModal.project.path)
+                setDeleteConfirmModal(null)
+              }}
+            />
+          )}
+
+          {/* Project Settings Modal */}
+          {projectSettingsModal && (
+            <ProjectSettingsModal
+              state={projectSettingsModal}
+              globalPermissions={globalPermissions}
+              globalVoiceSettings={globalVoiceSettings}
+              installedVoices={installedVoices}
+              onClose={() => setProjectSettingsModal(null)}
+              onSave={handleSaveProjectSettings}
+              onChange={handleProjectSettingsChange}
+              onToggleTool={handleToggleTool}
+              onAllowAll={handleAllowAll}
+              onClearAll={handleClearAll}
+            />
+          )}
+
+          {/* Extension Browser Modal */}
+          {extensionBrowserModal && (
+            <ExtensionBrowser
+              projectPath={extensionBrowserModal.project.path}
+              projectName={extensionBrowserModal.project.name}
+              onClose={() => setExtensionBrowserModal(null)}
+            />
+          )}
+
+          {/* CLAUDE.md Editor Modal */}
+          {claudeMdEditorModal && (
+            <ClaudeMdEditor
+              isOpen={true}
+              projectPath={claudeMdEditorModal.project.path}
+              projectName={claudeMdEditorModal.project.name}
+              onClose={() => setClaudeMdEditorModal(null)}
+            />
+          )}
+
+          {/* Category Context Menu */}
+          {categoryContextMenu && (
+            <CategoryContextMenu
+              x={categoryContextMenu.x}
+              y={categoryContextMenu.y}
+              category={categoryContextMenu.category}
+              onRename={() => {
+                handleStartCategoryRename(categoryContextMenu.category)
+                setCategoryContextMenu(null)
+              }}
+              onDelete={() => {
+                removeCategory(categoryContextMenu.category.id)
+                setCategoryContextMenu(null)
+              }}
+            />
+          )}
+        </div>
+      </>
     )
   }
 

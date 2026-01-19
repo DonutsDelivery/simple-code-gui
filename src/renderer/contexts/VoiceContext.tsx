@@ -99,6 +99,10 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const voiceOutputEnabledRef = useRef(voiceOutputEnabled)
   const skipOnNewRef = useRef(skipOnNew)
   const volumeRef = useRef(volume)  // Track volume for processQueue closure
+  // Generation ID to cancel stale processQueue instances when skipOnNew triggers
+  const processingGenerationRef = useRef(0)
+  // Resolve function to unblock hung audio promises when cancelled
+  const audioResolveRef = useRef<(() => void) | null>(null)
   // Per-project voice override
   const projectVoiceRef = useRef<ProjectVoiceSettings | null>(null)
   const globalVoiceRef = useRef<{ voice: string; engine: string } | null>(null)
@@ -237,8 +241,14 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
     isProcessingRef.current = true
     setIsSpeaking(true)
+    const myGeneration = processingGenerationRef.current
 
     while (speakQueueRef.current.length > 0) {
+      // Check if this processQueue instance was cancelled
+      if (processingGenerationRef.current !== myGeneration) {
+        return  // Exit without clearing isProcessingRef - new instance handles it
+      }
+
       const text = speakQueueRef.current.shift()
       if (!text) continue
 
@@ -246,9 +256,17 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         // Call Piper TTS via IPC - returns audio as base64
         const result = await window.electronAPI.voiceSpeak?.(text)
 
+        // Check again after async operation
+        if (processingGenerationRef.current !== myGeneration) {
+          return
+        }
+
         if (result?.success && result.audioData) {
           // Play the audio from base64 data
           await new Promise<void>((resolve) => {
+            // Store resolve so skipOnNew can unblock us
+            audioResolveRef.current = resolve
+
             const audioData = Uint8Array.from(atob(result.audioData), c => c.charCodeAt(0))
             const blob = new Blob([audioData], { type: 'audio/wav' })
             const url = URL.createObjectURL(blob)
@@ -257,25 +275,27 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
             audioRef.current = audio
             audioUrlRef.current = url  // Track URL for cleanup on unmount
 
-            audio.onended = () => {
+            const cleanup = () => {
               URL.revokeObjectURL(url)
-              audioRef.current = null
-              audioUrlRef.current = null
+              if (audioRef.current === audio) {
+                audioRef.current = null
+              }
+              if (audioUrlRef.current === url) {
+                audioUrlRef.current = null
+              }
+              audioResolveRef.current = null
               resolve()
             }
+
+            audio.onended = cleanup
             audio.onerror = (e) => {
               console.error('Audio playback error:', e)
-              URL.revokeObjectURL(url)
-              audioRef.current = null
-              audioUrlRef.current = null
-              resolve()
+              cleanup()
             }
 
             audio.play().catch(e => {
               console.error('Failed to play audio:', e)
-              URL.revokeObjectURL(url)
-              audioUrlRef.current = null
-              resolve()
+              cleanup()
             })
           })
         } else if (result?.error) {
@@ -286,8 +306,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    isProcessingRef.current = false
-    setIsSpeaking(false)
+    // Only clear if we're still the active generation
+    if (processingGenerationRef.current === myGeneration) {
+      isProcessingRef.current = false
+      setIsSpeaking(false)
+    }
   }, [])
 
   const speakText = useCallback((text: string) => {
@@ -310,9 +333,16 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
     if (cleanText.length < 3) return // Skip very short text
 
-    // If skipOnNew is enabled, clear queue and stop current audio
+    // If skipOnNew is enabled, cancel current playback and start fresh
     if (skipOnNewRef.current) {
       speakQueueRef.current = []
+      // Increment generation to cancel any running processQueue
+      processingGenerationRef.current++
+      // Unblock any hung audio promise
+      if (audioResolveRef.current) {
+        audioResolveRef.current()
+        audioResolveRef.current = null
+      }
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current = null
@@ -326,6 +356,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   const stopSpeaking = useCallback(() => {
     speakQueueRef.current = []
+    // Increment generation to cancel any running processQueue
+    processingGenerationRef.current++
+    // Unblock any hung audio promise
+    if (audioResolveRef.current) {
+      audioResolveRef.current()
+      audioResolveRef.current = null
+    }
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current = null
@@ -522,6 +559,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Cancel any running processQueue
+      processingGenerationRef.current++
+      // Unblock any hung audio promise
+      if (audioResolveRef.current) {
+        audioResolveRef.current()
+        audioResolveRef.current = null
+      }
       // Clean up audio element and blob URL
       if (audioRef.current) {
         audioRef.current.pause()

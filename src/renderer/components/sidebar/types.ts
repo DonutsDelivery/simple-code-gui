@@ -33,6 +33,9 @@ export interface SidebarProps {
   collapsed: boolean
   onWidthChange: (width: number) => void
   onCollapsedChange: (collapsed: boolean) => void
+  // Mobile drawer props
+  isMobileOpen?: boolean        // Controls drawer open state on mobile
+  onMobileClose?: () => void    // Called when user closes drawer
 }
 
 export interface ProjectSettingsModalState {

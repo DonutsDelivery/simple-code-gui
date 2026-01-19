@@ -1,0 +1,902 @@
+/* ============================================
+   Mobile-Specific Styles
+   Touch-friendly UI for mobile devices
+   ============================================ */
+
+/* Custom properties for mobile */
+:root {
+  --mobile-min-tap-target: 44px;
+  --mobile-drawer-width: 90vw;
+  --mobile-transition-duration: 0.3s;
+}
+
+/* ============================================
+   Mobile Breakpoint (max-width: 768px)
+   ============================================ */
+
+@media screen and (max-width: 768px) {
+  /* ----------------------------------------
+     Safe Area Insets for Notched Devices
+     ---------------------------------------- */
+  .app {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* ----------------------------------------
+     Typography Adjustments
+     ---------------------------------------- */
+  .app {
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* ----------------------------------------
+     Touch Target Sizing (44x44px minimum)
+     ---------------------------------------- */
+  button,
+  .btn,
+  [role="button"] {
+    min-height: var(--mobile-min-tap-target);
+    min-width: var(--mobile-min-tap-target);
+  }
+
+  /* Increase button padding for touch */
+  .sidebar-button,
+  .category-header,
+  .action-btn,
+  .icon-btn {
+    min-height: var(--mobile-min-tap-target);
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  /* Larger close buttons on tabs */
+  .tab-close {
+    width: var(--mobile-min-tap-target);
+    height: var(--mobile-min-tap-target);
+    min-width: var(--mobile-min-tap-target);
+    min-height: var(--mobile-min-tap-target);
+  }
+
+  .tab-close svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* ----------------------------------------
+     Layout Changes - Full Width Terminal
+     ---------------------------------------- */
+  .app-content {
+    flex-direction: column;
+  }
+
+  .main-content {
+    width: 100%;
+    flex: 1;
+  }
+
+  .terminal-container {
+    width: 100% !important;
+    height: 100%;
+  }
+
+  /* ----------------------------------------
+     Hide Desktop-Only Elements
+     ---------------------------------------- */
+
+  /* Hide tab bar (replaced by SwipeDots) */
+  .terminal-tabs,
+  .tab-bar {
+    display: none !important;
+  }
+
+  /* Hide resize handles */
+  .resize-handle,
+  .resizer,
+  [class*="resize"] {
+    display: none !important;
+  }
+
+  /* Hide sidebar by default on mobile */
+  .sidebar {
+    display: none;
+  }
+
+  /* When sidebar is shown via drawer */
+  .sidebar.mobile-drawer-open {
+    display: flex;
+  }
+
+  /* ----------------------------------------
+     Sidebar Drawer Styles
+     ---------------------------------------- */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--mobile-drawer-width);
+    max-width: 400px;
+    height: 100%;
+    z-index: 1000;
+    transform: translateX(100%);
+    transition: transform var(--mobile-transition-duration) ease-out;
+    box-shadow: var(--shadow-lg);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-default);
+  }
+
+  .sidebar.mobile-drawer-open {
+    transform: translateX(0);
+  }
+
+  /* Backdrop overlay */
+  .mobile-drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--mobile-transition-duration) ease-out,
+                visibility var(--mobile-transition-duration) ease-out;
+  }
+
+  .mobile-drawer-backdrop.visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Drawer close button */
+  .mobile-drawer-close {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    width: var(--mobile-min-tap-target);
+    height: var(--mobile-min-tap-target);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-hover);
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1001;
+  }
+
+  .mobile-drawer-close:active {
+    background: var(--bg-active);
+    color: var(--text-primary);
+  }
+
+  /* ----------------------------------------
+     Swipe Indicator Dots
+     ---------------------------------------- */
+  .swipe-dots {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .swipe-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--bg-active);
+    transition: background var(--transition-fast),
+                transform var(--transition-fast);
+  }
+
+  .swipe-dot.active {
+    background: var(--accent);
+    transform: scale(1.25);
+  }
+
+  .swipe-dot:not(.active):hover {
+    background: var(--bg-hover);
+  }
+
+  /* Counter style for many tabs (>5) */
+  .swipe-counter {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ----------------------------------------
+     Mobile Menu Toggle Button
+     ---------------------------------------- */
+  .mobile-menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--mobile-min-tap-target);
+    height: var(--mobile-min-tap-target);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--transition-fast),
+                color var(--transition-fast);
+  }
+
+  .mobile-menu-toggle:active {
+    background: var(--bg-active);
+    color: var(--text-primary);
+  }
+
+  /* ----------------------------------------
+     Stacked Layouts
+     ---------------------------------------- */
+  .flex-row,
+  .horizontal-layout,
+  [class*="flex-row"] {
+    flex-direction: column;
+  }
+
+  /* Modal adjustments for mobile */
+  .modal,
+  .dialog {
+    width: calc(100% - var(--space-lg) * 2);
+    max-width: none;
+    max-height: calc(100% - var(--space-xl) * 2);
+    margin: var(--space-lg);
+  }
+
+  /* ----------------------------------------
+     Title Bar Mobile Adjustments
+     ---------------------------------------- */
+  .title-bar {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .title-bar-btn {
+    width: var(--mobile-min-tap-target);
+    min-width: var(--mobile-min-tap-target);
+    height: var(--mobile-min-tap-target);
+  }
+
+  /* ----------------------------------------
+     Input Adjustments
+     ---------------------------------------- */
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* Prevent iOS zoom on focus */
+    min-height: var(--mobile-min-tap-target);
+    padding: var(--space-md);
+  }
+
+  /* ----------------------------------------
+     Touch-Specific Interactions
+     ---------------------------------------- */
+
+  /* Remove hover states on touch devices */
+  @media (hover: none) and (pointer: coarse) {
+    .sidebar-button:hover,
+    .category-header:hover,
+    .action-btn:hover,
+    .icon-btn:hover,
+    .tab:hover {
+      background: inherit;
+      color: inherit;
+    }
+
+    /* Use active state instead */
+    .sidebar-button:active,
+    .category-header:active,
+    .action-btn:active,
+    .icon-btn:active,
+    .tab:active {
+      background: var(--bg-active);
+      color: var(--text-primary);
+    }
+  }
+
+  /* ----------------------------------------
+     Scrolling Improvements
+     ---------------------------------------- */
+  .sidebar-content,
+  .conversation-list,
+  .terminal-wrapper {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* ============================================
+   Reduced Motion Preferences
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .sidebar {
+    transition: none;
+  }
+
+  .mobile-drawer-backdrop {
+    transition: none;
+  }
+
+  .swipe-dot {
+    transition: none;
+  }
+}
+
+/* ============================================
+   Small Mobile Devices (max-width: 480px)
+   ============================================ */
+
+@media screen and (max-width: 480px) {
+  .sidebar {
+    width: 100vw;
+    max-width: none;
+  }
+
+  .modal,
+  .dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Even larger touch targets for small screens */
+  button,
+  .btn,
+  [role="button"] {
+    min-height: 48px;
+    min-width: 48px;
+  }
+}
+
+/* ============================================
+   QR Scanner Component
+   ============================================ */
+
+.qr-scanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+}
+
+.qr-scanner--scanning {
+  background: transparent;
+}
+
+.qr-scanner--error {
+  background: var(--bg-base, #1a1a1a);
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-scanner__message {
+  text-align: center;
+  padding: var(--space-xl, 32px);
+  color: var(--text-primary, #fff);
+}
+
+.qr-scanner__message h2 {
+  margin: var(--space-md, 16px) 0;
+  font-size: 1.25rem;
+}
+
+.qr-scanner__message p {
+  color: var(--text-secondary, #888);
+  margin-bottom: var(--space-lg, 24px);
+}
+
+.qr-scanner__icon {
+  width: 64px;
+  height: 64px;
+  color: var(--color-error, #ef4444);
+}
+
+.qr-scanner__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.qr-scanner__mask {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.qr-scanner__mask--top,
+.qr-scanner__mask--bottom {
+  flex: 1;
+}
+
+.qr-scanner__middle {
+  display: flex;
+  height: 280px;
+}
+
+.qr-scanner__mask--left,
+.qr-scanner__mask--right {
+  flex: 1;
+}
+
+.qr-scanner__viewfinder {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.qr-scanner__corner {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--accent, #3b82f6);
+}
+
+.qr-scanner__corner--tl {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 8px;
+}
+
+.qr-scanner__corner--tr {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 8px;
+}
+
+.qr-scanner__corner--bl {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 8px;
+}
+
+.qr-scanner__corner--br {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 8px;
+}
+
+.qr-scanner__scan-line {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent, #3b82f6), transparent);
+  animation: scan-line 2s ease-in-out infinite;
+}
+
+@keyframes scan-line {
+  0%, 100% { top: 8px; opacity: 0; }
+  50% { top: calc(100% - 10px); opacity: 1; }
+}
+
+.qr-scanner__instructions {
+  position: absolute;
+  bottom: 120px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: white;
+  padding: var(--space-md, 16px);
+  font-size: 0.95rem;
+}
+
+.qr-scanner__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 16px) var(--space-lg, 24px);
+  border-radius: var(--radius-md, 8px);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.qr-scanner__button--cancel {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  min-width: 160px;
+}
+
+.qr-scanner__button--cancel:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.qr-scanner__button--secondary {
+  background: var(--bg-surface, #2a2a2a);
+  border: 1px solid var(--border-default, #444);
+  color: var(--text-primary, #fff);
+}
+
+.qr-scanner__cancel-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================
+   Host QR Display Component (Desktop)
+   ============================================ */
+
+.host-qr-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-lg, 24px);
+  padding: var(--space-xl, 32px);
+  background: var(--bg-surface, #2a2a2a);
+  border-radius: var(--radius-lg, 12px);
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.host-qr-display__header {
+  text-align: center;
+}
+
+.host-qr-display__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.host-qr-display__subtitle {
+  margin: var(--space-sm, 8px) 0 0;
+  color: var(--text-secondary, #888);
+  font-size: 0.9rem;
+}
+
+.host-qr-display__qr-container {
+  padding: var(--space-md, 16px);
+  background: white;
+  border-radius: var(--radius-md, 8px);
+}
+
+.host-qr-display__details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+  width: 100%;
+}
+
+.host-qr-display__field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm, 8px) 0;
+  border-bottom: 1px solid var(--border-subtle, #333);
+}
+
+.host-qr-display__field:last-child {
+  border-bottom: none;
+}
+
+.host-qr-display__label {
+  color: var(--text-secondary, #888);
+  font-size: 0.9rem;
+}
+
+.host-qr-display__value {
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+}
+
+.host-qr-display__value--mono {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+}
+
+.host-qr-display__select {
+  background: var(--bg-elevated, #333);
+  border: 1px solid var(--border-default, #444);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-primary, #fff);
+  padding: var(--space-xs, 4px) var(--space-sm, 8px);
+  font-size: 0.9rem;
+}
+
+.host-qr-display__actions {
+  display: flex;
+  gap: var(--space-md, 16px);
+  width: 100%;
+}
+
+.host-qr-display__button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 16px);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.host-qr-display__button--primary {
+  background: var(--accent, #3b82f6);
+  border: none;
+  color: white;
+}
+
+.host-qr-display__button--primary:hover {
+  background: var(--accent-hover, #2563eb);
+}
+
+.host-qr-display__button--secondary {
+  background: transparent;
+  border: 1px solid var(--border-default, #444);
+  color: var(--text-primary, #fff);
+}
+
+.host-qr-display__button--secondary:hover {
+  background: var(--bg-hover, #333);
+  border-color: var(--border-hover, #555);
+}
+
+.host-qr-display__url {
+  width: 100%;
+  padding: var(--space-md, 16px);
+  background: var(--bg-elevated, #333);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.host-qr-display__url-text {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+  word-break: break-all;
+}
+
+/* ============================================
+   Host Selector Component (Mobile)
+   ============================================ */
+
+.host-selector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-base, #1a1a1a);
+}
+
+.host-selector__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-lg, 24px) var(--space-md, 16px);
+  border-bottom: 1px solid var(--border-subtle, #333);
+}
+
+.host-selector__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.host-selector__current-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+}
+
+.host-selector__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.host-selector__status-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+}
+
+.host-selector__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 16px);
+  margin: var(--space-md, 16px);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md, 8px);
+  color: var(--color-error, #ef4444);
+  font-size: 0.9rem;
+}
+
+.host-selector__list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.host-selector__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-xl, 32px);
+  text-align: center;
+  color: var(--text-secondary, #888);
+}
+
+.host-selector__empty svg {
+  margin-bottom: var(--space-md, 16px);
+  opacity: 0.5;
+}
+
+.host-selector__empty p {
+  margin: var(--space-xs, 4px) 0;
+}
+
+.host-selector__empty-hint {
+  font-size: 0.85rem;
+  color: var(--text-tertiary, #666);
+}
+
+.host-selector__item-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.host-selector__delete-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  background: var(--color-error, #ef4444);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.host-selector__delete-indicator--active {
+  background: #dc2626;
+}
+
+.host-selector__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md, 16px);
+  padding: var(--space-md, 16px);
+  background: var(--bg-base, #1a1a1a);
+  border-bottom: 1px solid var(--border-subtle, #333);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.host-selector__item:active {
+  background: var(--bg-hover, #222);
+}
+
+.host-selector__item--active {
+  background: var(--bg-surface, #2a2a2a);
+}
+
+.host-selector__item-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.host-selector__item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.host-selector__item-name {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.host-selector__item-address {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  font-family: var(--font-mono, monospace);
+}
+
+.host-selector__item-last-connected {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #666);
+  margin-top: var(--space-xs, 4px);
+}
+
+.host-selector__item-arrow {
+  color: var(--text-tertiary, #666);
+  flex-shrink: 0;
+}
+
+.host-selector__add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md, 16px);
+  margin: var(--space-md, 16px);
+  padding: var(--space-lg, 24px);
+  background: var(--accent, #3b82f6);
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.host-selector__add-button:active {
+  background: var(--accent-hover, #2563eb);
+}
+
+.host-selector__add-button svg {
+  flex-shrink: 0;
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, RefObject } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
 import { TerminalTabs } from './components/TerminalTabs'
@@ -104,8 +104,19 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0])
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
+  const terminalContainerRef = useRef<HTMLDivElement>(null)
+
+  // Mobile drawer handlers
+  const openMobileDrawer = useCallback(() => {
+    setMobileDrawerOpen(true)
+  }, [])
+
+  const closeMobileDrawer = useCallback(() => {
+    setMobileDrawerOpen(false)
+  }, [])
 
   // Load workspace on mount and restore tabs
   useEffect(() => {
@@ -507,6 +518,8 @@ function App() {
         collapsed={sidebarCollapsed}
         onWidthChange={setSidebarWidth}
         onCollapsedChange={setSidebarCollapsed}
+        isMobileOpen={mobileDrawerOpen}
+        onMobileClose={closeMobileDrawer}
       />
       <div className="main-content">
         {claudeInstalled === false || gitBashInstalled === false ? (
@@ -571,6 +584,9 @@ function App() {
                   activeTabId={activeTabId}
                   onSelectTab={setActiveTab}
                   onCloseTab={handleCloseTab}
+                  onNewSession={(projectPath) => handleOpenSession(projectPath, undefined, undefined, undefined, true)}
+                  swipeContainerRef={terminalContainerRef as RefObject<HTMLElement>}
+                  onOpenSidebar={openMobileDrawer}
                 />
               )}
               <button
@@ -582,7 +598,7 @@ function App() {
               </button>
             </div>
             {viewMode === 'tabs' ? (
-              <div className="terminal-container">
+              <div className="terminal-container" ref={terminalContainerRef}>
                 {openTabs.map((tab) => (
                   <div
                     key={tab.id}

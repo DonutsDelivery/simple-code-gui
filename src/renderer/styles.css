@@ -1043,6 +1043,32 @@ html, body, #root {
   background: rgba(239, 68, 68, 0.15);
 }
 
+.tab-new-session {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab:hover .tab-new-session {
+  opacity: 1;
+}
+
+.tab-new-session:hover {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+}
+
 /* ============================================
    Terminal Container
    ============================================ */
@@ -6038,3 +6064,6 @@ html, body, #root {
 .skip-link:focus {
   top: 0;
 }
+
+/* Mobile-specific styles */
+@import './styles/mobile.css';

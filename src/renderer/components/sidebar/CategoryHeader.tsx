@@ -80,7 +80,7 @@ export const CategoryHeader = React.memo(function CategoryHeader({
       }}
       onClick={onToggleCollapse}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
           onToggleCollapse()
         }

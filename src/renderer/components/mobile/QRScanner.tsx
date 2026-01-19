@@ -1,0 +1,199 @@
+import React, { useState, useCallback, useEffect } from 'react'
+
+// Stub import - will be replaced with actual package when building for mobile
+// import { BarcodeScanner } from '@capacitor-community/barcode-scanner'
+const BarcodeScanner = {
+  checkPermission: async (_opts: { force?: boolean }) => ({ granted: true }),
+  hideBackground: async () => {},
+  showBackground: async () => {},
+  startScan: async () => ({ hasContent: false, content: '' }),
+  stopScan: async () => {},
+  prepare: async () => {},
+}
+
+export interface ParsedConnectionUrl {
+  host: string
+  port: number
+  token: string
+}
+
+interface QRScannerProps {
+  onScan: (connection: ParsedConnectionUrl) => void
+  onCancel: () => void
+  onError?: (error: string) => void
+}
+
+/**
+ * Parse connection URL in format: claude-terminal://host:port?token=xxx
+ */
+export function parseConnectionUrl(url: string): ParsedConnectionUrl | null {
+  try {
+    // Handle custom protocol
+    const urlToParse = url.replace('claude-terminal://', 'https://')
+    const parsed = new URL(urlToParse)
+
+    const host = parsed.hostname
+    const port = parseInt(parsed.port, 10) || 38470 // Default port
+    const token = parsed.searchParams.get('token')
+
+    if (!host || !token) {
+      return null
+    }
+
+    return { host, port, token }
+  } catch {
+    return null
+  }
+}
+
+export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.ReactElement {
+  const [isScanning, setIsScanning] = useState(false)
+  const [permissionDenied, setPermissionDenied] = useState(false)
+
+  const startScanning = useCallback(async () => {
+    try {
+      // Check camera permission
+      const status = await BarcodeScanner.checkPermission({ force: true })
+
+      if (!status.granted) {
+        setPermissionDenied(true)
+        onError?.('Camera permission denied')
+        return
+      }
+
+      // Hide the WebView background to show camera
+      await BarcodeScanner.hideBackground()
+      setIsScanning(true)
+
+      // Start scanning
+      const result = await BarcodeScanner.startScan()
+
+      if (result.hasContent && result.content) {
+        const parsed = parseConnectionUrl(result.content)
+
+        if (parsed) {
+          onScan(parsed)
+        } else {
+          onError?.('Invalid QR code format. Expected: claude-terminal://host:port?token=xxx')
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start scanner'
+      onError?.(message)
+    } finally {
+      await stopScanning()
+    }
+  }, [onScan, onError])
+
+  const stopScanning = useCallback(async () => {
+    try {
+      await BarcodeScanner.stopScan()
+      await BarcodeScanner.showBackground()
+    } catch {
+      // Ignore errors when stopping
+    }
+    setIsScanning(false)
+  }, [])
+
+  const handleCancel = useCallback(async () => {
+    await stopScanning()
+    onCancel()
+  }, [stopScanning, onCancel])
+
+  // Start scanning when component mounts
+  useEffect(() => {
+    startScanning()
+
+    // Cleanup on unmount
+    return () => {
+      stopScanning()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Render permission denied state
+  if (permissionDenied) {
+    return (
+      <div className="qr-scanner qr-scanner--error">
+        <div className="qr-scanner__message">
+          <svg
+            className="qr-scanner__icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M15 9l-6 6M9 9l6 6" />
+          </svg>
+          <h2>Camera Permission Required</h2>
+          <p>Please enable camera access in your device settings to scan QR codes.</p>
+          <button
+            className="qr-scanner__button qr-scanner__button--secondary"
+            onClick={onCancel}
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Full-screen scanning view
+  return (
+    <div className={`qr-scanner ${isScanning ? 'qr-scanner--scanning' : ''}`}>
+      {/* Scanning overlay with viewfinder */}
+      <div className="qr-scanner__overlay">
+        {/* Top dark area */}
+        <div className="qr-scanner__mask qr-scanner__mask--top" />
+
+        {/* Middle row with viewfinder */}
+        <div className="qr-scanner__middle">
+          <div className="qr-scanner__mask qr-scanner__mask--left" />
+
+          {/* Viewfinder frame */}
+          <div className="qr-scanner__viewfinder">
+            <div className="qr-scanner__corner qr-scanner__corner--tl" />
+            <div className="qr-scanner__corner qr-scanner__corner--tr" />
+            <div className="qr-scanner__corner qr-scanner__corner--bl" />
+            <div className="qr-scanner__corner qr-scanner__corner--br" />
+
+            {/* Scanning line animation */}
+            {isScanning && (
+              <div className="qr-scanner__scan-line" />
+            )}
+          </div>
+
+          <div className="qr-scanner__mask qr-scanner__mask--right" />
+        </div>
+
+        {/* Bottom dark area */}
+        <div className="qr-scanner__mask qr-scanner__mask--bottom" />
+      </div>
+
+      {/* Instructions */}
+      <div className="qr-scanner__instructions">
+        <p>Point your camera at the QR code on your computer</p>
+      </div>
+
+      {/* Cancel button */}
+      <button
+        className="qr-scanner__button qr-scanner__button--cancel"
+        onClick={handleCancel}
+        aria-label="Cancel scanning"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className="qr-scanner__cancel-icon"
+        >
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+        Cancel
+      </button>
+    </div>
+  )
+}
+
+export default QRScanner
