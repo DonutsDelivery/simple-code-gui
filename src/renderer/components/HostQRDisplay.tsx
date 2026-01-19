@@ -1,34 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
-
-// Stub import - will be replaced with actual package
-// import { QRCodeSVG } from 'qrcode.react'
-const QRCodeSVG = ({ value, size, level, includeMargin }: {
-  value: string
-  size: number
-  level?: string
-  includeMargin?: boolean
-}) => {
-  // Stub placeholder - renders a styled placeholder
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        background: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: '1px solid var(--border-default)',
-        borderRadius: 8,
-        padding: includeMargin ? 16 : 0
-      }}
-    >
-      <svg viewBox="0 0 24 24" width={size * 0.6} height={size * 0.6} fill="currentColor">
-        <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zM3 21h8v-8H3v8zm2-6h4v4H5v-4zM13 3v8h8V3h-8zm6 6h-4V5h4v4zM13 13h2v2h-2zM15 15h2v2h-2zM13 17h2v2h-2zM17 13h2v2h-2zM19 15h2v2h-2zM17 17h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z"/>
-      </svg>
-    </div>
-  )
-}
+import { QRCodeSVG } from 'qrcode.react'
 
 interface HostQRDisplayProps {
   port: number

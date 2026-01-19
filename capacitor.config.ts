@@ -5,17 +5,19 @@ const config: CapacitorConfig = {
   appName: 'Claude Terminal',
   webDir: 'dist/renderer',
   server: {
-    // Dev server config - connects to Vite dev server
-    url: 'http://localhost:5173',
-    cleartext: true
+    // Allow cleartext for local network connections to host PC
+    cleartext: true,
+    // Uncomment for development with Vite dev server:
+    // url: 'http://localhost:5173',
   },
   plugins: {
-    BarcodeScanner: {
-      // Barcode scanner plugin config
-    },
     Preferences: {
-      // Preferences plugin config (uses defaults)
+      // Uses defaults
     }
+  },
+  android: {
+    // Allow mixed content for WebSocket connections
+    allowMixedContent: true
   }
 }
 

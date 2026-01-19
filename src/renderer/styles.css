@@ -3,6 +3,9 @@
    Aesthetic: Refined developer tool with warmth
    ============================================ */
 
+/* Mobile-specific styles - must be at top per CSS spec */
+@import './styles/mobile.css';
+
 :root {
   /* Core palette - deep charcoal with warm orange accent */
   --bg-base: #0d0d0f;
@@ -6065,5 +6068,3 @@ html, body, #root {
   top: 0;
 }
 
-/* Mobile-specific styles */
-@import './styles/mobile.css';

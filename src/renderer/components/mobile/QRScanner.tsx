@@ -1,15 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react'
-
-// Stub import - will be replaced with actual package when building for mobile
-// import { BarcodeScanner } from '@capacitor-community/barcode-scanner'
-const BarcodeScanner = {
-  checkPermission: async (_opts: { force?: boolean }) => ({ granted: true }),
-  hideBackground: async () => {},
-  showBackground: async () => {},
-  startScan: async () => ({ hasContent: false, content: '' }),
-  stopScan: async () => {},
-  prepare: async () => {},
-}
+import {
+  BarcodeScanner,
+  BarcodeFormat,
+  LensFacing,
+} from '@capacitor-mlkit/barcode-scanning'
 
 export interface ParsedConnectionUrl {
   host: string
@@ -53,42 +47,54 @@ export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.
   const startScanning = useCallback(async () => {
     try {
       // Check camera permission
-      const status = await BarcodeScanner.checkPermission({ force: true })
+      const { camera } = await BarcodeScanner.checkPermissions()
 
-      if (!status.granted) {
-        setPermissionDenied(true)
-        onError?.('Camera permission denied')
-        return
+      if (camera !== 'granted') {
+        const { camera: newPermission } = await BarcodeScanner.requestPermissions()
+        if (newPermission !== 'granted') {
+          setPermissionDenied(true)
+          onError?.('Camera permission denied')
+          return
+        }
       }
 
-      // Hide the WebView background to show camera
-      await BarcodeScanner.hideBackground()
       setIsScanning(true)
 
-      // Start scanning
-      const result = await BarcodeScanner.startScan()
+      // Start scanning with ML Kit
+      const listener = await BarcodeScanner.addListener('barcodeScanned', (result) => {
+        const barcode = result.barcode
+        if (barcode.rawValue) {
+          const parsed = parseConnectionUrl(barcode.rawValue)
 
-      if (result.hasContent && result.content) {
-        const parsed = parseConnectionUrl(result.content)
-
-        if (parsed) {
-          onScan(parsed)
-        } else {
-          onError?.('Invalid QR code format. Expected: claude-terminal://host:port?token=xxx')
+          if (parsed) {
+            stopScanning()
+            onScan(parsed)
+          } else {
+            onError?.('Invalid QR code format. Expected: claude-terminal://host:port?token=xxx')
+          }
         }
+      })
+
+      await BarcodeScanner.startScan({
+        formats: [BarcodeFormat.QrCode],
+        lensFacing: LensFacing.Back,
+      })
+
+      // Store listener for cleanup
+      return () => {
+        listener.remove()
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start scanner'
       onError?.(message)
-    } finally {
-      await stopScanning()
+      setIsScanning(false)
     }
   }, [onScan, onError])
 
   const stopScanning = useCallback(async () => {
     try {
+      await BarcodeScanner.removeAllListeners()
       await BarcodeScanner.stopScan()
-      await BarcodeScanner.showBackground()
     } catch {
       // Ignore errors when stopping
     }
