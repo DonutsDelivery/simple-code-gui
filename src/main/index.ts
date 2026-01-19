@@ -28,6 +28,7 @@ import { SessionStore } from './session-store'
 import { discoverSessions } from './session-discovery'
 import { getMetaProjectsPath } from './meta-project-sync'
 import { ApiServerManager, PromptResult } from './api-server'
+import { MobileServer } from './mobile-server'
 import { getEnhancedPathWithPortable, setPortableBinDirs } from './platform'
 import { getPortableBinDirs } from './portable-deps'
 import { initUpdater } from './updater'
@@ -60,6 +61,7 @@ let mainWindow: BrowserWindow | null = null
 const ptyManager = new PtyManager()
 const sessionStore = new SessionStore()
 const apiServerManager = new ApiServerManager()
+const mobileServer = new MobileServer()
 
 // PTY tracking
 const ptyToProject = new Map<string, string>()
@@ -372,6 +374,16 @@ app.whenReady().then(() => {
   createWindow()
   if (mainWindow) initUpdater(mainWindow)
 
+  // Start mobile server for phone app connectivity
+  mobileServer.setPtyManager(ptyManager)
+  mobileServer.setSessionStore(sessionStore)
+  mobileServer.start().then(() => {
+    const info = mobileServer.getConnectionInfo()
+    console.log(`[Mobile] Server ready at ${info.ips[0]}:${info.port}`)
+  }).catch(err => {
+    console.error('[Mobile] Failed to start server:', err)
+  })
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -383,6 +395,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  mobileServer.stop()
   apiServerManager.stopAll()
   ptyManager.killAll()
 })
@@ -543,6 +556,14 @@ ipcMain.handle('api:status', (_, projectPath: string) => ({
   running: apiServerManager.isRunning(projectPath),
   port: apiServerManager.getPort(projectPath)
 }))
+
+// Mobile server management (for phone app connectivity)
+ipcMain.handle('mobile:getConnectionInfo', () => mobileServer.getConnectionInfo())
+ipcMain.handle('mobile:regenerateToken', () => ({
+  token: mobileServer.regenerateToken(),
+  ...mobileServer.getConnectionInfo()
+}))
+ipcMain.handle('mobile:isRunning', () => mobileServer.isRunning())
 
 // Settings management
 ipcMain.handle('settings:get', () => sessionStore.getSettings())

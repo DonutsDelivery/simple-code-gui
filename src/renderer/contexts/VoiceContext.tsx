@@ -123,6 +123,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   // Load settings on mount
   useEffect(() => {
+    // Skip if electronAPI not available (mobile/web)
+    if (!window.electronAPI) {
+      setSettingsLoaded(true)
+      return
+    }
     window.electronAPI.getSettings().then((settings) => {
       if (settings.voiceOutputEnabled !== undefined) setVoiceOutputEnabledState(settings.voiceOutputEnabled)
       if (settings.voiceVolume !== undefined) setVolumeState(settings.voiceVolume)
@@ -132,7 +137,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       }
       if (settings.voiceSkipOnNew !== undefined) setSkipOnNewState(settings.voiceSkipOnNew)
       setSettingsLoaded(true)
-    })
+    }).catch(() => setSettingsLoaded(true))
     // Load global voice settings for project override feature
     window.electronAPI.voiceGetSettings?.().then((voiceSettings) => {
       if (voiceSettings) {
@@ -159,7 +164,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   // Save a single voice setting
   const saveVoiceSetting = useCallback(async (key: string, value: boolean | number) => {
-    if (!settingsLoaded) return
+    if (!settingsLoaded || !window.electronAPI) return
     const settings = await window.electronAPI.getSettings()
     await window.electronAPI.saveSettings({ ...settings, [key]: value })
   }, [settingsLoaded])
@@ -253,6 +258,10 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       if (!text) continue
 
       try {
+        // Skip TTS if electronAPI not available (mobile/web)
+        if (!window.electronAPI?.voiceSpeak) {
+          continue
+        }
         // Call Piper TTS via IPC - returns audio as base64
         const result = await window.electronAPI.voiceSpeak?.(text)
 

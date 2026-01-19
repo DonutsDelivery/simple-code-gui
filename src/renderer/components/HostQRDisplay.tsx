@@ -69,39 +69,75 @@ async function getLocalIPs(): Promise<string[]> {
 }
 
 export function HostQRDisplay({
-  port,
+  port: _port, // Ignored - we get port from server
   onTokenChange,
   className = ''
 }: HostQRDisplayProps): React.ReactElement {
-  const [token, setToken] = useState<string>(() => generateToken())
+  const [token, setToken] = useState<string>('')
   const [localIPs, setLocalIPs] = useState<string[]>(['Detecting...'])
   const [selectedIP, setSelectedIP] = useState<string>('')
+  const [serverPort, setServerPort] = useState<number>(38470)
   const [copied, setCopied] = useState(false)
 
-  // Discover local IPs on mount
+  // Get connection info from mobile server on mount
   useEffect(() => {
-    getLocalIPs().then((ips) => {
-      setLocalIPs(ips)
-      setSelectedIP(ips[0] || 'localhost')
-    })
+    const loadConnectionInfo = async () => {
+      if (window.electronAPI?.mobileGetConnectionInfo) {
+        try {
+          const info = await window.electronAPI.mobileGetConnectionInfo()
+          setToken(info.token)
+          setLocalIPs(info.ips.length > 0 ? info.ips : ['localhost'])
+          setSelectedIP(info.ips[0] || 'localhost')
+          setServerPort(info.port)
+        } catch (e) {
+          console.error('Failed to get mobile connection info:', e)
+          // Fallback to local discovery
+          getLocalIPs().then((ips) => {
+            setLocalIPs(ips)
+            setSelectedIP(ips[0] || 'localhost')
+          })
+          setToken(generateToken())
+        }
+      } else {
+        // Not in Electron, use local discovery
+        getLocalIPs().then((ips) => {
+          setLocalIPs(ips)
+          setSelectedIP(ips[0] || 'localhost')
+        })
+        setToken(generateToken())
+      }
+    }
+    loadConnectionInfo()
   }, [])
 
   // Notify parent when token changes
   useEffect(() => {
-    onTokenChange?.(token)
+    if (token) {
+      onTokenChange?.(token)
+    }
   }, [token, onTokenChange])
 
   // Generate the connection URL
   const connectionUrl = useMemo(() => {
     const host = selectedIP || 'localhost'
-    return `claude-terminal://${host}:${port}?token=${token}`
-  }, [selectedIP, port, token])
+    return `claude-terminal://${host}:${serverPort}?token=${token}`
+  }, [selectedIP, serverPort, token])
 
-  // Regenerate token
-  const handleRegenerateToken = useCallback(() => {
-    const newToken = generateToken()
-    setToken(newToken)
-    setCopied(false)
+  // Regenerate token via server
+  const handleRegenerateToken = useCallback(async () => {
+    if (window.electronAPI?.mobileRegenerateToken) {
+      try {
+        const info = await window.electronAPI.mobileRegenerateToken()
+        setToken(info.token)
+        setCopied(false)
+      } catch (e) {
+        console.error('Failed to regenerate token:', e)
+      }
+    } else {
+      const newToken = generateToken()
+      setToken(newToken)
+      setCopied(false)
+    }
   }, [])
 
   // Copy URL to clipboard

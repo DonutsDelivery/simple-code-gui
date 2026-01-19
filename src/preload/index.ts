@@ -551,6 +551,11 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener('api:open-session', handler)
   },
 
+  // Mobile Server (for phone app connectivity)
+  mobileGetConnectionInfo: () => ipcRenderer.invoke('mobile:getConnectionInfo'),
+  mobileRegenerateToken: () => ipcRenderer.invoke('mobile:regenerateToken'),
+  mobileIsRunning: () => ipcRenderer.invoke('mobile:isRunning'),
+
   // Updater
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),
   checkForUpdate: () => ipcRenderer.invoke('updater:check'),
