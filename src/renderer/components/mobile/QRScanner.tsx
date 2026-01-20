@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import {
-  BarcodeScanner,
-  BarcodeFormat,
-  LensFacing,
-} from '@capacitor-mlkit/barcode-scanning'
+import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 
 export interface ParsedConnectionUrl {
   host: string
   port: number
   token: string
+  // v2 security fields
+  version?: number
+  fingerprint?: string
+  nonce?: string
+  nonceExpires?: number
 }
 
 interface QRScannerProps {
@@ -18,12 +19,58 @@ interface QRScannerProps {
 }
 
 /**
- * Parse connection URL in format: claude-terminal://host:port?token=xxx
+ * V2 QR code JSON format
  */
-export function parseConnectionUrl(url: string): ParsedConnectionUrl | null {
+interface QRCodeV2 {
+  type: 'claude-terminal'
+  version: 2
+  host: string
+  port: number
+  token: string
+  fingerprint: string
+  nonce: string
+  nonceExpires: number
+}
+
+/**
+ * Parse connection data from QR code
+ * Supports both v1 (URL format) and v2 (JSON format)
+ */
+export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
+  // Try parsing as JSON (v2 format)
+  try {
+    const parsed = JSON.parse(data)
+    if (parsed.type === 'claude-terminal' && parsed.version === 2) {
+      const v2 = parsed as QRCodeV2
+
+      // Validate required fields
+      if (!v2.host || !v2.token || !v2.fingerprint || !v2.nonce) {
+        return null
+      }
+
+      // Check if nonce has expired
+      if (v2.nonceExpires && Date.now() > v2.nonceExpires) {
+        return null // Expired nonce
+      }
+
+      return {
+        host: v2.host,
+        port: v2.port || 38470,
+        token: v2.token,
+        version: 2,
+        fingerprint: v2.fingerprint,
+        nonce: v2.nonce,
+        nonceExpires: v2.nonceExpires
+      }
+    }
+  } catch {
+    // Not JSON, try v1 URL format
+  }
+
+  // Try parsing as URL (v1 format for backward compatibility)
   try {
     // Handle custom protocol
-    const urlToParse = url.replace('claude-terminal://', 'https://')
+    const urlToParse = data.replace('claude-terminal://', 'https://')
     const parsed = new URL(urlToParse)
 
     const host = parsed.hostname
@@ -34,17 +81,17 @@ export function parseConnectionUrl(url: string): ParsedConnectionUrl | null {
       return null
     }
 
-    return { host, port, token }
+    return { host, port, token, version: 1 }
   } catch {
     return null
   }
 }
 
 export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.ReactElement {
-  const [isScanning, setIsScanning] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [permissionDenied, setPermissionDenied] = useState(false)
 
-  const startScanning = useCallback(async () => {
+  const doScan = useCallback(async () => {
     try {
       // Check camera permission
       const { camera } = await BarcodeScanner.checkPermissions()
@@ -58,61 +105,65 @@ export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.
         }
       }
 
-      setIsScanning(true)
+      setScanning(true)
 
-      // Start scanning with ML Kit
-      const listener = await BarcodeScanner.addListener('barcodeScanned', (result) => {
-        const barcode = result.barcode
-        if (barcode.rawValue) {
-          const parsed = parseConnectionUrl(barcode.rawValue)
+      // Hide app content so camera shows through (like LocalBooru does)
+      document.body.classList.add('barcode-scanner-active')
 
-          if (parsed) {
-            stopScanning()
-            onScan(parsed)
-          } else {
-            onError?.('Invalid QR code format. Expected: claude-terminal://host:port?token=xxx')
+      // Use the simple scan() method that returns a Promise
+      const result = await BarcodeScanner.scan()
+
+      // Restore app visibility
+      document.body.classList.remove('barcode-scanner-active')
+      setScanning(false)
+
+      if (!result.barcodes || result.barcodes.length === 0) {
+        onError?.('No QR code found')
+        onCancel()
+        return
+      }
+
+      const rawValue = result.barcodes[0].rawValue
+      if (!rawValue) {
+        onError?.('Empty QR code')
+        onCancel()
+        return
+      }
+
+      const parsed = parseConnectionUrl(rawValue)
+      if (parsed) {
+        onScan(parsed)
+      } else {
+        // Check if it was an expired nonce
+        try {
+          const data = JSON.parse(rawValue)
+          if (data.type === 'claude-terminal' && data.nonceExpires && Date.now() > data.nonceExpires) {
+            onError?.('QR code has expired. Please refresh the QR code on the host device.')
+            onCancel()
+            return
           }
+        } catch {
+          // Not JSON, continue with generic error
         }
-      })
-
-      await BarcodeScanner.startScan({
-        formats: [BarcodeFormat.QrCode],
-        lensFacing: LensFacing.Back,
-      })
-
-      // Store listener for cleanup
-      return () => {
-        listener.remove()
+        onError?.('Invalid QR code format')
+        onCancel()
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to start scanner'
+      document.body.classList.remove('barcode-scanner-active')
+      setScanning(false)
+      const message = err instanceof Error ? err.message : 'Failed to scan QR code'
       onError?.(message)
-      setIsScanning(false)
+      onCancel()
     }
-  }, [onScan, onError])
-
-  const stopScanning = useCallback(async () => {
-    try {
-      await BarcodeScanner.removeAllListeners()
-      await BarcodeScanner.stopScan()
-    } catch {
-      // Ignore errors when stopping
-    }
-    setIsScanning(false)
-  }, [])
-
-  const handleCancel = useCallback(async () => {
-    await stopScanning()
-    onCancel()
-  }, [stopScanning, onCancel])
+  }, [onScan, onCancel, onError])
 
   // Start scanning when component mounts
   useEffect(() => {
-    startScanning()
+    doScan()
 
     // Cleanup on unmount
     return () => {
-      stopScanning()
+      document.body.classList.remove('barcode-scanner-active')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,60 +195,17 @@ export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.
     )
   }
 
-  // Full-screen scanning view
+  // While scanning, render nothing - the native camera view takes over
+  if (scanning) {
+    return <></>
+  }
+
+  // Loading state before scan starts
   return (
-    <div className={`qr-scanner ${isScanning ? 'qr-scanner--scanning' : ''}`}>
-      {/* Scanning overlay with viewfinder */}
-      <div className="qr-scanner__overlay">
-        {/* Top dark area */}
-        <div className="qr-scanner__mask qr-scanner__mask--top" />
-
-        {/* Middle row with viewfinder */}
-        <div className="qr-scanner__middle">
-          <div className="qr-scanner__mask qr-scanner__mask--left" />
-
-          {/* Viewfinder frame */}
-          <div className="qr-scanner__viewfinder">
-            <div className="qr-scanner__corner qr-scanner__corner--tl" />
-            <div className="qr-scanner__corner qr-scanner__corner--tr" />
-            <div className="qr-scanner__corner qr-scanner__corner--bl" />
-            <div className="qr-scanner__corner qr-scanner__corner--br" />
-
-            {/* Scanning line animation */}
-            {isScanning && (
-              <div className="qr-scanner__scan-line" />
-            )}
-          </div>
-
-          <div className="qr-scanner__mask qr-scanner__mask--right" />
-        </div>
-
-        {/* Bottom dark area */}
-        <div className="qr-scanner__mask qr-scanner__mask--bottom" />
+    <div className="qr-scanner">
+      <div className="qr-scanner__message">
+        <h2>Starting camera...</h2>
       </div>
-
-      {/* Instructions */}
-      <div className="qr-scanner__instructions">
-        <p>Point your camera at the QR code on your computer</p>
-      </div>
-
-      {/* Cancel button */}
-      <button
-        className="qr-scanner__button qr-scanner__button--cancel"
-        onClick={handleCancel}
-        aria-label="Cancel scanning"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className="qr-scanner__cancel-icon"
-        >
-          <path d="M18 6L6 18M6 6l12 12" />
-        </svg>
-        Cancel
-      </button>
     </div>
   )
 }

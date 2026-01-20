@@ -11,6 +11,84 @@
 }
 
 /* ============================================
+   Mobile App Detection (Capacitor/Browser)
+   Uses CSS scroll-snap for swipe navigation
+   Sidebar = first panel, Main content = second panel
+   ============================================ */
+
+body.is-mobile-app .app {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  font-size: 15px;
+}
+
+/* Hide desktop-only elements */
+body.is-mobile-app .title-bar,
+body.is-mobile-app .sidebar-resize-handle,
+body.is-mobile-app .sidebar-collapse-btn {
+  display: none !important;
+}
+
+/* Horizontal scroll-snap container for swipe navigation */
+body.is-mobile-app .app-content {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+body.is-mobile-app .app-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sidebar as first swipe panel (full width) */
+body.is-mobile-app .sidebar {
+  flex: 0 0 100vw !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  min-width: 100vw !important;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  border-right: none;
+  overflow-y: auto;
+  position: relative;
+  transform: none;
+}
+
+/* Main content as second swipe panel (full width) */
+body.is-mobile-app .main-content {
+  flex: 0 0 100vw !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  min-width: 100vw !important;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+}
+
+/* Terminal fills the panel */
+body.is-mobile-app .terminal-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+body.is-mobile-app .terminal-wrapper {
+  height: 100% !important;
+}
+
+/* Hide view toggle on mobile */
+body.is-mobile-app .view-toggle-btn {
+  display: none;
+}
+
+/* ============================================
    Mobile Breakpoint (max-width: 768px)
    ============================================ */
 
@@ -104,20 +182,29 @@
     display: none !important;
   }
 
-  /* Hide sidebar by default on mobile */
-  .sidebar {
+  /* Hide sidebar by default on mobile (drawer mode only - not swipe mode) */
+  body:not(.is-mobile-app) .sidebar {
     display: none;
   }
 
   /* When sidebar is shown via drawer */
-  .sidebar.mobile-drawer-open {
+  body:not(.is-mobile-app) .sidebar.mobile-drawer-open {
     display: flex;
   }
 
+  /* Mobile app uses swipe layout - keep sidebar visible */
+  body.is-mobile-app .sidebar {
+    display: flex !important;
+    position: relative !important;
+    transform: none !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+
   /* ----------------------------------------
-     Sidebar Drawer Styles
+     Sidebar Drawer Styles (desktop browser only, not mobile app)
      ---------------------------------------- */
-  .sidebar {
+  body:not(.is-mobile-app) .sidebar {
     position: fixed;
     top: 0;
     right: 0;
@@ -135,7 +222,7 @@
     border-left: 1px solid var(--border-default);
   }
 
-  .sidebar.mobile-drawer-open {
+  body:not(.is-mobile-app) .sidebar.mobile-drawer-open {
     transform: translateX(0);
   }
 
@@ -390,13 +477,25 @@
   right: 0;
   bottom: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.9);
+  background: transparent;
   display: flex;
   flex-direction: column;
 }
 
 .qr-scanner--scanning {
   background: transparent;
+}
+
+/* Hide app content when scanner is active (camera shows through) */
+/* Using same approach as LocalBooru - completely hide WebView content */
+body.barcode-scanner-active {
+  visibility: hidden;
+  --background: transparent;
+  background: transparent !important;
+}
+
+body.barcode-scanner-active #root {
+  display: none;
 }
 
 .qr-scanner--error {
@@ -899,4 +998,313 @@
 
 .host-selector__add-button svg {
   flex-shrink: 0;
+}
+
+/* ============================================
+   Mobile Swipe Layout (Carousel)
+   ============================================ */
+
+.mobile-layout {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  background: var(--bg-base, #0d0d0f);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-slides {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+.mobile-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-slide--sidebar {
+  background: var(--bg-elevated, #1a1a1c);
+}
+
+.mobile-slide--terminal {
+  background: var(--bg-base, #0d0d0f);
+}
+
+.mobile-slide-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-elevated, #1a1a1c);
+  border-bottom: 1px solid var(--border-subtle, #2a2a2e);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.mobile-slide-back,
+.mobile-slide-close {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface, #252528);
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary, #888);
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.mobile-slide-back:active,
+.mobile-slide-close:active {
+  background: var(--bg-active, #333);
+  color: var(--text-primary, #fff);
+}
+
+.mobile-slide-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.mobile-slide-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.mobile-slide-content--terminal {
+  overflow: hidden;
+}
+
+/* Dots indicator */
+.mobile-dots {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  z-index: 100;
+}
+
+.mobile-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.mobile-dot--active {
+  background: var(--accent, #f97316);
+  transform: scale(1.25);
+}
+
+.mobile-dot:not(.mobile-dot--active):active {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Mobile sidebar content (within slide) */
+.mobile-sidebar-content {
+  padding: 16px;
+}
+
+.mobile-sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle, #2a2a2e);
+}
+
+.mobile-sidebar-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin: 0;
+}
+
+.mobile-sidebar-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary, #888);
+  margin-top: 4px;
+}
+
+/* Project list in mobile sidebar */
+.mobile-project-list {
+  padding: 8px 0;
+}
+
+.mobile-project-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-subtle, #2a2a2e);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mobile-project-item:active {
+  background: var(--bg-hover, #222);
+}
+
+.mobile-project-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-subtle, rgba(249, 115, 22, 0.1));
+  border-radius: 10px;
+  color: var(--accent, #f97316);
+  font-size: 18px;
+  margin-right: 12px;
+}
+
+.mobile-project-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-project-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-project-path {
+  font-size: 12px;
+  color: var(--text-tertiary, #666);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.mobile-project-arrow {
+  color: var(--text-tertiary, #666);
+  font-size: 18px;
+}
+
+.mobile-empty-projects {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary, #888);
+}
+
+.mobile-empty-projects p {
+  margin: 0;
+}
+
+.mobile-empty-hint {
+  font-size: 14px;
+  color: var(--text-tertiary, #666);
+  margin-top: 8px !important;
+}
+
+/* ============================================
+   Mobile App Welcome Screen
+   ============================================ */
+
+.mobile-logo {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: var(--accent, #f97316);
+  margin-bottom: var(--space-md, 16px);
+}
+
+.mobile-logo--success {
+  color: var(--color-success, #22c55e);
+}
+
+.mobile-logo--error {
+  color: var(--color-error, #ef4444);
+}
+
+.mobile-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  padding: var(--space-md, 16px) var(--space-xl, 32px);
+  min-width: 200px;
+  background: var(--accent, #f97316);
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin-top: var(--space-lg, 24px);
+}
+
+.mobile-btn:active {
+  transform: scale(0.98);
+  background: var(--accent-hover, #ea580c);
+}
+
+.mobile-btn--secondary {
+  background: transparent;
+  border: 1px solid var(--border-default, #444);
+  color: var(--text-primary, #fff);
+}
+
+.mobile-btn--secondary:active {
+  background: var(--bg-hover, #333);
+}
+
+.mobile-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md, 16px);
+  margin-top: var(--space-lg, 24px);
+}
+
+.mobile-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-default, #444);
+  border-top-color: var(--accent, #f97316);
+  border-radius: 50%;
+  animation: mobile-spin 0.8s linear infinite;
+  margin-top: var(--space-lg, 24px);
+}
+
+@keyframes mobile-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
