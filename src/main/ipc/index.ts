@@ -1,5 +1,5 @@
 export { registerCliHandlers, getExecOptions, checkCliInstalled, resetCliCache } from './cli-handlers'
-export { registerBeadsHandlers, getBeadsExecOptions } from './beads-handlers'
+export { registerBeadsHandlers, getBeadsExecOptions, checkBeadsInstalled, spawnBdCommand, validateTaskId, TASK_ID_PATTERN } from './beads-handlers'
 export { registerVoiceHandlers } from './voice-handlers'
 export { registerExtensionHandlers } from './extension-handlers'
 export { registerWindowHandlers } from './window-handlers'

@@ -5310,11 +5310,7 @@ html, body, #root {
    Terminal Menu (Arrow Expanding)
    ============================================ */
 
-.terminal-content-wrapper {
-  position: relative;
-  height: 100%;
-  width: 100%;
-}
+/* Moved to Terminal Content Layout section below */
 
 .terminal-menu-container {
   position: absolute;
@@ -5506,6 +5502,188 @@ html, body, #root {
   pointer-events: none;
   user-select: none;
 }
+
+/* ==================== Terminal Content Layout ==================== */
+
+.terminal-content-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-xterm {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* ==================== Terminal Bar (Bottom Bar) ==================== */
+
+.terminal-bar {
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-subtle);
+  z-index: 100;
+}
+
+.terminal-bar-scroll {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.terminal-bar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-bar-btn {
+  flex-shrink: 0;
+  min-width: 36px;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.terminal-bar-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.terminal-bar-btn:active {
+  background: var(--bg-active);
+}
+
+.terminal-bar-btn--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.terminal-bar-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.terminal-bar-btn--danger:active {
+  background: var(--danger);
+  color: white;
+}
+
+.terminal-bar-btn--menu.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.terminal-bar-icon {
+  font-size: 13px;
+}
+
+.terminal-bar-label {
+  font-size: 12px;
+}
+
+.terminal-bar-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 6px 2px;
+}
+
+.terminal-bar-menu-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.terminal-bar-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 170px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 200;
+  padding: 4px;
+}
+
+.terminal-bar-dropdown-item {
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-bar-dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.terminal-bar-dropdown-item:active {
+  background: var(--bg-active);
+}
+
+.terminal-bar-dropdown-item.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.terminal-bar-dropdown-item.selected {
+  background: var(--accent);
+  color: white;
+}
+
+.terminal-bar-dropdown-item.toggle-item {
+  justify-content: flex-start;
+}
+
+.terminal-bar-dropdown-item.toggle-item.checked {
+  background: var(--bg-hover);
+}
+
+.terminal-bar-toggle-indicator {
+  font-size: 12px;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.terminal-bar-dropdown-item.checked .terminal-bar-toggle-indicator {
+  color: var(--accent);
+}
+
+.terminal-bar-check {
+  font-size: 11px;
+  margin-left: auto;
+}
+
 
 /* ==================== Extension Browser ==================== */
 

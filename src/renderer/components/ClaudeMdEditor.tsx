@@ -25,7 +25,7 @@ export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: Cl
     setIsLoading(true)
     setError('')
     try {
-      const result = await window.electronAPI.claudeMdRead(projectPath)
+      const result = await window.electronAPI?.claudeMdRead(projectPath)
       if (result.success) {
         setContent(result.content || '')
         setOriginalContent(result.content || '')
@@ -44,7 +44,7 @@ export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: Cl
     setIsSaving(true)
     setError('')
     try {
-      const result = await window.electronAPI.claudeMdSave(projectPath, content)
+      const result = await window.electronAPI?.claudeMdSave(projectPath, content)
       if (result.success) {
         setOriginalContent(content)
         setFileExists(true)

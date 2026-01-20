@@ -282,6 +282,12 @@ export interface Api {
    */
   addProject: () => Promise<string | null>
 
+  /**
+   * Open a directory picker to select a parent folder and add all subdirectories as projects
+   * @returns Promise resolving to array of projects or null
+   */
+  addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
+
   // ==========================================================================
   // TTS (Text-to-Speech)
   // ==========================================================================

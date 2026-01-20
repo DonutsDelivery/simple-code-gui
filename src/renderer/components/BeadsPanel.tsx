@@ -119,7 +119,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     if (showLoading) setBeadsState({ status: 'loading' })
 
     try {
-      const status = await window.electronAPI.beadsCheck(loadingForProject)
+      const status = await window.electronAPI?.beadsCheck(loadingForProject)
 
       if (currentProjectRef.current !== loadingForProject) {
         return
@@ -137,7 +137,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
         return
       }
 
-      const result = await window.electronAPI.beadsList(loadingForProject)
+      const result = await window.electronAPI?.beadsList(loadingForProject)
 
       if (currentProjectRef.current !== loadingForProject) {
         return
@@ -164,7 +164,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     setBeadsState({ status: 'not_initialized', initializing: true })
 
     try {
-      const result = await window.electronAPI.beadsInit(projectPath)
+      const result = await window.electronAPI?.beadsInit(projectPath)
       if (result.success) {
         loadTasks()
       } else {
@@ -181,7 +181,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     setBeadsState({ status: 'not_installed', installing: 'python', needsPython: true, installError: null, installStatus: 'Downloading Python...' })
 
     try {
-      const result = await window.electronAPI.pythonInstall()
+      const result = await window.electronAPI?.pythonInstall()
       if (result.success) {
         setBeadsState({ status: 'not_installed', installing: null, needsPython: false, installError: null, installStatus: null })
         handleInstallBeads()
@@ -197,7 +197,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     setBeadsState({ status: 'not_installed', installing: 'beads', needsPython: false, installError: null, installStatus: null })
 
     try {
-      const result = await window.electronAPI.beadsInstall()
+      const result = await window.electronAPI?.beadsInstall()
       if (result.success) {
         loadTasks()
       } else if (result.needsPython) {
@@ -211,7 +211,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
   }
 
   useEffect(() => {
-    const cleanup = window.electronAPI.onInstallProgress((data) => {
+    const cleanup = window.electronAPI?.onInstallProgress((data) => {
       if (data.type === 'python') {
         const percent = data.percent !== undefined ? ` (${data.percent}%)` : ''
         setBeadsState((prev) => {
@@ -254,16 +254,16 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     const isReady = beadsState.status === 'ready'
     if (!projectPath || !isReady) return
 
-    window.electronAPI.beadsWatch(projectPath)
+    window.electronAPI?.beadsWatch(projectPath)
 
-    const cleanup = window.electronAPI.onBeadsTasksChanged((data) => {
+    const cleanup = window.electronAPI?.onBeadsTasksChanged((data) => {
       if (data.cwd === projectPath && !suppressWatcherReloadRef.current) {
         loadTasks(false)
       }
     })
 
     return () => {
-      window.electronAPI.beadsUnwatch(projectPath)
+      window.electronAPI?.beadsUnwatch(projectPath)
       cleanup()
     }
   }, [projectPath, beadsState.status, loadTasks])
@@ -280,7 +280,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
       const description = newTaskDescription.trim() || undefined
       const labels = newTaskLabels.trim() || undefined
 
-      const result = await window.electronAPI.beadsCreate(
+      const result = await window.electronAPI?.beadsCreate(
         projectPath,
         title,
         description,
@@ -313,7 +313,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI.beadsComplete(projectPath, taskId)
+      const result = await window.electronAPI?.beadsComplete(projectPath, taskId)
       if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
@@ -335,7 +335,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI.beadsDelete(projectPath, taskId)
+      const result = await window.electronAPI?.beadsDelete(projectPath, taskId)
       if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
@@ -364,7 +364,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI.beadsUpdate(projectPath, taskId, nextStatus)
+      const result = await window.electronAPI?.beadsUpdate(projectPath, taskId, nextStatus)
       if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
@@ -390,7 +390,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     }
 
     try {
-      const result = await window.electronAPI.beadsUpdate(projectPath, editingTaskId, undefined, editingTitle.trim())
+      const result = await window.electronAPI?.beadsUpdate(projectPath, editingTaskId, undefined, editingTitle.trim())
       if (result.success) {
         loadTasks()
       } else {
@@ -416,7 +416,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     setEditingDetail(true)
 
     try {
-      const result = await window.electronAPI.beadsShow(projectPath, task.id)
+      const result = await window.electronAPI?.beadsShow(projectPath, task.id)
       if (result.success && result.task) {
         const fullTask = Array.isArray(result.task) ? result.task[0] : result.task
         setDetailTask(fullTask)
@@ -446,7 +446,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
     if (!projectPath || !detailTask) return
 
     try {
-      const result = await window.electronAPI.beadsUpdate(
+      const result = await window.electronAPI?.beadsUpdate(
         projectPath,
         detailTask.id,
         editDetailStatus,
@@ -486,7 +486,7 @@ export function BeadsPanel({ projectPath, isExpanded, onToggle, onStartTaskInNew
 
     try {
       await Promise.allSettled(
-        closedTasks.map(task => window.electronAPI.beadsDelete(projectPath, task.id))
+        closedTasks.map(task => window.electronAPI?.beadsDelete(projectPath, task.id))
       )
     } finally {
       suppressWatcherReloadRef.current = false

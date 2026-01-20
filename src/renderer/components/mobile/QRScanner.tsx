@@ -3,6 +3,7 @@ import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 
 export interface ParsedConnectionUrl {
   host: string
+  hosts?: string[]  // Multiple IPs for fallback connection attempts
   port: number
   token: string
   // v2 security fields
@@ -25,6 +26,7 @@ interface QRCodeV2 {
   type: 'claude-terminal'
   version: 2
   host: string
+  hosts?: string[]  // Multiple IPs for fallback connection attempts
   port: number
   token: string
   fingerprint: string
@@ -55,6 +57,7 @@ export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
 
       return {
         host: v2.host,
+        hosts: v2.hosts,  // Include all IPs for multi-IP connection attempts
         port: v2.port || 38470,
         token: v2.token,
         version: 2,

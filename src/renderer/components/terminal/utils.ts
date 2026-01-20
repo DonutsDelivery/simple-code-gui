@@ -165,9 +165,9 @@ export function formatPathsForBackend(paths: string[], backend?: string): string
 export async function handlePaste(term: XTerm, ptyId: string, backend?: string): Promise<void> {
   try {
     // Check if clipboard has an image or file
-    const imageResult = await window.electronAPI.readClipboardImage()
+    const imageResult = await window.electronAPI?.readClipboardImage()
     if (imageResult.success && imageResult.hasImage && imageResult.path) {
-      window.electronAPI.writePty(ptyId, formatPathForBackend(imageResult.path, backend))
+      window.electronAPI?.writePty(ptyId, formatPathForBackend(imageResult.path, backend))
       return
     }
 
@@ -182,7 +182,7 @@ export async function handlePaste(term: XTerm, ptyId: string, backend?: string):
           .map(line => decodeURIComponent(line.replace('file://', '')))
           .join(' ')
       }
-      window.electronAPI.writePty(ptyId, cleanText || text)
+      window.electronAPI?.writePty(ptyId, cleanText || text)
     }
   } catch (e) {
     console.error('Paste failed:', e)

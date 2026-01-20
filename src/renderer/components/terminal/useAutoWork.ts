@@ -102,7 +102,7 @@ export function useAutoWork({
     setTimeout(() => {
       console.log('[AutoWork] Sending continuation prompt')
       const continuePrompt = buildAutoWorkPrompt()
-      window.electronAPI.writePty(ptyId, continuePrompt + '\r')
+      window.electronAPI?.writePty(ptyId, continuePrompt + '\r')
     }, clearDelay)
 
     setPendingAutoWorkContinue(false)
@@ -123,7 +123,7 @@ export function useAutoWork({
     const clearDelay = didClear ? 2000 : 100
     setTimeout(() => {
       console.log('[AutoWork] Sending initial prompt')
-      window.electronAPI.writePty(ptyId, buildAutoWorkPrompt() + '\r')
+      window.electronAPI?.writePty(ptyId, buildAutoWorkPrompt() + '\r')
     }, clearDelay)
   }, [ptyId, sendBackendCommand, buildAutoWorkPrompt])
 
@@ -144,7 +144,7 @@ export function useAutoWork({
       const didClear = sendBackendCommand('clear')
       const clearDelay = didClear ? 2000 : 100
       setTimeout(() => {
-        window.electronAPI.writePty(ptyId, buildAutoWorkPrompt() + '\r')
+        window.electronAPI?.writePty(ptyId, buildAutoWorkPrompt() + '\r')
       }, clearDelay)
     }
   }, [awaitingUserReview, ptyId, sendBackendCommand, buildAutoWorkPrompt, triggerSummarize])
@@ -159,7 +159,7 @@ export function useAutoWork({
     autoWorkGitCommitRef.current = false
     setAwaitingUserReview(false)
     console.log('[AutoWork] Mode disabled - will stop after current task')
-    window.electronAPI.writePty(ptyId, 'When you finish the current task, do NOT output the AUTOWORK_CONTINUE marker. Just complete this task and wait for further input.\r')
+    window.electronAPI?.writePty(ptyId, 'When you finish the current task, do NOT output the AUTOWORK_CONTINUE marker. Just complete this task and wait for further input.\r')
   }, [ptyId])
 
   // Cancel auto work immediately
@@ -172,7 +172,7 @@ export function useAutoWork({
     autoWorkGitCommitRef.current = false
     setAwaitingUserReview(false)
     console.log('[AutoWork] Mode disabled by cancel')
-    window.electronAPI.writePty(ptyId, '\x1b')
+    window.electronAPI?.writePty(ptyId, '\x1b')
   }, [ptyId])
 
   return {

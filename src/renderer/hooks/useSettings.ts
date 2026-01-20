@@ -30,7 +30,7 @@ export function useSettings(): UseSettingsReturn {
     }
     const loadSettings = async () => {
       try {
-        const loadedSettings = await window.electronAPI.getSettings()
+        const loadedSettings = await window.electronAPI?.getSettings()
         setSettings(loadedSettings)
 
         // Apply theme

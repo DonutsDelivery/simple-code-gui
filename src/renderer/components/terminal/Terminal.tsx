@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import '@xterm/xterm/css/xterm.css'
-import { TerminalMenu, AutoWorkOptions } from '../TerminalMenu.js'
+import { TerminalBar } from '../TerminalBar.js'
+import { AutoWorkOptions } from '../TerminalMenu.js'
 import { CustomCommandModal } from '../CustomCommandModal.js'
 import { resolveBackendCommand } from '../../utils/backendCommands.js'
 import type { TerminalProps } from './types.js'
@@ -17,13 +18,22 @@ export { clearTerminalBuffer, cleanupOrphanedBuffers }
  * Terminal component that wraps xterm.js with PTY integration.
  * Supports TTS, auto work loop, summary capture, and backend-specific commands.
  */
-export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend }: TerminalProps): React.ReactElement {
+export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend, api }: TerminalProps): React.ReactElement {
   // Custom command modal state
   const [showCustomCommandModal, setShowCustomCommandModal] = useState(false)
 
+  // PTY write helper - uses api if provided, otherwise window.electronAPI
+  const writePty = useCallback((id: string, data: string) => {
+    if (api) {
+      api.writePty(id, data)
+    } else {
+      window.electronAPI?.writePty(id, data)
+    }
+  }, [api])
+
   // Backend change handler
   const handleBackendChange = useCallback((newBackend: string) => {
-    window.electronAPI.setPtyBackend(ptyId, newBackend)
+    window.electronAPI?.setPtyBackend?.(ptyId, newBackend)
   }, [ptyId])
 
   // Send backend-specific command
@@ -32,12 +42,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     if (!backendCommand) {
       return false
     }
-    window.electronAPI.writePty(ptyId, backendCommand)
+    writePty(ptyId, backendCommand)
     setTimeout(() => {
-      window.electronAPI.writePty(ptyId, '\r')
+      writePty(ptyId, '\r')
     }, 100)
     return true
-  }, [backend, ptyId])
+  }, [backend, ptyId, writePty])
 
   // TTS hook
   const {
@@ -91,6 +101,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     ptyId,
     theme,
     backend,
+    api,
     onTTSChunk: processTTSChunk,
     onUserInput: handleUserInput,
     onSummaryChunk: processSummaryChunk,
@@ -112,7 +123,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
           fitAddonRef.current.fit()
           const dims = fitAddonRef.current.proposeDimensions()
           if (dims && dims.cols > 0 && dims.rows > 0) {
-            window.electronAPI.resizePty(ptyId, dims.cols, dims.rows)
+            window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
           }
           if (wasAtBottom) {
             requestAnimationFrame(() => {
@@ -171,7 +182,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         try {
-          const filePath = window.electronAPI.getPathForFile(files[i])
+          const filePath = window.electronAPI?.getPathForFile(files[i])
           if (filePath) {
             paths.push(filePath)
           }
@@ -195,7 +206,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     }
 
     if (paths.length > 0) {
-      window.electronAPI.writePty(ptyId, formatPathsForBackend(paths, backend))
+      window.electronAPI?.writePty(ptyId, formatPathsForBackend(paths, backend))
     }
   }, [ptyId, backend])
 
@@ -242,12 +253,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     <div className="terminal-content-wrapper">
       <div
         ref={containerRef}
-        style={{ height: '100%', width: '100%' }}
+        className="terminal-xterm"
         onMouseDown={onFocus}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       />
-      <TerminalMenu
+      <TerminalBar
         ptyId={ptyId}
         onCommand={handleMenuCommand}
         currentBackend={backend || 'claude'}

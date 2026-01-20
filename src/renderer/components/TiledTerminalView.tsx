@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Terminal } from './Terminal.js'
 import { ErrorBoundary } from './ErrorBoundary.js'
 import { Theme } from '../themes.js'
+import type { Api } from '../api/types.js'
 import {
   TileLayout,
   OpenTab,
@@ -35,6 +36,7 @@ interface TiledTerminalViewProps {
   layout: TileLayout[]
   onLayoutChange: (layout: TileLayout[]) => void
   onOpenSessionAtPosition?: (projectPath: string, dropZone: DropZone | null) => void
+  api?: Api  // API abstraction for PTY operations
 }
 
 export function TiledTerminalView({
@@ -45,7 +47,8 @@ export function TiledTerminalView({
   onFocusTab,
   layout,
   onLayoutChange,
-  onOpenSessionAtPosition
+  onOpenSessionAtPosition,
+  api
 }: TiledTerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const containerSizeRef = useRef({ width: 1920, height: 1080 })
@@ -304,9 +307,26 @@ export function TiledTerminalView({
 
     // Check if this is a sidebar project drop
     const sidebarProjectPath = e.dataTransfer.getData('application/x-sidebar-project')
-    if (sidebarProjectPath && onOpenSessionAtPosition) {
+    // Also try text/plain as fallback (sidebar sets both)
+    const textPlainData = e.dataTransfer.getData('text/plain')
+    const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
+
+    console.log('[TiledTerminalView] Drop event:', {
+      sidebarProjectPath,
+      textPlainData,
+      isSidebarDrag,
+      hasCallback: !!onOpenSessionAtPosition,
+      currentDropZone,
+      dataTypes: Array.from(e.dataTransfer.types)
+    })
+
+    // Use the sidebar path, or fall back to text/plain if this is a sidebar drag
+    const projectPath = sidebarProjectPath || (isSidebarDrag ? textPlainData : null)
+
+    if (projectPath && onOpenSessionAtPosition) {
       // Open the project at the drop position
-      onOpenSessionAtPosition(sidebarProjectPath, currentDropZone)
+      console.log('[TiledTerminalView] Calling onOpenSessionAtPosition with:', projectPath, currentDropZone)
+      onOpenSessionAtPosition(projectPath, currentDropZone)
       setDraggedSidebarProject(null)
       setDropTarget(null)
       setCurrentDropZone(null)
@@ -559,6 +579,34 @@ export function TiledTerminalView({
               borderRadius: 'var(--radius-sm)',
               minHeight: 0
             }}
+            onDragOver={(e) => {
+              // Handle sidebar project drags even when overlay isn't visible yet
+              const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
+              if (isSidebarDrag) {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!draggedSidebarProject) {
+                  setDraggedSidebarProject('pending')
+                }
+                if (containerRef.current) {
+                  const rect = containerRef.current.getBoundingClientRect()
+                  const mouseX = ((e.clientX - rect.left) / rect.width) * 100
+                  const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+                  const zone = computeDropZone(effectiveLayout, null, mouseX, mouseY)
+                  setCurrentDropZone(zone)
+                  setDropTarget(zone?.targetTileId || tile.id)
+                }
+              }
+            }}
+            onDrop={(e) => {
+              // Handle sidebar project drops even when overlay isn't visible
+              const sidebarPath = e.dataTransfer.getData('application/x-sidebar-project')
+              if (sidebarPath) {
+                e.preventDefault()
+                e.stopPropagation()
+                handleContainerDrop(e)
+              }
+            }}
           >
             <div
               className="tile-header"
@@ -586,6 +634,7 @@ export function TiledTerminalView({
                     onFocus={() => onFocusTab(tab.id)}
                     projectPath={tab.projectPath}
                     backend={tab.backend}
+                    api={api}
                   />
                 </ErrorBoundary>
               </div>

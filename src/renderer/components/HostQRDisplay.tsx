@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 
 interface HostQRDisplayProps {
@@ -8,13 +8,24 @@ interface HostQRDisplayProps {
 }
 
 /**
- * Generate a random secure token
+ * Generate a random secure token (fallback for non-Electron environments)
  */
 function generateToken(length = 32): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const array = new Uint8Array(length)
   crypto.getRandomValues(array)
   return Array.from(array, (byte) => chars[byte % chars.length]).join('')
+}
+
+/**
+ * Format a timestamp as time remaining
+ */
+function formatTimeRemaining(expiresAt: number): string {
+  const now = Date.now()
+  const remaining = Math.max(0, expiresAt - now)
+  const minutes = Math.floor(remaining / 60000)
+  const seconds = Math.floor((remaining % 60000) / 1000)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
 /**
@@ -75,26 +86,52 @@ export function HostQRDisplay({
 }: HostQRDisplayProps): React.ReactElement {
   const [token, setToken] = useState<string>('')
   const [localIPs, setLocalIPs] = useState<string[]>(['Detecting...'])
-  const [selectedIP, setSelectedIP] = useState<string>('')
   const [serverPort, setServerPort] = useState<number>(38470)
   const [copied, setCopied] = useState(false)
+  // v2 security fields
+  const [fingerprint, setFingerprint] = useState<string>('')
+  const [formattedFingerprint, setFormattedFingerprint] = useState<string>('')
+  const [qrData, setQrData] = useState<string>('')
+  const [nonceExpires, setNonceExpires] = useState<number>(0)
+  const [timeRemaining, setTimeRemaining] = useState<string>('')
+  const nonceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Refresh QR code with new nonce
+  const refreshQRCode = useCallback(async () => {
+    if (window.electronAPI?.mobileGetConnectionInfo) {
+      try {
+        const info = await window.electronAPI?.mobileGetConnectionInfo()
+        setToken(info.token)
+        setLocalIPs(info.ips.length > 0 ? info.ips : ['localhost'])
+        setServerPort(info.port)
+        setFingerprint(info.fingerprint)
+        setFormattedFingerprint(info.formattedFingerprint)
+        setQrData(info.qrData)
+        setNonceExpires(info.nonceExpires)
+      } catch (e) {
+        console.error('Failed to get mobile connection info:', e)
+      }
+    }
+  }, [])
 
   // Get connection info from mobile server on mount
   useEffect(() => {
     const loadConnectionInfo = async () => {
       if (window.electronAPI?.mobileGetConnectionInfo) {
         try {
-          const info = await window.electronAPI.mobileGetConnectionInfo()
+          const info = await window.electronAPI?.mobileGetConnectionInfo()
           setToken(info.token)
           setLocalIPs(info.ips.length > 0 ? info.ips : ['localhost'])
-          setSelectedIP(info.ips[0] || 'localhost')
           setServerPort(info.port)
+          setFingerprint(info.fingerprint)
+          setFormattedFingerprint(info.formattedFingerprint)
+          setQrData(info.qrData)
+          setNonceExpires(info.nonceExpires)
         } catch (e) {
           console.error('Failed to get mobile connection info:', e)
           // Fallback to local discovery
           getLocalIPs().then((ips) => {
             setLocalIPs(ips)
-            setSelectedIP(ips[0] || 'localhost')
           })
           setToken(generateToken())
         }
@@ -102,13 +139,42 @@ export function HostQRDisplay({
         // Not in Electron, use local discovery
         getLocalIPs().then((ips) => {
           setLocalIPs(ips)
-          setSelectedIP(ips[0] || 'localhost')
         })
         setToken(generateToken())
       }
     }
     loadConnectionInfo()
   }, [])
+
+  // Update time remaining countdown
+  useEffect(() => {
+    if (nonceExpires > 0) {
+      // Clear existing timer
+      if (nonceTimerRef.current) {
+        clearInterval(nonceTimerRef.current)
+      }
+
+      // Update immediately
+      setTimeRemaining(formatTimeRemaining(nonceExpires))
+
+      // Start countdown timer
+      nonceTimerRef.current = setInterval(() => {
+        const remaining = nonceExpires - Date.now()
+        if (remaining <= 0) {
+          // Nonce expired, refresh automatically
+          refreshQRCode()
+        } else {
+          setTimeRemaining(formatTimeRemaining(nonceExpires))
+        }
+      }, 1000)
+
+      return () => {
+        if (nonceTimerRef.current) {
+          clearInterval(nonceTimerRef.current)
+        }
+      }
+    }
+  }, [nonceExpires, refreshQRCode])
 
   // Notify parent when token changes
   useEffect(() => {
@@ -117,18 +183,19 @@ export function HostQRDisplay({
     }
   }, [token, onTokenChange])
 
-  // Generate the connection URL
-  const connectionUrl = useMemo(() => {
-    const host = selectedIP || 'localhost'
-    return `claude-terminal://${host}:${serverPort}?token=${token}`
-  }, [selectedIP, serverPort, token])
+  // Generate the connection URL (v1 format for backward compatibility display)
+  const connectionUrl = `claude-terminal://${localIPs[0] || 'localhost'}:${serverPort}?token=${token}`
 
-  // Regenerate token via server
+  // Regenerate token via server (also refreshes nonce)
   const handleRegenerateToken = useCallback(async () => {
     if (window.electronAPI?.mobileRegenerateToken) {
       try {
-        const info = await window.electronAPI.mobileRegenerateToken()
+        const info = await window.electronAPI?.mobileRegenerateToken()
         setToken(info.token)
+        setFingerprint(info.fingerprint)
+        setFormattedFingerprint(info.formattedFingerprint)
+        setQrData(info.qrData)
+        setNonceExpires(info.nonceExpires)
         setCopied(false)
       } catch (e) {
         console.error('Failed to regenerate token:', e)
@@ -161,40 +228,48 @@ export function HostQRDisplay({
         </p>
       </div>
 
-      {/* QR Code */}
+      {/* QR Code - uses v2 JSON format for security */}
       <div className="host-qr-display__qr-container">
         <QRCodeSVG
-          value={connectionUrl}
+          value={qrData || connectionUrl}
           size={200}
           level="M"
           includeMargin
         />
+        {timeRemaining && (
+          <div className="host-qr-display__qr-timer">
+            Expires in {timeRemaining}
+          </div>
+        )}
       </div>
 
       {/* Connection Details */}
       <div className="host-qr-display__details">
-        {/* IP Selection */}
+        {/* Server Fingerprint */}
+        {formattedFingerprint && (
+          <div className="host-qr-display__field host-qr-display__field--full">
+            <label className="host-qr-display__label">Server Fingerprint</label>
+            <span className="host-qr-display__value host-qr-display__value--mono host-qr-display__value--fingerprint">
+              {formattedFingerprint}
+            </span>
+            <span className="host-qr-display__hint">
+              Mobile app will verify this fingerprint on first connect
+            </span>
+          </div>
+        )}
+
+        {/* IP Addresses (all included in QR) */}
         <div className="host-qr-display__field">
-          <label className="host-qr-display__label">Local IP Address</label>
-          {localIPs.length > 1 ? (
-            <select
-              className="host-qr-display__select"
-              value={selectedIP}
-              onChange={(e) => setSelectedIP(e.target.value)}
-            >
-              {localIPs.map((ip) => (
-                <option key={ip} value={ip}>{ip}</option>
-              ))}
-            </select>
-          ) : (
-            <span className="host-qr-display__value">{selectedIP || localIPs[0]}</span>
-          )}
+          <label className="host-qr-display__label">Available IPs (tries all)</label>
+          <span className="host-qr-display__value host-qr-display__value--ips">
+            {localIPs.join(', ')}
+          </span>
         </div>
 
         {/* Port */}
         <div className="host-qr-display__field">
           <label className="host-qr-display__label">Port</label>
-          <span className="host-qr-display__value">{port}</span>
+          <span className="host-qr-display__value">{serverPort}</span>
         </div>
 
         {/* Token (partially hidden) */}
@@ -210,13 +285,26 @@ export function HostQRDisplay({
       <div className="host-qr-display__actions">
         <button
           className="host-qr-display__button host-qr-display__button--secondary"
-          onClick={handleRegenerateToken}
+          onClick={refreshQRCode}
+          title="Refresh QR code with new nonce"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
             <path d="M23 4v6h-6M1 20v-6h6" />
             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
           </svg>
-          Regenerate Token
+          Refresh QR
+        </button>
+
+        <button
+          className="host-qr-display__button host-qr-display__button--warning"
+          onClick={handleRegenerateToken}
+          title="Generate new token (invalidates existing connections)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          New Token
         </button>
 
         <button

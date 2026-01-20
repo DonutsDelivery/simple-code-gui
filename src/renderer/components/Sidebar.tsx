@@ -7,7 +7,6 @@ import { ClaudeMdEditor } from './ClaudeMdEditor.js'
 import { useVoice } from '../contexts/VoiceContext.js'
 import { useIsMobile } from '../hooks/useIsMobile.js'
 import { useSwipeGesture } from '../hooks/useSwipeGesture.js'
-import { HostQRDisplay } from './HostQRDisplay.js'
 import {
   SidebarProps,
   getCategoryGradient,
@@ -31,6 +30,7 @@ export function Sidebar({
   activeTabId,
   lastFocusedTabId,
   onAddProject,
+  onAddProjectsFromParent,
   onRemoveProject,
   onOpenSession,
   onSwitchToTab,
@@ -44,6 +44,8 @@ export function Sidebar({
   onCollapsedChange,
   isMobileOpen,
   onMobileClose,
+  onOpenMobileConnect,
+  onDisconnect,
 }: SidebarProps): React.ReactElement | null {
   // Mobile detection
   const { isMobile } = useIsMobile()
@@ -124,7 +126,7 @@ export function Sidebar({
   )
   const [claudeMdEditorModal, setClaudeMdEditorModal] = useState<{ project: Project } | null>(null)
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ project: Project } | null>(null)
-  const [mobileConnectModal, setMobileConnectModal] = useState(false)
+  // Mobile connect modal is now handled by App.tsx
   const [taskCounts, setTaskCounts] = useState<Record<string, { open: number; inProgress: number }>>(
     {}
   )
@@ -193,7 +195,7 @@ export function Sidebar({
 
   // Project handlers
   const handleSelectExecutable = async (project: Project) => {
-    const executable = await window.electronAPI.selectExecutable()
+    const executable = await window.electronAPI?.selectExecutable()
     if (executable) onUpdateProject(project.path, { executable })
     setContextMenu(null)
   }
@@ -205,7 +207,7 @@ export function Sidebar({
 
   const handleRunExecutable = async (project: Project) => {
     if (project.executable) {
-      const result = await window.electronAPI.runExecutable(project.executable, project.path)
+      const result = await window.electronAPI?.runExecutable(project.executable, project.path)
       if (!result.success) console.error('Failed to run executable:', result.error)
     }
     setContextMenu(null)
@@ -238,12 +240,12 @@ export function Sidebar({
   }
 
   const handleOpenCategoryAsProject = async (categoryName: string) => {
-    const metaPath = await window.electronAPI.getCategoryMetaPath(categoryName)
+    const metaPath = await window.electronAPI?.getCategoryMetaPath(categoryName)
     onOpenSession(metaPath)
   }
 
   const handleOpenAllProjects = async () => {
-    const metaPath = await window.electronAPI.getMetaProjectsPath()
+    const metaPath = await window.electronAPI?.getMetaProjectsPath()
     onOpenSession(metaPath)
   }
 
@@ -310,8 +312,8 @@ export function Sidebar({
   }, [contextMenu, categoryContextMenu])
 
   useEffect(() => {
-    if (contextMenu) {
-      window.electronAPI.apiStatus(contextMenu.project.path).then((status) => {
+    if (contextMenu && window.electronAPI?.apiStatus) {
+      window.electronAPI?.apiStatus(contextMenu.project.path).then((status) => {
         setApiStatus((prev) => ({ ...prev, [contextMenu.project.path]: status }))
       })
     }
@@ -319,12 +321,13 @@ export function Sidebar({
 
   useEffect(() => {
     async function fetchTaskCounts(): Promise<void> {
+      if (!window.electronAPI?.beadsCheck) return
       const counts: Record<string, { open: number; inProgress: number }> = {}
       for (const project of projects) {
         try {
-          const status = await window.electronAPI.beadsCheck(project.path)
-          if (status.installed && status.initialized) {
-            const result = await window.electronAPI.beadsList(project.path)
+          const status = await window.electronAPI?.beadsCheck(project.path)
+          if (status.installed && status.initialized && window.electronAPI?.beadsList) {
+            const result = await window.electronAPI?.beadsList(project.path)
             if (result.success && result.tasks) {
               const open = result.tasks.filter((t: { status: string }) => t.status === 'open')
                 .length
@@ -346,15 +349,15 @@ export function Sidebar({
   }, [projects])
 
   useEffect(() => {
-    if (focusedProjectPath) {
-      window.electronAPI.apiStatus(focusedProjectPath).then((status) => {
+    if (focusedProjectPath && window.electronAPI?.apiStatus) {
+      window.electronAPI?.apiStatus(focusedProjectPath).then((status) => {
         setApiStatus((prev) => ({ ...prev, [focusedProjectPath]: status }))
       })
     }
   }, [focusedProjectPath, setApiStatus])
 
   useEffect(() => {
-    window.electronAPI.isDebugMode().then(setIsDebugMode)
+    window.electronAPI?.isDebugMode?.()?.then(setIsDebugMode)
   }, [])
 
   // Memoized project item callbacks
@@ -664,6 +667,9 @@ export function Sidebar({
               <button className="add-project-btn" onClick={onAddProject} title="Add existing project folder">
                 + add
               </button>
+              <button className="add-project-btn" onClick={onAddProjectsFromParent} title="Add all projects from a parent folder">
+                + folder
+              </button>
             </div>
           </div>
 
@@ -676,8 +682,8 @@ export function Sidebar({
             }}
             onSendToCurrentTab={(prompt) => {
               if (focusedTabPtyId) {
-                window.electronAPI.writePty(focusedTabPtyId, prompt)
-                setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+                window.electronAPI?.writePty(focusedTabPtyId, prompt)
+                setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
               }
             }}
             currentTabPtyId={focusedTabPtyId}
@@ -687,8 +693,8 @@ export function Sidebar({
             projectPath={beadsProjectPath}
             onCommand={(cmd) => {
               if (focusedTabPtyId) {
-                window.electronAPI.writePty(focusedTabPtyId, cmd)
-                setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+                window.electronAPI?.writePty(focusedTabPtyId, cmd)
+                setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
               }
             }}
           />
@@ -718,8 +724,21 @@ export function Sidebar({
               await handleToggleApi(project)
               setContextMenu(null)
             }}
-            onOpenMobileConnect={() => setMobileConnectModal(true)}
+            onOpenMobileConnect={onOpenMobileConnect}
           />
+
+          {/* Disconnect button for mobile */}
+          {onDisconnect && (
+            <div className="sidebar-disconnect">
+              <button
+                className="disconnect-btn"
+                onClick={onDisconnect}
+                title="Disconnect from desktop"
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
 
           {/* Context Menu */}
           {contextMenu && (
@@ -772,21 +791,6 @@ export function Sidebar({
                 setDeleteConfirmModal(null)
               }}
             />
-          )}
-
-          {/* Mobile Connect Modal */}
-          {mobileConnectModal && (
-            <div className="modal-overlay" onClick={() => setMobileConnectModal(false)}>
-              <div className="modal mobile-connect-modal" onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                  <h3>Connect Mobile Device</h3>
-                  <button className="modal-close" onClick={() => setMobileConnectModal(false)}>×</button>
-                </div>
-                <div className="modal-content">
-                  <HostQRDisplay port={38470} />
-                </div>
-              </div>
-            </div>
           )}
 
           {/* Project Settings Modal */}
@@ -986,6 +990,9 @@ export function Sidebar({
           <button className="add-project-btn" onClick={onAddProject} title="Add existing project folder">
             + add
           </button>
+          <button className="add-project-btn" onClick={onAddProjectsFromParent} title="Add all projects from a parent folder">
+            + folder
+          </button>
         </div>
       </div>
 
@@ -998,8 +1005,8 @@ export function Sidebar({
         }}
         onSendToCurrentTab={(prompt) => {
           if (focusedTabPtyId) {
-            window.electronAPI.writePty(focusedTabPtyId, prompt)
-            setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+            window.electronAPI?.writePty(focusedTabPtyId, prompt)
+            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
           }
         }}
         currentTabPtyId={focusedTabPtyId}
@@ -1009,8 +1016,8 @@ export function Sidebar({
         projectPath={beadsProjectPath}
         onCommand={(cmd) => {
           if (focusedTabPtyId) {
-            window.electronAPI.writePty(focusedTabPtyId, cmd)
-            setTimeout(() => window.electronAPI.writePty(focusedTabPtyId, '\r'), 100)
+            window.electronAPI?.writePty(focusedTabPtyId, cmd)
+            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
           }
         }}
       />
@@ -1040,7 +1047,7 @@ export function Sidebar({
           await handleToggleApi(project)
           setContextMenu(null)
         }}
-        onOpenMobileConnect={() => setMobileConnectModal(true)}
+        onOpenMobileConnect={onOpenMobileConnect}
       />
       <div className="sidebar-resize-handle" onMouseDown={handleMouseDown} />
 
@@ -1095,21 +1102,6 @@ export function Sidebar({
             setDeleteConfirmModal(null)
           }}
         />
-      )}
-
-      {/* Mobile Connect Modal */}
-      {mobileConnectModal && (
-        <div className="modal-overlay" onClick={() => setMobileConnectModal(false)}>
-          <div className="modal mobile-connect-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Connect Mobile Device</h3>
-              <button className="modal-close" onClick={() => setMobileConnectModal(false)}>×</button>
-            </div>
-            <div className="modal-content">
-              <HostQRDisplay port={38470} />
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Project Settings Modal */}

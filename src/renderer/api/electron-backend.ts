@@ -47,6 +47,7 @@ declare global {
 
       // Project Management
       addProject: () => Promise<string | null>
+      addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
 
       // TTS
       ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
@@ -171,6 +172,11 @@ export class ElectronBackend implements ExtendedApi {
   async addProject(): Promise<string | null> {
     this.checkApi()
     return window.electronAPI!.addProject()
+  }
+
+  async addProjectsFromParent(): Promise<Array<{ path: string; name: string }> | null> {
+    this.checkApi()
+    return window.electronAPI!.addProjectsFromParent()
   }
 
   // ==========================================================================

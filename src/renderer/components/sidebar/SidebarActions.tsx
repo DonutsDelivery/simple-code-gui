@@ -32,9 +32,9 @@ export const SidebarActions = React.memo(function SidebarActions({
         activeTabId={activeTabId}
         onTranscription={(text) => {
           const currentTabId = activeTabIdRef.current
-          if (currentTabId) {
-            window.electronAPI.writePty(currentTabId, text)
-            setTimeout(() => window.electronAPI.writePty(currentTabId, '\r'), 100)
+          if (currentTabId && window.electronAPI?.writePty) {
+            window.electronAPI?.writePty(currentTabId, text)
+            setTimeout(() => window.electronAPI?.writePty?.(currentTabId, '\r'), 100)
           }
         }}
       />
@@ -70,7 +70,7 @@ export const SidebarActions = React.memo(function SidebarActions({
       {isDebugMode && (
         <button
           className="action-icon-btn"
-          onClick={() => window.electronAPI.refresh()}
+          onClick={() => window.electronAPI?.refresh?.()}
           tabIndex={0}
           title="Refresh (Debug Mode)"
           aria-label="Refresh (Debug Mode)"

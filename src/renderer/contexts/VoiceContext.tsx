@@ -128,7 +128,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       setSettingsLoaded(true)
       return
     }
-    window.electronAPI.getSettings().then((settings) => {
+    window.electronAPI?.getSettings().then((settings) => {
       if (settings.voiceOutputEnabled !== undefined) setVoiceOutputEnabledState(settings.voiceOutputEnabled)
       if (settings.voiceVolume !== undefined) setVolumeState(settings.voiceVolume)
       if (settings.voiceSpeed !== undefined) {
@@ -139,14 +139,14 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       setSettingsLoaded(true)
     }).catch(() => setSettingsLoaded(true))
     // Load global voice settings for project override feature
-    window.electronAPI?.voiceGetSettings?.().then((voiceSettings) => {
+    window.electronAPI?.voiceGetSettings?.()?.then((voiceSettings) => {
       if (voiceSettings) {
         globalVoiceRef.current = {
           voice: voiceSettings.ttsVoice || '',
           engine: voiceSettings.ttsEngine || 'piper'
         }
       }
-    }).catch(e => console.error('Failed to load global voice settings:', e))
+    })?.catch(e => console.error('Failed to load global voice settings:', e))
   }, [])
 
   // Keep refs in sync to avoid stale closures
@@ -165,8 +165,8 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   // Save a single voice setting
   const saveVoiceSetting = useCallback(async (key: string, value: boolean | number) => {
     if (!settingsLoaded || !window.electronAPI) return
-    const settings = await window.electronAPI.getSettings()
-    await window.electronAPI.saveSettings({ ...settings, [key]: value })
+    const settings = await window.electronAPI?.getSettings()
+    await window.electronAPI?.saveSettings({ ...settings, [key]: value })
   }, [settingsLoaded])
 
   // Debounced save for slider-based settings (volume, speed) to avoid excessive IPC calls

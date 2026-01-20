@@ -10,7 +10,7 @@ export function TitleBar({ title = 'Simple Code GUI' }: TitleBarProps) {
   const lastCallRef = useRef<number>(0)
 
   const checkMaximized = useCallback(() => {
-    window.electronAPI.windowIsMaximized().then(setIsMaximized)
+    window.electronAPI?.windowIsMaximized?.()?.then(setIsMaximized)
   }, [])
 
   useEffect(() => {
@@ -46,19 +46,19 @@ export function TitleBar({ title = 'Simple Code GUI' }: TitleBarProps) {
   }, [checkMaximized])
 
   const handleMinimize = () => {
-    window.electronAPI.windowMinimize()
+    window.electronAPI?.windowMinimize()
   }
 
   const handleMaximize = () => {
-    window.electronAPI.windowMaximize()
+    window.electronAPI?.windowMaximize()
     // Update state after a short delay to allow window to change
     setTimeout(() => {
-      window.electronAPI.windowIsMaximized().then(setIsMaximized)
+      window.electronAPI?.windowIsMaximized?.()?.then(setIsMaximized)
     }, 100)
   }
 
   const handleClose = () => {
-    window.electronAPI.windowClose()
+    window.electronAPI?.windowClose()
   }
 
   return (

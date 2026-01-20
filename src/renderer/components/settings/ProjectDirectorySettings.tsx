@@ -7,7 +7,7 @@ interface ProjectDirectorySettingsProps {
 
 export function ProjectDirectorySettings({ defaultProjectDir, onChange }: ProjectDirectorySettingsProps): React.ReactElement {
   async function handleSelectDirectory(): Promise<void> {
-    const dir = await window.electronAPI.selectDirectory()
+    const dir = await window.electronAPI?.selectDirectory()
     if (dir) {
       onChange(dir)
     }

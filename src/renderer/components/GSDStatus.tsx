@@ -45,7 +45,7 @@ export function GSDStatus({ projectPath, onCommand }: GSDStatusProps) {
 
     try {
       // Check if GSD is installed globally
-      const gsdCheck = await window.electronAPI.gsdCheck()
+      const gsdCheck = await window.electronAPI?.gsdCheck()
 
       if (currentProjectRef.current !== loadingForProject) return
 
@@ -57,7 +57,7 @@ export function GSDStatus({ projectPath, onCommand }: GSDStatusProps) {
       }
 
       // Get project progress
-      const result = await window.electronAPI.gsdGetProgress(loadingForProject)
+      const result = await window.electronAPI?.gsdGetProgress(loadingForProject)
 
       if (currentProjectRef.current !== loadingForProject) return
 
@@ -110,7 +110,7 @@ export function GSDStatus({ projectPath, onCommand }: GSDStatusProps) {
     setInstallError(null)
 
     try {
-      const result = await window.electronAPI.gsdInstall()
+      const result = await window.electronAPI?.gsdInstall()
       if (result.success) {
         setGsdInstalled(true)
         loadStatus(false)

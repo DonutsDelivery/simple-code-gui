@@ -29,7 +29,7 @@ export function QuickActionsMenu({ projectPath, ptyId, onOpenExtensions }: Quick
   useEffect(() => {
     if (isOpen && projectPath) {
       setLoading(true)
-      window.electronAPI.extensionsGetCommands(projectPath)
+      window.electronAPI?.extensionsGetCommands(projectPath)
         .then(cmds => {
           setCommands(cmds || [])
         })
@@ -73,7 +73,7 @@ export function QuickActionsMenu({ projectPath, ptyId, onOpenExtensions }: Quick
     if (!ptyId) return
 
     // Write the command to the PTY
-    window.electronAPI.writePty(ptyId, cmd + '\n')
+    window.electronAPI?.writePty(ptyId, cmd + '\n')
     setIsOpen(false)
   }, [ptyId])
 

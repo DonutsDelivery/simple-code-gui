@@ -1,6 +1,7 @@
 import type { Terminal as XTerm } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { Theme } from '../../themes.js'
+import type { Api } from '../../api/types.js'
 
 // Window extension for HMR globals
 export interface TerminalGlobals {
@@ -16,6 +17,7 @@ export interface TerminalProps {
   onFocus?: () => void
   projectPath?: string | null
   backend?: string
+  api?: Api  // API abstraction for PTY operations (uses electronAPI if not provided)
 }
 
 // Auto work options passed from menu

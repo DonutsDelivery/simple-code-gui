@@ -22,6 +22,7 @@ export interface SidebarProps {
   activeTabId: string | null
   lastFocusedTabId: string | null
   onAddProject: () => void
+  onAddProjectsFromParent: () => void
   onRemoveProject: (path: string) => void
   onOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => void
   onSwitchToTab: (tabId: string) => void
@@ -36,6 +37,10 @@ export interface SidebarProps {
   // Mobile drawer props
   isMobileOpen?: boolean        // Controls drawer open state on mobile
   onMobileClose?: () => void    // Called when user closes drawer
+  // Mobile connect modal
+  onOpenMobileConnect?: () => void  // Opens the QR code modal for mobile connection
+  // Mobile disconnect
+  onDisconnect?: () => void     // Disconnects from desktop host (mobile only)
 }
 
 export interface ProjectSettingsModalState {

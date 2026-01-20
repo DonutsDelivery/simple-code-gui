@@ -155,7 +155,10 @@ export const ProjectItem = React.memo(function ProjectItem({
         <div className="sessions-list">
           <div
             className="session-item new-session"
-            onClick={() => onOpenSession(undefined, undefined, true)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenSession(undefined, undefined, true)
+            }}
           >
             <span>+</span>
             <span>New Session</span>
@@ -164,7 +167,10 @@ export const ProjectItem = React.memo(function ProjectItem({
             <div
               key={session.sessionId}
               className={`session-item ${index === 0 ? 'most-recent' : ''}`}
-              onClick={() => onOpenSession(session.sessionId, session.slug)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenSession(session.sessionId, session.slug)
+              }}
               title={`Session ID: ${session.sessionId}`}
             >
               <span className="session-icon">{index === 0 ? '●' : '◦'}</span>

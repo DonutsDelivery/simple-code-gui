@@ -49,10 +49,12 @@ const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000]
 // ============================================================================
 
 /**
- * Check if host is a local network address
+ * Check if host is a local/private network address (including Tailscale)
  */
 function isLocalNetwork(hostname: string): boolean {
-  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)
+  // RFC 1918 private ranges + Tailscale CGNAT (100.64-127.x.x) + MagicDNS (*.ts.net)
+  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(hostname) ||
+         hostname.endsWith('.ts.net')
 }
 
 // ============================================================================
@@ -495,6 +497,12 @@ export class HttpBackend implements Api {
     // Instead, mobile clients should browse/select paths differently
     // This could be implemented via a file browser endpoint in the future
     console.warn('[HttpBackend] addProject() - Native dialogs not available via HTTP')
+    return null
+  }
+
+  async addProjectsFromParent(): Promise<Array<{ path: string; name: string }> | null> {
+    // HTTP backend cannot open a native file dialog on the desktop
+    console.warn('[HttpBackend] addProjectsFromParent() - Native dialogs not available via HTTP')
     return null
   }
 

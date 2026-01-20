@@ -124,6 +124,7 @@ export interface ElectronAPI {
   getWorkspace: () => Promise<Workspace>
   saveWorkspace: (workspace: Workspace) => Promise<void>
   addProject: () => Promise<string | null>
+  addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
   getMetaProjectsPath: () => Promise<string>
   getCategoryMetaPath: (categoryName: string) => Promise<string>
 
@@ -275,6 +276,31 @@ export interface ElectronAPI {
   apiStatus: (projectPath: string) => Promise<{ running: boolean; port?: number }>
   onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
 
+  // Mobile Server (for phone app connectivity)
+  mobileGetConnectionInfo: () => Promise<{
+    url: string
+    token: string
+    port: number
+    ips: string[]
+    fingerprint: string
+    formattedFingerprint: string
+    nonce: string
+    nonceExpires: number
+    qrData: string
+  }>
+  mobileRegenerateToken: () => Promise<{
+    token: string
+    url: string
+    port: number
+    ips: string[]
+    fingerprint: string
+    formattedFingerprint: string
+    nonce: string
+    nonceExpires: number
+    qrData: string
+  }>
+  mobileIsRunning: () => Promise<boolean>
+
   // Updater
   getVersion: () => Promise<string>
   checkForUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>
@@ -400,6 +426,7 @@ const api: ElectronAPI = {
   getWorkspace: () => ipcRenderer.invoke('workspace:get'),
   saveWorkspace: (workspace) => ipcRenderer.invoke('workspace:save', workspace),
   addProject: () => ipcRenderer.invoke('workspace:addProject'),
+  addProjectsFromParent: () => ipcRenderer.invoke('workspace:addProjectsFromParent'),
   getMetaProjectsPath: () => ipcRenderer.invoke('workspace:getMetaProjectsPath'),
   getCategoryMetaPath: (categoryName) => ipcRenderer.invoke('workspace:getCategoryMetaPath', categoryName),
 

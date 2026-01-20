@@ -39,7 +39,7 @@ export function MakeProjectModal({ isOpen, onClose, onProjectCreated }: MakeProj
       setProjectName('')
       setSelectedIcon('📁')
       setError('')
-      window.electronAPI.getSettings().then((settings) => {
+      window.electronAPI?.getSettings?.()?.then((settings) => {
         setDefaultDir(settings.defaultProjectDir || '')
       })
     }
@@ -60,7 +60,7 @@ export function MakeProjectModal({ isOpen, onClose, onProjectCreated }: MakeProj
     setError('')
 
     try {
-      const result = await window.electronAPI.createProject(projectName.trim(), defaultDir)
+      const result = await window.electronAPI?.createProject(projectName.trim(), defaultDir)
       if (result.success && result.path) {
         onProjectCreated(result.path, projectName.trim())
         onClose()

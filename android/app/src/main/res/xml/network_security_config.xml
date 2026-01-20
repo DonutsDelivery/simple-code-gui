@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext (HTTP/WS) for local network connections -->
+    <!--
+        Allow cleartext HTTP for local network connections.
+        Android's domain-config doesn't support IP addresses, only hostnames.
+        Since we connect to local servers via IP, we need to allow cleartext globally.
+        Security is provided by the token-based authentication, not TLS.
+    -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-
-    <!-- Explicitly allow cleartext for local network ranges -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.0.0</domain>
-        <domain includeSubdomains="true">192.168.1.0</domain>
-        <domain includeSubdomains="true">10.0.0.0</domain>
-        <domain includeSubdomains="true">172.16.0.0</domain>
-        <domain includeSubdomains="true">localhost</domain>
-    </domain-config>
 </network-security-config>

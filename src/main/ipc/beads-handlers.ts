@@ -273,4 +273,4 @@ export function registerBeadsHandlers(getMainWindow: () => BrowserWindow | null)
   })
 }
 
-export { getBeadsExecOptions }
+export { getBeadsExecOptions, checkBeadsInstalled, spawnBdCommand, validateTaskId, TASK_ID_PATTERN }

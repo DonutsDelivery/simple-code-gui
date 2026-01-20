@@ -38,7 +38,7 @@ export function useSummaryCapture({
     summaryBufferRef.current = ''
     capturingSummaryRef.current = true
     console.log('[Summary] Capture enabled for ptyId:', ptyId)
-    window.electronAPI.writePty(ptyId, 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.\r')
+    window.electronAPI?.writePty(ptyId, 'Summarize this session for context recovery. Wrap output in markers: three equals, SUMMARY_START, three equals at start. Three equals, SUMMARY_END, three equals at end.\r')
   }, [ptyId])
 
   // Process chunk for summary markers
@@ -81,13 +81,13 @@ export function useSummaryCapture({
 
     setTimeout(() => {
       console.log('[Summary] Pasting summary:', summaryToSend.substring(0, 50) + '...')
-      window.electronAPI.writePty(ptyId, summaryToSend + '\r')
+      window.electronAPI?.writePty(ptyId, summaryToSend + '\r')
 
       if (shouldContinueAutoWork) {
         setTimeout(() => {
           console.log('[AutoWork+Summary] Sending work prompt after summary')
           const autoworkPrompt = buildAutoWorkPrompt()
-          window.electronAPI.writePty(ptyId, autoworkPrompt + '\r')
+          window.electronAPI?.writePty(ptyId, autoworkPrompt + '\r')
         }, 2000)
       }
     }, clearDelay)

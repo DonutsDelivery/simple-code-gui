@@ -47,7 +47,7 @@ export function useProjectSettingsModal({
   >({})
 
   const handleOpenProjectSettings = useCallback(async (project: Project) => {
-    const settings = await window.electronAPI.getSettings()
+    const settings = await window.electronAPI?.getSettings()
     setGlobalPermissions({
       tools: settings.autoAcceptTools || [],
       mode: settings.permissionMode || 'default',
@@ -55,9 +55,9 @@ export function useProjectSettingsModal({
 
     try {
       const [piperVoices, xttsVoices, voiceSettings] = await Promise.all([
-        window.electronAPI.voiceGetInstalled?.() || [],
-        window.electronAPI.xttsGetVoices?.() || [],
-        window.electronAPI.voiceGetSettings?.() || {},
+        window.electronAPI?.voiceGetInstalled?.() || [],
+        window.electronAPI?.xttsGetVoices?.() || [],
+        window.electronAPI?.voiceGetSettings?.() || {},
       ])
       const combined: InstalledVoice[] = []
       if (piperVoices) combined.push(...piperVoices)
@@ -114,14 +114,14 @@ export function useProjectSettingsModal({
 
     if (newPort !== oldPort) {
       if (!newPort) {
-        await window.electronAPI.apiStop(projectSettingsModal.project.path)
+        await window.electronAPI?.apiStop(projectSettingsModal.project.path)
         setApiStatus((prev) => ({
           ...prev,
           [projectSettingsModal.project.path]: { running: false },
         }))
       } else {
         setProjectSettingsModal({ ...projectSettingsModal, apiStatus: 'checking' })
-        const result = await window.electronAPI.apiStart(
+        const result = await window.electronAPI?.apiStart(
           projectSettingsModal.project.path,
           newPort
         )
@@ -172,10 +172,10 @@ export function useProjectSettingsModal({
     async (project: Project) => {
       const status = apiStatus[project.path]
       if (status?.running) {
-        await window.electronAPI.apiStop(project.path)
+        await window.electronAPI?.apiStop(project.path)
         setApiStatus((prev) => ({ ...prev, [project.path]: { running: false } }))
       } else if (project.apiPort) {
-        const result = await window.electronAPI.apiStart(project.path, project.apiPort)
+        const result = await window.electronAPI?.apiStart(project.path, project.apiPort)
         if (result.success) {
           setApiStatus((prev) => ({
             ...prev,

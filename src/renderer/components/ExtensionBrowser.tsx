@@ -57,9 +57,9 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
       setError(null)
 
       const [registryData, installedData, urlsData] = await Promise.all([
-        window.electronAPI.extensionsFetchRegistry(forceRefresh),
-        window.electronAPI.extensionsGetInstalled(),
-        window.electronAPI.extensionsGetCustomUrls()
+        window.electronAPI?.extensionsFetchRegistry(forceRefresh),
+        window.electronAPI?.extensionsGetInstalled(),
+        window.electronAPI?.extensionsGetCustomUrls()
       ])
 
       setRegistry({
@@ -109,9 +109,9 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
     try {
       let result
       if (ext.type === 'skill' || ext.type === 'agent') {
-        result = await window.electronAPI.extensionsInstallSkill(ext, 'global')
+        result = await window.electronAPI?.extensionsInstallSkill(ext, 'global')
       } else {
-        result = await window.electronAPI.extensionsInstallMcp(ext)
+        result = await window.electronAPI?.extensionsInstallMcp(ext)
       }
 
       if (!result.success) {
@@ -130,7 +130,7 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
   const handleRemove = async (extId: string) => {
     setRemoving(extId)
     try {
-      const result = await window.electronAPI.extensionsRemove(extId)
+      const result = await window.electronAPI?.extensionsRemove(extId)
       if (!result.success) {
         setError(result.error || 'Removal failed')
       } else {
@@ -147,9 +147,9 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
   const handleToggle = async (extId: string, enabled: boolean) => {
     try {
       if (enabled) {
-        await window.electronAPI.extensionsEnableForProject(extId, projectPath)
+        await window.electronAPI?.extensionsEnableForProject(extId, projectPath)
       } else {
-        await window.electronAPI.extensionsDisableForProject(extId, projectPath)
+        await window.electronAPI?.extensionsDisableForProject(extId, projectPath)
       }
       await loadData()
     } catch (e: any) {
@@ -165,21 +165,21 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
       setInstalling('custom-url')
 
       // First fetch info from the URL
-      const extInfo = await window.electronAPI.extensionsFetchFromUrl(customUrl.trim())
+      const extInfo = await window.electronAPI?.extensionsFetchFromUrl(customUrl.trim())
       if (!extInfo) {
         setError('Could not fetch extension info from URL')
         return
       }
 
       // Install it
-      const result = await window.electronAPI.extensionsInstallSkill(extInfo, 'global')
+      const result = await window.electronAPI?.extensionsInstallSkill(extInfo, 'global')
       if (!result.success) {
         setError(result.error || 'Installation failed')
         return
       }
 
       // Save the custom URL
-      await window.electronAPI.extensionsAddCustomUrl(customUrl.trim())
+      await window.electronAPI?.extensionsAddCustomUrl(customUrl.trim())
       setCustomUrl('')
       await loadData()
     } catch (e: any) {
@@ -385,7 +385,7 @@ export function ExtensionBrowser({ projectPath, projectName, onClose }: Extensio
                     const textarea = document.getElementById('mcp-config-textarea') as HTMLTextAreaElement
                     try {
                       const config = JSON.parse(textarea.value || '{}')
-                      await window.electronAPI.extensionsSetConfig(configuring.id, config)
+                      await window.electronAPI?.extensionsSetConfig(configuring.id, config)
                       setConfiguring(null)
                       await loadData()
                     } catch (e) {

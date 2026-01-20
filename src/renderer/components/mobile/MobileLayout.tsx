@@ -155,6 +155,24 @@ export function MobileLayout({
       >
         {/* Slide 0: Sidebar/Navigation */}
         <div className="mobile-slide mobile-slide--sidebar">
+          <div className="mobile-sidebar-header">
+            <span className="mobile-sidebar-title">Projects</span>
+            <button
+              className="mobile-refresh-btn"
+              onClick={() => {
+                // Clear caches and force reload
+                if ('caches' in window) {
+                  caches.keys().then(names => {
+                    names.forEach(name => caches.delete(name))
+                  })
+                }
+                window.location.reload()
+              }}
+              title="Refresh (clear cache)"
+            >
+              ↻
+            </button>
+          </div>
           <div className="mobile-slide-content">
             {sidebarContent}
           </div>
@@ -180,7 +198,7 @@ export function MobileLayout({
             </div>
             <div className="mobile-slide-content mobile-slide-content--terminal">
               <Terminal
-                ptyId={tab.id}
+                ptyId={tab.ptyId}
                 isActive={currentSlide === index + 1}
                 theme={theme}
                 projectPath={tab.projectPath}

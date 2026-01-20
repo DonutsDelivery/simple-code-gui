@@ -429,6 +429,33 @@ ipcMain.handle('workspace:addProject', async () => {
   return result.canceled ? null : result.filePaths[0] || null
 })
 
+ipcMain.handle('workspace:addProjectsFromParent', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory'],
+    title: 'Select Parent Folder (all subdirectories will be added as projects)'
+  })
+  if (result.canceled || !result.filePaths[0]) return null
+
+  const parentDir = result.filePaths[0]
+  const { readdirSync, statSync } = require('fs')
+
+  try {
+    const entries = readdirSync(parentDir, { withFileTypes: true })
+    const subdirs = entries
+      .filter((entry: { isDirectory: () => boolean; name: string }) =>
+        entry.isDirectory() && !entry.name.startsWith('.')
+      )
+      .map((entry: { name: string }) => ({
+        path: join(parentDir, entry.name),
+        name: entry.name
+      }))
+    return subdirs
+  } catch (e) {
+    console.error('Failed to scan parent directory:', e)
+    return null
+  }
+})
+
 // Session discovery
 ipcMain.handle('sessions:discover', (_, projectPath: string, backend?: 'claude' | 'opencode') => discoverSessions(projectPath, backend))
 
@@ -561,10 +588,10 @@ ipcMain.handle('api:status', (_, projectPath: string) => ({
 
 // Mobile server management (for phone app connectivity)
 ipcMain.handle('mobile:getConnectionInfo', () => mobileServer.getConnectionInfo())
-ipcMain.handle('mobile:regenerateToken', () => ({
-  token: mobileServer.regenerateToken(),
-  ...mobileServer.getConnectionInfo()
-}))
+ipcMain.handle('mobile:regenerateToken', () => {
+  mobileServer.regenerateToken()
+  return mobileServer.getConnectionInfo()
+})
 ipcMain.handle('mobile:isRunning', () => mobileServer.isRunning())
 
 // Settings management

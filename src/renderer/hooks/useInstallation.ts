@@ -24,10 +24,11 @@ export function useInstallation(): UseInstallationReturn {
   const [installMessage, setInstallMessage] = useState<string | null>(null)
 
   const checkInstallation = useCallback(async () => {
-    const claudeStatus = await window.electronAPI.claudeCheck()
-    setClaudeInstalled(claudeStatus.installed)
-    setNpmInstalled(claudeStatus.npmInstalled)
-    setGitBashInstalled(claudeStatus.gitBashInstalled)
+    const claudeStatus = await window.electronAPI?.claudeCheck?.()
+    // In browser/HTTP mode, assume everything is installed (server handles this)
+    setClaudeInstalled(claudeStatus?.installed ?? true)
+    setNpmInstalled(claudeStatus?.npmInstalled ?? true)
+    setGitBashInstalled(claudeStatus?.gitBashInstalled ?? true)
   }, [])
 
   const handleInstallNode = useCallback(async () => {
@@ -35,7 +36,7 @@ export function useInstallation(): UseInstallationReturn {
     setInstallError(null)
     setInstallMessage(null)
     try {
-      const result = await window.electronAPI.nodeInstall()
+      const result = await window.electronAPI?.nodeInstall()
       if (result.success) {
         if (result.method === 'download') {
           setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Code GUI.')
@@ -57,7 +58,7 @@ export function useInstallation(): UseInstallationReturn {
     setInstallError(null)
     setInstallMessage(null)
     try {
-      const result = await window.electronAPI.claudeInstall()
+      const result = await window.electronAPI?.claudeInstall()
       if (result.success) {
         setClaudeInstalled(true)
       } else if (result.needsNode) {
@@ -76,7 +77,7 @@ export function useInstallation(): UseInstallationReturn {
     setInstallError(null)
     setInstallMessage(null)
     try {
-      const result = await window.electronAPI.gitInstall()
+      const result = await window.electronAPI?.gitInstall()
       if (result.success) {
         setGitBashInstalled(true)
         setInstallMessage(result.message || 'Git installed! Please restart Simple Code GUI.')

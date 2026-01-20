@@ -67,7 +67,7 @@ export function VoiceOutputSettings({
     if (source === 'xtts') {
       onPreviewStateChange({ playingPreview: null, previewLoading: voiceKey })
       try {
-        const result = await window.electronAPI.xttsSpeak?.(
+        const result = await window.electronAPI?.xttsSpeak?.(
           'Hello! This is a preview of my voice.',
           voiceKey,
           'en'
@@ -122,16 +122,16 @@ export function VoiceOutputSettings({
       // Temporarily set the voice, speak, then restore
       const originalVoice = voice.selectedVoice
       const originalEngine = voice.selectedEngine
-      await window.electronAPI.voiceApplySettings?.({
+      await window.electronAPI?.voiceApplySettings?.({
         ttsVoice: voiceKey,
         ttsEngine: 'piper',
         ttsSpeed: 1.0
       })
-      const result = await window.electronAPI.voiceSpeak?.(
+      const result = await window.electronAPI?.voiceSpeak?.(
         'Hello! This is a preview of my voice.'
       )
       // Restore original settings
-      await window.electronAPI.voiceApplySettings?.({
+      await window.electronAPI?.voiceApplySettings?.({
         ttsVoice: originalVoice,
         ttsEngine: originalEngine,
         ttsSpeed: voice.ttsSpeed

@@ -11,24 +11,32 @@ export interface HostConfig {
   port: number
   token: string
   lastConnected?: Date
+  // v2 security fields
+  fingerprint?: string       // Server fingerprint (TOFU - stored after first verify)
+  pendingNonce?: string      // Nonce to verify on connect
+  nonceExpires?: number      // When the nonce expires
 }
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
+export type ConnectionState = 'disconnected' | 'connecting' | 'verifying' | 'connected' | 'error'
+export type ConnectionMethod = 'none' | 'websocket' | 'http-polling'
 
 export interface HostConnectionState {
   hosts: HostConfig[]
   currentHost: HostConfig | null
   connectionState: ConnectionState
+  connectionMethod: ConnectionMethod  // Shows whether using WebSocket or HTTP polling
   error: string | null
+  fingerprintWarning: string | null  // Set when fingerprint mismatch detected
 }
 
 export interface HostConnectionActions {
   addHost: (config: Omit<HostConfig, 'id'>) => HostConfig
   removeHost: (id: string) => void
   updateHost: (id: string, updates: Partial<Omit<HostConfig, 'id'>>) => void
-  connect: (hostId: string) => void
+  connect: (hostId: string, options?: { nonce?: string; fingerprint?: string; token?: string; host?: string; port?: number }) => void
   disconnect: () => void
   reconnect: () => void
+  acceptFingerprint: () => void  // Accept a new/changed fingerprint
 }
 
 export type UseHostConnectionReturn = HostConnectionState & HostConnectionActions
@@ -86,12 +94,68 @@ function saveHosts(hosts: HostConfig[]): void {
 }
 
 /**
+ * Check if host is a local/private network address
+ * Includes: localhost, private IPv4 ranges, and Tailscale CGNAT (100.64-127.x.x)
+ */
+function isLocalNetwork(hostname: string): boolean {
+  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(hostname)
+}
+
+/**
  * Build WebSocket URL from host config
+ * SECURITY: Token is no longer in URL - it's passed via Sec-WebSocket-Protocol header
  */
 function buildWebSocketUrl(host: HostConfig): string {
-  // Use wss:// for secure connection, ws:// for local development
-  const protocol = host.host === 'localhost' || host.host.startsWith('192.168.') ? 'ws' : 'wss'
-  return `${protocol}://${host.host}:${host.port}/ws?token=${encodeURIComponent(host.token)}`
+  // Use ws:// for local networks, wss:// for public
+  const protocol = isLocalNetwork(host.host) ? 'ws' : 'wss'
+  return `${protocol}://${host.host}:${host.port}/ws`
+}
+
+/**
+ * Build WebSocket protocols array with token
+ * SECURITY: Token passed as subprotocol to avoid exposure in URL/logs
+ */
+function buildWebSocketProtocols(host: HostConfig): string[] {
+  // Prefix with 'token-' so server can identify it
+  return [`token-${host.token}`]
+}
+
+/**
+ * Build HTTP URL from host config
+ */
+function buildHttpUrl(host: HostConfig, path: string): string {
+  // Use http:// for local networks, https:// for public
+  const protocol = isLocalNetwork(host.host) ? 'http' : 'https'
+  return `${protocol}://${host.host}:${host.port}${path}`
+}
+
+/**
+ * Verify handshake with server
+ * Returns the server's fingerprint if successful
+ */
+async function verifyHandshake(host: HostConfig, nonce: string): Promise<{ success: boolean; fingerprint?: string; error?: string }> {
+  try {
+    const url = buildHttpUrl(host, '/verify-handshake')
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nonce })
+    })
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      return { success: false, error: data.error || `HTTP ${response.status}` }
+    }
+
+    const data = await response.json()
+    if (data.valid && data.fingerprint) {
+      return { success: true, fingerprint: data.fingerprint }
+    }
+
+    return { success: false, error: 'Invalid handshake response' }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Network error' }
+  }
 }
 
 // ============================================
@@ -103,7 +167,9 @@ export function useHostConnection(): UseHostConnectionReturn {
   const [hosts, setHosts] = useState<HostConfig[]>(loadHosts)
   const [currentHost, setCurrentHost] = useState<HostConfig | null>(null)
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
+  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>('none')
   const [error, setError] = useState<string | null>(null)
+  const [fingerprintWarning, setFingerprintWarning] = useState<string | null>(null)
 
   // Refs for WebSocket management
   const wsRef = useRef<WebSocket | null>(null)
@@ -111,6 +177,8 @@ export function useHostConnection(): UseHostConnectionReturn {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pongTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Pending fingerprint for TOFU acceptance
+  const pendingFingerprintRef = useRef<{ hostId: string; fingerprint: string } | null>(null)
 
   // Save hosts to localStorage when they change
   useEffect(() => {
@@ -201,36 +269,104 @@ export function useHostConnection(): UseHostConnectionReturn {
   }, [])
 
   /**
-   * Connect to a host
+   * Internal function to establish HTTP polling connection (fallback when WebSocket fails)
    */
-  const connect = useCallback((hostId: string) => {
-    const host = hosts.find(h => h.id === hostId)
-    if (!host) {
-      setError('Host not found')
+  const establishHttpPolling = useCallback(async (host: HostConfig, hostId: string) => {
+    console.log('[HTTP Polling] Starting polling connection')
+
+    // Do immediate health check to validate connection
+    try {
+      const url = buildHttpUrl(host, '/health')
+      console.log('[HTTP Polling] Initial health check:', url)
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const data = await response.json()
+      console.log('[HTTP Polling] Health check passed:', data)
+    } catch (err) {
+      console.error('[HTTP Polling] Initial health check failed:', err)
+      setConnectionState('error')
+      setError(`Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
       return
     }
 
-    // Close existing connection
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
-
-    clearTimers()
+    setConnectionState('connected')
+    setConnectionMethod('http-polling')
+    setError(null)
+    setFingerprintWarning(null)
     reconnectAttemptRef.current = 0
 
-    setCurrentHost(host)
-    setConnectionState('connecting')
-    setError(null)
+    // Update last connected time
+    setHosts(prev =>
+      prev.map(h =>
+        h.id === hostId
+          ? { ...h, lastConnected: new Date() }
+          : h
+      )
+    )
 
+    // Track consecutive failures for retry logic
+    let consecutiveFailures = 0
+    const MAX_FAILURES = 3
+
+    // Start HTTP polling for keep-alive (longer interval since we validated)
+    const pollInterval = setInterval(async () => {
+      try {
+        const url = buildHttpUrl(host, '/health')
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(10000) // 10 second timeout
+        })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        consecutiveFailures = 0 // Reset on success
+        console.log('[HTTP Polling] Health check OK')
+      } catch (err) {
+        consecutiveFailures++
+        console.error(`[HTTP Polling] Health check failed (${consecutiveFailures}/${MAX_FAILURES}):`, err)
+
+        if (consecutiveFailures >= MAX_FAILURES) {
+          clearInterval(pollInterval)
+          setConnectionState('error')
+          setError('Connection lost after multiple failures')
+        }
+      }
+    }, PING_INTERVAL)
+
+    // Store interval for cleanup
+    pingTimerRef.current = pollInterval
+  }, [])
+
+  /**
+   * Internal function to establish WebSocket connection after verification
+   */
+  const establishWebSocket = useCallback((host: HostConfig, hostId: string) => {
     const url = buildWebSocketUrl(host)
+    const protocols = buildWebSocketProtocols(host)
+    console.log('[WebSocket] Connecting to:', url, '(token via protocol header)')
+
+    // Set a timeout to fall back to HTTP polling if WebSocket fails quickly
+    const wsTimeout = setTimeout(() => {
+      console.log('[WebSocket] Connection timeout, falling back to HTTP polling')
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
+        wsRef.current.close()
+        wsRef.current = null
+        establishHttpPolling(host, hostId)
+      }
+    }, 5000)
 
     try {
-      const ws = new WebSocket(url)
+      // SECURITY: Pass token via Sec-WebSocket-Protocol header instead of URL
+      const ws = new WebSocket(url, protocols)
 
       ws.onopen = () => {
+        clearTimeout(wsTimeout)
+        console.log('[WebSocket] Connected!')
         setConnectionState('connected')
+        setConnectionMethod('websocket')
         setError(null)
+        setFingerprintWarning(null)
         reconnectAttemptRef.current = 0
 
         // Update last connected time
@@ -249,45 +385,185 @@ export function useHostConnection(): UseHostConnectionReturn {
       ws.onmessage = handleMessage
 
       ws.onerror = (event) => {
-        console.error('WebSocket error:', event)
-        setError('Connection error')
-        setConnectionState('error')
+        clearTimeout(wsTimeout)
+        // Log more details about the error
+        console.error('[WebSocket] Error event:', {
+          type: event.type,
+          target: event.target ? {
+            url: (event.target as WebSocket).url,
+            readyState: (event.target as WebSocket).readyState,
+            protocol: (event.target as WebSocket).protocol
+          } : 'no target',
+          message: (event as any).message || 'no message'
+        })
+        // Fall back to HTTP polling
+        console.log('[WebSocket] Falling back to HTTP polling')
+        wsRef.current = null
+        establishHttpPolling(host, hostId)
       }
 
       ws.onclose = (event) => {
+        clearTimeout(wsTimeout)
         clearTimers()
 
         if (event.wasClean) {
           setConnectionState('disconnected')
         } else {
-          setConnectionState('error')
-          setError(`Connection lost (code: ${event.code})`)
-
-          // Attempt reconnection
-          if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
-            const delay = RECONNECT_DELAYS[Math.min(reconnectAttemptRef.current, RECONNECT_DELAYS.length - 1)]
-            reconnectAttemptRef.current++
-
-            console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptRef.current})...`)
-
-            reconnectTimerRef.current = setTimeout(() => {
-              if (currentHost) {
-                connect(currentHost.id)
-              }
-            }, delay)
-          } else {
-            setError('Max reconnection attempts reached')
-          }
+          // Try HTTP polling instead of reconnecting WebSocket
+          console.log('[WebSocket] Connection lost, trying HTTP polling')
+          establishHttpPolling(host, hostId)
         }
       }
 
       wsRef.current = ws
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to connect'
-      setError(message)
-      setConnectionState('error')
+      clearTimeout(wsTimeout)
+      console.error('[WebSocket] Exception:', err)
+      // Fall back to HTTP polling
+      establishHttpPolling(host, hostId)
     }
-  }, [hosts, clearTimers, startPingPong, handleMessage, currentHost])
+  }, [clearTimers, startPingPong, handleMessage, establishHttpPolling])
+
+  /**
+   * Connect to a host
+   * @param hostId The host ID to connect to
+   * @param options Optional nonce/fingerprint/token for v2 connections
+   */
+  const connect = useCallback(async (hostId: string, options?: { nonce?: string; fingerprint?: string; token?: string; host?: string; port?: number }) => {
+    let host = hosts.find(h => h.id === hostId)
+
+    // Handle race condition: if host not found in state yet but we have enough info, construct it
+    if (!host && options?.host && options?.port && options?.token) {
+      host = {
+        id: hostId,
+        name: `${options.host}:${options.port}`,
+        host: options.host,
+        port: options.port,
+        token: options.token
+      }
+    } else if (!host) {
+      setError('Host not found')
+      return
+    } else if (options?.token) {
+      // Apply token override if provided (handles race condition with updateHost)
+      host = { ...host, token: options.token }
+    }
+
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
+    clearTimers()
+    reconnectAttemptRef.current = 0
+    pendingFingerprintRef.current = null
+    setFingerprintWarning(null)
+
+    setCurrentHost(host)
+    setConnectionState('connecting')
+    setError(null)
+
+    console.log('[useHostConnection] Connecting to:', host.host, host.port, 'token:', host.token?.slice(0, 8))
+
+    // If we have a nonce, try to verify the handshake (v2 flow)
+    const nonce = options?.nonce || host.pendingNonce
+    const expectedFingerprint = options?.fingerprint
+
+    if (nonce) {
+      setConnectionState('verifying')
+
+      const result = await verifyHandshake(host, nonce as string)
+
+      if (result.success && result.fingerprint) {
+        const serverFingerprint = result.fingerprint
+
+        // Check fingerprint (TOFU - Trust On First Use)
+        if (host.fingerprint) {
+          // We have a stored fingerprint - verify it matches
+          if (host.fingerprint !== serverFingerprint) {
+            // Fingerprint mismatch! This could be a MITM attack
+            pendingFingerprintRef.current = { hostId, fingerprint: serverFingerprint }
+            setFingerprintWarning(
+              `WARNING: Server fingerprint has changed!\n` +
+              `Expected: ${host.fingerprint}\n` +
+              `Got: ${serverFingerprint}\n\n` +
+              `This could indicate a man-in-the-middle attack, or the server was reinstalled.`
+            )
+            setConnectionState('error')
+            return
+          }
+        } else if (expectedFingerprint) {
+          // First connect with QR-provided fingerprint - verify it matches
+          if (expectedFingerprint !== serverFingerprint) {
+            setError('Fingerprint mismatch - QR code may have been tampered with')
+            setConnectionState('error')
+            return
+          }
+          // Store the fingerprint for future connections
+          setHosts(prev =>
+            prev.map(h =>
+              h.id === hostId
+                ? { ...h, fingerprint: serverFingerprint, pendingNonce: undefined }
+                : h
+            )
+          )
+        } else {
+          // First connect without expected fingerprint - store it (TOFU)
+          setHosts(prev =>
+            prev.map(h =>
+              h.id === hostId
+                ? { ...h, fingerprint: serverFingerprint, pendingNonce: undefined }
+                : h
+            )
+          )
+        }
+      } else {
+        // Verification failed - log but continue (might be network issue)
+        console.warn('Handshake verification failed:', result.error, '- proceeding anyway')
+      }
+
+      // Clear the nonce from host config
+      setHosts(prev =>
+        prev.map(h =>
+          h.id === hostId
+            ? { ...h, pendingNonce: undefined }
+            : h
+        )
+      )
+    }
+
+    // Proceed with WebSocket connection
+    setConnectionState('connecting')
+    establishWebSocket(host, hostId)
+  }, [hosts, clearTimers, establishWebSocket])
+
+  /**
+   * Accept a changed fingerprint (user acknowledges the risk)
+   */
+  const acceptFingerprint = useCallback(() => {
+    const pending = pendingFingerprintRef.current
+    if (!pending) return
+
+    // Store the new fingerprint
+    setHosts(prev =>
+      prev.map(h =>
+        h.id === pending.hostId
+          ? { ...h, fingerprint: pending.fingerprint }
+          : h
+      )
+    )
+
+    // Clear the warning and pending
+    setFingerprintWarning(null)
+    pendingFingerprintRef.current = null
+
+    // Now connect
+    const host = hosts.find(h => h.id === pending.hostId)
+    if (host) {
+      establishWebSocket(host, pending.hostId)
+    }
+  }, [hosts, establishWebSocket])
 
   /**
    * Disconnect from current host
@@ -302,6 +578,7 @@ export function useHostConnection(): UseHostConnectionReturn {
     }
 
     setConnectionState('disconnected')
+    setConnectionMethod('none')
     setCurrentHost(null)
     setError(null)
   }, [clearTimers])
@@ -359,14 +636,17 @@ export function useHostConnection(): UseHostConnectionReturn {
     hosts,
     currentHost,
     connectionState,
+    connectionMethod,
     error,
+    fingerprintWarning,
     // Actions
     addHost,
     removeHost,
     updateHost,
     connect,
     disconnect,
-    reconnect
+    reconnect,
+    acceptFingerprint
   }
 }
 

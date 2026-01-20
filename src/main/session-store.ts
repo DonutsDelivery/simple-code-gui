@@ -121,7 +121,21 @@ export class SessionStore {
     return this.data.workspace
   }
 
+  // Reload workspace from disk (useful when file was modified externally)
+  reloadFromDisk(): void {
+    console.log('[SessionStore] Reloading workspace from disk')
+    this.data = this.load()
+    console.log('[SessionStore] Reloaded, projects:', this.data.workspace?.projects?.length || 0)
+  }
+
   saveWorkspace(workspace: Workspace): void {
+    // Protect against overwriting populated workspace with empty one
+    const incomingProjects = workspace?.projects?.length || 0
+    const currentProjects = this.data.workspace?.projects?.length || 0
+    if (incomingProjects === 0 && currentProjects > 0) {
+      console.log('[SessionStore] Rejected empty workspace save - current has', currentProjects, 'projects')
+      return
+    }
     this.data.workspace = workspace
     this.save()
     syncMetaProjects(workspace)

@@ -7,25 +7,135 @@ import { TiledTerminalView, TileLayout, DropZone, splitTile, addTileToLayout } f
 import { SettingsModal } from './components/SettingsModal'
 import { MakeProjectModal } from './components/MakeProjectModal'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { MobileApp } from './components/mobile/MobileApp'
+import { ConnectionScreen } from './components/ConnectionScreen'
 import { HostQRDisplay } from './components/HostQRDisplay'
+import { MobileLayout } from './components/mobile/MobileLayout'
+import { MobileSidebarContent } from './components/mobile/MobileSidebarContent'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
 import { useModals } from './contexts/ModalContext'
 import { useInstallation, useUpdater, useViewState, AppSettings } from './hooks'
-import type { ElectronAPI } from '../preload/index'
+import {
+  isElectronEnvironment,
+  getApi,
+  initializeApi,
+  Api,
+  HttpBackend
+} from './api'
 
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI
-  }
+// Check if running in Capacitor native app
+function isCapacitorApp(): boolean {
+  return typeof window !== 'undefined' &&
+         typeof (window as any).Capacitor !== 'undefined' &&
+         (window as any).Capacitor?.isNativePlatform?.() === true
 }
 
 function App() {
-  // Check if we're running in mobile/web context without Electron
-  const isElectronAvailable = typeof window !== 'undefined' && window.electronAPI
+  // Check if we're running in Electron or browser/Capacitor
+  const isElectron = isElectronEnvironment()
+  const isCapacitor = isCapacitorApp()
 
+  // Add mobile class to body for CSS targeting
+  useEffect(() => {
+    if (isCapacitor || !isElectron) {
+      document.body.classList.add('is-mobile-app')
+    }
+    return () => {
+      document.body.classList.remove('is-mobile-app')
+    }
+  }, [isCapacitor, isElectron])
+
+  // Connection state for browser/Capacitor mode
+  const [isConnected, setIsConnected] = useState(isElectron)
+  const [api, setApiState] = useState<Api | null>(isElectron ? initializeApi() : null)
+
+  // Handle successful connection from ConnectionScreen
+  const handleConnected = useCallback((connectedApi: HttpBackend) => {
+    setApiState(connectedApi)
+    setIsConnected(true)
+  }, [])
+
+  // Handle disconnect - return to connection screen but keep saved hosts
+  const handleDisconnect = useCallback(() => {
+    console.log('[App] Disconnecting...')
+    // Only clear the active connection, keep saved hosts for easy reconnect
+    localStorage.removeItem('claude-terminal-connection')
+    // Don't clear saved hosts: localStorage.removeItem('claude-terminal-saved-hosts')
+    // Set flag to prevent auto-reconnect (cleared on next app launch)
+    sessionStorage.setItem('claude-terminal-manual-disconnect', 'true')
+    setApiState(null)
+    setIsConnected(false)
+  }, [])
+
+  // Try to restore saved connection on mount (browser/Capacitor only)
+  // Also check for token in URL query string (from server redirect)
+  useEffect(() => {
+    if (isElectron || isConnected) return
+
+    // Check for token in URL (from server redirect)
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlToken = urlParams.get('token')
+
+    if (urlToken) {
+      // We have a token from URL - extract host/port from current location
+      const host = window.location.hostname
+      const port = parseInt(window.location.port) || 38470
+
+      // Save to localStorage so future reloads work
+      const config = { host, port, token: urlToken }
+      localStorage.setItem('claude-terminal-connection', JSON.stringify(config))
+
+      // Clear token from URL for cleaner appearance
+      window.history.replaceState({}, document.title, window.location.pathname)
+
+      console.log('[App] Connecting with URL token:', { host, port, tokenLength: urlToken.length })
+    }
+
+    try {
+      const saved = localStorage.getItem('claude-terminal-connection')
+      if (saved) {
+        const config = JSON.parse(saved)
+        if (config.host && config.port && config.token) {
+          // We have saved config, the ConnectionScreen will auto-connect
+        }
+      }
+    } catch (e) {
+      // Invalid saved config, ignore
+    }
+  }, [isElectron, isConnected])
+
+  // Show connection screen if not connected (browser/Capacitor mode)
+  if (!isConnected || !api) {
+    // Try to get saved config for auto-connect
+    let savedConfig: { host: string; port: number; token: string } | null = null
+    try {
+      const saved = localStorage.getItem('claude-terminal-connection')
+      if (saved) {
+        savedConfig = JSON.parse(saved)
+      }
+    } catch {
+      // Ignore
+    }
+
+    return <ConnectionScreen onConnected={handleConnected} savedConfig={savedConfig} />
+  }
+
+  // Render the main app with the connected API
+  return <MainApp api={api} isElectron={isElectron} onDisconnect={handleDisconnect} />
+}
+
+// =============================================================================
+// Main App Component (once connected)
+// =============================================================================
+
+interface MainAppProps {
+  api: Api
+  isElectron: boolean
+  onDisconnect?: () => void
+}
+
+function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
   const {
     projects,
     openTabs,
@@ -86,11 +196,6 @@ function App() {
     voiceOutputEnabledRef.current = voiceOutputEnabled
   }, [voiceOutputEnabled])
 
-  // Early return for mobile/web context without Electron
-  if (!isElectronAvailable) {
-    return <MobileApp />
-  }
-
   // Apply per-project voice settings when active tab changes
   useEffect(() => {
     if (!activeTabId) {
@@ -141,21 +246,21 @@ function App() {
         await checkInstallation()
 
         // Load and apply theme
-        const settings = await window.electronAPI.getSettings()
-        setSettings(settings)
-        const theme = getThemeById(settings.theme || 'default')
+        const loadedSettings = await api.getSettings()
+        setSettings(loadedSettings)
+        const theme = getThemeById(loadedSettings.theme || 'default')
         applyTheme(theme)
         setCurrentTheme(theme)
 
         // Kill any existing PTYs from hot reload (but don't clear buffers - they'll be restored)
         const existingTabs = useWorkspaceStore.getState().openTabs
         for (const tab of existingTabs) {
-          window.electronAPI.killPty(tab.id)
+          api.killPty(tab.id)
           // Note: Don't clear buffers here - they're used for HMR recovery
         }
         clearTabs()
 
-        const workspace = await window.electronAPI.getWorkspace()
+        const workspace = await api.getWorkspace()
         if (workspace.projects) {
           setProjects(workspace.projects)
           if (workspace.projects.length > 0) {
@@ -163,7 +268,7 @@ function App() {
           }
           // Install TTS instructions for all existing projects
           for (const project of workspace.projects) {
-            await window.electronAPI.ttsInstallInstructions?.(project.path)
+            await api.ttsInstallInstructions?.(project.path)
           }
         }
         // Load categories
@@ -183,7 +288,7 @@ function App() {
           for (const savedTab of workspace.openTabs) {
             try {
               // Always install TTS instructions so Claude uses <tts> tags
-              await window.electronAPI.ttsInstallInstructions?.(savedTab.projectPath)
+              await api.ttsInstallInstructions?.(savedTab.projectPath)
 
               const projectName = savedTab.projectPath.split(/[/\\]/).pop() || savedTab.projectPath
               let titleToRestore = savedTab.title || `${projectName} - New`
@@ -196,7 +301,7 @@ function App() {
               const effectiveBackendForTab = savedBackend
                 || (projectForTab?.backend && projectForTab.backend !== 'default'
                   ? projectForTab.backend
-                  : settings?.backend || 'claude')
+                  : loadedSettings?.backend || 'claude')
 
               let sessionIdToRestore: string | undefined = savedTab.sessionId
 
@@ -206,7 +311,7 @@ function App() {
                 let sessionsForProject = sessionsCache.get(savedTab.projectPath)
                 if (!sessionsForProject) {
                   const backendForDiscovery = effectiveBackendForTab === 'opencode' ? 'opencode' : 'claude'
-                  const list = await window.electronAPI.discoverSessions(savedTab.projectPath, backendForDiscovery)
+                  const list = await api.discoverSessions(savedTab.projectPath, backendForDiscovery)
                   sessionsForProject = { list, nextIndex: 0 }
                   sessionsCache.set(savedTab.projectPath, sessionsForProject)
                 }
@@ -224,7 +329,7 @@ function App() {
                 }
               }
 
-              const ptyId = await window.electronAPI.spawnPty(
+              const ptyId = await api.spawnPty(
                 savedTab.projectPath,
                 sessionIdToRestore,
                 undefined, // model
@@ -267,7 +372,7 @@ function App() {
       setLoading(false)
     }
     loadWorkspace()
-  }, [addTab, clearTabs, checkInstallation, setProjects, setCategories, setViewMode])
+  }, [api, addTab, clearTabs, checkInstallation, setProjects, setCategories, setViewMode])
 
   // Save workspace when it changes
   useEffect(() => {
@@ -287,7 +392,7 @@ function App() {
         sessionStorage.setItem('hadProjects', 'true')
       }
 
-      window.electronAPI.saveWorkspace({
+      api.saveWorkspace({
         projects,
         openTabs: openTabs.map(t => ({
           id: t.id,
@@ -302,7 +407,7 @@ function App() {
         categories
       })
     }
-  }, [projects, openTabs, activeTabId, loading, viewMode, tileLayout, categories])
+  }, [api, projects, openTabs, activeTabId, loading, viewMode, tileLayout, categories])
 
   // Poll for session IDs - update tabs without sessions and detect when sessions change (e.g., after /clear)
   // Uses 30s interval to reduce IPC overhead, only polls tabs that need session discovery
@@ -319,7 +424,7 @@ function App() {
         await Promise.all(tabsNeedingSession.map(async (tab) => {
           try {
             const effectiveBackend = tab.backend === 'opencode' ? 'opencode' : 'claude'
-            const sessions = await window.electronAPI.discoverSessions(tab.projectPath, effectiveBackend)
+            const sessions = await api.discoverSessions(tab.projectPath, effectiveBackend)
             if (sessions.length > 0) {
               const mostRecent = sessions[0]
 
@@ -343,11 +448,11 @@ function App() {
     }, 30000) // Poll every 30 seconds (reduced from 5s to minimize IPC overhead)
 
     return () => clearInterval(pollInterval)
-  }, [openTabs, updateTab])
+  }, [api, openTabs, updateTab])
 
   // Listen for API requests to open new sessions
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onApiOpenSession(async ({ projectPath, autoClose, model }) => {
+    const unsubscribe = api.onApiOpenSession(async ({ projectPath, autoClose, model }) => {
       // Open a new session for this project (API-triggered)
       const modelLabel = model && model !== 'default' ? ` [${model}]` : ''
       const title = `${projectPath.split(/[/\\]/).pop() || projectPath} - API${modelLabel}${autoClose ? ' (auto-close)' : ''}`
@@ -360,9 +465,9 @@ function App() {
 
       try {
         // Always install TTS instructions so Claude uses <tts> tags
-        await window.electronAPI.ttsInstallInstructions?.(projectPath)
+        await api.ttsInstallInstructions?.(projectPath)
 
-        const ptyId = await window.electronAPI.spawnPty(projectPath, undefined, model, effectiveBackend)
+        const ptyId = await api.spawnPty(projectPath, undefined, model, effectiveBackend)
         addTab({
           id: ptyId,
           projectPath,
@@ -376,11 +481,11 @@ function App() {
     })
 
     return unsubscribe
-  }, [addTab, projects, settings?.backend])
+  }, [api, addTab, projects, settings?.backend])
 
   // Listen for PTY recreation events
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onPtyRecreated(({ oldId, newId, backend }) => {
+    const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend }) => {
       console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
       // Find the tab with the old ID
       const tab = useWorkspaceStore.getState().openTabs.find(t => t.id === oldId)
@@ -394,18 +499,33 @@ function App() {
       }
     })
     return unsubscribe
-  }, [updateTab, setActiveTab])
+  }, [api, updateTab, setActiveTab])
 
   const handleAddProject = useCallback(async () => {
-    const path = await window.electronAPI.addProject()
+    const path = await api.addProject()
     if (path) {
       // Split on both / and \ for cross-platform support
       const name = path.split(/[/\\]/).pop() || path
       addProject({ path, name })
       // Install TTS instructions for the new project
-      await window.electronAPI.ttsInstallInstructions?.(path)
+      await api.ttsInstallInstructions?.(path)
     }
-  }, [addProject])
+  }, [api, addProject])
+
+  const handleAddProjectsFromParent = useCallback(async () => {
+    const projectsToAdd = await api.addProjectsFromParent?.()
+    if (projectsToAdd && projectsToAdd.length > 0) {
+      // Filter out projects that are already added
+      const existingPaths = new Set(projects.map(p => p.path))
+      const newProjects = projectsToAdd.filter(p => !existingPaths.has(p.path))
+
+      for (const project of newProjects) {
+        addProject({ path: project.path, name: project.name })
+        // Install TTS instructions for each new project
+        await api.ttsInstallInstructions?.(project.path)
+      }
+    }
+  }, [api, addProject, projects])
 
   const handleOpenSession = useCallback(async (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => {
     // Check if this session is already open
@@ -425,7 +545,7 @@ function App() {
 
     if (!forceNewSession) {
       try {
-        const sessions = await window.electronAPI.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
+        const sessions = await api.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
         if (sessions.length > 0) {
           const [mostRecent] = sessions
           const existingTab = openTabs.find(tab => tab.sessionId === mostRecent.sessionId)
@@ -447,10 +567,10 @@ function App() {
 
     try {
       // Always install TTS instructions so Claude uses <tts> tags
-      await window.electronAPI.ttsInstallInstructions?.(projectPath)
+      await api.ttsInstallInstructions?.(projectPath)
 
-      // ptyId = await window.electronAPI.spawnPty(projectPath, sessionId, model?, backend?)
-      const ptyId = await window.electronAPI.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
+      // ptyId = await api.spawnPty(projectPath, sessionId, model?, backend?)
+      const ptyId = await api.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
       addTab({
         id: ptyId,
         projectPath,
@@ -463,10 +583,10 @@ function App() {
       // If an initial prompt was provided, send it after a short delay to let the terminal initialize
       if (initialPrompt) {
         setTimeout(() => {
-          window.electronAPI.writePty(ptyId, initialPrompt)
+          api.writePty(ptyId, initialPrompt)
           // Send enter to submit
           setTimeout(() => {
-            window.electronAPI.writePty(ptyId, '\r')
+            api.writePty(ptyId, '\r')
           }, 100)
         }, 1500) // Wait for backend to fully start
       }
@@ -476,21 +596,31 @@ function App() {
       const errorMsg = e?.message || String(e)
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
-  }, [addTab, openTabs, projects, setActiveTab, settings?.backend, settings])
+  }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, settings])
 
   // Handler for opening a project session at a specific position in the tiled layout
   const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null) => {
+    console.log('[App] handleOpenSessionAtPosition called with:', { projectPath, dropZone })
+
+    if (!projectPath || projectPath === 'pending') {
+      console.error('[App] Invalid project path:', projectPath)
+      return
+    }
+
     // Get project and determine effective backend
     const project = projects.find(p => p.path === projectPath)
+    console.log('[App] Found project:', project)
     const effectiveBackend = project?.backend && project.backend !== 'default'
       ? project.backend
       : settings?.backend || 'claude'
+    console.log('[App] Using backend:', effectiveBackend)
 
     // Discover the most recent session for this project
     let sessionId: string | undefined
     let slug: string | undefined
     try {
-      const sessions = await window.electronAPI.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
+      console.log('[App] Discovering sessions for:', projectPath)
+      const sessions = await api.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
       if (sessions.length > 0) {
         const [mostRecent] = sessions
         // Check if already open
@@ -510,8 +640,8 @@ function App() {
     const title = slug ? `${projectName} - ${slug}` : `${projectName} - New`
 
     try {
-      await window.electronAPI.ttsInstallInstructions?.(projectPath)
-      const ptyId = await window.electronAPI.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
+      await api.ttsInstallInstructions?.(projectPath)
+      const ptyId = await api.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
 
       // Calculate the new layout based on the drop zone
       let newLayout: TileLayout[]
@@ -543,22 +673,22 @@ function App() {
       const errorMsg = e?.message || String(e)
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
-  }, [addTab, openTabs, projects, setActiveTab, settings?.backend, tileLayout, setTileLayout])
+  }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, tileLayout, setTileLayout])
 
   const handleCloseTab = useCallback((tabId: string) => {
-    window.electronAPI.killPty(tabId)
+    api.killPty(tabId)
     clearTerminalBuffer(tabId)
     removeTab(tabId)
-  }, [removeTab])
+  }, [api, removeTab])
 
   const handleCloseProjectTabs = useCallback((projectPath: string) => {
     const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
     tabsToClose.forEach(tab => {
-      window.electronAPI.killPty(tab.id)
+      api.killPty(tab.id)
       clearTerminalBuffer(tab.id)
       removeTab(tab.id)
     })
-  }, [openTabs, removeTab])
+  }, [api, openTabs, removeTab])
 
   const handleProjectCreated = useCallback((projectPath: string, projectName: string) => {
     addProject({ path: projectPath, name: projectName })
@@ -575,6 +705,9 @@ function App() {
     )
   }
 
+  // Mobile: each terminal is its own slide. Desktop: terminals wrapped in main-content
+  const isMobile = !isElectron
+
   return (
     <div className="app">
       <TitleBar />
@@ -585,6 +718,7 @@ function App() {
         activeTabId={activeTabId}
         lastFocusedTabId={lastFocusedTabId}
         onAddProject={handleAddProject}
+        onAddProjectsFromParent={handleAddProjectsFromParent}
         onRemoveProject={removeProject}
         onOpenSession={handleOpenSession}
         onSwitchToTab={setActiveTab}
@@ -599,8 +733,32 @@ function App() {
         isMobileOpen={mobileDrawerOpen}
         onMobileClose={closeMobileDrawer}
         onOpenMobileConnect={() => setMobileConnectOpen(true)}
+        onDisconnect={onDisconnect}
       />
-      <div className="main-content">
+      {/* Mobile: render each terminal as its own slide */}
+      {isMobile && openTabs.map((tab) => (
+        <div key={tab.id} className="mobile-terminal-slide">
+          <div className="mobile-slide-header">
+            <span className="mobile-slide-title">{tab.title}</span>
+            <button className="mobile-slide-close" onClick={() => handleCloseTab(tab.id)}>×</button>
+          </div>
+          <div className="mobile-slide-content">
+            <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
+              <Terminal
+                ptyId={tab.id}
+                isActive={true}
+                theme={currentTheme}
+                onFocus={() => setLastFocusedTabId(tab.id)}
+                projectPath={tab.projectPath}
+                backend={tab.backend}
+                api={api}
+              />
+            </ErrorBoundary>
+          </div>
+        </div>
+      ))}
+      {/* Desktop: wrap terminals in main-content */}
+      {!isMobile && <div className="main-content">
         {claudeInstalled === false || gitBashInstalled === false ? (
           <div className="empty-state">
             <h2>{claudeInstalled === false ? 'Claude Code Not Found' : 'Git Required'}</h2>
@@ -691,6 +849,7 @@ function App() {
                         onFocus={() => setLastFocusedTabId(tab.id)}
                         projectPath={tab.projectPath}
                         backend={tab.backend}
+                        api={api}
                       />
                     </ErrorBoundary>
                   </div>
@@ -707,6 +866,7 @@ function App() {
                   layout={tileLayout}
                   onLayoutChange={setTileLayout}
                   onOpenSessionAtPosition={handleOpenSessionAtPosition}
+                  api={api}
                 />
               </ErrorBoundary>
             )}
@@ -717,7 +877,7 @@ function App() {
             <p>Add a project from the sidebar, then click a session to open it</p>
           </div>
         )}
-      </div>
+      </div>}
 
       <SettingsModal
         isOpen={settingsOpen}
@@ -732,8 +892,8 @@ function App() {
         onProjectCreated={handleProjectCreated}
       />
 
-      {/* Mobile Connect Modal (QR Code) */}
-      {mobileConnectOpen && (
+      {/* Mobile Connect Modal (QR Code) - only show in Electron */}
+      {isElectron && mobileConnectOpen && (
         <div className="modal-overlay" onClick={() => setMobileConnectOpen(false)}>
           <div className="modal mobile-connect-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -748,8 +908,8 @@ function App() {
       )}
       </div>
 
-      {/* Version indicator */}
-      {appVersion && (
+      {/* Version indicator - only in Electron */}
+      {isElectron && appVersion && (
         <div className="version-indicator">
           <span className="version-text">v{appVersion}</span>
           {updateStatus.status === 'available' && (

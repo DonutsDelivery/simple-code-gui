@@ -51,8 +51,8 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
   async function refreshInstalledVoices(): Promise<void> {
     try {
       const [piperVoices, xttsVoices] = await Promise.all([
-        window.electronAPI.voiceGetInstalled?.(),
-        window.electronAPI.xttsGetVoices?.()
+        window.electronAPI?.voiceGetInstalled?.(),
+        window.electronAPI?.xttsGetVoices?.()
       ])
       const combined: Array<{ key: string; displayName: string; source: string }> = []
       if (piperVoices) combined.push(...piperVoices)
@@ -72,7 +72,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
 
   useEffect(() => {
     if (isOpen) {
-      window.electronAPI.getSettings().then((settings) => {
+      window.electronAPI?.getSettings?.()?.then((settings) => {
         setGeneral(prev => ({
           ...prev,
           defaultProjectDir: settings.defaultProjectDir || '',
@@ -84,7 +84,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
       })
 
       // Load voice settings (active voice)
-      window.electronAPI.voiceGetSettings?.().then((voiceSettings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => {
+      window.electronAPI?.voiceGetSettings?.()?.then((voiceSettings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => {
         if (voiceSettings) {
           setVoice(prev => ({
             ...prev,
@@ -99,23 +99,23 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
             repetitionPenalty: voiceSettings.xttsRepetitionPenalty ?? 2.0
           })
         }
-      }).catch(e => console.error('Failed to load voice settings:', e))
+      })?.catch(e => console.error('Failed to load voice settings:', e))
 
       // Load voice status
-      window.electronAPI.voiceCheckWhisper?.().then(status => {
+      window.electronAPI?.voiceCheckWhisper?.()?.then(status => {
         setVoice(prev => ({ ...prev, whisperStatus: status }))
-      }).catch(e => console.error('Failed to check Whisper status:', e))
+      })?.catch(e => console.error('Failed to check Whisper status:', e))
 
-      window.electronAPI.voiceCheckTTS?.().then(status => {
+      window.electronAPI?.voiceCheckTTS?.()?.then(status => {
         setVoice(prev => ({ ...prev, ttsStatus: status }))
-      }).catch(e => console.error('Failed to check TTS status:', e))
+      })?.catch(e => console.error('Failed to check TTS status:', e))
 
       refreshInstalledVoices()
 
       // Load installed extensions
-      window.electronAPI.extensionsGetInstalled?.().then(exts => {
+      window.electronAPI?.extensionsGetInstalled?.()?.then(exts => {
         setInstalledExtensions(exts || [])
-      }).catch(e => console.error('Failed to load installed extensions:', e))
+      })?.catch(e => console.error('Failed to load installed extensions:', e))
     } else {
       setUI(prev => ({ ...prev, playingPreview: null, previewLoading: null }))
     }
@@ -129,9 +129,9 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
       permissionMode: general.permissionMode,
       backend: general.backend
     }
-    await window.electronAPI.saveSettings(newSettings)
+    await window.electronAPI?.saveSettings(newSettings)
     // Save voice settings including XTTS quality settings
-    await window.electronAPI.voiceApplySettings?.({
+    await window.electronAPI?.voiceApplySettings?.({
       ttsVoice: voice.selectedVoice,
       ttsEngine: voice.selectedEngine,
       ttsSpeed: voice.ttsSpeed,
@@ -182,8 +182,8 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
   async function handleInstallWhisperModel(model: string): Promise<void> {
     setUI(prev => ({ ...prev, installingModel: model }))
     try {
-      await window.electronAPI.voiceInstallWhisper?.(model)
-      const status = await window.electronAPI.voiceCheckWhisper?.()
+      await window.electronAPI?.voiceInstallWhisper?.(model)
+      const status = await window.electronAPI?.voiceCheckWhisper?.()
       if (status) setVoice(prev => ({ ...prev, whisperStatus: status }))
     } catch (e) {
       console.error('Failed to install Whisper model:', e)
@@ -200,7 +200,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
     setUI(prev => ({ ...prev, removingTTS: true, ttsRemovalResult: null }))
 
     try {
-      const workspace = await window.electronAPI.getWorkspace()
+      const workspace = await window.electronAPI?.getWorkspace()
       const projects = workspace?.projects || []
 
       let success = 0
@@ -208,7 +208,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
 
       for (const project of projects) {
         try {
-          const result = await window.electronAPI.ttsRemoveInstructions?.(project.path)
+          const result = await window.electronAPI?.ttsRemoveInstructions?.(project.path)
           if (result?.success) {
             success++
           } else {
@@ -302,7 +302,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
             className="kofi-link"
             onClick={(e) => {
               e.preventDefault()
-              window.electronAPI.openExternal?.('https://ko-fi.com/donutsdelivery')
+              window.electronAPI?.openExternal?.('https://ko-fi.com/donutsdelivery')
             }}
           >
             ♥ Support on Ko-fi
@@ -326,7 +326,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
             selectedVoice: voiceKey,
             selectedEngine: engine === 'xtts' ? 'xtts' : 'piper'
           }))
-          window.electronAPI.voiceSetVoice?.({ voice: voiceKey, engine })
+          window.electronAPI?.voiceSetVoice?.({ voice: voiceKey, engine })
         }}
       />
     </div>

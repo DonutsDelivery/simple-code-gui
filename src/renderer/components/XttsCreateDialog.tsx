@@ -42,14 +42,14 @@ export function XttsCreateDialog({
   }
 
   async function handleSelectAudio(): Promise<void> {
-    const result = await window.electronAPI.xttsSelectAudio()
+    const result = await window.electronAPI?.xttsSelectAudio()
     if (result.success && result.path) {
       setCreateXttsAudioPath(result.path)
     }
   }
 
   async function handleSelectMedia(): Promise<void> {
-    const result = await window.electronAPI.xttsSelectMediaFile()
+    const result = await window.electronAPI?.xttsSelectMediaFile()
     if (result.success && result.path) {
       setMediaPath(result.path)
       setMediaDuration(result.duration || 0)
@@ -69,7 +69,7 @@ export function XttsCreateDialog({
 
     setExtracting(true)
     try {
-      const result = await window.electronAPI.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
+      const result = await window.electronAPI?.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
       if (result.success && result.dataUrl) {
         const audio = new Audio(result.dataUrl)
         audio.volume = voiceVolume
@@ -100,7 +100,7 @@ export function XttsCreateDialog({
 
     setExtracting(true)
     try {
-      const result = await window.electronAPI.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
+      const result = await window.electronAPI?.xttsExtractAudioClip(mediaPath, cropStart, cropEnd)
       if (result.success && result.outputPath) {
         setCreateXttsAudioPath(result.outputPath)
         setMediaPath('')

@@ -45,7 +45,7 @@ export function useSessions({
         try {
           const project = projects.find((item) => item.path === expandedProject)
           const backend = project?.backend === 'opencode' ? 'opencode' : 'claude'
-          const projectSessions = await window.electronAPI.discoverSessions(
+          const projectSessions = await window.electronAPI?.discoverSessions(
             expandedProject,
             backend
           )
@@ -80,7 +80,7 @@ export function useSessions({
 
       if (!projectSessions) {
         try {
-          projectSessions = await window.electronAPI.discoverSessions(projectPath, backend)
+          projectSessions = await window.electronAPI?.discoverSessions(projectPath, backend)
           setSessions((prev) => ({ ...prev, [projectPath]: projectSessions }))
         } catch (e) {
           console.error('Failed to discover sessions:', e)

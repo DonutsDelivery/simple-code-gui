@@ -52,7 +52,7 @@ export function CustomCommandModal({ isOpen, onClose, projectPath }: CustomComma
     setError('')
 
     try {
-      const result = await window.electronAPI.commandsSave(
+      const result = await window.electronAPI?.commandsSave(
         trimmedName,
         commandContent,
         scope === 'project' ? projectPath! : null

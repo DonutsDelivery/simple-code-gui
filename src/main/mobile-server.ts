@@ -11,7 +11,7 @@ import { randomBytes } from 'crypto'
 import { networkInterfaces } from 'os'
 import { appendFileSync, readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { app } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, resolve } from 'path'
 
 // File logging for debugging
 function log(message: string, data?: any): void {
@@ -35,9 +35,26 @@ import {
   verifyNonce,
   startNonceCleanup,
   stopNonceCleanup,
+  validateProjectPath,
+  encryptToken,
+  decryptToken,
+  writeSecureFile,
+  checkEndpointRateLimit,
+  cleanupEndpointRateLimits,
   IpClass
 } from './mobile-security'
 import { discoverSessions } from './session-discovery'
+import {
+  getBeadsExecOptions,
+  checkBeadsInstalled,
+  spawnBdCommand,
+  validateTaskId,
+  TASK_ID_PATTERN
+} from './ipc'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 const DEFAULT_PORT = 38470
 
@@ -83,12 +100,67 @@ export class MobileServer {
   // Track PTYs spawned via mobile API
   private localPtys: Map<string, LocalPty> = new Map()
 
+  // Path to renderer dist files
+  private rendererPath: string
+
+  // Cleanup interval for endpoint rate limits
+  private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
+
   constructor(config: MobileServerConfig = {}) {
     this.port = config.port || DEFAULT_PORT
     this.token = this.loadOrCreateToken()
+    this.rendererPath = this.getRendererPath()
     this.app = express()
     this.setupMiddleware()
     this.setupRoutes()
+  }
+
+  /**
+   * Get the path to renderer dist files
+   * In development: dist/renderer
+   * In production: inside app.asar or resources
+   */
+  private getRendererPath(): string {
+    // Check if running in development
+    if (process.env.NODE_ENV === 'development') {
+      return resolve(__dirname, '../../dist/renderer')
+    }
+    // Production - check common locations
+    const appPath = app.getAppPath()
+    // If running from asar, renderer is in dist/renderer inside the asar
+    if (appPath.includes('.asar')) {
+      return join(appPath, 'dist/renderer')
+    }
+    // Otherwise check relative paths
+    const possiblePaths = [
+      join(appPath, 'dist/renderer'),
+      join(appPath, '../renderer'),
+      resolve(__dirname, '../../dist/renderer'),
+      resolve(__dirname, '../renderer')
+    ]
+    for (const p of possiblePaths) {
+      if (existsSync(join(p, 'index.html'))) {
+        return p
+      }
+    }
+    // Fallback
+    return join(appPath, 'dist/renderer')
+  }
+
+  /**
+   * Check if path is for a static file
+   */
+  private isStaticPath(path: string): boolean {
+    return path === '/' ||
+           path === '/index.html' ||
+           path.startsWith('/assets/') ||
+           path.endsWith('.js') ||
+           path.endsWith('.css') ||
+           path.endsWith('.svg') ||
+           path.endsWith('.png') ||
+           path.endsWith('.ico') ||
+           path.endsWith('.woff') ||
+           path.endsWith('.woff2')
   }
 
   private getTokenPath(): string {
@@ -99,21 +171,34 @@ export class MobileServer {
     const tokenPath = this.getTokenPath()
     try {
       if (existsSync(tokenPath)) {
-        const token = readFileSync(tokenPath, 'utf-8').trim()
-        if (token && token.length === 64) { // Valid 32-byte hex token
-          log('Loaded existing token')
-          return token
+        const storedData = readFileSync(tokenPath, 'utf-8').trim()
+
+        // Try to decrypt (new encrypted format)
+        const decrypted = decryptToken(storedData)
+        if (decrypted && decrypted.length === 64) {
+          log('Loaded existing encrypted token')
+          return decrypted
+        }
+
+        // Fallback: check if it's an old unencrypted token (migration path)
+        if (storedData.length === 64 && /^[a-f0-9]+$/.test(storedData)) {
+          log('Migrating unencrypted token to encrypted storage')
+          // Re-save with encryption
+          const encrypted = encryptToken(storedData)
+          writeSecureFile(tokenPath, encrypted)
+          return storedData
         }
       }
     } catch (err) {
       log('Failed to load token, generating new one', { error: String(err) })
     }
 
-    // Generate and save new token
+    // Generate and save new token with encryption
     const token = randomBytes(32).toString('hex')
     try {
-      writeFileSync(tokenPath, token, 'utf-8')
-      log('Generated and saved new token')
+      const encrypted = encryptToken(token)
+      writeSecureFile(tokenPath, encrypted)
+      log('Generated and saved new encrypted token')
     } catch (err) {
       log('Failed to save token', { error: String(err) })
     }
@@ -123,8 +208,9 @@ export class MobileServer {
   regenerateToken(): string {
     this.token = randomBytes(32).toString('hex')
     try {
-      writeFileSync(this.getTokenPath(), this.token, 'utf-8')
-      log('Regenerated and saved token')
+      const encrypted = encryptToken(this.token)
+      writeSecureFile(this.getTokenPath(), encrypted)
+      log('Regenerated and saved encrypted token')
     } catch (err) {
       log('Failed to save regenerated token', { error: String(err) })
     }
@@ -132,11 +218,56 @@ export class MobileServer {
   }
 
   private setupMiddleware(): void {
-    // CORS for local network
+    // SECURITY: CORS restricted to local network and mobile app origins
     this.app.use(cors({
-      origin: true,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
+        if (!origin) {
+          return callback(null, true)
+        }
+
+        // Allow capacitor:// and file:// schemes (mobile app)
+        if (origin.startsWith('capacitor://') || origin.startsWith('file://')) {
+          return callback(null, true)
+        }
+
+        // Allow localhost variants
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+          return callback(null, true)
+        }
+
+        // Allow local network IP ranges (RFC 1918)
+        // 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+        const localNetworkPattern = /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?/
+        if (localNetworkPattern.test(origin)) {
+          return callback(null, true)
+        }
+
+        // Allow Tailscale CGNAT range (100.64.0.0 - 100.127.255.255)
+        const tailscaleCgnatPattern = /^https?:\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+(:\d+)?/
+        if (tailscaleCgnatPattern.test(origin)) {
+          return callback(null, true)
+        }
+
+        // Allow Tailscale MagicDNS hostnames (*.ts.net)
+        if (origin.includes('.ts.net')) {
+          return callback(null, true)
+        }
+
+        // Reject other origins
+        log('CORS blocked origin', { origin })
+        callback(new Error('CORS not allowed for this origin'))
+      },
       credentials: true
     }))
+
+    // Serve static files FIRST (before auth) - UI files don't need auth
+    log('Static files path:', { path: this.rendererPath, exists: existsSync(this.rendererPath) })
+    if (existsSync(this.rendererPath)) {
+      this.app.use(express.static(this.rendererPath, {
+        index: 'index.html'
+      }))
+    }
 
     // JSON body parsing
     this.app.use(express.json({ limit: '1mb' }))
@@ -156,9 +287,27 @@ export class MobileServer {
       next()
     })
 
-    // Auth middleware (skip for health, connect, and verify-handshake endpoints)
+    // Auth middleware (skip for health, connect, verify-handshake, and static files)
     this.app.use((req: Request, res: Response, next: NextFunction) => {
+      // Skip auth for unauthenticated endpoints
       if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake') {
+        return next()
+      }
+      // Skip auth for static files (token passed in query string for initial load)
+      if (this.isStaticPath(req.path)) {
+        const queryToken = req.query.token as string
+        if (queryToken === this.token) {
+          return next()
+        }
+        // Check cookie for subsequent static file requests
+        const cookieToken = req.headers.cookie?.split(';')
+          .map(c => c.trim())
+          .find(c => c.startsWith('ct_token='))
+          ?.split('=')[1]
+        if (cookieToken === this.token) {
+          return next()
+        }
+        // No valid token - still serve static files but without sensitive data
         return next()
       }
 
@@ -190,8 +339,11 @@ export class MobileServer {
 
     // IP-based access control middleware
     this.app.use((req: Request, res: Response, next: NextFunction) => {
-      // Skip for unauthenticated endpoints
+      // Skip for unauthenticated endpoints and static files
       if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake') {
+        return next()
+      }
+      if (this.isStaticPath(req.path)) {
         return next()
       }
 
@@ -206,6 +358,30 @@ export class MobileServer {
         return res.status(403).json({
           error: `This operation requires ${accessLevel} access. Your IP (${ipClass}) is not authorized.`
         })
+      }
+
+      next()
+    })
+
+    // SECURITY: Per-endpoint rate limiting
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      // Skip for health check and static files
+      if (req.path === '/health' || this.isStaticPath(req.path)) {
+        return next()
+      }
+
+      const clientIp = getClientIp(req)
+      const result = checkEndpointRateLimit(clientIp, req.method, req.path)
+
+      // Add rate limit headers
+      res.setHeader('X-RateLimit-Remaining', String(result.remaining))
+      res.setHeader('X-RateLimit-Reset', String(Math.ceil(result.resetIn / 1000)))
+
+      if (!result.allowed) {
+        return res.status(429).json({
+          error: 'Too many requests. Please slow down.',
+          retryAfter: Math.ceil(result.resetIn / 1000)
+        }).setHeader('Retry-After', String(Math.ceil(result.resetIn / 1000)))
       }
 
       next()
@@ -244,6 +420,16 @@ export class MobileServer {
     // Sessions discovery is read-only
     if (path === '/api/sessions') {
       return 'read'
+    }
+
+    // Beads: GET operations are read, write operations need write access
+    if (path.includes('/projects/beads')) {
+      // Read operations
+      if (method === 'GET') {
+        return 'read'
+      }
+      // Write operations (POST, PUT, PATCH, DELETE)
+      return 'write'
     }
 
     // TTS speak/stop/settings need write
@@ -517,13 +703,15 @@ export class MobileServer {
           return res.status(400).json({ error: 'path query parameter is required' })
         }
 
-        // Validate path exists
-        if (!existsSync(projectPath)) {
-          return res.status(404).json({ error: 'Project path does not exist' })
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(projectPath)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
         }
+        const safeProjectPath = pathValidation.normalizedPath!
 
         // Discover sessions using the same logic as the main process
-        const sessions = await discoverSessions(projectPath, backend)
+        const sessions = await discoverSessions(safeProjectPath, backend)
 
         // Return in the expected format
         res.json({
@@ -552,25 +740,18 @@ export class MobileServer {
           return res.status(400).json({ error: 'path is required and must be a string' })
         }
 
-        // Validate path exists and is a directory
-        if (!existsSync(projectPath)) {
-          return res.status(404).json({ error: 'Path does not exist' })
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(projectPath)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
         }
-
-        try {
-          const stats = statSync(projectPath)
-          if (!stats.isDirectory()) {
-            return res.status(400).json({ error: 'Path must be a directory' })
-          }
-        } catch (e) {
-          return res.status(400).json({ error: 'Unable to access path' })
-        }
+        const safeProjectPath = pathValidation.normalizedPath!
 
         // Extract project name from path
-        const name = basename(projectPath)
+        const name = basename(safeProjectPath)
 
-        log('Project add', { path: projectPath, name })
-        res.json({ path: projectPath, name })
+        log('Project add', { path: safeProjectPath, name })
+        res.json({ path: safeProjectPath, name })
       } catch (error) {
         log('Project add error', { error: String(error) })
         res.status(500).json({ error: String(error) })
@@ -675,6 +856,277 @@ export class MobileServer {
     })
 
     // ========================================
+    // Beads API Routes - Task management
+    // ========================================
+
+    // GET /projects/beads/check - Check if beads is installed and initialized for a project
+    this.app.get('/projects/beads/check', async (req: Request, res: Response) => {
+      try {
+        const cwd = req.query.cwd as string
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        const installed = await checkBeadsInstalled()
+        if (!installed) {
+          return res.json({ installed: false, initialized: false })
+        }
+
+        const beadsDir = join(safeCwd, '.beads')
+        res.json({ installed: true, initialized: existsSync(beadsDir) })
+      } catch (error) {
+        log('Beads check error', { error: String(error) })
+        res.status(500).json({ error: String(error) })
+      }
+    })
+
+    // POST /projects/beads/init - Initialize beads in a project
+    this.app.post('/projects/beads/init', async (req: Request, res: Response) => {
+      try {
+        const { cwd } = req.body
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        await execAsync('bd init', { ...getBeadsExecOptions(), cwd: safeCwd })
+        res.json({ success: true })
+      } catch (error: any) {
+        log('Beads init error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // GET /projects/beads/ready - Get tasks ready to work on
+    this.app.get('/projects/beads/ready', async (req: Request, res: Response) => {
+      try {
+        const cwd = req.query.cwd as string
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        const { stdout } = await execAsync('bd ready --json', { ...getBeadsExecOptions(), cwd: safeCwd })
+        res.json({ success: true, tasks: JSON.parse(stdout) })
+      } catch (error: any) {
+        log('Beads ready error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // GET /projects/beads/tasks - List all tasks (returns BeadsTask[] directly)
+    this.app.get('/projects/beads/tasks', async (req: Request, res: Response) => {
+      try {
+        const cwd = req.query.cwd as string
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        const { stdout } = await execAsync('bd list --json', { ...getBeadsExecOptions(), cwd: safeCwd })
+        // Return tasks array directly (httpClient expects BeadsTask[])
+        res.json(JSON.parse(stdout))
+      } catch (error: any) {
+        log('Beads list error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // GET /projects/beads/tasks/:taskId - Show a specific task (returns BeadsTask directly)
+    this.app.get('/projects/beads/tasks/:taskId', async (req: Request, res: Response) => {
+      try {
+        const { taskId } = req.params
+        const cwd = req.query.cwd as string
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        validateTaskId(taskId)
+        const { stdout } = await spawnBdCommand(['show', taskId, '--json'], { cwd: safeCwd })
+        // Return task directly (httpClient expects BeadsTask)
+        res.json(JSON.parse(stdout))
+      } catch (error: any) {
+        log('Beads show error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // POST /projects/beads/tasks - Create a new task (returns BeadsTask directly)
+    this.app.post('/projects/beads/tasks', async (req: Request, res: Response) => {
+      try {
+        const { cwd, title, description, priority, type, labels } = req.body
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd is required' })
+        }
+        if (!title || typeof title !== 'string') {
+          return res.status(400).json({ error: 'title is required' })
+        }
+        if (type && !TASK_ID_PATTERN.test(type)) {
+          return res.status(400).json({ error: 'Invalid type format' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        const args = ['create', title]
+        if (description) args.push('-d', description)
+        if (priority !== undefined) args.push('-p', String(priority))
+        if (type) args.push('-t', type)
+        if (labels) args.push('-l', labels)
+        args.push('--json')
+
+        const { stdout } = await spawnBdCommand(args, { cwd: safeCwd })
+        // Return task directly (httpClient expects BeadsTask)
+        res.json(JSON.parse(stdout))
+      } catch (error: any) {
+        log('Beads create error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // POST /projects/beads/tasks/:taskId/complete - Mark task as complete
+    this.app.post('/projects/beads/tasks/:taskId/complete', async (req: Request, res: Response) => {
+      try {
+        const { taskId } = req.params
+        const { cwd } = req.body
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        validateTaskId(taskId)
+        const { stdout } = await spawnBdCommand(['close', taskId, '--json'], { cwd: safeCwd })
+        res.json({ success: true, result: JSON.parse(stdout) })
+      } catch (error: any) {
+        log('Beads complete error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // POST /projects/beads/tasks/:taskId/start - Start working on a task
+    this.app.post('/projects/beads/tasks/:taskId/start', async (req: Request, res: Response) => {
+      try {
+        const { taskId } = req.params
+        const { cwd } = req.body
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        validateTaskId(taskId)
+        await spawnBdCommand(['update', taskId, '--status', 'in_progress'], { cwd: safeCwd })
+        res.json({ success: true })
+      } catch (error: any) {
+        log('Beads start error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // PATCH /projects/beads/tasks/:taskId - Update a task
+    this.app.patch('/projects/beads/tasks/:taskId', async (req: Request, res: Response) => {
+      try {
+        const { taskId } = req.params
+        const { cwd, status, title, description, priority } = req.body
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        validateTaskId(taskId)
+        const args = ['update', taskId]
+        if (status) args.push('--status', status)
+        if (title) args.push('--title', title)
+        if (description !== undefined) args.push('--description', description)
+        if (priority !== undefined) args.push('--priority', String(priority))
+
+        await spawnBdCommand(args, { cwd: safeCwd })
+        res.json({ success: true })
+      } catch (error: any) {
+        log('Beads update error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // DELETE /projects/beads/tasks/:taskId - Delete a task
+    this.app.delete('/projects/beads/tasks/:taskId', async (req: Request, res: Response) => {
+      try {
+        const { taskId } = req.params
+        const cwd = req.query.cwd as string
+        if (!cwd) {
+          return res.status(400).json({ error: 'cwd query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(cwd)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeCwd = pathValidation.normalizedPath!
+
+        validateTaskId(taskId)
+        await spawnBdCommand(['delete', taskId, '--force'], { cwd: safeCwd })
+        res.json({ success: true })
+      } catch (error: any) {
+        log('Beads delete error', { error: String(error) })
+        res.status(500).json({ success: false, error: error.message || String(error) })
+      }
+    })
+
+    // ========================================
     // PTY API Routes - Direct PTY management
     // ========================================
 
@@ -687,15 +1139,22 @@ export class MobileServer {
           return res.status(400).json({ error: 'projectPath is required' })
         }
 
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateProjectPath(projectPath)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safeProjectPath = pathValidation.normalizedPath!
+
         if (!this.ptyManager) {
           return res.status(500).json({ error: 'PTY manager not available' })
         }
 
-        log('PTY spawn request', { projectPath, sessionId, model, backend })
+        log('PTY spawn request', { projectPath: safeProjectPath, sessionId, model, backend })
 
         // Use the ptyManager to spawn a new PTY
         const ptyId = this.ptyManager.spawn(
-          projectPath,
+          safeProjectPath,
           sessionId,
           undefined, // autoAcceptTools
           undefined, // permissionMode
@@ -706,7 +1165,7 @@ export class MobileServer {
         // Track this PTY for cleanup
         const localPty: LocalPty = {
           ptyId,
-          projectPath,
+          projectPath: safeProjectPath,
           dataCallbacks: new Set(),
           exitCallbacks: new Set()
         }
@@ -846,11 +1305,21 @@ export class MobileServer {
     this.server.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url || '', `http://localhost:${this.port}`)
       const pathname = url.pathname
-      const token = url.searchParams.get('token')
+
+      // SECURITY: Get token from Sec-WebSocket-Protocol header (preferred) or query string (fallback)
+      // Using the protocol header prevents token from appearing in server logs and browser history
+      const protocolHeader = req.headers['sec-websocket-protocol'] as string | undefined
+      const protocols = protocolHeader?.split(',').map(p => p.trim()) || []
+      // Token is passed as a protocol prefixed with 'token-'
+      const tokenFromProtocol = protocols.find(p => p.startsWith('token-'))?.slice(6)
+      const tokenFromQuery = url.searchParams.get('token')
+      const token = tokenFromProtocol || tokenFromQuery
 
       log('WebSocket upgrade request', {
         url: req.url,
         pathname,
+        hasProtocolToken: !!tokenFromProtocol,
+        hasQueryToken: !!tokenFromQuery,
         headers: {
           host: req.headers.host,
           origin: req.headers.origin,
@@ -1137,6 +1606,22 @@ export class MobileServer {
     return ips
   }
 
+  private getTailscaleHostname(): string | null {
+    try {
+      const { execSync } = require('child_process')
+      const output = execSync('tailscale status --json', { encoding: 'utf-8', timeout: 5000 })
+      const status = JSON.parse(output)
+      // Get the DNS name for this machine
+      if (status.Self && status.Self.DNSName) {
+        // DNSName ends with a dot, remove it
+        return status.Self.DNSName.replace(/\.$/, '')
+      }
+    } catch {
+      // Tailscale not installed or not running
+    }
+    return null
+  }
+
   // Register service handlers from main process
   setPtyManager(manager: any): void {
     this.ptyManager = manager
@@ -1167,11 +1652,16 @@ export class MobileServer {
     const fingerprint = getOrCreateFingerprint()
     const { nonce, expiresAt } = createNonce()
 
-    // V2 QR code format is JSON
+    // Include Tailscale hostname if available (more reliable than IP for Tailscale connections)
+    const tailscaleHostname = this.getTailscaleHostname()
+    const allHosts = tailscaleHostname ? [...ips, tailscaleHostname] : ips
+
+    // V2 QR code format is JSON - includes all IPs/hostnames for multi-host connection attempts
     const qrPayload = {
       type: 'claude-terminal',
       version: 2,
-      host: primaryIp,
+      host: primaryIp,  // Primary IP for backward compatibility
+      hosts: allHosts,  // All available IPs + Tailscale hostname for multi-host connection
       port: this.port,
       token: this.token,
       fingerprint,
@@ -1206,6 +1696,11 @@ export class MobileServer {
         // Start nonce cleanup
         startNonceCleanup()
 
+        // Start endpoint rate limit cleanup (every 2 minutes)
+        this.rateLimitCleanupInterval = setInterval(() => {
+          cleanupEndpointRateLimits()
+        }, 2 * 60 * 1000)
+
         this.server.listen(this.port, '0.0.0.0', () => {
           log(`Started on port ${this.port}`)
           log(`Token: ${this.token.slice(0, 8)}...`)
@@ -1233,6 +1728,12 @@ export class MobileServer {
   stop(): void {
     // Stop nonce cleanup
     stopNonceCleanup()
+
+    // Stop endpoint rate limit cleanup
+    if (this.rateLimitCleanupInterval) {
+      clearInterval(this.rateLimitCleanupInterval)
+      this.rateLimitCleanupInterval = null
+    }
 
     if (this.wss) {
       this.wss.close()

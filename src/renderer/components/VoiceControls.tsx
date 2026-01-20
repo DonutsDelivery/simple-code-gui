@@ -30,7 +30,7 @@ export function VoiceControls({
   useEffect(() => {
     checkInstallation()
 
-    const cleanup = window.electronAPI.onInstallProgress?.((data) => {
+    const cleanup = window.electronAPI?.onInstallProgress?.((data) => {
       if ((data.type === 'piper' || data.type === 'piper-voice') && data.percent === 100) {
         setInstallingTTS(false)
         checkInstallation()
@@ -41,7 +41,7 @@ export function VoiceControls({
 
   const checkInstallation = async () => {
     try {
-      const ttsStatus = await window.electronAPI.voiceCheckTTS?.()
+      const ttsStatus = await window.electronAPI?.voiceCheckTTS?.()
       setTtsInstalled(ttsStatus?.installed ?? false)
     } catch (e) {
       // Voice features not available
@@ -71,9 +71,9 @@ export function VoiceControls({
     if (!ttsInstalled) {
       setInstallingTTS(true)
       try {
-        const result = await window.electronAPI.voiceInstallPiper?.()
+        const result = await window.electronAPI?.voiceInstallPiper?.()
         if (result?.success) {
-          await window.electronAPI.voiceInstallVoice?.('en_US-libritts_r-medium')
+          await window.electronAPI?.voiceInstallVoice?.('en_US-libritts_r-medium')
         }
         await checkInstallation()
       } catch (e) {
@@ -91,7 +91,7 @@ export function VoiceControls({
       // Test TTS when enabling
       if (newState) {
         console.log('Testing TTS...')
-        window.electronAPI.voiceSpeak?.('Voice output enabled. Hello!')
+        window.electronAPI?.voiceSpeak?.('Voice output enabled. Hello!')
           .then(result => {
             console.log('TTS result:', result)
             if (result?.success && result.audioData) {
