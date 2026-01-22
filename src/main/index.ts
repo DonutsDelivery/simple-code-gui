@@ -593,6 +593,11 @@ ipcMain.handle('mobile:regenerateToken', () => {
   return mobileServer.getConnectionInfo()
 })
 ipcMain.handle('mobile:isRunning', () => mobileServer.isRunning())
+ipcMain.handle('mobile:sendFile', (_event, filePath: string, message?: string) => {
+  return mobileServer.sendFileToMobile(filePath, message)
+})
+ipcMain.handle('mobile:getConnectedClients', () => mobileServer.getConnectedClientCount())
+ipcMain.handle('mobile:getPendingFiles', () => mobileServer.getPendingFiles())
 
 // Settings management
 ipcMain.handle('settings:get', () => sessionStore.getSettings())

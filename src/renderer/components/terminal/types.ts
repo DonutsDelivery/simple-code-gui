@@ -18,6 +18,8 @@ export interface TerminalProps {
   projectPath?: string | null
   backend?: string
   api?: Api  // API abstraction for PTY operations (uses electronAPI if not provided)
+  isMobile?: boolean  // Whether running on mobile (for mobile-specific UI)
+  onOpenFileBrowser?: () => void  // Callback to open file browser (mobile only)
 }
 
 // Auto work options passed from menu

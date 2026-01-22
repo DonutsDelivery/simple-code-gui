@@ -683,12 +683,22 @@ export function validatePath(inputPath: string, options: {
     }
   }
 
-  // Check if directory if required
-  if (options.mustBeDirectory) {
+  // Check if directory/file if required
+  if (options.mustBeDirectory === true) {
     try {
       const stats = statSync(normalizedPath)
       if (!stats.isDirectory()) {
         return { valid: false, error: 'Path must be a directory' }
+      }
+    } catch {
+      return { valid: false, error: 'Unable to access path' }
+    }
+  } else if (options.mustBeDirectory === false) {
+    // Explicitly false means must be a file
+    try {
+      const stats = statSync(normalizedPath)
+      if (!stats.isFile()) {
+        return { valid: false, error: 'Path must be a file' }
       }
     } catch {
       return { valid: false, error: 'Unable to access path' }
@@ -706,5 +716,31 @@ export function validateProjectPath(path: string): PathValidationResult {
   return validatePath(path, {
     mustExist: true,
     mustBeDirectory: true
+  })
+}
+
+/**
+ * Validation for file paths (for file download/read operations)
+ * Must exist and be a file (not directory)
+ * Optionally constrain to specific base directories
+ */
+export function validateFilePath(path: string, allowedBasePaths?: string[]): PathValidationResult {
+  return validatePath(path, {
+    mustExist: true,
+    mustBeDirectory: false, // Must be a file
+    allowedBasePaths
+  })
+}
+
+/**
+ * Validation for directory listing paths
+ * Must exist and be a directory
+ * Optionally constrain to specific base directories
+ */
+export function validateDirectoryPath(path: string, allowedBasePaths?: string[]): PathValidationResult {
+  return validatePath(path, {
+    mustExist: true,
+    mustBeDirectory: true,
+    allowedBasePaths
   })
 }

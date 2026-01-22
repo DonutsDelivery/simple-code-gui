@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readdirSync, lstatSync, readlinkSync, unlinkSync, rmdirSync, symlinkSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, lstatSync, readlinkSync, unlinkSync, rmSync, symlinkSync } from 'fs'
 import { join, basename } from 'path'
 import type { Workspace, Project, ProjectCategory } from './session-store'
 
@@ -13,26 +13,14 @@ function getMetaProjectsBasePath(): string {
 }
 
 /**
- * Safely remove a directory and all its contents (symlinks only, not actual files)
+ * Safely remove a directory and all its contents
+ * Meta-projects dir only contains our symlinks/structure, so safe to fully remove
  */
 function removeSymlinkDirectory(dirPath: string): void {
   if (!existsSync(dirPath)) return
 
   try {
-    const entries = readdirSync(dirPath)
-    for (const entry of entries) {
-      const entryPath = join(dirPath, entry)
-      const stat = lstatSync(entryPath)
-
-      if (stat.isSymbolicLink()) {
-        unlinkSync(entryPath)
-      } else if (stat.isDirectory()) {
-        // Recursively clean subdirectories
-        removeSymlinkDirectory(entryPath)
-      }
-      // Skip regular files - shouldn't exist but don't delete user data
-    }
-    rmdirSync(dirPath)
+    rmSync(dirPath, { recursive: true, force: true })
   } catch (e) {
     console.warn(`Failed to remove directory ${dirPath}:`, e)
   }

@@ -11,6 +11,8 @@ import { ConnectionScreen } from './components/ConnectionScreen'
 import { HostQRDisplay } from './components/HostQRDisplay'
 import { MobileLayout } from './components/mobile/MobileLayout'
 import { MobileSidebarContent } from './components/mobile/MobileSidebarContent'
+import { FileBrowser } from './components/mobile/FileBrowser'
+import type { HostConfig } from './hooks/useHostConnection'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
@@ -221,6 +223,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
+  const [showFileBrowser, setShowFileBrowser] = useState(false)
+  const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
   const terminalContainerRef = useRef<HTMLDivElement>(null)
@@ -232,6 +236,12 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
 
   const closeMobileDrawer = useCallback(() => {
     setMobileDrawerOpen(false)
+  }, [])
+
+  // Open file browser (mobile only) - uses active tab's project path
+  const handleOpenFileBrowser = useCallback((projectPath?: string) => {
+    setFileBrowserPath(projectPath || null)
+    setShowFileBrowser(true)
   }, [])
 
   // Load workspace on mount and restore tabs
@@ -352,6 +362,7 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
                 usedSessionIds.add(sessionIdToRestore)
               }
             } catch (e) {
+              console.error('Failed to restore tab:', savedTab.projectPath, e)
             }
           }
         }
@@ -543,7 +554,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
       ? project.backend
       : settings?.backend || 'claude'
 
-    if (!forceNewSession) {
+    // Only discover sessions if no specific sessionId was requested
+    if (!forceNewSession && !sessionId) {
       try {
         const sessions = await api.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
         if (sessions.length > 0) {
@@ -752,6 +764,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
                 projectPath={tab.projectPath}
                 backend={tab.backend}
                 api={api}
+                isMobile={true}
+                onOpenFileBrowser={() => handleOpenFileBrowser(tab.projectPath || undefined)}
               />
             </ErrorBoundary>
           </div>
@@ -906,6 +920,37 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
           </div>
         </div>
       )}
+
+      {/* File Browser Modal (mobile only) */}
+      {isMobile && showFileBrowser && (() => {
+        // Get host config from API connection info (more reliable than localStorage on mobile)
+        const connInfo = api.getConnectionInfo?.()
+        if (!connInfo) return null
+
+        const hostConfig: HostConfig = {
+          id: 'current',
+          name: 'Desktop',
+          host: connInfo.host,
+          port: connInfo.port,
+          token: connInfo.token
+        }
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100
+          }}>
+            <FileBrowser
+              host={hostConfig}
+              initialPath={fileBrowserPath || undefined}
+              onClose={() => setShowFileBrowser(false)}
+            />
+          </div>
+        )
+      })()}
       </div>
 
       {/* Version indicator - only in Electron */}

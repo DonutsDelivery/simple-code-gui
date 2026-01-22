@@ -20,6 +20,15 @@ export interface HostConfig {
 export type ConnectionState = 'disconnected' | 'connecting' | 'verifying' | 'connected' | 'error'
 export type ConnectionMethod = 'none' | 'websocket' | 'http-polling'
 
+// File pushed from desktop for download
+export interface PendingFile {
+  id: string
+  name: string
+  size: number
+  mimeType: string
+  message?: string
+}
+
 export interface HostConnectionState {
   hosts: HostConfig[]
   currentHost: HostConfig | null
@@ -27,6 +36,7 @@ export interface HostConnectionState {
   connectionMethod: ConnectionMethod  // Shows whether using WebSocket or HTTP polling
   error: string | null
   fingerprintWarning: string | null  // Set when fingerprint mismatch detected
+  pendingFiles: PendingFile[]  // Files pushed from desktop for download
 }
 
 export interface HostConnectionActions {
@@ -37,6 +47,8 @@ export interface HostConnectionActions {
   disconnect: () => void
   reconnect: () => void
   acceptFingerprint: () => void  // Accept a new/changed fingerprint
+  clearPendingFile: (fileId: string) => void  // Remove a pending file from the list
+  clearAllPendingFiles: () => void  // Clear all pending files
 }
 
 export type UseHostConnectionReturn = HostConnectionState & HostConnectionActions
@@ -95,29 +107,22 @@ function saveHosts(hosts: HostConfig[]): void {
 
 /**
  * Check if host is a local/private network address
- * Includes: localhost, private IPv4 ranges, and Tailscale CGNAT (100.64-127.x.x)
+ * Includes: localhost, private IPv4 ranges, Tailscale CGNAT (100.64-127.x.x), and MagicDNS (*.ts.net)
  */
 function isLocalNetwork(hostname: string): boolean {
-  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(hostname)
+  // RFC 1918 private ranges + Tailscale CGNAT (100.64-127.x.x) + MagicDNS (*.ts.net)
+  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(hostname) ||
+         hostname.endsWith('.ts.net')
 }
 
 /**
  * Build WebSocket URL from host config
- * SECURITY: Token is no longer in URL - it's passed via Sec-WebSocket-Protocol header
+ * Token passed via query string for Capacitor WebView compatibility
  */
 function buildWebSocketUrl(host: HostConfig): string {
   // Use ws:// for local networks, wss:// for public
   const protocol = isLocalNetwork(host.host) ? 'ws' : 'wss'
-  return `${protocol}://${host.host}:${host.port}/ws`
-}
-
-/**
- * Build WebSocket protocols array with token
- * SECURITY: Token passed as subprotocol to avoid exposure in URL/logs
- */
-function buildWebSocketProtocols(host: HostConfig): string[] {
-  // Prefix with 'token-' so server can identify it
-  return [`token-${host.token}`]
+  return `${protocol}://${host.host}:${host.port}/ws?token=${encodeURIComponent(host.token)}`
 }
 
 /**
@@ -170,6 +175,7 @@ export function useHostConnection(): UseHostConnectionReturn {
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>('none')
   const [error, setError] = useState<string | null>(null)
   const [fingerprintWarning, setFingerprintWarning] = useState<string | null>(null)
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 
   // Refs for WebSocket management
   const wsRef = useRef<WebSocket | null>(null)
@@ -260,6 +266,24 @@ export function useHostConnection(): UseHostConnectionReturn {
         return
       }
 
+      // Handle file available notification (single file pushed)
+      if (data.type === 'file:available' && data.file) {
+        console.log('[WebSocket] File available for download:', data.file)
+        setPendingFiles(prev => {
+          // Avoid duplicates
+          if (prev.some(f => f.id === data.file.id)) return prev
+          return [...prev, data.file as PendingFile]
+        })
+        return
+      }
+
+      // Handle pending files list (sent on connect)
+      if (data.type === 'files:pending' && Array.isArray(data.files)) {
+        console.log('[WebSocket] Pending files:', data.files)
+        setPendingFiles(data.files as PendingFile[])
+        return
+      }
+
       // Other message types can be handled here or by listeners
       console.log('WebSocket message:', data)
     } catch {
@@ -310,6 +334,35 @@ export function useHostConnection(): UseHostConnectionReturn {
     let consecutiveFailures = 0
     const MAX_FAILURES = 3
 
+    // Helper to fetch pending files
+    const fetchPendingFiles = async () => {
+      const url = buildHttpUrl(host, '/api/files/pending')
+      console.log('[HTTP Polling] Fetching pending files from:', url)
+      try {
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${host.token}` },
+          signal: AbortSignal.timeout(5000)
+        })
+        console.log('[HTTP Polling] Pending files response:', response.status)
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[HTTP Polling] Pending files data:', data)
+          if (data.files && Array.isArray(data.files)) {
+            console.log('[HTTP Polling] Setting pending files:', data.files.length)
+            setPendingFiles(data.files as PendingFile[])
+          }
+        } else {
+          const errorText = await response.text()
+          console.error('[HTTP Polling] Pending files error:', response.status, errorText)
+        }
+      } catch (err) {
+        console.error('[HTTP Polling] Failed to fetch pending files:', err)
+      }
+    }
+
+    // Fetch pending files immediately on connect
+    fetchPendingFiles()
+
     // Start HTTP polling for keep-alive (longer interval since we validated)
     const pollInterval = setInterval(async () => {
       try {
@@ -322,6 +375,9 @@ export function useHostConnection(): UseHostConnectionReturn {
         }
         consecutiveFailures = 0 // Reset on success
         console.log('[HTTP Polling] Health check OK')
+
+        // Also check for pending files during polling
+        await fetchPendingFiles()
       } catch (err) {
         consecutiveFailures++
         console.error(`[HTTP Polling] Health check failed (${consecutiveFailures}/${MAX_FAILURES}):`, err)
@@ -340,29 +396,39 @@ export function useHostConnection(): UseHostConnectionReturn {
 
   /**
    * Internal function to establish WebSocket connection after verification
+   * NOTE: HTTP polling fallback is DISABLED for debugging WebSocket issues
    */
   const establishWebSocket = useCallback((host: HostConfig, hostId: string) => {
     const url = buildWebSocketUrl(host)
-    const protocols = buildWebSocketProtocols(host)
-    console.log('[WebSocket] Connecting to:', url, '(token via protocol header)')
+    console.log('[WebSocket] ========== CONNECTION ATTEMPT ==========')
+    console.log('[WebSocket] URL:', url)
+    console.log('[WebSocket] Host:', host.host)
+    console.log('[WebSocket] Port:', host.port)
+    console.log('[WebSocket] Token (first 8 chars):', host.token?.slice(0, 8))
+    console.log('[WebSocket] Is local network:', isLocalNetwork(host.host))
 
-    // Set a timeout to fall back to HTTP polling if WebSocket fails quickly
+    // Connection timeout - just show error, no fallback
     const wsTimeout = setTimeout(() => {
-      console.log('[WebSocket] Connection timeout, falling back to HTTP polling')
+      console.error('[WebSocket] Connection timeout after 10 seconds')
+      console.error('[WebSocket] readyState:', wsRef.current?.readyState)
       if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-        wsRef.current.close()
-        wsRef.current = null
-        establishHttpPolling(host, hostId)
+        setConnectionState('error')
+        setError('WebSocket connection timeout - check server logs on desktop')
       }
-    }, 5000)
+    }, 10000)
 
     try {
-      // SECURITY: Pass token via Sec-WebSocket-Protocol header instead of URL
-      const ws = new WebSocket(url, protocols)
+      console.log('[WebSocket] Creating WebSocket object...')
+      // Token passed via query string for Capacitor WebView compatibility
+      const ws = new WebSocket(url)
+      console.log('[WebSocket] WebSocket object created, readyState:', ws.readyState)
 
       ws.onopen = () => {
         clearTimeout(wsTimeout)
-        console.log('[WebSocket] Connected!')
+        console.log('[WebSocket] ========== CONNECTED! ==========')
+        console.log('[WebSocket] readyState:', ws.readyState)
+        console.log('[WebSocket] protocol:', ws.protocol)
+        console.log('[WebSocket] extensions:', ws.extensions)
         setConnectionState('connected')
         setConnectionMethod('websocket')
         setError(null)
@@ -380,6 +446,29 @@ export function useHostConnection(): UseHostConnectionReturn {
 
         // Start ping/pong keep-alive
         startPingPong()
+
+        // Fetch pending files via HTTP (WebSocket may not send them immediately)
+        const fetchPendingFilesHttp = async () => {
+          try {
+            const url = buildHttpUrl(host, '/api/files/pending')
+            console.log('[WebSocket] Fetching pending files via HTTP:', url)
+            const response = await fetch(url, {
+              headers: { 'Authorization': `Bearer ${host.token}` }
+            })
+            if (response.ok) {
+              const data = await response.json()
+              if (data.files && Array.isArray(data.files)) {
+                console.log('[WebSocket] Got pending files:', data.files.length)
+                setPendingFiles(data.files as PendingFile[])
+              }
+            } else {
+              console.error('[WebSocket] Pending files error:', response.status)
+            }
+          } catch (err) {
+            console.error('[WebSocket] Failed to fetch pending files:', err)
+          }
+        }
+        fetchPendingFilesHttp()
       }
 
       ws.onmessage = handleMessage
@@ -387,42 +476,50 @@ export function useHostConnection(): UseHostConnectionReturn {
       ws.onerror = (event) => {
         clearTimeout(wsTimeout)
         // Log more details about the error
-        console.error('[WebSocket] Error event:', {
-          type: event.type,
-          target: event.target ? {
-            url: (event.target as WebSocket).url,
-            readyState: (event.target as WebSocket).readyState,
-            protocol: (event.target as WebSocket).protocol
-          } : 'no target',
-          message: (event as any).message || 'no message'
-        })
-        // Fall back to HTTP polling
-        console.log('[WebSocket] Falling back to HTTP polling')
+        console.error('[WebSocket] ========== ERROR ==========')
+        console.error('[WebSocket] Error event type:', event.type)
+        console.error('[WebSocket] Error event:', event)
+        if (event.target) {
+          const target = event.target as WebSocket
+          console.error('[WebSocket] Target URL:', target.url)
+          console.error('[WebSocket] Target readyState:', target.readyState)
+          console.error('[WebSocket] Target protocol:', target.protocol)
+        }
+        console.error('[WebSocket] Full event object:', JSON.stringify(event, Object.getOwnPropertyNames(event)))
+
+        // Show error to user - NO FALLBACK
+        setConnectionState('error')
+        setError('WebSocket error - check console logs for details')
         wsRef.current = null
-        establishHttpPolling(host, hostId)
       }
 
       ws.onclose = (event) => {
         clearTimeout(wsTimeout)
         clearTimers()
+        console.log('[WebSocket] ========== CLOSED ==========')
+        console.log('[WebSocket] Code:', event.code)
+        console.log('[WebSocket] Reason:', event.reason)
+        console.log('[WebSocket] Was clean:', event.wasClean)
 
         if (event.wasClean) {
           setConnectionState('disconnected')
         } else {
-          // Try HTTP polling instead of reconnecting WebSocket
-          console.log('[WebSocket] Connection lost, trying HTTP polling')
-          establishHttpPolling(host, hostId)
+          // Show error - NO FALLBACK
+          setConnectionState('error')
+          setError(`WebSocket closed unexpectedly (code: ${event.code}, reason: ${event.reason || 'none'})`)
         }
       }
 
       wsRef.current = ws
     } catch (err) {
       clearTimeout(wsTimeout)
+      console.error('[WebSocket] ========== EXCEPTION ==========')
       console.error('[WebSocket] Exception:', err)
-      // Fall back to HTTP polling
-      establishHttpPolling(host, hostId)
+      console.error('[WebSocket] Stack:', (err as Error).stack)
+      setConnectionState('error')
+      setError(`WebSocket exception: ${err instanceof Error ? err.message : String(err)}`)
     }
-  }, [clearTimers, startPingPong, handleMessage, establishHttpPolling])
+  }, [clearTimers, startPingPong, handleMessage])
 
   /**
    * Connect to a host
@@ -533,8 +630,33 @@ export function useHostConnection(): UseHostConnectionReturn {
       )
     }
 
-    // Proceed with WebSocket connection
+    // Pre-connection test: verify token is valid before attempting WebSocket
+    // This helps diagnose auth issues vs WebSocket issues
+    console.log('[Connect] Testing token validity with /ws-test endpoint...')
     setConnectionState('connecting')
+
+    try {
+      const testUrl = buildHttpUrl(host, `/ws-test?token=${encodeURIComponent(host.token)}`)
+      console.log('[Connect] Testing URL:', testUrl)
+      const testResponse = await fetch(testUrl)
+      const testData = await testResponse.json()
+      console.log('[Connect] ws-test response:', testData)
+
+      if (!testResponse.ok || !testData.ok) {
+        console.error('[Connect] Token validation failed:', testData)
+        setConnectionState('error')
+        setError(`Token validation failed: ${testData.message || 'Invalid token'}`)
+        return
+      }
+      console.log('[Connect] Token validated successfully, proceeding with WebSocket')
+    } catch (testErr) {
+      console.error('[Connect] Failed to reach server for token test:', testErr)
+      setConnectionState('error')
+      setError(`Cannot reach server: ${testErr instanceof Error ? testErr.message : String(testErr)}`)
+      return
+    }
+
+    // Proceed with WebSocket connection
     establishWebSocket(host, hostId)
   }, [hosts, clearTimers, establishWebSocket])
 
@@ -631,6 +753,20 @@ export function useHostConnection(): UseHostConnectionReturn {
     )
   }, [])
 
+  /**
+   * Clear a pending file after download or dismissal
+   */
+  const clearPendingFile = useCallback((fileId: string) => {
+    setPendingFiles(prev => prev.filter(f => f.id !== fileId))
+  }, [])
+
+  /**
+   * Clear all pending files
+   */
+  const clearAllPendingFiles = useCallback(() => {
+    setPendingFiles([])
+  }, [])
+
   return {
     // State
     hosts,
@@ -639,6 +775,7 @@ export function useHostConnection(): UseHostConnectionReturn {
     connectionMethod,
     error,
     fingerprintWarning,
+    pendingFiles,
     // Actions
     addHost,
     removeHost,
@@ -646,7 +783,9 @@ export function useHostConnection(): UseHostConnectionReturn {
     connect,
     disconnect,
     reconnect,
-    acceptFingerprint
+    acceptFingerprint,
+    clearPendingFile,
+    clearAllPendingFiles
   }
 }
 

@@ -564,6 +564,17 @@ export class HttpBackend implements Api {
   // ==========================================================================
 
   /**
+   * Get connection info for external components (like FileBrowser)
+   */
+  getConnectionInfo(): { host: string; port: number; token: string } {
+    return {
+      host: this.host,
+      port: this.port,
+      token: this.token
+    }
+  }
+
+  /**
    * Test connection to the server
    */
   async testConnection(): Promise<{ success: boolean; error?: string }> {

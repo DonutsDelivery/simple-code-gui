@@ -226,6 +226,27 @@ export function useTerminalSetup({
         try {
           newTerminal.open(container)
           console.log('[Terminal] xterm.open() succeeded')
+
+          // MOBILE FIX: Disable autocorrect/autocomplete on xterm's internal textarea
+          // This prevents Android Gboard/IME from duplicating text during composition
+          // See: https://github.com/xtermjs/xterm.js/issues/3600
+          const textarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
+          if (textarea) {
+            textarea.setAttribute('autocomplete', 'off')
+            textarea.setAttribute('autocorrect', 'off')
+            textarea.setAttribute('autocapitalize', 'off')
+            textarea.setAttribute('spellcheck', 'false')
+            // Set enterkeyhint to 'send' so Android keyboard sends Enter instead of "Done"
+            textarea.setAttribute('enterkeyhint', 'send')
+            // Ensure inputmode allows newlines
+            textarea.setAttribute('inputmode', 'text')
+            // Also set as properties for browsers that prefer them
+            textarea.autocomplete = 'off'
+            ;(textarea as any).autocorrect = 'off'
+            ;(textarea as any).autocapitalize = 'off'
+            textarea.spellcheck = false
+            console.log('[Terminal] Disabled mobile keyboard features on textarea')
+          }
         } catch (e) {
           console.warn('[Terminal] xterm.open() failed:', e)
           initPending = false
@@ -339,15 +360,33 @@ export function useTerminalSetup({
         fitAddon.fit()
       })
 
-      // Batched input handling
+      // Batched input handling with IME composition awareness
       let inputBuffer = ''
+      let isComposing = false  // Track IME composition state
 
       const flushInput = () => {
-        if (inputBuffer) {
+        if (inputBuffer && !isComposing) {
           writePty(ptyId, inputBuffer)
           inputBuffer = ''
         }
         inputFlushTimeout = null
+      }
+
+      // Handle IME composition events to prevent duplicate input on mobile
+      // See: https://github.com/xtermjs/xterm.js/issues/3600
+      const textarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
+      if (textarea) {
+        textarea.addEventListener('compositionstart', () => {
+          console.log('[Terminal] IME composition started')
+          isComposing = true
+        })
+        textarea.addEventListener('compositionend', () => {
+          console.log('[Terminal] IME composition ended')
+          // Small delay to let xterm process the final input
+          setTimeout(() => {
+            isComposing = false
+          }, 50)
+        })
       }
 
       terminal.onData((data) => {
@@ -356,6 +395,13 @@ export function useTerminalSetup({
 
         // Ignore terminal control sequences
         if (data.startsWith('\x1b[') && (data.endsWith('R') || data === '\x1b[I' || data === '\x1b[O')) {
+          return
+        }
+
+        // During IME composition, be more careful with input
+        // Only buffer single characters, don't send multi-char bursts that might be composition artifacts
+        if (isComposing && data.length > 1 && data.charCodeAt(0) >= 32) {
+          console.log('[Terminal] Suppressing composition artifact:', data.length, 'chars')
           return
         }
 
