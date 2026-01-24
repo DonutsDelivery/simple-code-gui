@@ -11,6 +11,8 @@ import { ConnectionScreen } from './components/ConnectionScreen'
 import { HostQRDisplay } from './components/HostQRDisplay'
 import { MobileLayout } from './components/mobile/MobileLayout'
 import { MobileSidebarContent } from './components/mobile/MobileSidebarContent'
+import { FileBrowser } from './components/mobile/FileBrowser'
+import type { HostConfig } from './hooks/useHostConnection'
 import { useWorkspaceStore, OpenTab } from './stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from './themes'
 import { useVoice } from './contexts/VoiceContext'
@@ -23,6 +25,7 @@ import {
   Api,
   HttpBackend
 } from './api'
+import type { BackendId } from './api/types'
 
 // Check if running in Capacitor native app
 function isCapacitorApp(): boolean {
@@ -68,6 +71,11 @@ function App() {
     setIsConnected(false)
   }, [])
 
+  // Helper to validate port
+  const isValidPort = (port: number): boolean => {
+    return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
+  }
+
   // Try to restore saved connection on mount (browser/Capacitor only)
   // Also check for token in URL query string (from server redirect)
   useEffect(() => {
@@ -81,6 +89,12 @@ function App() {
       // We have a token from URL - extract host/port from current location
       const host = window.location.hostname
       const port = parseInt(window.location.port) || 38470
+
+      // Validate port before saving
+      if (!isValidPort(port)) {
+        console.error('[App] Invalid port from URL:', port)
+        return
+      }
 
       // Save to localStorage so future reloads work
       const config = { host, port, token: urlToken }
@@ -96,8 +110,12 @@ function App() {
       const saved = localStorage.getItem('claude-terminal-connection')
       if (saved) {
         const config = JSON.parse(saved)
-        if (config.host && config.port && config.token) {
-          // We have saved config, the ConnectionScreen will auto-connect
+        // Validate port from saved config
+        if (config.host && config.token && isValidPort(config.port)) {
+          // We have valid saved config, the ConnectionScreen will auto-connect
+        } else if (config.port && !isValidPort(config.port)) {
+          console.error('[App] Invalid port in saved config:', config.port, '- clearing')
+          localStorage.removeItem('claude-terminal-connection')
         }
       }
     } catch (e) {
@@ -112,7 +130,13 @@ function App() {
     try {
       const saved = localStorage.getItem('claude-terminal-connection')
       if (saved) {
-        savedConfig = JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        // Only use config if port is valid
+        if (parsed && isValidPort(parsed.port)) {
+          savedConfig = parsed
+        } else if (parsed?.port) {
+          console.error('[App] Discarding saved config with invalid port:', parsed.port)
+        }
       }
     } catch {
       // Ignore
@@ -221,6 +245,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
+  const [showFileBrowser, setShowFileBrowser] = useState(false)
+  const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const initRef = useRef(false)
   const hadProjectsRef = useRef(false) // Track if we ever had projects loaded
   const terminalContainerRef = useRef<HTMLDivElement>(null)
@@ -232,6 +258,12 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
 
   const closeMobileDrawer = useCallback(() => {
     setMobileDrawerOpen(false)
+  }, [])
+
+  // Open file browser (mobile only) - uses active tab's project path
+  const handleOpenFileBrowser = useCallback((projectPath?: string) => {
+    setFileBrowserPath(projectPath || null)
+    setShowFileBrowser(true)
   }, [])
 
   // Load workspace on mount and restore tabs
@@ -295,37 +327,34 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
 
               // Get project and determine effective backend for restored tab
               const projectForTab = workspace.projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
-              const savedBackend = savedTab.backend && savedTab.backend !== 'default'
-                ? savedTab.backend
-                : undefined
-              const effectiveBackendForTab = savedBackend
+              const savedBackend = savedTab.backend
+              const effectiveBackendForTab = (savedBackend
                 || (projectForTab?.backend && projectForTab.backend !== 'default'
                   ? projectForTab.backend
-                  : loadedSettings?.backend || 'claude')
+                  : (loadedSettings?.backend && loadedSettings.backend !== 'default'
+                    ? loadedSettings.backend
+                    : 'claude'))) as BackendId
 
               let sessionIdToRestore: string | undefined = savedTab.sessionId
 
               // Always discover sessions to find the most recent one
               // This handles cases where session changed after save (e.g., user did /clear)
-              if (effectiveBackendForTab === 'claude' || effectiveBackendForTab === 'opencode') {
-                let sessionsForProject = sessionsCache.get(savedTab.projectPath)
-                if (!sessionsForProject) {
-                  const backendForDiscovery = effectiveBackendForTab === 'opencode' ? 'opencode' : 'claude'
-                  const list = await api.discoverSessions(savedTab.projectPath, backendForDiscovery)
-                  sessionsForProject = { list, nextIndex: 0 }
-                  sessionsCache.set(savedTab.projectPath, sessionsForProject)
-                }
+              let sessionsForProject = sessionsCache.get(savedTab.projectPath)
+              if (!sessionsForProject) {
+                const list = await api.discoverSessions(savedTab.projectPath, effectiveBackendForTab)
+                sessionsForProject = { list, nextIndex: 0 }
+                sessionsCache.set(savedTab.projectPath, sessionsForProject)
+              }
 
-                const list = sessionsForProject.list || []
-                for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
-                  const candidate = list[i]
-                  if (!usedSessionIds.has(candidate.sessionId)) {
-                    // Use discovered session (most recent not already in use)
-                    sessionIdToRestore = candidate.sessionId
-                    titleToRestore = `${projectName} - ${candidate.slug}`
-                    sessionsForProject.nextIndex = i + 1
-                    break
-                  }
+              const list = sessionsForProject.list || []
+              for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
+                const candidate = list[i]
+                if (!usedSessionIds.has(candidate.sessionId)) {
+                  // Use discovered session (most recent not already in use)
+                  sessionIdToRestore = candidate.sessionId
+                  titleToRestore = `${projectName} - ${candidate.slug}`
+                  sessionsForProject.nextIndex = i + 1
+                  break
                 }
               }
 
@@ -352,6 +381,7 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
                 usedSessionIds.add(sessionIdToRestore)
               }
             } catch (e) {
+              console.error('Failed to restore tab:', savedTab.projectPath, e)
             }
           }
         }
@@ -365,14 +395,29 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
         if (workspace.viewMode) {
           setViewMode(workspace.viewMode)
         }
-        // Don't restore tileLayout - let it auto-generate for clean grid
+        // Restore tileLayout with mapped IDs (old tab IDs -> new ptyIds)
+        if (workspace.tileLayout && workspace.tileLayout.length > 0 && idMapping.size > 0) {
+          const mappedLayout = workspace.tileLayout
+            .map(tile => {
+              const newId = idMapping.get(tile.id)
+              if (newId) {
+                return { ...tile, id: newId }
+              }
+              return null
+            })
+            .filter((tile): tile is typeof workspace.tileLayout[0] => tile !== null)
+
+          if (mappedLayout.length > 0) {
+            setTileLayout(mappedLayout)
+          }
+        }
       } catch (e) {
         console.error('Failed to load workspace:', e)
       }
       setLoading(false)
     }
     loadWorkspace()
-  }, [api, addTab, clearTabs, checkInstallation, setProjects, setCategories, setViewMode])
+  }, [api, addTab, clearTabs, checkInstallation, setProjects, setCategories, setViewMode, setTileLayout])
 
   // Save workspace when it changes
   useEffect(() => {
@@ -399,6 +444,7 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
           projectPath: t.projectPath,
           sessionId: t.sessionId,
           title: t.title,
+          ptyId: t.ptyId,
           backend: t.backend
         })),
         activeTabId,
@@ -423,13 +469,14 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
       try {
         await Promise.all(tabsNeedingSession.map(async (tab) => {
           try {
-            const effectiveBackend = tab.backend === 'opencode' ? 'opencode' : 'claude'
+            const effectiveBackend = (tab.backend || 'claude') as BackendId
             const sessions = await api.discoverSessions(tab.projectPath, effectiveBackend)
+
             if (sessions.length > 0) {
               const mostRecent = sessions[0]
 
               // Check if we already have this session in another tab
-              const alreadyOpen = openTabs.some(t => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
+              const alreadyOpen = openTabs.some((t) => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
               if (!alreadyOpen) {
                 const projectName = tab.projectPath.split(/[/\\]/).pop() || tab.projectPath
                 updateTab(tab.id, {
@@ -452,16 +499,19 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
 
   // Listen for API requests to open new sessions
   useEffect(() => {
-    const unsubscribe = api.onApiOpenSession(async ({ projectPath, autoClose, model }) => {
+    const unsubscribe = api.onApiOpenSession(async ({ projectPath, autoClose, model }: { projectPath: string; autoClose?: boolean; model?: string }) => {
       // Open a new session for this project (API-triggered)
       const modelLabel = model && model !== 'default' ? ` [${model}]` : ''
       const title = `${projectPath.split(/[/\\]/).pop() || projectPath} - API${modelLabel}${autoClose ? ' (auto-close)' : ''}`
 
       // Get project and determine effective backend
-      const project = projects.find(p => p.path === projectPath)
-      const effectiveBackend = project?.backend && project.backend !== 'default'
+      const project = projects.find((p) => p.path === projectPath)
+
+      const effectiveBackend = (project?.backend && project.backend !== 'default'
         ? project.backend
-        : settings?.backend || 'claude'
+        : (settings?.backend && settings.backend !== 'default'
+          ? settings.backend
+          : 'claude')) as BackendId
 
       try {
         // Always install TTS instructions so Claude uses <tts> tags
@@ -488,7 +538,7 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend }) => {
       console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
       // Find the tab with the old ID
-      const tab = useWorkspaceStore.getState().openTabs.find(t => t.id === oldId)
+      const tab = useWorkspaceStore.getState().openTabs.find((t) => t.id === oldId)
       if (tab) {
         // Update the tab with the new ID and backend
         updateTab(oldId, { id: newId, ptyId: newId, backend })
@@ -516,8 +566,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     const projectsToAdd = await api.addProjectsFromParent?.()
     if (projectsToAdd && projectsToAdd.length > 0) {
       // Filter out projects that are already added
-      const existingPaths = new Set(projects.map(p => p.path))
-      const newProjects = projectsToAdd.filter(p => !existingPaths.has(p.path))
+      const existingPaths = new Set(projects.map((p) => p.path))
+      const newProjects = projectsToAdd.filter((p) => !existingPaths.has(p.path))
 
       for (const project of newProjects) {
         addProject({ path: project.path, name: project.name })
@@ -538,17 +588,21 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     }
 
     // Get project and determine effective backend
-    const project = projects.find(p => p.path === projectPath)
-    const effectiveBackend = project?.backend && project.backend !== 'default'
+    const project = projects.find((p) => p.path === projectPath)
+    const effectiveBackend = (project?.backend && project.backend !== 'default'
       ? project.backend
-      : settings?.backend || 'claude'
+      : (settings?.backend && settings.backend !== 'default'
+        ? settings.backend
+        : 'claude')) as BackendId
 
-    if (!forceNewSession) {
+    // Only discover sessions if no specific sessionId was requested
+    if (!forceNewSession && !sessionId) {
       try {
-        const sessions = await api.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
+        const sessions = await api.discoverSessions(projectPath, effectiveBackend)
         if (sessions.length > 0) {
           const [mostRecent] = sessions
-          const existingTab = openTabs.find(tab => tab.sessionId === mostRecent.sessionId)
+          const existingTab = openTabs.find((tab) => tab.sessionId === mostRecent.sessionId)
+
           if (existingTab) {
             setActiveTab(existingTab.id)
             return
@@ -608,11 +662,13 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     }
 
     // Get project and determine effective backend
-    const project = projects.find(p => p.path === projectPath)
+    const project = projects.find((p) => p.path === projectPath)
     console.log('[App] Found project:', project)
-    const effectiveBackend = project?.backend && project.backend !== 'default'
+    const effectiveBackend = (project?.backend && project.backend !== 'default'
       ? project.backend
-      : settings?.backend || 'claude'
+      : (settings?.backend && settings.backend !== 'default'
+        ? settings.backend
+        : 'claude')) as BackendId
     console.log('[App] Using backend:', effectiveBackend)
 
     // Discover the most recent session for this project
@@ -620,11 +676,11 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     let slug: string | undefined
     try {
       console.log('[App] Discovering sessions for:', projectPath)
-      const sessions = await api.discoverSessions(projectPath, effectiveBackend === 'opencode' ? 'opencode' : 'claude')
+      const sessions = await api.discoverSessions(projectPath, effectiveBackend)
       if (sessions.length > 0) {
         const [mostRecent] = sessions
         // Check if already open
-        const existingTab = openTabs.find(tab => tab.sessionId === mostRecent.sessionId)
+        const existingTab = openTabs.find((tab) => tab.sessionId === mostRecent.sessionId)
         if (existingTab) {
           setActiveTab(existingTab.id)
           return
@@ -712,29 +768,29 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
     <div className="app">
       <TitleBar />
       <div className="app-content">
-      <Sidebar
-        projects={projects}
-        openTabs={openTabs}
-        activeTabId={activeTabId}
-        lastFocusedTabId={lastFocusedTabId}
-        onAddProject={handleAddProject}
-        onAddProjectsFromParent={handleAddProjectsFromParent}
-        onRemoveProject={removeProject}
-        onOpenSession={handleOpenSession}
-        onSwitchToTab={setActiveTab}
-        onOpenSettings={openSettings}
-        onOpenMakeProject={openMakeProject}
-        onUpdateProject={updateProject}
-        onCloseProjectTabs={handleCloseProjectTabs}
-        width={sidebarWidth}
-        collapsed={sidebarCollapsed}
-        onWidthChange={setSidebarWidth}
-        onCollapsedChange={setSidebarCollapsed}
-        isMobileOpen={mobileDrawerOpen}
-        onMobileClose={closeMobileDrawer}
-        onOpenMobileConnect={() => setMobileConnectOpen(true)}
-        onDisconnect={onDisconnect}
-      />
+        <Sidebar
+          projects={projects}
+          openTabs={openTabs}
+          activeTabId={activeTabId}
+          lastFocusedTabId={lastFocusedTabId}
+          onAddProject={handleAddProject}
+          onAddProjectsFromParent={handleAddProjectsFromParent}
+          onRemoveProject={removeProject}
+          onOpenSession={handleOpenSession}
+          onSwitchToTab={setActiveTab}
+          onOpenSettings={openSettings}
+          onOpenMakeProject={openMakeProject}
+          onUpdateProject={updateProject}
+          onCloseProjectTabs={handleCloseProjectTabs}
+          width={sidebarWidth}
+          collapsed={sidebarCollapsed}
+          onWidthChange={setSidebarWidth}
+          onCollapsedChange={setSidebarCollapsed}
+          isMobileOpen={mobileDrawerOpen}
+          onMobileClose={closeMobileDrawer}
+          onOpenMobileConnect={() => setMobileConnectOpen(true)}
+          onDisconnect={onDisconnect}
+        />
       {/* Mobile: render each terminal as its own slide */}
       {isMobile && openTabs.map((tab) => (
         <div key={tab.id} className="mobile-terminal-slide">
@@ -752,6 +808,8 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
                 projectPath={tab.projectPath}
                 backend={tab.backend}
                 api={api}
+                isMobile={true}
+                onOpenFileBrowser={() => handleOpenFileBrowser(tab.projectPath || undefined)}
               />
             </ErrorBoundary>
           </div>
@@ -884,6 +942,10 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
         onClose={closeSettings}
         onThemeChange={setCurrentTheme}
         onSaved={(newSettings) => setSettings(newSettings)}
+        appVersion={appVersion}
+        updateStatus={updateStatus}
+        onDownloadUpdate={downloadUpdate}
+        onInstallUpdate={installUpdate}
       />
 
       <MakeProjectModal
@@ -906,42 +968,39 @@ function MainApp({ api, isElectron, onDisconnect }: MainAppProps) {
           </div>
         </div>
       )}
+
+      {/* File Browser Modal (mobile only) */}
+      {isMobile && showFileBrowser && fileBrowserPath && (() => {
+        // Get host config from API connection info (more reliable than localStorage on mobile)
+        const connInfo = api.getConnectionInfo?.()
+        if (!connInfo) return null
+
+        const hostConfig: HostConfig = {
+          id: 'current',
+          name: 'Desktop',
+          host: connInfo.host,
+          port: connInfo.port,
+          token: connInfo.token
+        }
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100
+          }}>
+            <FileBrowser
+              host={hostConfig}
+              basePath={fileBrowserPath}
+              onClose={() => setShowFileBrowser(false)}
+            />
+          </div>
+        )
+      })()}
       </div>
 
-      {/* Version indicator - only in Electron */}
-      {isElectron && appVersion && (
-        <div className="version-indicator">
-          <span className="version-text">v{appVersion}</span>
-          {updateStatus.status === 'available' && (
-            <button
-              className="update-btn"
-              onClick={downloadUpdate}
-              title={`Update to v${updateStatus.version}`}
-            >
-              Update available
-            </button>
-          )}
-          {updateStatus.status === 'downloading' && (
-            <span className="update-progress" role="status" aria-live="polite" aria-atomic="true">
-              Downloading... {Math.round(updateStatus.progress || 0)}%
-            </span>
-          )}
-          {updateStatus.status === 'downloaded' && (
-            <button
-              className="update-btn ready"
-              onClick={installUpdate}
-              title="Restart and install update"
-            >
-              Restart to update
-            </button>
-          )}
-          {updateStatus.status === 'error' && (
-            <span className="update-error" role="alert" aria-live="assertive" title={updateStatus.error}>
-              Update failed
-            </span>
-          )}
-        </div>
-      )}
     </div>
   )
 }

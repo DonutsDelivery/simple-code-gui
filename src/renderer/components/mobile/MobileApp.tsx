@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { QRScanner, ParsedConnectionUrl } from './QRScanner.js'
-import { useHostConnection, HostConfig, ConnectionMethod } from '../../hooks/useHostConnection.js'
+import { useHostConnection, HostConfig, ConnectionMethod, PendingFile } from '../../hooks/useHostConnection.js'
+import { FileBrowser } from './FileBrowser.js'
 
 // Conditionally import Capacitor App plugin (only available on native)
 let CapacitorApp: any = null
@@ -37,22 +38,124 @@ function parseDeepLink(url: string): ParsedConnectionUrl | null {
 
 type MobileView = 'welcome' | 'scanning' | 'connecting' | 'connected' | 'error'
 
+// Check if host is a local/private network address (including Tailscale)
+function isLocalNetwork(hostname: string): boolean {
+  // RFC 1918 private ranges + Tailscale CGNAT (100.64-127.x.x) + MagicDNS (*.ts.net)
+  return /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(hostname) ||
+         hostname.endsWith('.ts.net')
+}
+
 // Helper to build HTTP URL
 function buildHttpUrl(host: HostConfig, path: string): string {
-  const protocol = /^(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host.host) ? 'http' : 'https'
+  // Validate port before building URL
+  if (!host.port || host.port < 1 || host.port > 65535) {
+    console.error('[MobileApp] Invalid port for HTTP URL:', host.port)
+    throw new Error(`Invalid port: ${host.port}`)
+  }
+  const protocol = isLocalNetwork(host.host) ? 'http' : 'https'
   return `${protocol}://${host.host}:${host.port}${path}`
 }
 
 // Connected view with actual functionality
-function ConnectedView({ host, connectionMethod, onDisconnect }: {
+function ConnectedView({ host, connectionMethod, onDisconnect, pendingFiles: propPendingFiles, onClearPendingFile }: {
   host: HostConfig
   connectionMethod: ConnectionMethod
   onDisconnect: () => void
+  pendingFiles: PendingFile[]
+  onClearPendingFile: (fileId: string) => void
 }) {
   const [ttsText, setTtsText] = useState('')
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [showFileBrowser, setShowFileBrowser] = useState(false)
+  const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Array<{ path: string; name: string }>>([])
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
+  const [localPendingFiles, setLocalPendingFiles] = useState<PendingFile[]>([])
   const isWebSocket = connectionMethod === 'websocket'
+
+  // Merge prop pending files with locally fetched ones
+  const pendingFiles = [...propPendingFiles, ...localPendingFiles.filter(f => !propPendingFiles.some(p => p.id === f.id))]
+
+  // Download a pending file
+  const downloadPendingFile = useCallback(async (file: PendingFile) => {
+    setDownloadingFile(file.id)
+    try {
+      const url = buildHttpUrl(host, `/api/files/pending/${file.id}/download`)
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${host.token}` }
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      // Get the file as a blob
+      const blob = await response.blob()
+
+      // Create a download link and trigger it
+      const downloadUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = file.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(downloadUrl)
+
+      // Clear from pending files after successful download
+      onClearPendingFile(file.id)
+      setLocalPendingFiles(prev => prev.filter(f => f.id !== file.id))
+    } catch (err) {
+      setStatus(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setDownloadingFile(null)
+    }
+  }, [host, onClearPendingFile])
+
+  // Load projects and pending files on mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const response = await fetch(buildHttpUrl(host, '/api/workspace'), {
+          headers: { 'Authorization': `Bearer ${host.token}` }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setProjects(data.projects || [])
+        }
+      } catch (err) {
+        console.error('Failed to load projects:', err)
+      }
+    }
+
+    const loadPendingFiles = async () => {
+      try {
+        const url = buildHttpUrl(host, '/api/files/pending')
+        console.log('[ConnectedView] Fetching pending files:', url)
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${host.token}` }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[ConnectedView] Got pending files:', data.files?.length || 0)
+          if (data.files && Array.isArray(data.files)) {
+            setLocalPendingFiles(data.files)
+          }
+        } else {
+          console.error('[ConnectedView] Pending files error:', response.status)
+        }
+      } catch (err) {
+        console.error('[ConnectedView] Failed to load pending files:', err)
+      }
+    }
+
+    loadProjects()
+    loadPendingFiles()
+
+    // Poll for pending files every 30 seconds
+    const interval = setInterval(loadPendingFiles, 30000)
+    return () => clearInterval(interval)
+  }, [host])
 
   const speak = useCallback(async () => {
     if (!ttsText.trim()) return
@@ -122,6 +225,86 @@ function ConnectedView({ host, connectionMethod, onDisconnect }: {
         </span>
       </div>
 
+      {/* Pending Files Notification */}
+      {pendingFiles.length > 0 && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '12px',
+          background: '#2d3a4a',
+          borderRadius: '8px',
+          border: '1px solid #4a90d9'
+        }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: '14px', color: '#4a90d9' }}>
+            📥 Files Ready to Download
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {pendingFiles.map((file) => (
+              <div key={file.id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px',
+                background: '#1a1a1a',
+                borderRadius: '6px'
+              }}>
+                <span style={{ fontSize: '20px' }}>
+                  {file.mimeType === 'application/vnd.android.package-archive' ? '📦' : '📄'}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {file.name}
+                  </div>
+                  {file.message && (
+                    <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '2px' }}>
+                      {file.message}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '10px', opacity: 0.5, marginTop: '2px' }}>
+                    {(file.size / 1024 / 1024).toFixed(1)} MB
+                  </div>
+                </div>
+                <button
+                  onClick={() => downloadPendingFile(file)}
+                  disabled={downloadingFile === file.id}
+                  style={{
+                    background: downloadingFile === file.id ? '#555' : '#4a90d9',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: downloadingFile === file.id ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  {downloadingFile === file.id ? 'Downloading...' : 'Download'}
+                </button>
+                <button
+                  onClick={() => onClearPendingFile(file.id)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#888',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* TTS Section */}
       <div style={{ marginBottom: '16px' }}>
         <h3 style={{ margin: '0 0 8px', fontSize: '14px' }}>Text to Speech</h3>
@@ -163,6 +346,53 @@ function ConnectedView({ host, connectionMethod, onDisconnect }: {
         )}
       </div>
 
+      {/* Files Section */}
+      <div style={{ marginBottom: '16px' }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: '14px' }}>Files</h3>
+        <p style={{ margin: '0 0 8px', fontSize: '12px', opacity: 0.6 }}>
+          Browse and download files from your desktop
+        </p>
+        {projects.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {projects.slice(0, 5).map((project) => (
+              <button
+                key={project.path}
+                className="mobile-btn mobile-btn--secondary"
+                onClick={() => {
+                  setFileBrowserPath(project.path)
+                  setShowFileBrowser(true)
+                }}
+                style={{
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span>📁</span>
+                <span style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {project.name || project.path.split('/').pop()}
+                </span>
+              </button>
+            ))}
+            {projects.length > 5 && (
+              <p style={{ margin: 0, fontSize: '11px', opacity: 0.5 }}>
+                +{projects.length - 5} more projects
+              </p>
+            )}
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: '12px', opacity: 0.5 }}>
+            No projects found
+          </p>
+        )}
+      </div>
+
       {/* Disconnect */}
       <button
         className="mobile-btn mobile-btn--secondary"
@@ -171,6 +401,24 @@ function ConnectedView({ host, connectionMethod, onDisconnect }: {
       >
         Disconnect
       </button>
+
+      {/* File Browser Modal */}
+      {showFileBrowser && fileBrowserPath && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 100
+        }}>
+          <FileBrowser
+            host={host}
+            basePath={fileBrowserPath}
+            onClose={() => setShowFileBrowser(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -185,11 +433,13 @@ export function MobileApp(): React.ReactElement {
     connectionMethod,
     error,
     fingerprintWarning,
+    pendingFiles,
     addHost,
     updateHost,
     connect,
     disconnect,
-    acceptFingerprint
+    acceptFingerprint,
+    clearPendingFile
   } = useHostConnection()
 
   // Sync view with connection state
@@ -347,7 +597,7 @@ export function MobileApp(): React.ReactElement {
 
   // Render connected state with actual functionality
   if (view === 'connected' && currentHost) {
-    return <ConnectedView host={currentHost} connectionMethod={connectionMethod} onDisconnect={handleDisconnect} />
+    return <ConnectedView host={currentHost} connectionMethod={connectionMethod} onDisconnect={handleDisconnect} pendingFiles={pendingFiles} onClearPendingFile={clearPendingFile} />
   }
 
   // Render fingerprint warning state

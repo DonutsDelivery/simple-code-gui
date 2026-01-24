@@ -1560,6 +1560,40 @@ body.is-mobile-app .terminal-bar {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Fix terminal bar dropdown on mobile - use fixed positioning */
+body.is-mobile-app .terminal-bar-dropdown {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 50px);
+  left: 10px;
+  right: 10px;
+  max-height: 50vh;
+}
+
+/* Make terminal content wrapper allow bar dropdown to show */
+body.is-mobile-app .terminal-content-wrapper {
+  position: relative;
+  overflow: visible;
+}
+
+/* Larger touch targets for terminal bar buttons on mobile */
+body.is-mobile-app .terminal-bar-btn {
+  min-width: 44px;
+  min-height: 40px;
+  height: 40px;
+  font-size: 15px;
+}
+
+/* Ensure the primary (Enter) button stands out */
+body.is-mobile-app .terminal-bar-btn--primary {
+  background: var(--accent, #f97316);
+  border-color: var(--accent, #f97316);
+  color: white;
+}
+
+body.is-mobile-app .terminal-bar-btn--primary:active {
+  background: var(--accent-hover, #ea580c);
+}
+
 /* ============================================
    Mobile Virtual Keyboard (DEPRECATED - using MobileTerminalBar instead)
    Arrow keys and special keys for terminal
@@ -1705,6 +1739,8 @@ body.is-mobile-app .terminal-bar {
 /* Terminal content fills available space - bar is inside terminal-container */
 .mobile-slide-content--terminal {
   position: relative;
+  /* Allow dropdowns to overflow */
+  overflow: visible !important;
 }
 
 /* ----------------------------------------

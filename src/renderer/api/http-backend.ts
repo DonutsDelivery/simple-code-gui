@@ -15,7 +15,8 @@ import {
   PtyExitCallback,
   PtyRecreatedCallback,
   ApiOpenSessionCallback,
-  Unsubscribe
+  Unsubscribe,
+  BackendId
 } from './types'
 
 // ============================================================================
@@ -62,6 +63,11 @@ function isLocalNetwork(hostname: string): boolean {
 // ============================================================================
 
 export class HttpBackend implements Api {
+  voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
+  xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
+  voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string }>
+  apiStart?: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+  apiStop?: (projectPath: string) => Promise<{ success: boolean }>
   private baseUrl: string
   private wsBaseUrl: string
   private token: string
@@ -83,6 +89,15 @@ export class HttpBackend implements Api {
   private apiOpenSessionCallbacks: Set<ApiOpenSessionCallback> = new Set()
 
   constructor(config: HttpBackendConfig) {
+    // Validate port to prevent requests to invalid addresses like localhost:1
+    if (!config.port || config.port < 1 || config.port > 65535 || !Number.isInteger(config.port)) {
+      console.error('[HttpBackend] Invalid port:', config.port, '- using default 38470')
+      config.port = 38470
+    }
+    if (config.port < 1024) {
+      console.warn('[HttpBackend] Port', config.port, 'is a privileged port (< 1024), this may fail')
+    }
+
     this.host = config.host
     this.port = config.port
     this.token = config.token
@@ -93,6 +108,8 @@ export class HttpBackend implements Api {
 
     this.baseUrl = `${httpProtocol}://${config.host}:${config.port}`
     this.wsBaseUrl = `${wsProtocol}://${config.host}:${config.port}`
+
+    console.log('[HttpBackend] Initialized with baseUrl:', this.baseUrl)
   }
 
   // ==========================================================================
@@ -308,7 +325,7 @@ export class HttpBackend implements Api {
   // PTY Management (Api Interface)
   // ==========================================================================
 
-  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: string): Promise<string> {
+  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     this.setConnectionState('connecting')
 
     const data = await this.fetchJson<{ ptyId: string }>('/api/pty/spawn', {
@@ -448,7 +465,7 @@ export class HttpBackend implements Api {
   // Session Management
   // ==========================================================================
 
-  async discoverSessions(projectPath: string, backend?: 'claude' | 'opencode'): Promise<Session[]> {
+  async discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
     const params = new URLSearchParams({ path: projectPath })
     if (backend) {
       params.set('backend', backend)
@@ -562,6 +579,17 @@ export class HttpBackend implements Api {
   // ==========================================================================
   // Connection Management
   // ==========================================================================
+
+  /**
+   * Get connection info for external components (like FileBrowser)
+   */
+  getConnectionInfo(): { host: string; port: number; token: string } {
+    return {
+      host: this.host,
+      port: this.port,
+      token: this.token
+    }
+  }
 
   /**
    * Test connection to the server

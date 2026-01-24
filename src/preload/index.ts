@@ -300,6 +300,18 @@ export interface ElectronAPI {
     qrData: string
   }>
   mobileIsRunning: () => Promise<boolean>
+  mobileSendFile: (filePath: string, message?: string) => Promise<{ success: boolean; fileId?: string; error?: string }>
+  mobileGetConnectedClients: () => Promise<number>
+  mobileGetPendingFiles: () => Promise<Array<{
+    id: string
+    name: string
+    path: string
+    size: number
+    mimeType: string
+    createdAt: number
+    expiresAt: number
+    message?: string
+  }>>
 
   // Updater
   getVersion: () => Promise<string>
@@ -582,6 +594,9 @@ const api: ElectronAPI = {
   mobileGetConnectionInfo: () => ipcRenderer.invoke('mobile:getConnectionInfo'),
   mobileRegenerateToken: () => ipcRenderer.invoke('mobile:regenerateToken'),
   mobileIsRunning: () => ipcRenderer.invoke('mobile:isRunning'),
+  mobileSendFile: (filePath: string, message?: string) => ipcRenderer.invoke('mobile:sendFile', filePath, message),
+  mobileGetConnectedClients: () => ipcRenderer.invoke('mobile:getConnectedClients'),
+  mobileGetPendingFiles: () => ipcRenderer.invoke('mobile:getPendingFiles'),
 
   // Updater
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),

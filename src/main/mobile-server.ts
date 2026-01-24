@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, Server } from 'http'
 import { randomBytes } from 'crypto'
 import { networkInterfaces } from 'os'
-import { appendFileSync, readFileSync, writeFileSync, existsSync, statSync } from 'fs'
+import { appendFileSync, readFileSync, writeFileSync, existsSync, statSync, readdirSync, createReadStream } from 'fs'
 import { app } from 'electron'
 import { join, basename, resolve } from 'path'
 
@@ -36,6 +36,8 @@ import {
   startNonceCleanup,
   stopNonceCleanup,
   validateProjectPath,
+  validateFilePath,
+  validateDirectoryPath,
   encryptToken,
   decryptToken,
   writeSecureFile,
@@ -82,6 +84,18 @@ interface LocalPty {
   exitCallbacks: Set<(code: number) => void>
 }
 
+// Pending file for push-to-mobile
+interface PendingFile {
+  id: string
+  name: string
+  path: string
+  size: number
+  mimeType: string
+  createdAt: number
+  expiresAt: number
+  message?: string // Optional message to display
+}
+
 export class MobileServer {
   private app: Express
   private server: Server | null = null
@@ -99,6 +113,12 @@ export class MobileServer {
 
   // Track PTYs spawned via mobile API
   private localPtys: Map<string, LocalPty> = new Map()
+
+  // Pending files queue for push-to-mobile functionality
+  private pendingFiles: Map<string, PendingFile> = new Map()
+
+  // Connected WebSocket clients for push notifications
+  private connectedClients: Set<WebSocket> = new Set()
 
   // Path to renderer dist files
   private rendererPath: string
@@ -313,6 +333,15 @@ export class MobileServer {
 
       const clientIp = getClientIp(req)
 
+      // Allow query token for file downloads (needed for Android WebView window.open)
+      if (req.path.startsWith('/api/files/')) {
+        const queryToken = req.query.token as string
+        if (queryToken === this.token) {
+          clearRateLimit(clientIp)
+          return next()
+        }
+      }
+
       const authHeader = req.headers.authorization
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         recordFailedAuth(clientIp)
@@ -435,6 +464,13 @@ export class MobileServer {
     // TTS speak/stop/settings need write
     if (path.includes('/api/tts/speak') || path.includes('/api/tts/stop') || path.includes('/api/tts/settings')) {
       return 'write'
+    }
+
+    // File operations: restricted to local network for security
+    // Even though these are read-only operations, exposing file system
+    // browsing over public internet would be a security risk
+    if (path.includes('/api/files')) {
+      return 'write' // Requires localhost or local_network
     }
 
     // Default to read for other authenticated endpoints
@@ -1127,6 +1163,225 @@ export class MobileServer {
     })
 
     // ========================================
+    // File API Routes - File browsing and transfer
+    // ========================================
+
+    // GET /api/files/list - List directory contents
+    this.app.get('/api/files/list', async (req: Request, res: Response) => {
+      try {
+        const dirPath = req.query.path as string
+        if (!dirPath) {
+          return res.status(400).json({ error: 'path query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateDirectoryPath(dirPath)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safePath = pathValidation.normalizedPath!
+
+        // Read directory contents
+        const entries = readdirSync(safePath, { withFileTypes: true })
+        const files = entries.map(entry => {
+          const fullPath = join(safePath, entry.name)
+          let stats = null
+          try {
+            stats = statSync(fullPath)
+          } catch {
+            // Ignore stat errors (permission issues, etc.)
+          }
+          return {
+            name: entry.name,
+            type: entry.isDirectory() ? 'directory' : entry.isSymbolicLink() ? 'symlink' : 'file',
+            size: stats?.size || 0,
+            modified: stats?.mtime?.toISOString() || null,
+            path: fullPath
+          }
+        })
+
+        // Sort: directories first, then files, alphabetically
+        files.sort((a, b) => {
+          if (a.type === 'directory' && b.type !== 'directory') return -1
+          if (a.type !== 'directory' && b.type === 'directory') return 1
+          return a.name.localeCompare(b.name)
+        })
+
+        res.json({ path: safePath, files })
+      } catch (error: any) {
+        log('Files list error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // GET /api/files/download - Download a file
+    this.app.get('/api/files/download', async (req: Request, res: Response) => {
+      try {
+        const filePath = req.query.path as string
+        if (!filePath) {
+          return res.status(400).json({ error: 'path query parameter is required' })
+        }
+
+        // SECURITY: Validate path to prevent traversal attacks
+        const pathValidation = validateFilePath(filePath)
+        if (!pathValidation.valid) {
+          return res.status(400).json({ error: pathValidation.error })
+        }
+        const safePath = pathValidation.normalizedPath!
+
+        // Get file stats for headers
+        const stats = statSync(safePath)
+        const fileName = basename(safePath)
+
+        // Set headers for file download
+        res.setHeader('Content-Type', 'application/octet-stream')
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+        res.setHeader('Content-Length', stats.size)
+
+        // Stream the file
+        const fileStream = createReadStream(safePath)
+        fileStream.pipe(res)
+
+        fileStream.on('error', (err) => {
+          log('File stream error', { error: String(err) })
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Error reading file' })
+          }
+        })
+      } catch (error: any) {
+        log('File download error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // GET /api/files/info - Get file/directory info
+    this.app.get('/api/files/info', async (req: Request, res: Response) => {
+      try {
+        const filePath = req.query.path as string
+        if (!filePath) {
+          return res.status(400).json({ error: 'path query parameter is required' })
+        }
+
+        // Use validatePath directly to allow both files and directories
+        const normalizedPath = resolve(filePath)
+        if (!existsSync(normalizedPath)) {
+          return res.status(404).json({ error: 'Path does not exist' })
+        }
+
+        const stats = statSync(normalizedPath)
+        res.json({
+          path: normalizedPath,
+          name: basename(normalizedPath),
+          type: stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file',
+          size: stats.size,
+          modified: stats.mtime.toISOString(),
+          created: stats.birthtime.toISOString(),
+          isReadable: true // If we got here, it's readable
+        })
+      } catch (error: any) {
+        log('File info error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // POST /api/files/send - Queue a file for mobile download (called by desktop/Claude)
+    this.app.post('/api/files/send', async (req: Request, res: Response) => {
+      try {
+        const { path: filePath, message } = req.body
+        if (!filePath) {
+          return res.status(400).json({ error: 'path is required in request body' })
+        }
+
+        const result = this.sendFileToMobile(filePath, message)
+        if (result.success) {
+          res.json({
+            success: true,
+            fileId: result.fileId,
+            connectedClients: this.connectedClients.size
+          })
+        } else {
+          res.status(400).json({ success: false, error: result.error })
+        }
+      } catch (error: any) {
+        log('File send error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // GET /api/files/pending - Get list of pending files for mobile
+    this.app.get('/api/files/pending', async (req: Request, res: Response) => {
+      try {
+        const files = this.getPendingFiles().map(f => ({
+          id: f.id,
+          name: f.name,
+          size: f.size,
+          mimeType: f.mimeType,
+          message: f.message,
+          expiresAt: f.expiresAt
+        }))
+        res.json({ files })
+      } catch (error: any) {
+        log('Pending files error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // GET /api/files/pending/:fileId/download - Download a pending file
+    this.app.get('/api/files/pending/:fileId/download', async (req: Request, res: Response) => {
+      try {
+        const { fileId } = req.params
+        const pendingFile = this.pendingFiles.get(fileId)
+
+        if (!pendingFile) {
+          return res.status(404).json({ error: 'File not found or expired' })
+        }
+
+        // Check if file still exists
+        if (!existsSync(pendingFile.path)) {
+          this.pendingFiles.delete(fileId)
+          return res.status(404).json({ error: 'File no longer exists' })
+        }
+
+        // Get fresh stats
+        const stats = statSync(pendingFile.path)
+
+        // Set headers for file download
+        res.setHeader('Content-Type', pendingFile.mimeType)
+        res.setHeader('Content-Disposition', `attachment; filename="${pendingFile.name}"`)
+        res.setHeader('Content-Length', stats.size)
+
+        // Stream the file
+        const fileStream = createReadStream(pendingFile.path)
+        fileStream.pipe(res)
+
+        fileStream.on('error', (err) => {
+          log('Pending file stream error', { error: String(err), fileId })
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Error reading file' })
+          }
+        })
+
+        // Optionally remove from pending after download (keep for retry)
+        // this.pendingFiles.delete(fileId)
+      } catch (error: any) {
+        log('Pending file download error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // DELETE /api/files/pending/:fileId - Remove a pending file
+    this.app.delete('/api/files/pending/:fileId', async (req: Request, res: Response) => {
+      try {
+        const { fileId } = req.params
+        const removed = this.removePendingFile(fileId)
+        res.json({ success: removed })
+      } catch (error: any) {
+        log('Pending file delete error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+
+    // ========================================
     // PTY API Routes - Direct PTY management
     // ========================================
 
@@ -1360,6 +1615,9 @@ export class MobileServer {
     this.wss.on('connection', (ws: WebSocket, req) => {
       log('WebSocket client connected (main)')
 
+      // Track connected client for push notifications
+      this.connectedClients.add(ws)
+
       ws.on('message', (message: Buffer) => {
         try {
           const msg = JSON.parse(message.toString())
@@ -1370,6 +1628,9 @@ export class MobileServer {
       })
 
       ws.on('close', () => {
+        // Remove from connected clients
+        this.connectedClients.delete(ws)
+
         // Remove from all subscriptions
         this.terminalSubscriptions.forEach((subscribers, ptyId) => {
           subscribers.delete(ws)
@@ -1382,6 +1643,9 @@ export class MobileServer {
 
       // Send welcome message
       ws.send(JSON.stringify({ type: 'connected', timestamp: Date.now() }))
+
+      // Send any pending files to new client
+      this.sendPendingFilesToClient(ws)
     })
   }
 
@@ -1685,6 +1949,138 @@ export class MobileServer {
   // Generate a fresh nonce (for QR refresh)
   generateNonce(): { nonce: string; expiresAt: number } {
     return createNonce()
+  }
+
+  /**
+   * Send a file to connected mobile clients
+   * This queues the file and notifies all connected clients
+   * Returns the pending file ID
+   */
+  sendFileToMobile(filePath: string, message?: string): { success: boolean; fileId?: string; error?: string } {
+    try {
+      // Validate file path
+      const pathValidation = validateFilePath(filePath)
+      if (!pathValidation.valid) {
+        return { success: false, error: pathValidation.error }
+      }
+      const safePath = pathValidation.normalizedPath!
+
+      // Get file info
+      const stats = statSync(safePath)
+      const fileName = basename(safePath)
+
+      // Determine MIME type
+      const ext = fileName.split('.').pop()?.toLowerCase() || ''
+      const mimeTypes: Record<string, string> = {
+        'apk': 'application/vnd.android.package-archive',
+        'pdf': 'application/pdf',
+        'zip': 'application/zip',
+        'txt': 'text/plain',
+        'json': 'application/json',
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif'
+      }
+      const mimeType = mimeTypes[ext] || 'application/octet-stream'
+
+      // Create pending file entry
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const pendingFile: PendingFile = {
+        id: fileId,
+        name: fileName,
+        path: safePath,
+        size: stats.size,
+        mimeType,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 30 * 60 * 1000, // 30 minutes
+        message
+      }
+
+      // Add to pending files
+      this.pendingFiles.set(fileId, pendingFile)
+
+      // Clean up expired files
+      this.cleanupExpiredFiles()
+
+      // Notify all connected clients
+      const notification = {
+        type: 'file:available',
+        file: {
+          id: fileId,
+          name: fileName,
+          size: stats.size,
+          mimeType,
+          message
+        }
+      }
+
+      this.connectedClients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(notification))
+        }
+      })
+
+      log('File queued for mobile', { fileId, fileName, size: stats.size, connectedClients: this.connectedClients.size })
+
+      return { success: true, fileId }
+    } catch (error: any) {
+      log('Error sending file to mobile', { error: String(error) })
+      return { success: false, error: error.message || String(error) }
+    }
+  }
+
+  /**
+   * Get list of pending files
+   */
+  getPendingFiles(): PendingFile[] {
+    this.cleanupExpiredFiles()
+    return Array.from(this.pendingFiles.values())
+  }
+
+  /**
+   * Remove a pending file (after download or expiry)
+   */
+  removePendingFile(fileId: string): boolean {
+    return this.pendingFiles.delete(fileId)
+  }
+
+  /**
+   * Send pending files list to a specific client
+   */
+  private sendPendingFilesToClient(ws: WebSocket): void {
+    this.cleanupExpiredFiles()
+    const files = Array.from(this.pendingFiles.values()).map(f => ({
+      id: f.id,
+      name: f.name,
+      size: f.size,
+      mimeType: f.mimeType,
+      message: f.message
+    }))
+
+    if (files.length > 0) {
+      ws.send(JSON.stringify({ type: 'files:pending', files }))
+    }
+  }
+
+  /**
+   * Clean up expired pending files
+   */
+  private cleanupExpiredFiles(): void {
+    const now = Date.now()
+    for (const [fileId, file] of this.pendingFiles) {
+      if (file.expiresAt < now) {
+        this.pendingFiles.delete(fileId)
+        log('Expired pending file removed', { fileId, name: file.name })
+      }
+    }
+  }
+
+  /**
+   * Get number of connected mobile clients
+   */
+  getConnectedClientCount(): number {
+    return this.connectedClients.size
   }
 
   async start(): Promise<void> {

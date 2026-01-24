@@ -17,6 +17,7 @@ interface TerminalBarProps {
   currentBackend: string
   onBackendChange: (backend: string) => void
   isMobile?: boolean
+  onOpenFileBrowser?: () => void
 }
 
 // Key codes for quick input
@@ -25,6 +26,7 @@ const ARROW_UP = '\x1b[A'
 const ARROW_DOWN = '\x1b[B'
 const TAB = '\t'
 const ESCAPE = '\x1b'
+const ENTER = '\r'
 
 interface MenuItem {
   id: string
@@ -57,7 +59,8 @@ export function TerminalBar({
   onInput,
   currentBackend,
   onBackendChange,
-  isMobile = false
+  isMobile = false,
+  onOpenFileBrowser
 }: TerminalBarProps): React.ReactElement {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -187,8 +190,8 @@ export function TerminalBar({
   return (
     <div className="terminal-bar" ref={barRef}>
       <div className="terminal-bar-scroll">
-        {/* Quick input buttons - always show on mobile, optionally on desktop */}
-        {(isMobile || onInput) && onInput && (
+        {/* Quick input buttons - only show on mobile */}
+        {isMobile && onInput && (
           <>
             <button
               className="terminal-bar-btn terminal-bar-btn--danger"
@@ -225,8 +228,27 @@ export function TerminalBar({
             >
               Esc
             </button>
+            <button
+              className="terminal-bar-btn terminal-bar-btn--primary"
+              onClick={() => onInput(ENTER)}
+              title="Enter"
+            >
+              ⏎
+            </button>
             <div className="terminal-bar-divider" />
           </>
+        )}
+
+        {/* Files button - mobile only */}
+        {isMobile && onOpenFileBrowser && (
+          <button
+            className="terminal-bar-btn terminal-bar-btn--menu"
+            onClick={onOpenFileBrowser}
+            title="Browse Files"
+          >
+            <span className="terminal-bar-icon">📁</span>
+            <span className="terminal-bar-label">Files</span>
+          </button>
         )}
 
         {/* Menu categories */}
