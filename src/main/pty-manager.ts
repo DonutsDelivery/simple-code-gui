@@ -9,7 +9,7 @@ interface ClaudeProcess {
   pty: pty.IPty
   cwd: string
   sessionId?: string
-  backend?: string
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   disposables: { dispose: () => void }[]
 }
 
@@ -53,7 +53,7 @@ function getEnhancedEnv(): { [key: string]: string } {
 }
 
 // Find executable for the given backend
-function findExecutable(backend: string = 'claude'): string {
+function findExecutable(backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude'): string {
   if (backend === 'gemini') {
     return findGeminiExecutable()
   }
@@ -234,7 +234,7 @@ function findAiderExecutable(): string {
 
 // Build backend-specific permission arguments
 // Maps our internal permission modes to each backend's CLI flags
-function buildPermissionArgs(backend: string = 'claude', permissionMode?: string, autoAcceptTools?: string[]): string[] {
+function buildPermissionArgs(backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude', permissionMode?: string, autoAcceptTools?: string[]): string[] {
   const args: string[] = []
 
   switch (backend) {
@@ -329,7 +329,7 @@ export class PtyManager {
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
   private exitCallbacks: Map<string, (code: number) => void> = new Map()
 
-  spawn(cwd: string, sessionId?: string, autoAcceptTools?: string[], permissionMode?: string, model?: string, backend?: string): string {
+  spawn(cwd: string, sessionId?: string, autoAcceptTools?: string[], permissionMode?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
     const id = crypto.randomUUID()
 
     const args: string[] = []
@@ -368,7 +368,7 @@ export class PtyManager {
       pty: shell,
       cwd,
       sessionId,
-      backend,
+      backend: backend as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | undefined,
       disposables: []
     }
 

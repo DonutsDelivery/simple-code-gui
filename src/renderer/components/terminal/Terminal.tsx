@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import { TerminalBar } from '../TerminalBar.js'
 import { AutoWorkOptions } from '../TerminalMenu.js'
@@ -32,9 +32,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [api])
 
   // Backend change handler
-  const handleBackendChange = useCallback((newBackend: string) => {
+  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => {
+    if (newBackend === 'default') return
+    api?.setPtyBackend?.(ptyId, newBackend)
     window.electronAPI?.setPtyBackend?.(ptyId, newBackend)
-  }, [ptyId])
+  }, [api, ptyId])
 
   // Send backend-specific command
   const sendBackendCommand = useCallback((commandId: string): boolean => {
@@ -97,6 +99,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     terminalRef,
     fitAddonRef,
     userScrolledUpRef,
+    currentLineInputRef,
   } = useTerminalSetup({
     ptyId,
     theme,
@@ -216,8 +219,106 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     e.dataTransfer.dropEffect = 'copy'
   }, [])
 
+  // Track if a clear/compact operation is in progress to prevent double-triggering
+  const clearInProgressRef = useRef(false)
+
+  // Special handlers for /clear and /compact that preserve user input
+  const handleClearWithRestore = useCallback(() => {
+    // Debounce: prevent multiple rapid triggers
+    if (clearInProgressRef.current) return
+    clearInProgressRef.current = true
+
+    const savedInput = currentLineInputRef.current
+
+    // Clear the current line with Ctrl+U
+    if (savedInput) {
+      writePty(ptyId, '\x15') // Ctrl+U clears line
+      currentLineInputRef.current = ''
+    }
+
+    // Send /clear command
+    const backendCommand = resolveBackendCommand(backend, 'clear')
+    if (backendCommand) {
+      setTimeout(() => {
+        writePty(ptyId, backendCommand)
+        setTimeout(() => {
+          writePty(ptyId, '\r')
+          // Restore input after command processes
+          // Note: Don't set currentLineInputRef here - onData will track it when echoed
+          if (savedInput) {
+            setTimeout(() => {
+              writePty(ptyId, savedInput)
+              // Allow next operation after restore completes
+              setTimeout(() => {
+                clearInProgressRef.current = false
+              }, 100)
+            }, 500) // Wait for /clear to complete
+          } else {
+            setTimeout(() => {
+              clearInProgressRef.current = false
+            }, 500)
+          }
+        }, 100)
+      }, 50)
+    } else {
+      clearInProgressRef.current = false
+    }
+  }, [backend, ptyId, writePty, currentLineInputRef])
+
+  const handleCompactWithRestore = useCallback(() => {
+    // Debounce: prevent multiple rapid triggers
+    if (clearInProgressRef.current) return
+    clearInProgressRef.current = true
+
+    const savedInput = currentLineInputRef.current
+
+    // Clear the current line with Ctrl+U
+    if (savedInput) {
+      writePty(ptyId, '\x15') // Ctrl+U clears line
+      currentLineInputRef.current = ''
+    }
+
+    // Send /compact command
+    const backendCommand = resolveBackendCommand(backend, 'compact')
+    if (backendCommand) {
+      setTimeout(() => {
+        writePty(ptyId, backendCommand)
+        setTimeout(() => {
+          writePty(ptyId, '\r')
+          // Restore input after command processes
+          // Note: Don't set currentLineInputRef here - onData will track it when echoed
+          if (savedInput) {
+            setTimeout(() => {
+              writePty(ptyId, savedInput)
+              // Allow next operation after restore completes
+              setTimeout(() => {
+                clearInProgressRef.current = false
+              }, 100)
+            }, 500) // Wait for /compact to complete
+          } else {
+            setTimeout(() => {
+              clearInProgressRef.current = false
+            }, 500)
+          }
+        }, 100)
+      }, 50)
+    } else {
+      clearInProgressRef.current = false
+    }
+  }, [backend, ptyId, writePty, currentLineInputRef])
+
   // Handle menu commands
   const handleMenuCommand = useCallback((command: string, options?: AutoWorkOptions) => {
+    // Route clear/compact to special handlers that preserve user input
+    if (command === 'clear') {
+      handleClearWithRestore()
+      return
+    }
+    if (command === 'compact') {
+      handleCompactWithRestore()
+      return
+    }
+
     if (sendBackendCommand(command)) {
       return
     }
@@ -247,7 +348,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         setShowCustomCommandModal(true)
         break
     }
-  }, [sendBackendCommand, triggerSummarize, startAutoWork, continueAutoWork, stopAutoWork, cancelAutoWork])
+  }, [sendBackendCommand, triggerSummarize, startAutoWork, continueAutoWork, stopAutoWork, cancelAutoWork, handleClearWithRestore, handleCompactWithRestore])
 
   return (
     <div className="terminal-content-wrapper">
@@ -266,10 +367,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         ptyId={ptyId}
         onCommand={handleMenuCommand}
         onInput={(data) => writePty(ptyId, data)}
-        currentBackend={backend || 'claude'}
+        currentBackend={(backend || 'claude') as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'}
         onBackendChange={handleBackendChange}
         isMobile={isMobile}
         onOpenFileBrowser={onOpenFileBrowser}
+        onClearWithRestore={handleClearWithRestore}
+        onCompactWithRestore={handleCompactWithRestore}
       />
       <CustomCommandModal
         isOpen={showCustomCommandModal}

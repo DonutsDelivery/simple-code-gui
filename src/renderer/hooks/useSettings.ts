@@ -6,7 +6,7 @@ export interface AppSettings {
   theme: string
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 interface UseSettingsReturn {
@@ -31,6 +31,9 @@ export function useSettings(): UseSettingsReturn {
     const loadSettings = async () => {
       try {
         const loadedSettings = await window.electronAPI?.getSettings()
+        if (!loadedSettings) {
+          return
+        }
         setSettings(loadedSettings)
 
         // Apply theme

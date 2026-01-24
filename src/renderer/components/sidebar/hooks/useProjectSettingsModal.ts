@@ -49,13 +49,13 @@ export function useProjectSettingsModal({
   const handleOpenProjectSettings = useCallback(async (project: Project) => {
     const settings = await window.electronAPI?.getSettings()
     setGlobalPermissions({
-      tools: settings.autoAcceptTools || [],
-      mode: settings.permissionMode || 'default',
+      tools: settings?.autoAcceptTools || [],
+      mode: settings?.permissionMode || 'default',
     })
 
     try {
       const [piperVoices, xttsVoices, voiceSettings] = await Promise.all([
-        window.electronAPI?.voiceGetInstalled?.() || [],
+        (window.electronAPI?.voiceGetInstalled?.() || []) as InstalledVoice[],
         window.electronAPI?.xttsGetVoices?.() || [],
         window.electronAPI?.voiceGetSettings?.() || {},
       ])
@@ -114,22 +114,22 @@ export function useProjectSettingsModal({
 
     if (newPort !== oldPort) {
       if (!newPort) {
-        await window.electronAPI?.apiStop(projectSettingsModal.project.path)
+        await window.electronAPI?.apiStop?.(projectSettingsModal.project.path)
         setApiStatus((prev) => ({
           ...prev,
           [projectSettingsModal.project.path]: { running: false },
         }))
       } else {
         setProjectSettingsModal({ ...projectSettingsModal, apiStatus: 'checking' })
-        const result = await window.electronAPI?.apiStart(
+        const result = await window.electronAPI?.apiStart?.(
           projectSettingsModal.project.path,
           newPort
         )
-        if (!result.success) {
+        if (!result?.success) {
           setProjectSettingsModal({
             ...projectSettingsModal,
             apiStatus: 'error',
-            apiError: result.error || 'Port may already be in use',
+            apiError: result?.error || 'Port may already be in use',
           })
           return
         }
@@ -160,7 +160,7 @@ export function useProjectSettingsModal({
       ttsVoice: projectSettingsModal.ttsVoice || undefined,
       ttsEngine: projectSettingsModal.ttsEngine || undefined,
       backend:
-        projectSettingsModal.backend !== 'default' && projectSettingsModal.backend !== 'aider'
+        projectSettingsModal.backend !== 'default'
           ? projectSettingsModal.backend
           : undefined,
     })
@@ -172,17 +172,17 @@ export function useProjectSettingsModal({
     async (project: Project) => {
       const status = apiStatus[project.path]
       if (status?.running) {
-        await window.electronAPI?.apiStop(project.path)
+        await window.electronAPI?.apiStop?.(project.path)
         setApiStatus((prev) => ({ ...prev, [project.path]: { running: false } }))
       } else if (project.apiPort) {
-        const result = await window.electronAPI?.apiStart(project.path, project.apiPort)
-        if (result.success) {
+        const result = await window.electronAPI?.apiStart?.(project.path, project.apiPort)
+        if (result?.success) {
           setApiStatus((prev) => ({
             ...prev,
             [project.path]: { running: true, port: project.apiPort },
           }))
         } else {
-          alert(`Failed to start API server: ${result.error}`)
+          alert(`Failed to start API server: ${result?.error || 'Unknown error'}`)
         }
       }
     },

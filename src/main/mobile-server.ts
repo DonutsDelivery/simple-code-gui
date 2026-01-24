@@ -729,39 +729,26 @@ export class MobileServer {
     })
 
     // GET /api/sessions - Discover sessions for a project
-    // Query params: path (project path), backend (claude|opencode)
+    // Query params: path (project path), backend (claude|gemini|codex|opencode|aider)
     this.app.get('/api/sessions', async (req: Request, res: Response) => {
       try {
         const projectPath = req.query.path as string
-        const backend = (req.query.backend as 'claude' | 'opencode') || 'claude'
-
+        const backend = (req.query.backend as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') || 'claude'
         if (!projectPath) {
-          return res.status(400).json({ error: 'path query parameter is required' })
+          return res.status(400).json({ error: 'Missing path' })
         }
 
-        // SECURITY: Validate path to prevent traversal attacks
         const pathValidation = validateProjectPath(projectPath)
         if (!pathValidation.valid) {
           return res.status(400).json({ error: pathValidation.error })
         }
         const safeProjectPath = pathValidation.normalizedPath!
 
-        // Discover sessions using the same logic as the main process
         const sessions = await discoverSessions(safeProjectPath, backend)
-
-        // Return in the expected format
-        res.json({
-          sessions: sessions.map(s => ({
-            sessionId: s.sessionId,
-            slug: s.slug,
-            lastModified: s.lastModified,
-            cwd: s.cwd,
-            fileSize: s.fileSize
-          }))
-        })
-      } catch (error) {
-        log('Sessions discovery error', { error: String(error) })
-        res.status(500).json({ error: String(error) })
+        res.json({ sessions })
+      } catch (error: any) {
+        log('Sessions error', { error: String(error) })
+        res.status(500).json({ error: error.message || String(error) })
       }
     })
 
@@ -1167,15 +1154,27 @@ export class MobileServer {
     // ========================================
 
     // GET /api/files/list - List directory contents
+    // Requires basePath to constrain access to project folder only
     this.app.get('/api/files/list', async (req: Request, res: Response) => {
       try {
         const dirPath = req.query.path as string
+        const basePath = req.query.basePath as string
         if (!dirPath) {
           return res.status(400).json({ error: 'path query parameter is required' })
         }
+        if (!basePath) {
+          return res.status(400).json({ error: 'basePath query parameter is required (project root)' })
+        }
 
-        // SECURITY: Validate path to prevent traversal attacks
-        const pathValidation = validateDirectoryPath(dirPath)
+        // SECURITY: Validate basePath is a valid project directory
+        const baseValidation = validateProjectPath(basePath)
+        if (!baseValidation.valid) {
+          return res.status(400).json({ error: `Invalid basePath: ${baseValidation.error}` })
+        }
+        const safeBasePath = baseValidation.normalizedPath!
+
+        // SECURITY: Validate path is within basePath to prevent traversal attacks
+        const pathValidation = validateDirectoryPath(dirPath, [safeBasePath])
         if (!pathValidation.valid) {
           return res.status(400).json({ error: pathValidation.error })
         }
@@ -1207,7 +1206,7 @@ export class MobileServer {
           return a.name.localeCompare(b.name)
         })
 
-        res.json({ path: safePath, files })
+        res.json({ path: safePath, basePath: safeBasePath, files })
       } catch (error: any) {
         log('Files list error', { error: String(error) })
         res.status(500).json({ error: error.message || String(error) })
@@ -1215,15 +1214,27 @@ export class MobileServer {
     })
 
     // GET /api/files/download - Download a file
+    // Requires basePath to constrain access to project folder only
     this.app.get('/api/files/download', async (req: Request, res: Response) => {
       try {
         const filePath = req.query.path as string
+        const basePath = req.query.basePath as string
         if (!filePath) {
           return res.status(400).json({ error: 'path query parameter is required' })
         }
+        if (!basePath) {
+          return res.status(400).json({ error: 'basePath query parameter is required (project root)' })
+        }
 
-        // SECURITY: Validate path to prevent traversal attacks
-        const pathValidation = validateFilePath(filePath)
+        // SECURITY: Validate basePath is a valid project directory
+        const baseValidation = validateProjectPath(basePath)
+        if (!baseValidation.valid) {
+          return res.status(400).json({ error: `Invalid basePath: ${baseValidation.error}` })
+        }
+        const safeBasePath = baseValidation.normalizedPath!
+
+        // SECURITY: Validate path is within basePath to prevent traversal attacks
+        const pathValidation = validateFilePath(filePath, [safeBasePath])
         if (!pathValidation.valid) {
           return res.status(400).json({ error: pathValidation.error })
         }

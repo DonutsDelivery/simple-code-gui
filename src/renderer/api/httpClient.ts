@@ -16,6 +16,8 @@ import {
 // Types (mirror preload types)
 // =============================================================================
 
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+
 export interface Settings {
   defaultProjectDir: string
   theme: string
@@ -25,7 +27,7 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | BackendId
 }
 
 export interface ProjectCategory {
@@ -48,7 +50,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | BackendId
   categoryId?: string
   order?: number
 }
@@ -59,7 +61,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: BackendId
 }
 
 export interface TileLayout {
@@ -674,7 +676,7 @@ export class HttpApiClient {
   // Sessions API
   // ===========================================================================
 
-  async discoverSessions(projectPath: string, backend?: 'claude' | 'opencode'): Promise<Session[]> {
+  async discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
     const encodedPath = encodeURIComponent(projectPath)
     let url = `/terminal/discover/${encodedPath}`
     if (backend) {
@@ -709,7 +711,7 @@ export class HttpApiClient {
     cwd: string,
     sessionId?: string,
     model?: string,
-    backend?: string
+    backend?: BackendId
   ): Promise<string> {
     // Ensure WebSocket is connected
     if (!this.wsManager.isConnected()) {
@@ -755,7 +757,7 @@ export class HttpApiClient {
   }
 
   // Note: setPtyBackend not available via HTTP currently
-  async setPtyBackend(_id: string, _backend: string): Promise<void> {
+  async setPtyBackend(_id: string, _backend: BackendId): Promise<void> {
     console.warn('[HttpApiClient] setPtyBackend not implemented in HTTP API')
   }
 
@@ -768,7 +770,7 @@ export class HttpApiClient {
   }
 
   // Note: onPtyRecreated not available via HTTP currently
-  onPtyRecreated(_callback: (data: { oldId: string; newId: string; backend: string }) => void): () => void {
+  onPtyRecreated(_callback: (data: { oldId: string; newId: string; backend: BackendId }) => void): () => void {
     console.warn('[HttpApiClient] onPtyRecreated not implemented in HTTP API')
     return () => {}
   }
@@ -1191,7 +1193,7 @@ export function setHttpClient(client: HttpApiClient | null): void {
  */
 export interface ApiClient {
   // Terminal
-  spawnPty(cwd: string, sessionId?: string, model?: string, backend?: string): Promise<string>
+  spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string>
   writePty(id: string, data: string): void
   resizePty(id: string, cols: number, rows: number): void
   killPty(id: string): void
@@ -1207,7 +1209,10 @@ export interface ApiClient {
   saveSettings(settings: Settings): Promise<void>
 
   // Sessions
-  discoverSessions(projectPath: string, backend?: 'claude' | 'opencode'): Promise<Session[]>
+  discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]>
+
+  // Backend switching (not available via HTTP)
+  setPtyBackend?(id: string, backend: BackendId): Promise<void>
 
   // Beads
   beadsCheck(cwd: string): Promise<{ installed: boolean; initialized: boolean }>

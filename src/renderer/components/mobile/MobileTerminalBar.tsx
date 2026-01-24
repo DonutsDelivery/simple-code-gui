@@ -5,14 +5,15 @@
  * Contains quick input buttons and menu categories.
  */
 
-import React, { useState, useRef } from 'react'
-import { CommandMenuItem, getCommandMenuItems } from '../../utils/backendCommands'
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import ReactDOM from 'react-dom'
+import { getCommandMenuItems } from '../../utils/backendCommands'
 
 interface MobileTerminalBarProps {
   onInput: (data: string) => void
   onCommand: (command: string) => void
-  currentBackend: string
-  onBackendChange: (backend: string) => void
+  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => void
   onOpenFileBrowser?: () => void
 }
 
@@ -45,7 +46,81 @@ export function MobileTerminalBar({
   onOpenFileBrowser
 }: MobileTerminalBarProps): React.ReactElement {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, visible: false })
+  const barRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const menuButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (barRef.current && barRef.current.contains(target)) return
+      if (dropdownRef.current && dropdownRef.current.contains(target)) return
+      setOpenMenu(null)
+    }
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!openMenu) {
+      setMenuPosition((prev) => prev.visible ? { ...prev, visible: false } : prev)
+    }
+  }, [openMenu])
+
+  const updateMenuPosition = useCallback(() => {
+    if (!openMenu || !dropdownRef.current) return
+    const button = menuButtonRefs.current[openMenu]
+    if (!button) return
+
+    const padding = 12
+    const rect = button.getBoundingClientRect()
+    const menuRect = dropdownRef.current.getBoundingClientRect()
+    const maxTop = window.innerHeight - menuRect.height - padding
+    const openDownTop = rect.bottom + 8
+
+    let top = rect.top - menuRect.height - 8
+    if (top < padding) {
+      top = Math.min(openDownTop, maxTop)
+    }
+
+    let left = rect.left
+    if (left + menuRect.width > window.innerWidth - padding) {
+      left = window.innerWidth - menuRect.width - padding
+    }
+    if (left < padding) {
+      left = padding
+    }
+
+    setMenuPosition((prev) => {
+      if (prev.top === top && prev.left === left && prev.visible) return prev
+      return { top, left, visible: true }
+    })
+  }, [openMenu])
+
+  useLayoutEffect(() => {
+    updateMenuPosition()
+  }, [updateMenuPosition, openMenu])
+
+  useEffect(() => {
+    if (!openMenu) return
+    const handleReposition = () => updateMenuPosition()
+    window.addEventListener('resize', handleReposition)
+    window.addEventListener('scroll', handleReposition, true)
+    return () => {
+      window.removeEventListener('resize', handleReposition)
+      window.removeEventListener('scroll', handleReposition, true)
+    }
+  }, [openMenu, updateMenuPosition])
 
   const commandItems = getCommandMenuItems(currentBackend)
 
@@ -99,23 +174,35 @@ export function MobileTerminalBar({
     if (item.disabled) return
 
     if (categoryId === 'backend') {
-      onBackendChange(item.id)
-    } else if (categoryId === 'gsd') {
-      onCommand(`/${item.id}`)
-    } else if (categoryId === 'commands') {
-      onCommand(item.id)
-    } else {
-      onCommand(item.id)
+      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider')
+      setOpenMenu(null)
+      return
     }
+
+    if (categoryId === 'gsd') {
+      onCommand(`/${item.id}`)
+      setOpenMenu(null)
+      return
+    }
+
+    if (categoryId === 'commands') {
+      onCommand(item.id)
+      setOpenMenu(null)
+      return
+    }
+
+    onCommand(item.id)
     setOpenMenu(null)
   }
 
   const toggleMenu = (categoryId: string) => {
-    setOpenMenu(openMenu === categoryId ? null : categoryId)
+    setOpenMenu((prev) => (prev === categoryId ? null : categoryId))
   }
 
+  const openCategory = menuCategories.find((category) => category.id === openMenu)
+
   return (
-    <div className="mobile-terminal-bar">
+    <div className="mobile-terminal-bar" ref={barRef}>
       {/* Scrollable content */}
       <div className="mobile-terminal-bar-scroll">
         {/* Quick input buttons */}
@@ -178,42 +265,55 @@ export function MobileTerminalBar({
 
         {/* Menu categories */}
         {menuCategories.map((category) => (
-          <div key={category.id} className="mobile-bar-menu-wrapper" ref={menuRef}>
+          <div key={category.id} className="mobile-bar-menu-wrapper">
             <button
               className={`mobile-bar-btn mobile-bar-btn--menu ${openMenu === category.id ? 'active' : ''}`}
               onClick={() => toggleMenu(category.id)}
+              aria-expanded={openMenu === category.id}
+              ref={(node) => {
+                menuButtonRefs.current[category.id] = node
+              }}
             >
               <span className="mobile-bar-icon">{category.icon}</span>
               <span className="mobile-bar-label">{category.label}</span>
+              <span className="mobile-bar-caret" aria-hidden="true">▲</span>
             </button>
-
-            {openMenu === category.id && (
-              <div className="mobile-bar-dropdown">
-                {category.items.map((item) => (
-                  <button
-                    key={item.id}
-                    className={`mobile-bar-dropdown-item ${item.disabled ? 'disabled' : ''} ${category.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
-                    onClick={() => handleMenuItemClick(category.id, item)}
-                    disabled={item.disabled}
-                  >
-                    {item.label}
-                    {category.id === 'backend' && item.id === currentBackend && (
-                      <span className="mobile-bar-check">✓</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         ))}
       </div>
 
-      {/* Backdrop to close menu */}
-      {openMenu && (
-        <div
-          className="mobile-bar-backdrop"
-          onClick={() => setOpenMenu(null)}
-        />
+      {openCategory && ReactDOM.createPortal(
+        <>
+          <div
+            className="mobile-bar-backdrop"
+            onClick={() => setOpenMenu(null)}
+          />
+          <div
+            className="mobile-bar-dropdown"
+            ref={dropdownRef}
+            style={{
+              top: menuPosition.top,
+              left: menuPosition.left,
+              visibility: menuPosition.visible ? 'visible' : 'hidden',
+              pointerEvents: menuPosition.visible ? 'auto' : 'none'
+            }}
+          >
+            {openCategory.items.map((item) => (
+              <button
+                key={item.id}
+                className={`mobile-bar-dropdown-item ${item.disabled ? 'disabled' : ''} ${openCategory.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
+                onClick={() => handleMenuItemClick(openCategory.id, item)}
+                disabled={item.disabled}
+              >
+                {item.label}
+                {openCategory.id === 'backend' && item.id === currentBackend && (
+                  <span className="mobile-bar-check">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
       )}
     </div>
   )

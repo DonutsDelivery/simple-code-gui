@@ -81,13 +81,21 @@ export function useSummaryCapture({
 
     setTimeout(() => {
       console.log('[Summary] Pasting summary:', summaryToSend.substring(0, 50) + '...')
-      window.electronAPI?.writePty(ptyId, summaryToSend + '\r')
+      window.electronAPI?.writePty(ptyId, summaryToSend)
+      // Small delay before Enter to ensure prompt is fully written
+      setTimeout(() => {
+        window.electronAPI?.writePty(ptyId, '\r')
+      }, 100)
 
       if (shouldContinueAutoWork) {
         setTimeout(() => {
           console.log('[AutoWork+Summary] Sending work prompt after summary')
           const autoworkPrompt = buildAutoWorkPrompt()
-          window.electronAPI?.writePty(ptyId, autoworkPrompt + '\r')
+          window.electronAPI?.writePty(ptyId, autoworkPrompt)
+          // Small delay before Enter to ensure prompt is fully written
+          setTimeout(() => {
+            window.electronAPI?.writePty(ptyId, '\r')
+          }, 100)
         }, 2000)
       }
     }, clearDelay)

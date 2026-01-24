@@ -457,20 +457,24 @@ ipcMain.handle('workspace:addProjectsFromParent', async () => {
 })
 
 // Session discovery
-ipcMain.handle('sessions:discover', (_, projectPath: string, backend?: 'claude' | 'opencode') => discoverSessions(projectPath, backend))
+ipcMain.handle('sessions:discover', (_, projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => discoverSessions(projectPath, backend))
 
 // PTY management
-ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: string; sessionId?: string; model?: string; backend?: string }) => {
+ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => {
   try {
     const workspace = sessionStore.getWorkspace()
     const project = workspace.projects.find(p => p.path === cwd)
     const globalSettings = sessionStore.getSettings()
 
-    const effectiveBackend = (backend && backend !== 'default')
-      ? backend
-      : (project?.backend && project.backend !== 'default')
+    const normalizedGlobalBackend = globalSettings.backend === 'default'
+      ? undefined
+      : globalSettings.backend
+
+    const normalizedBackend = backend === 'default' ? undefined : backend
+    const effectiveBackend = normalizedBackend
+      || (project?.backend && project.backend !== 'default'
         ? project.backend
-        : (globalSettings.backend || 'claude')
+        : normalizedGlobalBackend || 'claude')
 
     const pending = pendingApiPrompts.get(cwd)
     const effectiveModel = model || pending?.model
@@ -529,7 +533,7 @@ ipcMain.on('pty:kill', (_, id: string) => {
   ptyManager.kill(id)
 })
 
-ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: string }) => {
+ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => {
   const process = ptyManager.getProcess(oldId)
   if (!process) return
 

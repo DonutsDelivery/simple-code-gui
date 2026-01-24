@@ -1415,10 +1415,10 @@ html, body, #root {
   visibility: hidden;
   pointer-events: none;
   border-radius: var(--radius-md);
-  overflow: hidden;
 }
 
 .terminal-wrapper.active {
+  overflow: hidden;
   visibility: visible;
   pointer-events: auto;
 }
@@ -4847,6 +4847,50 @@ html, body, #root {
   cursor: help;
 }
 
+/* Version Settings (in Settings Modal) */
+.version-settings {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.version-current {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.version-update-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.version-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.version-status.downloading {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.version-status.error {
+  color: var(--danger);
+  cursor: help;
+}
+
 
 /* ==================== ACTION ICON BUTTONS ==================== */
 
@@ -5526,6 +5570,7 @@ html, body, #root {
   background: var(--bg-elevated);
   border-top: 1px solid var(--border-subtle);
   z-index: 100;
+  overflow: hidden;
 }
 
 .terminal-bar-scroll {
@@ -5563,6 +5608,13 @@ html, body, #root {
   transition: background 0.15s, border-color 0.15s;
 }
 
+.terminal-bar-caret {
+  font-size: 9px;
+  opacity: 0.6;
+  margin-left: 4px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
 .terminal-bar-btn:hover {
   background: var(--bg-hover);
   border-color: var(--border-strong);
@@ -5583,6 +5635,22 @@ html, body, #root {
 
 .terminal-bar-btn--danger:active {
   background: var(--danger);
+  color: white;
+}
+
+.terminal-bar-btn--action {
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+}
+
+.terminal-bar-btn--action:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.terminal-bar-btn--action:active {
+  background: var(--accent);
   color: white;
 }
 
@@ -5613,9 +5681,13 @@ html, body, #root {
   flex-shrink: 0;
 }
 
+.terminal-bar-menu-wrapper .terminal-bar-btn--menu.active .terminal-bar-caret {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
 .terminal-bar-dropdown {
-  position: absolute;
-  bottom: calc(100% + 6px);
+  position: fixed;
   left: 0;
   min-width: 170px;
   max-height: 280px;
@@ -5626,6 +5698,11 @@ html, body, #root {
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
   z-index: 200;
   padding: 4px;
+}
+
+.terminal-bar-menu-wrapper:last-child .terminal-bar-dropdown {
+  right: 0;
+  left: auto;
 }
 
 .terminal-bar-dropdown-item {
@@ -6290,4 +6367,3 @@ html, body, #root {
 .skip-link:focus {
   top: 0;
 }
-

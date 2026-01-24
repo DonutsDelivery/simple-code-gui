@@ -18,6 +18,7 @@ import {
   ApiOpenSessionCallback,
   Unsubscribe
 } from './types'
+import type { BackendId } from './types'
 
 /**
  * Type declaration for the global electronAPI
@@ -26,16 +27,18 @@ declare global {
   interface Window {
     electronAPI?: {
       // PTY Management
-      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: string) => Promise<string>
+      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
       killPty: (id: string) => void
       writePty: (id: string, data: string) => void
       resizePty: (id: string, cols: number, rows: number) => void
       onPtyData: (id: string, callback: (data: string) => void) => () => void
       onPtyExit: (id: string, callback: (code: number) => void) => () => void
-      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: string }) => void) => () => void
+      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId }) => void) => () => void
+      setPtyBackend: (id: string, backend: BackendId) => Promise<void>
+
 
       // Session Management
-      discoverSessions: (projectPath: string, backend?: 'claude' | 'opencode') => Promise<Session[]>
+      discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]>
 
       // Workspace Management
       getWorkspace: () => Promise<Workspace>
@@ -51,11 +54,25 @@ declare global {
 
       // TTS
       ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
+      voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
+      xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
+      voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }>
+      voiceCheckWhisper?: () => Promise<{ installed: boolean; models: string[]; currentModel: string | null }>
+      voiceCheckTTS?: () => Promise<{ installed: boolean; engine: string | null; voices: string[]; currentVoice: string | null }>
+      voiceInstallWhisper?: (model: string) => Promise<{ success: boolean; error?: string }>
+      voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => Promise<{ success: boolean }>
+      voiceSetVoice?: (voice: string | { voice: string; engine: 'piper' | 'xtts' }) => Promise<{ success: boolean }>
+      ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean }>
+      extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
       voiceSpeak: (text: string) => Promise<{ success: boolean; audioData?: string; error?: string }>
       voiceStopSpeaking: () => Promise<{ success: boolean }>
 
       // Events
       onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
+
+      // API Server
+      apiStart?: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+      apiStop?: (projectPath: string) => Promise<{ success: boolean }>
 
       // Extended API (Desktop-only)
       selectDirectory: () => Promise<string | null>
@@ -93,7 +110,7 @@ export class ElectronBackend implements ExtendedApi {
   // PTY Management
   // ==========================================================================
 
-  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: string): Promise<string> {
+  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     this.checkApi()
     return window.electronAPI!.spawnPty(cwd, sessionId, model, backend)
   }
@@ -128,11 +145,16 @@ export class ElectronBackend implements ExtendedApi {
     return window.electronAPI!.onPtyRecreated(callback)
   }
 
+  setPtyBackend(id: string, backend: BackendId): Promise<void> {
+    this.checkApi()
+    return window.electronAPI!.setPtyBackend(id, backend)
+  }
+
   // ==========================================================================
   // Session Management
   // ==========================================================================
 
-  async discoverSessions(projectPath: string, backend?: 'claude' | 'opencode'): Promise<Session[]> {
+  async discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
     this.checkApi()
     return window.electronAPI!.discoverSessions(projectPath, backend)
   }

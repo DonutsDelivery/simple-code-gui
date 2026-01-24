@@ -1418,12 +1418,16 @@ body.barcode-scanner-active #root {
   gap: 8px;
   padding: 8px 12px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   /* Hide scrollbar but keep scroll functionality */
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.mobile-terminal-bar {
+  overflow: visible;
 }
 
 .mobile-terminal-bar-scroll::-webkit-scrollbar {
@@ -1484,6 +1488,13 @@ body.barcode-scanner-active #root {
   font-size: 13px;
 }
 
+.mobile-bar-caret {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 4px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
 .mobile-bar-divider {
   flex-shrink: 0;
   width: 1px;
@@ -1497,10 +1508,13 @@ body.barcode-scanner-active #root {
   flex-shrink: 0;
 }
 
+.mobile-bar-btn--menu.active .mobile-bar-caret {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
 .mobile-bar-dropdown {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  position: fixed;
   min-width: 180px;
   max-height: 300px;
   overflow-y: auto;
@@ -1560,19 +1574,10 @@ body.is-mobile-app .terminal-bar {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Fix terminal bar dropdown on mobile - use fixed positioning */
-body.is-mobile-app .terminal-bar-dropdown {
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom) + 50px);
-  left: 10px;
-  right: 10px;
-  max-height: 50vh;
-}
-
-/* Make terminal content wrapper allow bar dropdown to show */
+/* Make terminal content wrapper avoid overflow bleed */
 body.is-mobile-app .terminal-content-wrapper {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* Larger touch targets for terminal bar buttons on mobile */

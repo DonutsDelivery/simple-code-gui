@@ -12,6 +12,7 @@ import {
   VoiceInputSettings,
   VoiceOutputSettings,
   UninstallTTSSection,
+  VersionSettings,
   DEFAULT_GENERAL,
   DEFAULT_VOICE,
   DEFAULT_XTTS,
@@ -25,7 +26,16 @@ import type {
   SettingsModalProps,
 } from './settings'
 
-export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: SettingsModalProps): React.ReactElement | null {
+export function SettingsModal({
+  isOpen,
+  onClose,
+  onThemeChange,
+  onSaved,
+  appVersion,
+  updateStatus,
+  onDownloadUpdate,
+  onInstallUpdate
+}: SettingsModalProps): React.ReactElement | null {
   // Grouped state: general settings (theme, directory, permissions, backend)
   const [general, setGeneral] = useState<GeneralSettings>(DEFAULT_GENERAL)
 
@@ -79,7 +89,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
           selectedTheme: settings.theme || 'default',
           autoAcceptTools: settings.autoAcceptTools || [],
           permissionMode: settings.permissionMode || 'default',
-          backend: settings.backend || 'claude'
+          backend: settings.backend || 'default'
         }))
       })
 
@@ -102,20 +112,20 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
       })?.catch(e => console.error('Failed to load voice settings:', e))
 
       // Load voice status
-      window.electronAPI?.voiceCheckWhisper?.()?.then(status => {
-        setVoice(prev => ({ ...prev, whisperStatus: status }))
-      })?.catch(e => console.error('Failed to check Whisper status:', e))
+      window.electronAPI?.voiceCheckWhisper?.()?.then((status) => {
+        setVoice((prev) => ({ ...prev, whisperStatus: status }))
+      })?.catch((e) => console.error('Failed to check Whisper status:', e))
 
-      window.electronAPI?.voiceCheckTTS?.()?.then(status => {
-        setVoice(prev => ({ ...prev, ttsStatus: status }))
-      })?.catch(e => console.error('Failed to check TTS status:', e))
+      window.electronAPI?.voiceCheckTTS?.()?.then((status) => {
+        setVoice((prev) => ({ ...prev, ttsStatus: status }))
+      })?.catch((e) => console.error('Failed to check TTS status:', e))
 
       refreshInstalledVoices()
 
       // Load installed extensions
-      window.electronAPI?.extensionsGetInstalled?.()?.then(exts => {
+      window.electronAPI?.extensionsGetInstalled?.()?.then((exts) => {
         setInstalledExtensions(exts || [])
-      })?.catch(e => console.error('Failed to load installed extensions:', e))
+      })?.catch((e) => console.error('Failed to load installed extensions:', e))
     } else {
       setUI(prev => ({ ...prev, playingPreview: null, previewLoading: null }))
     }
@@ -232,12 +242,19 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings-modal" ref={focusTrapRef} onClick={(e) => e.stopPropagation()}>
+      <div className="modal settings-modal" ref={focusTrapRef as React.RefObject<HTMLDivElement>} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Settings</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-content">
+          <VersionSettings
+            appVersion={appVersion}
+            updateStatus={updateStatus}
+            onDownloadUpdate={onDownloadUpdate}
+            onInstallUpdate={onInstallUpdate}
+          />
+
           <ThemeSettings
             selectedTheme={general.selectedTheme}
             onThemeChange={onThemeChange}

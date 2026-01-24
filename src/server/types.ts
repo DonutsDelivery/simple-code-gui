@@ -132,7 +132,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   categoryId?: string
   order?: number
 }
@@ -143,7 +143,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: Backend
 }
 
 export interface TileLayout {
@@ -262,7 +262,7 @@ export interface MobileApiServerConfig {
   host: string
   enableCors: boolean
   corsOrigins?: string[]
-  tokenExpiry?: number // milliseconds, null = never
+  tokenExpiry?: number | null // milliseconds, null = never
   enableWebSocket: boolean
   maxConnections?: number
 }

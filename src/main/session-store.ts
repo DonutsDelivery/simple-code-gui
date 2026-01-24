@@ -23,7 +23,7 @@ export interface Project {
   color?: string              // Project color for visual identification
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' // Per-project backend (overrides global)
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' // Per-project backend (overrides global)
   categoryId?: string         // Category this project belongs to
   order?: number              // Order within category or uncategorized list
 }
@@ -33,7 +33,8 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  ptyId?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface TileLayout {
@@ -63,14 +64,15 @@ export interface WindowBounds {
 export interface Settings {
   defaultProjectDir: string
   theme: string
-  autoAcceptTools?: string[]  // List of tool patterns to auto-accept (e.g., "Bash(git:*)", "Read", "Write")
-  permissionMode?: string     // Permission mode: default, acceptEdits, dontAsk, bypassPermissions
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode'
   voiceOutputEnabled?: boolean
   voiceVolume?: number
   voiceSpeed?: number
   voiceSkipOnNew?: boolean
+  autoAcceptTools?: string[]
+  permissionMode?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
+
 
 interface StoredData {
   workspace: Workspace
@@ -151,7 +153,7 @@ export class SessionStore {
   }
 
   getSettings(): Settings {
-    return this.data.settings ?? { defaultProjectDir: '', theme: 'default' }
+    return this.data.settings ?? { defaultProjectDir: '', theme: 'default', backend: 'default' }
   }
 
   saveSettings(settings: Settings): void {

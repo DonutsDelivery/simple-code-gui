@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Project } from '../../../stores/workspace.js'
-import { ClaudeSession, OpenTab } from '../types.js'
+import { OpenTab } from '../types.js'
+import type { Session } from '../../../api/types'
+import type { BackendId } from '../../../api/types'
 
 interface UseSessionsOptions {
   projects: Project[]
@@ -18,7 +20,7 @@ interface UseSessionsOptions {
 interface UseSessionsReturn {
   expandedProject: string | null
   setExpandedProject: React.Dispatch<React.SetStateAction<string | null>>
-  sessions: Record<string, ClaudeSession[]>
+  sessions: Record<string, Session[]>
   toggleProject: (e: React.MouseEvent, path: string) => void
   openMostRecentSession: (projectPath: string) => Promise<void>
   handleOpenSession: (
@@ -36,7 +38,7 @@ export function useSessions({
   onSwitchToTab,
 }: UseSessionsOptions): UseSessionsReturn {
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
-  const [sessions, setSessions] = useState<Record<string, ClaudeSession[]>>({})
+  const [sessions, setSessions] = useState<Record<string, Session[]>>({})
 
   // Load sessions when a project is expanded
   useEffect(() => {
@@ -44,12 +46,14 @@ export function useSessions({
       if (expandedProject) {
         try {
           const project = projects.find((item) => item.path === expandedProject)
-          const backend = project?.backend === 'opencode' ? 'opencode' : 'claude'
+          const backend = ((project?.backend && project.backend !== 'default')
+            ? project.backend
+            : 'claude') as BackendId
           const projectSessions = await window.electronAPI?.discoverSessions(
             expandedProject,
             backend
           )
-          setSessions((prev) => ({ ...prev, [expandedProject]: projectSessions }))
+          setSessions((prev) => ({ ...prev, [expandedProject]: projectSessions ?? [] }))
         } catch (e) {
           console.error('Failed to discover sessions:', e)
         }
@@ -75,12 +79,12 @@ export function useSessions({
         return
       }
 
-      const backend = effectiveBackend === 'opencode' ? 'opencode' : 'claude'
+      const backend = (effectiveBackend || 'claude') as BackendId
       let projectSessions = sessions[projectPath]
 
       if (!projectSessions) {
         try {
-          projectSessions = await window.electronAPI?.discoverSessions(projectPath, backend)
+          projectSessions = (await window.electronAPI?.discoverSessions(projectPath, backend)) ?? []
           setSessions((prev) => ({ ...prev, [projectPath]: projectSessions }))
         } catch (e) {
           console.error('Failed to discover sessions:', e)
@@ -88,7 +92,7 @@ export function useSessions({
         }
       }
 
-      if (projectSessions && projectSessions.length > 0) {
+      if (projectSessions.length > 0) {
         const mostRecent = projectSessions[0]
         onOpenSession(projectPath, mostRecent.sessionId, mostRecent.slug)
       } else {

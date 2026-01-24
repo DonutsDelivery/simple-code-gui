@@ -33,7 +33,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   categoryId?: string
   order?: number
 }
@@ -44,7 +44,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface Workspace {
@@ -129,7 +129,7 @@ export interface ElectronAPI {
   getCategoryMetaPath: (categoryName: string) => Promise<string>
 
   // Sessions
-  discoverSessions: (projectPath: string, backend?: 'claude' | 'opencode') => Promise<Session[]>
+  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<Session[]>
 
   // Settings
   getSettings: () => Promise<Settings>
@@ -261,14 +261,14 @@ export interface ElectronAPI {
   xttsExtractAudioClip: (inputPath: string, startTime: number, endTime: number) => Promise<{ success: boolean; outputPath?: string; dataUrl?: string; error?: string }>
 
   // PTY
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: string) => Promise<string>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<string>
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void
-  setPtyBackend: (id: string, backend: string) => Promise<void>
+  setPtyBackend: (id: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<void>
   onPtyData: (id: string, callback: (data: string) => void) => () => void
   onPtyExit: (id: string, callback: (code: number) => void) => () => void
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: string }) => void) => () => void
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => void) => () => void
 
   // API Server
   apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
@@ -575,7 +575,7 @@ const api: ElectronAPI = {
   },
 
   onPtyRecreated: (callback) => {
-    const handler = (_: IpcRendererEvent, data: { oldId: string; newId: string; backend: string }) => callback(data)
+    const handler = (_: IpcRendererEvent, data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => callback(data)
     ipcRenderer.on('pty:recreated', handler)
     return () => ipcRenderer.removeListener('pty:recreated', handler)
   },

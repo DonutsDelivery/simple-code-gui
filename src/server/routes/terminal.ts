@@ -49,7 +49,7 @@ function sendError(res: Response, statusCode: number, error: string): void {
  * Create a new terminal session
  *
  * Body: { projectPath: string, sessionId?: string, model?: string, backend?: Backend }
- * Returns: { ptyId: string, projectPath: string, backend?: string }
+ * Returns: { ptyId: string, projectPath: string, backend?: Backend }
  */
 router.post('/create', async (req: Request, res: Response) => {
   try {
@@ -272,7 +272,7 @@ router.get('/discover/:projectPath(*)', async (req: Request, res: Response) => {
     }
 
     const { projectPath } = req.params
-    const backend = req.query.backend as string | undefined
+    const backend = req.query.backend as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | undefined
 
     const sessions = await services.discoverSessions(projectPath, backend)
 

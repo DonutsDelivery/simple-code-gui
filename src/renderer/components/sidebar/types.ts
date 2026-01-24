@@ -13,7 +13,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   ptyId?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface SidebarProps {

@@ -35,7 +35,7 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: BackendSelection
 }
 
 /**
@@ -64,7 +64,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | BackendId
   categoryId?: string
   order?: number
 }
@@ -78,7 +78,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: BackendSelection
 }
 
 /**
@@ -119,126 +119,48 @@ export interface VoiceSettings {
   whisperModel?: string
   ttsEngine?: 'piper' | 'xtts' | 'openvoice'
   ttsVoice?: string
-  ttsSpeed?: number
-  microphoneId?: string | null
-  readBehavior?: 'immediate' | 'pause' | 'manual'
-  skipOnNew?: boolean
-  xttsTemperature?: number
-  xttsTopK?: number
-  xttsTopP?: number
-  xttsRepetitionPenalty?: number
 }
-
-// ============================================================================
-// Event Callback Types
-// ============================================================================
-
-/**
- * Callback for PTY data events
- */
-export type PtyDataCallback = (data: string) => void
-
-/**
- * Callback for PTY exit events
- */
-export type PtyExitCallback = (code: number) => void
-
-/**
- * Callback for PTY recreated events (backend switching)
- */
-export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: string }) => void
-
-/**
- * Callback for API open session events
- */
-export type ApiOpenSessionCallback = (data: { projectPath: string; autoClose: boolean; model?: string }) => void
-
-/**
- * Unsubscribe function returned by event subscriptions
- */
-export type Unsubscribe = () => void
 
 // ============================================================================
 // API Interface
 // ============================================================================
 
+export type Unsubscribe = () => void
+
+export type PtyDataCallback = (data: string) => void
+export type PtyExitCallback = (code: number) => void
+export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: BackendId }) => void
+
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+export type BackendSelection = 'default' | BackendId
+
+export interface ApiOpenSessionEvent {
+  projectPath: string
+  autoClose?: boolean
+  model?: string
+}
+
+export type ApiOpenSessionCallback = (event: ApiOpenSessionEvent) => void
+
 /**
- * Main API interface that abstracts communication between the renderer
- * and the backend (either Electron main process or HTTP server).
- *
- * Both the Electron IPC implementation and HTTP implementation must
- * conform to this interface.
+ * Core API interface for the renderer
  */
 export interface Api {
-  // ==========================================================================
-  // PTY Management
-  // ==========================================================================
+  // Optional: Desktop-only voice catalog and XTTS management
+  voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
+  xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
+  voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }>
+  voiceCheckWhisper?: () => Promise<{ installed: boolean; models: string[]; currentModel: string | null }>
+  voiceCheckTTS?: () => Promise<{ installed: boolean; engine: string | null; voices: string[]; currentVoice: string | null }>
+  voiceInstallWhisper?: (model: string) => Promise<{ success: boolean; error?: string }>
+  voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => Promise<{ success: boolean }>
+  voiceSetVoice?: (voice: string | { voice: string; engine: 'piper' | 'xtts' }) => Promise<{ success: boolean }>
+  ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean }>
+  extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
 
-  /**
-   * Spawn a new PTY instance for a project
-   * @param cwd Working directory (project path)
-   * @param sessionId Optional session ID to resume
-   * @param model Optional model override
-   * @param backend Optional backend override ('claude', 'gemini', etc.)
-   * @returns Promise resolving to the PTY ID
-   */
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: string) => Promise<string>
-
-  /**
-   * Kill a PTY instance
-   * @param id PTY ID to kill
-   */
-  killPty: (id: string) => void
-
-  /**
-   * Write data to a PTY
-   * @param id PTY ID
-   * @param data Data to write
-   */
-  writePty: (id: string, data: string) => void
-
-  /**
-   * Resize a PTY
-   * @param id PTY ID
-   * @param cols Number of columns
-   * @param rows Number of rows
-   */
-  resizePty: (id: string, cols: number, rows: number) => void
-
-  /**
-   * Subscribe to PTY data events
-   * @param id PTY ID
-   * @param callback Function called when data is received
-   * @returns Unsubscribe function
-   */
-  onPtyData: (id: string, callback: PtyDataCallback) => Unsubscribe
-
-  /**
-   * Subscribe to PTY exit events
-   * @param id PTY ID
-   * @param callback Function called when PTY exits
-   * @returns Unsubscribe function
-   */
-  onPtyExit: (id: string, callback: PtyExitCallback) => Unsubscribe
-
-  /**
-   * Subscribe to PTY recreated events (backend switching)
-   * @param callback Function called when a PTY is recreated
-   * @returns Unsubscribe function
-   */
-  onPtyRecreated: (callback: PtyRecreatedCallback) => Unsubscribe
-
-  // ==========================================================================
-  // Session Management
-  // ==========================================================================
-
-  /**
-   * Discover existing sessions for a project
-   * @param projectPath Path to the project
-   * @param backend Optional backend type ('claude' or 'opencode')
-   * @returns Promise resolving to array of sessions
-   */
-  discoverSessions: (projectPath: string, backend?: 'claude' | 'opencode') => Promise<Session[]>
+  // Optional: API server control (desktop only)
+  apiStart?: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+  apiStop?: (projectPath: string) => Promise<{ success: boolean }>
 
   // ==========================================================================
   // Workspace Management
@@ -287,6 +209,65 @@ export interface Api {
    * @returns Promise resolving to array of projects or null
    */
   addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
+
+  // ==========================================================================
+  // Session Discovery
+  // ==========================================================================
+
+  /**
+   * Discover recent sessions for a project
+   * @param projectPath Path to the project
+   * @param backend Optional backend type ('claude', 'gemini', 'codex', 'opencode', or 'aider')
+   */
+  discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]>
+
+  // ==========================================================================
+  // PTY Management
+  // ==========================================================================
+
+  /**
+   * Spawn a new PTY session
+   * @param cwd Working directory
+   * @param sessionId Optional session ID to resume
+   * @param model Optional model override
+   * @param backend Optional backend override ('claude', 'gemini', etc.)
+   */
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
+
+  /**
+   * Write data to a PTY
+   */
+  writePty: (id: string, data: string) => void
+
+  /**
+   * Resize a PTY
+   */
+  resizePty: (id: string, cols: number, rows: number) => void
+
+  /**
+   * Kill a PTY
+   */
+  killPty: (id: string) => void
+
+  /**
+   * Subscribe to PTY output
+   */
+  onPtyData: (id: string, callback: (data: string) => void) => Unsubscribe
+
+  /**
+   * Subscribe to PTY exit
+   */
+  onPtyExit: (id: string, callback: (code: number) => void) => Unsubscribe
+
+  /**
+   * Switch a PTY backend (desktop only)
+   */
+  setPtyBackend?: (id: string, backend: BackendId) => Promise<void>
+
+  /**
+   * Subscribe to PTY recreated events (backend switching)
+   */
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId }) => void) => Unsubscribe
 
   // ==========================================================================
   // TTS (Text-to-Speech)

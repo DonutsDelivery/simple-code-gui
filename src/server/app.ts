@@ -49,10 +49,10 @@ export interface ServerServices {
   saveSettings: (settings: any) => Promise<void>
 
   // Sessions
-  discoverSessions: (projectPath: string, backend?: string) => Promise<any[]>
+  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<any[]>
 
   // PTY management
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: string) => Promise<string>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<string>
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void

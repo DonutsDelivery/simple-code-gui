@@ -142,7 +142,7 @@ export function isClaudeProseResponse(text: string): boolean {
 }
 
 // Format a single path for backend-specific syntax
-export function formatPathForBackend(path: string, backend?: string): string {
+export function formatPathForBackend(path: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
   const normalized = backend && backend !== 'default' ? backend : 'claude'
   const escaped = path.includes('"') ? path.replace(/"/g, '\\"') : path
   const safePath = /\s/.test(escaped) ? `"${escaped}"` : escaped
@@ -157,16 +157,16 @@ export function formatPathForBackend(path: string, backend?: string): string {
 }
 
 // Format multiple paths for backend
-export function formatPathsForBackend(paths: string[], backend?: string): string {
+export function formatPathsForBackend(paths: string[], backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
   return paths.map((path) => formatPathForBackend(path, backend)).join(' ')
 }
 
 // Custom paste handler for xterm
-export async function handlePaste(term: XTerm, ptyId: string, backend?: string): Promise<void> {
+export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): Promise<void> {
   try {
     // Check if clipboard has an image or file
     const imageResult = await window.electronAPI?.readClipboardImage()
-    if (imageResult.success && imageResult.hasImage && imageResult.path) {
+    if (imageResult?.success && imageResult.hasImage && imageResult.path) {
       window.electronAPI?.writePty(ptyId, formatPathForBackend(imageResult.path, backend))
       return
     }

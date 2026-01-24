@@ -27,7 +27,7 @@ setupXtermErrorHandler()
 interface UseTerminalSetupOptions {
   ptyId: string
   theme: Theme
-  backend?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   api?: Api  // API abstraction (uses window.electronAPI if not provided)
   onTTSChunk: (cleanChunk: string) => void
   onUserInput: (data: string) => void
@@ -42,6 +42,7 @@ interface UseTerminalSetupReturn {
   terminalRef: React.RefObject<XTerm | null>
   fitAddonRef: React.RefObject<FitAddon | null>
   userScrolledUpRef: React.RefObject<boolean>
+  currentLineInputRef: React.RefObject<string>
 }
 
 /**
@@ -64,6 +65,7 @@ export function useTerminalSetup({
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const userScrolledUpRef = useRef(false)
+  const currentLineInputRef = useRef<string>('')
 
   // PTY operations - use provided API or fall back to window.electronAPI
   const writePty = (id: string, data: string) => {
@@ -405,6 +407,24 @@ export function useTerminalSetup({
           return
         }
 
+        // Track current line input for /clear and /compact button feature
+        for (const char of data) {
+          const code = char.charCodeAt(0)
+          if (char === '\r' || char === '\n') {
+            // Enter pressed - clear the tracked input
+            currentLineInputRef.current = ''
+          } else if (char === '\x7f' || char === '\b') {
+            // Backspace - remove last character
+            currentLineInputRef.current = currentLineInputRef.current.slice(0, -1)
+          } else if (char === '\x15') {
+            // Ctrl+U - clear line (kill to beginning)
+            currentLineInputRef.current = ''
+          } else if (code >= 32) {
+            // Printable character - append to current line
+            currentLineInputRef.current += char
+          }
+        }
+
         inputBuffer += data
 
         if (data.length === 1 && data.charCodeAt(0) < 32) {
@@ -649,5 +669,6 @@ export function useTerminalSetup({
     terminalRef,
     fitAddonRef,
     userScrolledUpRef,
+    currentLineInputRef,
   }
 }

@@ -1,4 +1,4 @@
-export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode'
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 
 export interface CommandMenuItem {
   id: string
@@ -51,17 +51,21 @@ const backendCommandItems: Record<BackendId, CommandMenuItem[]> = {
     { ...DIVIDER, id: 'divider-cmd' },
     ADD_CUSTOM,
   ],
+  aider: [
+    cmd('help'), cmd('model'), cmd('clear'), cmd('commit'),
+    cmd('tokens'), cmd('reset'), cmd('diff'), cmd('lint'),
+    cmd('test'), cmd('undo'), cmd('quit'), cmd('exit'),
+    { ...DIVIDER, id: 'divider-cmd' },
+    ADD_CUSTOM,
+  ],
 }
 
-function normalizeBackend(backend?: string): BackendId | null {
+function normalizeBackend(backend?: 'default' | BackendId): BackendId | null {
   if (!backend || backend === 'default') return 'claude'
-  if (backend === 'claude' || backend === 'gemini' || backend === 'codex' || backend === 'opencode') {
-    return backend
-  }
-  return null
+  return backend
 }
 
-export function getCommandMenuItems(backend?: string): CommandMenuItem[] {
+export function getCommandMenuItems(backend?: 'default' | BackendId): CommandMenuItem[] {
   const normalized = normalizeBackend(backend)
   if (!normalized) {
     return [{ id: 'unsupported-unknown', label: 'No command shortcuts for this backend', disabled: true }]
@@ -69,7 +73,7 @@ export function getCommandMenuItems(backend?: string): CommandMenuItem[] {
   return backendCommandItems[normalized]
 }
 
-export function resolveBackendCommand(backend: string | undefined, commandId: string): string | null {
+export function resolveBackendCommand(backend: 'default' | BackendId | undefined, commandId: string): string | null {
   const normalized = normalizeBackend(backend)
   if (!normalized) return null
   const items = backendCommandItems[normalized]
