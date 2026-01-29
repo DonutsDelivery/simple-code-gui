@@ -10,6 +10,10 @@ import {
   SUMMARY_MARKER_DISPLAY_REGEX,
   AUTOWORK_MARKER_REGEX,
   TERMINAL_CONFIG,
+  DEFAULT_FONT_SIZE,
+  MIN_FONT_SIZE,
+  MAX_FONT_SIZE,
+  FONT_SIZE_STORAGE_KEY,
 } from './constants.js'
 import {
   getTerminalBuffers,
@@ -193,8 +197,13 @@ export function useTerminalSetup({
         brightWhite: t.brightWhite,
       }
 
+      // Load saved font size from localStorage
+      const savedFontSize = localStorage.getItem(FONT_SIZE_STORAGE_KEY)
+      const initialFontSize = savedFontSize ? parseInt(savedFontSize, 10) : DEFAULT_FONT_SIZE
+
       const newTerminal = new XTerm({
         ...TERMINAL_CONFIG,
+        fontSize: initialFontSize,
         theme: initialTheme,
       })
 
@@ -268,6 +277,23 @@ export function useTerminalSetup({
         initPending = false  // Init complete
         terminalRef.current = terminal
         fitAddonRef.current = fitAddon
+
+        // Load web links addon for clickable URLs
+        import('@xterm/addon-web-links').then(({ WebLinksAddon }) => {
+          if (disposed || !terminal) return
+          try {
+            const webLinksAddon = new WebLinksAddon((event, uri) => {
+              // Open URLs in default browser (Ctrl+click or regular click)
+              window.electronAPI?.openExternal?.(uri) ?? window.open(uri, '_blank')
+            })
+            terminal.loadAddon(webLinksAddon)
+            console.log('Terminal links: enabled (clickable URLs)')
+          } catch (e) {
+            console.warn('Terminal links: failed to load addon:', e)
+          }
+        }).catch(e => {
+          console.warn('Terminal links: addon unavailable:', e)
+        })
 
         // Continue with post-open setup
         postOpenSetup()
@@ -347,15 +373,37 @@ export function useTerminalSetup({
         terminal.scrollToBottom()
       }
 
-      // Track user scroll
+      // Track user scroll and handle Ctrl+scroll zoom
       const wheelHandler = (e: WheelEvent) => {
+        // Ctrl+scroll = zoom font size
+        if (e.ctrlKey && terminal) {
+          e.preventDefault()
+          const currentSize = terminal.options.fontSize || DEFAULT_FONT_SIZE
+          const delta = e.deltaY > 0 ? -1 : 1
+          const newSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, currentSize + delta))
+          if (newSize !== currentSize) {
+            terminal.options.fontSize = newSize
+            localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(newSize))
+            // Refit terminal after font size change
+            if (fitAddon) {
+              fitAddon.fit()
+              const dims = fitAddon.proposeDimensions()
+              if (dims && dims.cols > 0 && dims.rows > 0) {
+                resizePty(ptyId, dims.cols, dims.rows)
+              }
+            }
+          }
+          return
+        }
+        // Normal scroll tracking
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true
         } else if (e.deltaY > 0 && terminal && isTerminalAtBottom(terminal)) {
           userScrolledUpRef.current = false
         }
       }
-      containerRef.current!.addEventListener('wheel', wheelHandler, { passive: true })
+      // Use passive: false to allow preventDefault for Ctrl+scroll
+      containerRef.current!.addEventListener('wheel', wheelHandler, { passive: false })
 
       cleanupScroll = terminal.onScroll(() => {
         if (terminal && isTerminalAtBottom(terminal)) {

@@ -159,29 +159,36 @@ function findOpenCodeExecutable(): string {
   return 'opencode'
 }
 
-// Find claude executable - on Windows, npm installs .cmd files
+// Find claude executable - on Windows, npm installs .cmd files, native installer creates .exe
 function findClaudeExecutable(): string {
   if (!isWindows) {
     return 'claude'
   }
 
-  // On Windows, check for claude.cmd in portable npm-global first
+  // Windows: check for both .cmd (npm) and .exe (native) installations
+  const extensions = ['claude.cmd', 'claude.exe']
+
+  // Check portable npm-global first
   const portableDirs = getPortableBinDirs()
   for (const dir of portableDirs) {
-    const claudeCmd = path.join(dir, 'claude.cmd')
-    if (fs.existsSync(claudeCmd)) {
-      console.log('Found Claude at (portable):', claudeCmd)
-      return claudeCmd
+    for (const ext of extensions) {
+      const claudePath = path.join(dir, ext)
+      if (fs.existsSync(claudePath)) {
+        console.log('Found Claude at (portable):', claudePath)
+        return claudePath
+      }
     }
   }
 
-  // Then check for claude.cmd in system npm paths
+  // Then check system paths (includes ~/.local/bin for native installs)
   const additionalPaths = getAdditionalPaths()
   for (const dir of additionalPaths) {
-    const claudeCmd = path.join(dir, 'claude.cmd')
-    if (fs.existsSync(claudeCmd)) {
-      console.log('Found Claude at:', claudeCmd)
-      return claudeCmd
+    for (const ext of extensions) {
+      const claudePath = path.join(dir, ext)
+      if (fs.existsSync(claudePath)) {
+        console.log('Found Claude at:', claudePath)
+        return claudePath
+      }
     }
   }
 

@@ -24,10 +24,16 @@ export const CODE_PATTERN_REGEX = /[{}()\[\];=`$]|^\s*\/\/|^\s*#|function\s|cons
 export const SUMMARY_EXTRACT_REGEX = /===SUMMARY_START===([\s\S]*)===SUMMARY_END===/
 export const AUTOWORK_MARKER_REGEX = /===AUTOWORK_CONTINUE===/g
 
+// Terminal font size configuration
+export const DEFAULT_FONT_SIZE = 14
+export const MIN_FONT_SIZE = 8
+export const MAX_FONT_SIZE = 32
+export const FONT_SIZE_STORAGE_KEY = 'terminal-font-size'
+
 // Terminal configuration
 export const TERMINAL_CONFIG = {
   cursorBlink: false,
-  fontSize: 14,
+  fontSize: DEFAULT_FONT_SIZE,
   fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
   scrollback: 5000,
   allowProposedApi: true,
