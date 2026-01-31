@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
 
 // Mock crypto for UUID generation
 vi.stubGlobal('crypto', {
-  randomUUID: vi.fn().mockReturnValue('test-uuid-12345')
+  randomUUID: vi.fn().mockReturnValue('test-uuid-12345'),
 })
 
 // Mock node-pty
@@ -11,28 +11,30 @@ const mockPtyProcess = {
   onExit: vi.fn(),
   write: vi.fn(),
   resize: vi.fn(),
-  kill: vi.fn()
+  kill: vi.fn(),
 }
 
 vi.mock('node-pty', () => ({
-  spawn: vi.fn().mockImplementation(() => mockPtyProcess)
+  spawn: vi.fn().mockImplementation(() => mockPtyProcess),
 }))
 
 // Mock fs for executable checking
 vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(false)
+  existsSync: vi.fn().mockReturnValue(false),
 }))
 
 // Mock platform module
 vi.mock('../platform', () => ({
   isWindows: false,
-  getEnhancedPathWithPortable: vi.fn().mockReturnValue('/usr/bin:/usr/local/bin'),
-  getAdditionalPaths: vi.fn().mockReturnValue(['/usr/local/bin'])
+  getEnhancedPathWithPortable: vi
+    .fn()
+    .mockReturnValue('/usr/bin:/usr/local/bin'),
+  getAdditionalPaths: vi.fn().mockReturnValue(['/usr/local/bin']),
 }))
 
 // Mock portable-deps module
 vi.mock('../portable-deps', () => ({
-  getPortableBinDirs: vi.fn().mockReturnValue([])
+  getPortableBinDirs: vi.fn().mockReturnValue([]),
 }))
 
 import { PtyManager } from '../pty-manager'
@@ -55,9 +57,11 @@ describe('PtyManager', () => {
     mockPtyProcess.onData.mockImplementation((cb: (data: string) => void) => {
       dataCallback = cb
     })
-    mockPtyProcess.onExit.mockImplementation((cb: (result: { exitCode: number }) => void) => {
-      exitCallback = cb
-    })
+    mockPtyProcess.onExit.mockImplementation(
+      (cb: (result: { exitCode: number }) => void) => {
+        exitCallback = cb
+      }
+    )
 
     manager = new PtyManager()
   })
@@ -79,7 +83,7 @@ describe('PtyManager', () => {
           cols: 120,
           rows: 30,
           cwd: '/test/dir',
-          handleFlowControl: true
+          handleFlowControl: true,
         })
       )
     })
@@ -107,11 +111,7 @@ describe('PtyManager', () => {
     it('should not add model argument for "default" model', () => {
       manager.spawn('/test/dir', undefined, undefined, undefined, 'default')
 
-      expect(pty.spawn).toHaveBeenCalledWith(
-        'claude',
-        [],
-        expect.any(Object)
-      )
+      expect(pty.spawn).toHaveBeenCalledWith('claude', [], expect.any(Object))
     })
 
     it('should spawn with permission mode arguments', () => {
@@ -139,24 +139,54 @@ describe('PtyManager', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'claude',
-        ['-r', 'session-123', '--model', 'sonnet', '--permission-mode', 'dontAsk', '--allowedTools', 'Read'],
+        [
+          '-r',
+          'session-123',
+          '--model',
+          'sonnet',
+          '--permission-mode',
+          'dontAsk',
+          '--allowedTools',
+          'Read',
+        ],
         expect.any(Object)
       )
     })
 
     describe('backend-specific spawning', () => {
       it('should spawn gemini backend with correct executable and args', () => {
-        manager.spawn('/test/dir', 'session-123', ['tool1'], 'dontAsk', undefined, 'gemini')
+        manager.spawn(
+          '/test/dir',
+          'session-123',
+          ['tool1'],
+          'dontAsk',
+          undefined,
+          'gemini'
+        )
 
         expect(pty.spawn).toHaveBeenCalledWith(
           'gemini',
-          ['--resume', 'session-123', '--approval-mode', 'yolo', '--allowed-tools', 'tool1'],
+          [
+            '--resume',
+            'session-123',
+            '--approval-mode',
+            'yolo',
+            '--allowed-tools',
+            'tool1',
+          ],
           expect.any(Object)
         )
       })
 
       it('should spawn codex backend with correct executable and args', () => {
-        manager.spawn('/test/dir', 'session-123', undefined, 'dontAsk', undefined, 'codex')
+        manager.spawn(
+          '/test/dir',
+          'session-123',
+          undefined,
+          'dontAsk',
+          undefined,
+          'codex'
+        )
 
         expect(pty.spawn).toHaveBeenCalledWith(
           'codex',
@@ -166,7 +196,14 @@ describe('PtyManager', () => {
       })
 
       it('should spawn opencode backend without permission args', () => {
-        manager.spawn('/test/dir', 'session-123', ['Read'], 'dontAsk', undefined, 'opencode')
+        manager.spawn(
+          '/test/dir',
+          'session-123',
+          ['Read'],
+          'dontAsk',
+          undefined,
+          'opencode'
+        )
 
         expect(pty.spawn).toHaveBeenCalledWith(
           'opencode',
@@ -176,7 +213,14 @@ describe('PtyManager', () => {
       })
 
       it('should spawn aider backend with --yes for non-default permission', () => {
-        manager.spawn('/test/dir', 'session-123', undefined, 'acceptEdits', undefined, 'aider')
+        manager.spawn(
+          '/test/dir',
+          'session-123',
+          undefined,
+          'acceptEdits',
+          undefined,
+          'aider'
+        )
 
         expect(pty.spawn).toHaveBeenCalledWith(
           'aider',
@@ -277,7 +321,9 @@ describe('PtyManager', () => {
     it('should kill all PTY processes', () => {
       // Reset UUID mock to return different values
       let callCount = 0
-      vi.mocked(crypto.randomUUID).mockImplementation(() => `uuid-${callCount++}`)
+      vi.mocked(crypto.randomUUID).mockImplementation(
+        () => `uuid-${callCount++}`
+      )
 
       manager.spawn('/test/dir1')
       manager.spawn('/test/dir2')
@@ -305,7 +351,14 @@ describe('PtyManager', () => {
     })
 
     it('should include sessionId and backend in process info', () => {
-      const id = manager.spawn('/test/dir', 'session-abc', undefined, undefined, undefined, 'gemini')
+      const id = manager.spawn(
+        '/test/dir',
+        'session-abc',
+        undefined,
+        undefined,
+        undefined,
+        'gemini'
+      )
 
       const proc = manager.getProcess(id)
 
@@ -361,14 +414,14 @@ describe('PtyManager', () => {
       vi.mocked(platform).isWindows = false
     })
 
-    it('should use winpty instead of ConPTY on Windows', () => {
+    it('should use ConPTY on Windows', () => {
       manager.spawn('/test/dir')
 
       expect(pty.spawn).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Array),
         expect.objectContaining({
-          useConpty: false
+          useConpty: true,
         })
       )
     })
@@ -395,13 +448,27 @@ describe('buildPermissionArgs (via spawn)', () => {
 
   describe('claude backend', () => {
     it('should not add permission-mode for default', () => {
-      manager.spawn('/test', undefined, undefined, 'default', undefined, 'claude')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'default',
+        undefined,
+        'claude'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith('claude', [], expect.any(Object))
     })
 
     it('should add permission-mode for acceptEdits', () => {
-      manager.spawn('/test', undefined, undefined, 'acceptEdits', undefined, 'claude')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'acceptEdits',
+        undefined,
+        'claude'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'claude',
@@ -413,7 +480,14 @@ describe('buildPermissionArgs (via spawn)', () => {
 
   describe('gemini backend', () => {
     it('should map acceptEdits to auto_edit', () => {
-      manager.spawn('/test', undefined, undefined, 'acceptEdits', undefined, 'gemini')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'acceptEdits',
+        undefined,
+        'gemini'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'gemini',
@@ -423,7 +497,14 @@ describe('buildPermissionArgs (via spawn)', () => {
     })
 
     it('should map dontAsk to yolo', () => {
-      manager.spawn('/test', undefined, undefined, 'dontAsk', undefined, 'gemini')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'dontAsk',
+        undefined,
+        'gemini'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'gemini',
@@ -433,7 +514,14 @@ describe('buildPermissionArgs (via spawn)', () => {
     })
 
     it('should map bypassPermissions to yolo', () => {
-      manager.spawn('/test', undefined, undefined, 'bypassPermissions', undefined, 'gemini')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'bypassPermissions',
+        undefined,
+        'gemini'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'gemini',
@@ -445,7 +533,14 @@ describe('buildPermissionArgs (via spawn)', () => {
 
   describe('codex backend', () => {
     it('should map acceptEdits to --full-auto', () => {
-      manager.spawn('/test', undefined, undefined, 'acceptEdits', undefined, 'codex')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'acceptEdits',
+        undefined,
+        'codex'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
@@ -455,7 +550,14 @@ describe('buildPermissionArgs (via spawn)', () => {
     })
 
     it('should map bypassPermissions to --dangerously-bypass...', () => {
-      manager.spawn('/test', undefined, undefined, 'bypassPermissions', undefined, 'codex')
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'bypassPermissions',
+        undefined,
+        'codex'
+      )
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
