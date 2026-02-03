@@ -97,6 +97,16 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
     if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake') {
       return next()
     }
+
+    // /ws-test uses query string auth (validates token itself)
+    if (req.path === '/ws-test') {
+      const queryToken = req.query.token as string
+      if (queryToken === getToken()) {
+        return next()
+      }
+      // Let the route handler return the proper error
+      return next()
+    }
     // Skip auth for static files (token passed in query string for initial load)
     if (isStaticPath(req.path)) {
       const queryToken = req.query.token as string
@@ -220,7 +230,7 @@ export function isAccessAllowed(ipClass: IpClass, access: EndpointAccess): boole
 export function setupIpAccessMiddleware(app: Express): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
     // Skip for unauthenticated endpoints and static files
-    if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake') {
+    if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake' || req.path === '/ws-test') {
       return next()
     }
     if (isStaticPath(req.path)) {
@@ -246,8 +256,8 @@ export function setupIpAccessMiddleware(app: Express): void {
 
 export function setupEndpointRateLimitMiddleware(app: Express): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
-    // Skip for health check and static files
-    if (req.path === '/health' || isStaticPath(req.path)) {
+    // Skip for health check, ws-test, and static files
+    if (req.path === '/health' || req.path === '/ws-test' || isStaticPath(req.path)) {
       return next()
     }
 

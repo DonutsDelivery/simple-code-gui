@@ -12,7 +12,7 @@ export function createWindow(
   const bounds = sessionStore.getWindowBounds()
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, 'icon.png')
-    : join(__dirname, '../../../resources/icon.png')
+    : join(__dirname, '../../resources/icon.png')
 
   const mainWindow = new BrowserWindow({
     width: bounds?.width ?? 1200,
@@ -25,7 +25,7 @@ export function createWindow(
     icon: iconPath,
     show: false,
     webPreferences: {
-      preload: join(__dirname, '../../preload/index.js'),
+      preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     },
@@ -37,7 +37,7 @@ export function createWindow(
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173')
   } else {
-    mainWindow.loadFile(join(__dirname, '../../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
   mainWindow.webContents.on('before-input-event', (event, input) => {

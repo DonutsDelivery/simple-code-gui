@@ -348,12 +348,12 @@ export function useBeadsTasks({
     }
   }, [projectPath, beadsState.status, loadTasks, suppressWatcherReloadRef])
 
-  // Load tasks on mount (after cache init)
+  // Load tasks on mount and when project changes (after cache init)
   useEffect(() => {
     if (projectPath) {
       loadTasks(false)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectPath, loadTasks])
 
   return {
     loadTasks,

@@ -1366,6 +1366,17 @@ html, body, #root {
   cursor: nwse-resize;
 }
 
+/* Suppress hover effects and pointer events on handles during active resize */
+.terminal-tiled-custom.is-resizing .tile-edge-resize,
+.terminal-tiled-custom.is-resizing .tile-corner-resize {
+  pointer-events: none;
+  transition: none;
+}
+
+.terminal-tiled-custom.is-resizing .terminal-tile {
+  transition: none;
+}
+
 .terminal-tiled-custom .tile-header {
   cursor: grab;
 }
