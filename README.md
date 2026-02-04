@@ -32,8 +32,6 @@ Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants o
 - **Tiled View** - See multiple terminals side-by-side (toggle with grid button)
 - **Workspace Persistence** - Restores your open tabs and layout on restart
 
-![Tabbed Interface](assets/main%20tabbed.png)
-
 ### Project Organization
 - **Project Sidebar** - Save and organize project folders for quick access
 - **Create Projects** - Make new project directories without leaving the app
@@ -60,11 +58,6 @@ Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants o
 - **9 Color Themes** - Including RGB Gamer mode with animations
 - **Settings Panel** - Configure themes, permissions, backend, and voice
 - **Window Memory** - Remembers size and position
-
-<p>
-<img src="assets/settings 1.png" width="400" alt="Settings - Themes & Permissions">
-<img src="assets/settings 2.png" width="400" alt="Settings - Voice">
-</p>
 
 ### Task Tracking (Beads Integration)
 - **Task Panel** - Manage project tasks without leaving the app
