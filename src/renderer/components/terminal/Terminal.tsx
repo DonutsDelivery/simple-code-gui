@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import { TerminalBar } from '../TerminalBar.js'
 import { AutoWorkOptions } from '../TerminalMenu.js'
@@ -18,7 +18,7 @@ export { clearTerminalBuffer, cleanupOrphanedBuffers }
  * Terminal component that wraps xterm.js with PTY integration.
  * Supports TTS, auto work loop, summary capture, and backend-specific commands.
  */
-export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend, api, isMobile, onOpenFileBrowser }: TerminalProps): React.ReactElement {
+export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend, api }: TerminalProps): React.ReactElement {
   // Custom command modal state
   const [showCustomCommandModal, setShowCustomCommandModal] = useState(false)
 
@@ -32,11 +32,9 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [api])
 
   // Backend change handler
-  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => {
-    if (newBackend === 'default') return
-    api?.setPtyBackend?.(ptyId, newBackend)
+  const handleBackendChange = useCallback((newBackend: string) => {
     window.electronAPI?.setPtyBackend?.(ptyId, newBackend)
-  }, [api, ptyId])
+  }, [ptyId])
 
   // Send backend-specific command
   const sendBackendCommand = useCallback((commandId: string): boolean => {
@@ -99,8 +97,6 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     terminalRef,
     fitAddonRef,
     userScrolledUpRef,
-    currentLineInputRef,
-    inputSuppressedRef,
   } = useTerminalSetup({
     ptyId,
     theme,
@@ -143,6 +139,36 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       setTimeout(doFit, 150)
     }
   }, [isActive, ptyId, containerRef, terminalRef, fitAddonRef, userScrolledUpRef])
+
+  // Update terminal theme when theme changes
+  useEffect(() => {
+    if (terminalRef.current) {
+      const t = theme.terminal
+      terminalRef.current.options.theme = {
+        background: t.background,
+        foreground: t.foreground,
+        cursor: t.cursor,
+        cursorAccent: t.cursorAccent,
+        selectionBackground: t.selection,
+        black: t.black,
+        red: t.red,
+        green: t.green,
+        yellow: t.yellow,
+        blue: t.blue,
+        magenta: t.magenta,
+        cyan: t.cyan,
+        white: t.white,
+        brightBlack: t.brightBlack,
+        brightRed: t.brightRed,
+        brightGreen: t.brightGreen,
+        brightYellow: t.brightYellow,
+        brightBlue: t.brightBlue,
+        brightMagenta: t.brightMagenta,
+        brightCyan: t.brightCyan,
+        brightWhite: t.brightWhite,
+      }
+    }
+  }, [theme, terminalRef])
 
   // Handle file drop from file manager
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -190,116 +216,8 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     e.dataTransfer.dropEffect = 'copy'
   }, [])
 
-  // Track if a clear/compact operation is in progress to prevent double-triggering
-  const clearInProgressRef = useRef(false)
-
-  // Special handlers for /clear and /compact that preserve user input
-  const handleClearWithRestore = useCallback(() => {
-    // Debounce: prevent multiple rapid triggers
-    if (clearInProgressRef.current) return
-    clearInProgressRef.current = true
-
-    const savedInput = currentLineInputRef.current
-
-    // Suppress user keyboard input to prevent race conditions
-    inputSuppressedRef.current = true
-
-    // Clear the current line with Ctrl+U
-    if (savedInput) {
-      writePty(ptyId, '\x15') // Ctrl+U clears line
-      currentLineInputRef.current = ''
-    }
-
-    // Send /clear command
-    const backendCommand = resolveBackendCommand(backend, 'clear')
-    if (backendCommand) {
-      setTimeout(() => {
-        writePty(ptyId, backendCommand)
-        setTimeout(() => {
-          writePty(ptyId, '\r')
-          // Restore input after command processes
-          if (savedInput) {
-            setTimeout(() => {
-              writePty(ptyId, savedInput)
-              // Re-enable input and allow next operation
-              setTimeout(() => {
-                inputSuppressedRef.current = false
-                clearInProgressRef.current = false
-              }, 100)
-            }, 500) // Wait for /clear to complete
-          } else {
-            setTimeout(() => {
-              inputSuppressedRef.current = false
-              clearInProgressRef.current = false
-            }, 500)
-          }
-        }, 100)
-      }, 150) // Increased from 50ms for Ctrl+U to be processed
-    } else {
-      inputSuppressedRef.current = false
-      clearInProgressRef.current = false
-    }
-  }, [backend, ptyId, writePty, currentLineInputRef, inputSuppressedRef])
-
-  const handleCompactWithRestore = useCallback(() => {
-    // Debounce: prevent multiple rapid triggers
-    if (clearInProgressRef.current) return
-    clearInProgressRef.current = true
-
-    const savedInput = currentLineInputRef.current
-
-    // Suppress user keyboard input to prevent race conditions
-    inputSuppressedRef.current = true
-
-    // Clear the current line with Ctrl+U
-    if (savedInput) {
-      writePty(ptyId, '\x15') // Ctrl+U clears line
-      currentLineInputRef.current = ''
-    }
-
-    // Send /compact command
-    const backendCommand = resolveBackendCommand(backend, 'compact')
-    if (backendCommand) {
-      setTimeout(() => {
-        writePty(ptyId, backendCommand)
-        setTimeout(() => {
-          writePty(ptyId, '\r')
-          // Restore input after command processes
-          if (savedInput) {
-            setTimeout(() => {
-              writePty(ptyId, savedInput)
-              // Re-enable input and allow next operation
-              setTimeout(() => {
-                inputSuppressedRef.current = false
-                clearInProgressRef.current = false
-              }, 100)
-            }, 500) // Wait for /compact to complete
-          } else {
-            setTimeout(() => {
-              inputSuppressedRef.current = false
-              clearInProgressRef.current = false
-            }, 500)
-          }
-        }, 100)
-      }, 150) // Increased from 50ms for Ctrl+U to be processed
-    } else {
-      inputSuppressedRef.current = false
-      clearInProgressRef.current = false
-    }
-  }, [backend, ptyId, writePty, currentLineInputRef, inputSuppressedRef])
-
   // Handle menu commands
   const handleMenuCommand = useCallback((command: string, options?: AutoWorkOptions) => {
-    // Route clear/compact to special handlers that preserve user input
-    if (command === 'clear') {
-      handleClearWithRestore()
-      return
-    }
-    if (command === 'compact') {
-      handleCompactWithRestore()
-      return
-    }
-
     if (sendBackendCommand(command)) {
       return
     }
@@ -329,7 +247,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         setShowCustomCommandModal(true)
         break
     }
-  }, [sendBackendCommand, triggerSummarize, startAutoWork, continueAutoWork, stopAutoWork, cancelAutoWork, handleClearWithRestore, handleCompactWithRestore])
+  }, [sendBackendCommand, triggerSummarize, startAutoWork, continueAutoWork, stopAutoWork, cancelAutoWork])
 
   return (
     <div className="terminal-content-wrapper">
@@ -337,23 +255,14 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         ref={containerRef}
         className="terminal-xterm"
         onMouseDown={onFocus}
-        onClick={() => {
-          // Focus terminal on click (important for mobile touch)
-          terminalRef.current?.focus()
-        }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       />
       <TerminalBar
         ptyId={ptyId}
         onCommand={handleMenuCommand}
-        onInput={(data) => writePty(ptyId, data)}
-        currentBackend={(backend || 'claude') as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'}
+        currentBackend={backend || 'claude'}
         onBackendChange={handleBackendChange}
-        isMobile={isMobile}
-        onOpenFileBrowser={onOpenFileBrowser}
-        onClearWithRestore={handleClearWithRestore}
-        onCompactWithRestore={handleCompactWithRestore}
       />
       <CustomCommandModal
         isOpen={showCustomCommandModal}
