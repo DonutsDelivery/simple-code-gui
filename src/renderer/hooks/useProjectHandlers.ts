@@ -30,7 +30,7 @@ interface UseProjectHandlersReturn {
   handleAddProject: () => Promise<void>
   handleAddProjectsFromParent: () => Promise<void>
   handleOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => Promise<void>
-  handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }) => Promise<void>
+  handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentLayout?: TileLayout[]) => Promise<void>
   handleCloseTab: (tabId: string) => void
   handleCloseProjectTabs: (projectPath: string) => void
   handleProjectCreated: (projectPath: string, projectName: string) => void
@@ -130,9 +130,10 @@ export function useProjectHandlers({
       })
 
       // Check if there's already a tile for this project and add as sub-tab
-      const existingTile = findTileForProject(tileLayout, openTabs, projectPath)
+      const currentTileLayout = tileLayoutRef.current
+      const existingTile = findTileForProject(currentTileLayout, openTabs, projectPath)
       if (existingTile) {
-        setTileLayout(addTabToExistingTile(tileLayout, existingTile.id, ptyId))
+        setTileLayout(addTabToExistingTile(currentTileLayout, existingTile.id, ptyId))
       }
 
       // If an initial prompt was provided, send it after a short delay
@@ -149,10 +150,17 @@ export function useProjectHandlers({
       const errorMsg = e?.message || String(e)
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
-  }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, tileLayout, setTileLayout])
+  }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, setTileLayout])
 
-  const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }) => {
-    console.log('[App] handleOpenSessionAtPosition called with:', { projectPath, dropZone, containerSize, currentTileLayout: tileLayout })
+  // Keep a ref to the latest tileLayout so async callbacks always read the freshest state
+  const tileLayoutRef = useRef(tileLayout)
+  tileLayoutRef.current = tileLayout
+
+  const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentLayout?: TileLayout[]) => {
+    // Use the effective layout passed from the drop handler (matches what computeDropZone used),
+    // falling back to the latest stored layout via ref (not the stale closure value)
+    const layoutToUse = currentLayout || tileLayoutRef.current
+    console.log('[App] handleOpenSessionAtPosition called with:', { projectPath, dropZone, containerSize, currentTileLayout: layoutToUse, hadCurrentLayout: !!currentLayout })
 
     if (!projectPath || projectPath === 'pending') {
       console.error('[App] Invalid project path:', projectPath)
@@ -182,9 +190,12 @@ export function useProjectHandlers({
       // Calculate the new layout based on the drop zone
       let newLayout: TileLayout[]
 
+      // Re-read the latest layout after the async spawn (layout may have changed during await)
+      const latestLayout = currentLayout || tileLayoutRef.current
+
       // Check if dropping on center/swap of a tile that has the same project → add as sub-tab
       if (dropZone && dropZone.type === 'swap') {
-        const targetTile = tileLayout.find(t => t.id === dropZone.targetTileId)
+        const targetTile = latestLayout.find(t => t.id === dropZone.targetTileId)
         const targetTabIds = targetTile?.tabIds || [dropZone.targetTileId]
         const targetHasSameProject = targetTabIds.some(tabId => {
           const tab = openTabs.find(t => t.id === tabId)
@@ -193,23 +204,25 @@ export function useProjectHandlers({
 
         if (targetHasSameProject && targetTile) {
           console.log('[App] Adding as sub-tab to existing tile')
-          newLayout = addTabToExistingTile(tileLayout, targetTile.id, ptyId)
+          newLayout = addTabToExistingTile(latestLayout, targetTile.id, ptyId)
         } else {
           console.log('[App] Using addTileToLayout for swap')
-          newLayout = addTileToLayout(tileLayout, ptyId, dropZone.targetTileId, containerSize.width, containerSize.height)
+          newLayout = addTileToLayout(latestLayout, ptyId, dropZone.targetTileId, containerSize.width, containerSize.height)
         }
       } else if (dropZone && dropZone.type !== 'swap') {
         const direction = dropZone.type.replace('split-', '') as 'top' | 'bottom' | 'left' | 'right'
         console.log('[App] Using splitTile with direction:', direction, 'targetTileId:', dropZone.targetTileId)
-        newLayout = splitTile(tileLayout, dropZone.targetTileId, ptyId, direction)
+        newLayout = splitTile(latestLayout, dropZone.targetTileId, ptyId, direction)
       } else {
         console.log('[App] Using addTileToLayout with no drop zone (null)')
-        newLayout = addTileToLayout(tileLayout, ptyId, null, containerSize.width, containerSize.height)
+        newLayout = addTileToLayout(latestLayout, ptyId, null, containerSize.width, containerSize.height)
       }
       console.log('[App] New layout calculated:', newLayout)
 
-      setTileLayout(newLayout)
-
+      // Add tab FIRST, then set layout LAST.
+      // This ensures our positioned layout is the final state update and
+      // won't be overwritten by useEffectiveLayout's generic positioning
+      // if there's an intermediate render between these two updates.
       addTab({
         id: ptyId,
         projectPath,
@@ -218,12 +231,13 @@ export function useProjectHandlers({
         ptyId,
         backend: effectiveBackend
       })
+      setTileLayout(newLayout)
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
       const errorMsg = e?.message || String(e)
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
-  }, [api, addTab, projects, settings?.backend, tileLayout, setTileLayout])
+  }, [api, addTab, projects, openTabs, settings?.backend, setTileLayout])
 
   const handleCloseTab = useCallback((tabId: string) => {
     const tab = openTabs.find(t => t.id === tabId)

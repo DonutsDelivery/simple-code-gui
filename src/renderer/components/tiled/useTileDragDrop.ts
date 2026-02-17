@@ -133,7 +133,7 @@ export function useHandleContainerDrop(
   tabs: OpenTab[],
   onLayoutChange: (layout: TileLayout[]) => void,
   applyDropZone: (layout: TileLayout[], draggedId: string, zone: DropZone) => TileLayout[],
-  onOpenSessionAtPosition: ((projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }) => void) | undefined,
+  onOpenSessionAtPosition: ((projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }, currentLayout?: TileLayout[]) => void) | undefined,
   actions: DragDropActions
 ): (e: React.DragEvent) => void {
   const { setDraggedTile, setDraggedSidebarProject, setDropTarget, setCurrentDropZone } = actions
@@ -166,8 +166,11 @@ export function useHandleContainerDrop(
     const projectPath = sidebarProjectPath || (isSidebarDrag ? textPlainData : null)
 
     if (projectPath && onOpenSessionAtPosition) {
-      console.log('[TiledTerminalView] Calling onOpenSessionAtPosition with:', projectPath, dropZone, containerSizeRef.current)
-      onOpenSessionAtPosition(projectPath, dropZone, containerSizeRef.current)
+      // Pass the effective layout so handleOpenSessionAtPosition uses the same layout
+      // that computeDropZone used (avoids stale closure / state mismatch)
+      const layoutForPosition = effectiveLayoutRef.current
+      console.log('[TiledTerminalView] Calling onOpenSessionAtPosition with:', projectPath, dropZone, containerSizeRef.current, 'layoutTiles:', layoutForPosition.length)
+      onOpenSessionAtPosition(projectPath, dropZone, containerSizeRef.current, layoutForPosition)
       setDraggedSidebarProject(null)
       setDropTarget(null)
       setCurrentDropZone(null)

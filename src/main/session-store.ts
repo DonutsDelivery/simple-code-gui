@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs'
 import { join } from 'path'
 import { syncMetaProjects } from './meta-project-sync'
 
@@ -101,6 +101,7 @@ interface StoredData {
 
 export class SessionStore {
   private configPath: string
+  private backupPath: string
   private data: StoredData
 
   constructor() {
@@ -109,18 +110,49 @@ export class SessionStore {
       mkdirSync(configDir, { recursive: true })
     }
     this.configPath = join(configDir, 'workspace.json')
+    this.backupPath = join(configDir, 'workspace.json.backup')
     this.data = this.load()
   }
 
-  private load(): StoredData {
+  private loadFile(path: string): StoredData | null {
     try {
-      if (existsSync(this.configPath)) {
-        const content = readFileSync(this.configPath, 'utf-8')
-        return JSON.parse(content)
-      }
+      if (!existsSync(path)) return null
+      const stat = statSync(path)
+      if (stat.size === 0) return null
+      const content = readFileSync(path, 'utf-8')
+      const data = JSON.parse(content)
+      if (!data?.workspace) return null
+      return data
     } catch (e) {
-      console.error('Failed to load workspace:', e)
+      console.error(`[SessionStore] Failed to load ${path}:`, e)
+      return null
     }
+  }
+
+  private load(): StoredData {
+    // Try main file first
+    const main = this.loadFile(this.configPath)
+    if (main && (main.workspace.projects?.length || 0) > 0) {
+      return main
+    }
+
+    // Main file is empty/corrupt/missing — try backup
+    const backup = this.loadFile(this.backupPath)
+    if (backup && (backup.workspace.projects?.length || 0) > 0) {
+      console.log('[SessionStore] Main config empty/corrupt, restored from backup (' +
+        backup.workspace.projects.length + ' projects)')
+      // Restore backup as main file immediately
+      try {
+        writeFileSync(this.configPath, JSON.stringify(backup, null, 2))
+      } catch (e) {
+        console.error('[SessionStore] Failed to restore backup to main:', e)
+      }
+      return backup
+    }
+
+    // If main loaded but had 0 projects (valid empty state), use it
+    if (main) return main
+
     return {
       workspace: {
         projects: [],
@@ -132,9 +164,38 @@ export class SessionStore {
 
   private save(): void {
     try {
-      writeFileSync(this.configPath, JSON.stringify(this.data, null, 2))
+      const json = JSON.stringify(this.data, null, 2)
+
+      // Validate we can parse what we're about to write
+      JSON.parse(json)
+
+      // Back up existing file before overwriting (if it has content)
+      if (existsSync(this.configPath)) {
+        try {
+          const stat = statSync(this.configPath)
+          if (stat.size > 0) {
+            // Only update backup if existing file is valid and has projects
+            const existing = this.loadFile(this.configPath)
+            if (existing && (existing.workspace.projects?.length || 0) > 0) {
+              writeFileSync(this.backupPath, readFileSync(this.configPath))
+            }
+          }
+        } catch (e) {
+          console.error('[SessionStore] Failed to update backup:', e)
+        }
+      }
+
+      // Atomic write: write to temp file, then rename
+      const tmpPath = this.configPath + '.tmp'
+      writeFileSync(tmpPath, json)
+
+      // Verify the temp file was written completely
+      const written = readFileSync(tmpPath, 'utf-8')
+      JSON.parse(written) // throws if truncated/corrupt
+
+      renameSync(tmpPath, this.configPath)
     } catch (e) {
-      console.error('Failed to save workspace:', e)
+      console.error('[SessionStore] Failed to save workspace:', e)
     }
   }
 

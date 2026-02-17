@@ -19,7 +19,7 @@ export interface TiledTerminalViewProps {
   onFocusTab: (id: string) => void
   layout: TileLayout[]
   onLayoutChange: (layout: TileLayout[]) => void
-  onOpenSessionAtPosition?: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }) => void
+  onOpenSessionAtPosition?: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }, currentLayout?: TileLayout[]) => void
   onAddTab?: (projectPath: string) => void
   onUndoCloseTab?: () => void
   api?: Api
