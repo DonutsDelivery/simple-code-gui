@@ -511,6 +511,61 @@ export function removeTabFromTile(
   })
 }
 
+/** Group all tiles belonging to the same project into a single tile with sub-tabs */
+export function groupProjectTiles(
+  layout: TileLayout[],
+  projectPath: string,
+  tabs: OpenTab[],
+  containerWidth: number,
+  containerHeight: number
+): TileLayout[] {
+  const projectTiles = layout.filter(tile =>
+    tile.tabIds.some(tabId => tabs.find(t => t.id === tabId)?.projectPath === projectPath)
+  )
+  if (projectTiles.length <= 1) return layout
+
+  const firstTile = projectTiles[0]
+  const otherTileIds = projectTiles.slice(1).map(t => t.id)
+  const allTabIds = projectTiles.flatMap(t => t.tabIds)
+
+  let newLayout = layout.map(t =>
+    t.id === firstTile.id
+      ? { ...t, tabIds: allTabIds, activeTabId: allTabIds[allTabIds.length - 1] }
+      : t
+  )
+  for (const tileId of otherTileIds) {
+    newLayout = removeTilePreservingStructure(newLayout, tileId, tabs, containerWidth, containerHeight)
+  }
+  return newLayout
+}
+
+/** Ungroup all sub-tabs of a tile into separate independent tiles */
+export function ungroupTileLayout(
+  layout: TileLayout[],
+  tileId: string,
+  containerWidth: number,
+  containerHeight: number
+): TileLayout[] {
+  const tile = layout.find(t => t.id === tileId)
+  if (!tile || tile.tabIds.length <= 1) return layout
+
+  const [firstTabId, ...restTabIds] = tile.tabIds
+
+  // Keep first tab in the original tile space
+  let newLayout = layout.map(t =>
+    t.id === tileId
+      ? { ...t, tabIds: [firstTabId], activeTabId: firstTabId }
+      : t
+  )
+
+  // Add remaining tabs as new independent tiles
+  for (const tabId of restTabIds) {
+    newLayout = addTileToLayout(newLayout, tabId, null, containerWidth, containerHeight)
+  }
+
+  return newLayout
+}
+
 /** Get all tab IDs across all tiles */
 export function getAllTabIdsFromLayout(layout: TileLayout[]): Set<string> {
   const ids = new Set<string>()

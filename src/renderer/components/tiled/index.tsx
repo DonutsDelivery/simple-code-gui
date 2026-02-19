@@ -16,7 +16,7 @@ import { TileTerminal } from './TileTerminal.js'
 import { DropZoneOverlay } from './DropZoneOverlay.js'
 
 export type { TileLayout, DropZone } from '../tiled-layout-utils.js'
-export { splitTile, addTileToLayout, addTabToExistingTile, findTileForProject } from '../tiled-layout-utils.js'
+export { splitTile, addTileToLayout, addTabToExistingTile, findTileForProject, ungroupTileLayout, groupProjectTiles } from '../tiled-layout-utils.js'
 
 const GAP = 4
 
@@ -31,6 +31,8 @@ export function TiledTerminalView({
   onLayoutChange,
   onOpenSessionAtPosition,
   onAddTab,
+  onUngroupTile,
+  onGroupTile,
   onUndoCloseTab,
   api
 }: TiledTerminalViewProps): React.ReactElement | null {
@@ -185,6 +187,8 @@ export function TiledTerminalView({
             onFocusTab={onFocusTab}
             onSwitchSubTab={handleSwitchSubTab}
             onAddTab={onAddTab}
+            onUngroupTile={onUngroupTile}
+            onGroupTile={onGroupTile}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onContainerDrop={handleContainerDrop}

@@ -27,6 +27,8 @@ interface TileTerminalProps {
   onFocusTab: (id: string) => void
   onSwitchSubTab: (tileId: string, tabId: string) => void
   onAddTab?: (projectPath: string) => void
+  onUngroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
+  onGroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
   onDragStart: (e: React.DragEvent, tileId: string) => void
   onDragEnd: () => void
   onContainerDrop: (e: React.DragEvent) => void
@@ -57,6 +59,8 @@ export function TileTerminal({
   onFocusTab,
   onSwitchSubTab,
   onAddTab,
+  onUngroupTile,
+  onGroupTile,
   onDragStart,
   onDragEnd,
   onContainerDrop,
@@ -89,6 +93,28 @@ export function TileTerminal({
       onAddTab(projectPath)
     }
   }, [tabs, onAddTab])
+
+  const handleUngroup = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const projectPath = tabs[0]?.projectPath
+    if (projectPath && onUngroupTile) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const containerSize = rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 }
+      onUngroupTile(tile.id, projectPath, containerSize)
+    }
+  }, [tile.id, tabs, onUngroupTile, containerRef])
+
+  const handleGroup = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const projectPath = tabs[0]?.projectPath
+    if (projectPath && onGroupTile) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const containerSize = rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 }
+      onGroupTile(tile.id, projectPath, containerSize)
+    }
+  }, [tile.id, tabs, onGroupTile, containerRef])
 
   function handleTileDragOver(e: React.DragEvent): void {
     const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
@@ -190,6 +216,15 @@ export function TileTerminal({
                 title="New session"
               >+</button>
             )}
+            {onUngroupTile && (
+              <button
+                className="tile-ungroup"
+                draggable={false}
+                onClick={handleUngroup}
+                onMouseDown={(e) => e.stopPropagation()}
+                title="Ungroup into separate tiles"
+              >⊞</button>
+            )}
           </>
         ) : (
           <>
@@ -203,6 +238,15 @@ export function TileTerminal({
                   onMouseDown={(e) => e.stopPropagation()}
                   title="New session"
                 >+</button>
+              )}
+              {onGroupTile && project?.subTabsEnabled === false && (
+                <button
+                  className="tile-group"
+                  draggable={false}
+                  onClick={handleGroup}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="Group sessions into sub-tabs"
+                >⊟</button>
               )}
               <button
                 className="tile-close"
