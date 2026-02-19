@@ -17,7 +17,8 @@ export function useEffectiveLayout(
   tabs: OpenTab[],
   projects: { path: string; subTabsEnabled?: boolean }[],
   containerSizeRef: MutableRefObject<{ width: number; height: number }>,
-  onLayoutChange: (layout: TileLayout[]) => void
+  onLayoutChange: (layout: TileLayout[]) => void,
+  globalSubTabsEnabled?: boolean
 ): {
   effectiveLayout: TileLayout[]
   effectiveLayoutRef: MutableRefObject<TileLayout[]>
@@ -29,8 +30,11 @@ export function useEffectiveLayout(
   const effectiveLayout = useMemo(() => {
     const { width, height } = containerSizeRef.current
 
+    const globalEnabled = globalSubTabsEnabled ?? true
     const disabledPaths = new Set(
-      projects.filter(p => p.subTabsEnabled === false).map(p => p.path)
+      projects
+        .filter(p => (p.subTabsEnabled !== undefined ? p.subTabsEnabled : globalEnabled) === false)
+        .map(p => p.path)
     )
 
     if (layout.length === 0) {
@@ -76,7 +80,7 @@ export function useEffectiveLayout(
     }
 
     return validateLayout(newLayout, tabs, width, height)
-  }, [layout, tabs, projects, containerSizeRef])
+  }, [layout, tabs, projects, containerSizeRef, globalSubTabsEnabled])
 
   effectiveLayoutRef.current = effectiveLayout
 

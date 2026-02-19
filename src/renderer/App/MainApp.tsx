@@ -142,8 +142,9 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
 
   const handleGroupTile = useCallback((tileId: string, projectPath: string, containerSize: { width: number; height: number }) => {
     setTileLayout(groupProjectTiles(tileLayout, projectPath, openTabs, containerSize.width, containerSize.height))
-    updateProject(projectPath, { subTabsEnabled: undefined })
-  }, [tileLayout, openTabs, setTileLayout, updateProject])
+    const globalEnabled = settings?.subTabsEnabled !== false
+    updateProject(projectPath, { subTabsEnabled: globalEnabled ? undefined : true })
+  }, [tileLayout, openTabs, setTileLayout, updateProject, settings])
 
   // App-specific state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
@@ -364,6 +365,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                       onUngroupTile={handleUngroupTile}
                       onGroupTile={handleGroupTile}
                       onUndoCloseTab={canUndoCloseTab ? handleUndoCloseTab : undefined}
+                      globalSubTabsEnabled={settings?.subTabsEnabled !== false}
                       api={api}
                     />
                   </ErrorBoundary>

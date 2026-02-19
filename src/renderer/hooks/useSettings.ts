@@ -26,6 +26,7 @@ export interface AppSettings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  subTabsEnabled?: boolean
 }
 
 interface UseSettingsReturn {

@@ -6,6 +6,7 @@ import { COMMON_TOOLS, PERMISSION_MODES, API_SESSION_MODES, API_MODELS } from '.
 interface ProjectSettingsModalProps {
   state: ProjectSettingsModalState
   globalPermissions: { tools: string[]; mode: string }
+  globalSubTabsEnabled?: boolean
   globalVoiceSettings: { voice: string; engine: string }
   installedVoices: InstalledVoice[]
   onClose: () => void
@@ -19,6 +20,7 @@ interface ProjectSettingsModalProps {
 export function ProjectSettingsModal({
   state,
   globalPermissions,
+  globalSubTabsEnabled = true,
   globalVoiceSettings,
   installedVoices,
   onClose,
@@ -294,6 +296,9 @@ export function ProjectSettingsModal({
               </label>
               <p className="form-hint">
                 When enabled, opening multiple sessions from this project stacks them as sub-tabs within a single tile.
+              </p>
+              <p className="form-hint global-hint">
+                Global default: {globalSubTabsEnabled ? 'enabled' : 'disabled'}
               </p>
             </div>
           </div>

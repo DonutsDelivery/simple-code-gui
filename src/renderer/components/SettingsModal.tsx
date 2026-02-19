@@ -113,7 +113,8 @@ export function SettingsModal({
           themeCustomization: migrateThemeCustomization(settings.themeCustomization),
           autoAcceptTools: settings.autoAcceptTools || [],
           permissionMode: settings.permissionMode || 'default',
-          backend: settings.backend || 'default'
+          backend: settings.backend || 'default',
+          subTabsEnabled: settings.subTabsEnabled !== false
         }))
       })
 
@@ -162,7 +163,8 @@ export function SettingsModal({
       themeCustomization: general.themeCustomization,
       autoAcceptTools: general.autoAcceptTools,
       permissionMode: general.permissionMode,
-      backend: general.backend
+      backend: general.backend,
+      subTabsEnabled: general.subTabsEnabled
     }
     await window.electronAPI?.saveSettings(newSettings)
     // Save voice settings including XTTS quality settings
@@ -308,6 +310,20 @@ export function SettingsModal({
             backend={general.backend}
             onChange={(backend) => setGeneral(prev => ({ ...prev, backend }))}
           />
+
+          <div className="settings-section">
+            <h3>Tiled View</h3>
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={general.subTabsEnabled}
+                  onChange={(e) => setGeneral(prev => ({ ...prev, subTabsEnabled: e.target.checked }))}
+                />
+                <span>Group sessions from the same project into sub-tabs by default</span>
+              </label>
+            </div>
+          </div>
 
           <ExtensionsSettings installedExtensions={installedExtensions} />
 

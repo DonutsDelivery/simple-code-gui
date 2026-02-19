@@ -61,6 +61,7 @@ export interface Settings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: BackendSelection
+  subTabsEnabled?: boolean
 }
 
 /**

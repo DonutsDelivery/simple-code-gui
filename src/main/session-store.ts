@@ -91,6 +91,7 @@ export interface Settings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  subTabsEnabled?: boolean  // default: true
 }
 
 

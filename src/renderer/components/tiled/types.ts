@@ -25,6 +25,7 @@ export interface TiledTerminalViewProps {
   onUngroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
   onGroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
   onUndoCloseTab?: () => void
+  globalSubTabsEnabled?: boolean
   api?: Api
 }
 

@@ -12,6 +12,7 @@ interface UseProjectSettingsModalReturn {
   installedVoices: InstalledVoice[]
   globalVoiceSettings: { voice: string; engine: string }
   globalPermissions: { tools: string[]; mode: string }
+  globalSubTabsEnabled: boolean
   apiStatus: Record<string, { running: boolean; port?: number }>
   setApiStatus: React.Dispatch<
     React.SetStateAction<Record<string, { running: boolean; port?: number }>>
@@ -45,6 +46,7 @@ export function useProjectSettingsModal({
   const [apiStatus, setApiStatus] = useState<
     Record<string, { running: boolean; port?: number }>
   >({})
+  const [globalSubTabsEnabled, setGlobalSubTabsEnabled] = useState<boolean>(true)
 
   const handleOpenProjectSettings = useCallback(async (project: Project) => {
     const settings = await window.electronAPI?.getSettings()
@@ -52,6 +54,8 @@ export function useProjectSettingsModal({
       tools: settings?.autoAcceptTools || [],
       mode: settings?.permissionMode || 'default',
     })
+    const globalEnabled = settings?.subTabsEnabled !== false
+    setGlobalSubTabsEnabled(globalEnabled)
 
     try {
       const [piperVoices, xttsVoices, voiceSettings] = await Promise.all([
@@ -91,7 +95,9 @@ export function useProjectSettingsModal({
       ttsVoice: project.ttsVoice || '',
       ttsEngine: project.ttsEngine || '',
       backend: project.backend || 'default',
-      subTabsEnabled: project.subTabsEnabled !== false,
+      subTabsEnabled: project.subTabsEnabled !== undefined
+        ? project.subTabsEnabled
+        : globalEnabled,
     })
   }, [])
 
@@ -164,7 +170,9 @@ export function useProjectSettingsModal({
         projectSettingsModal.backend !== 'default'
           ? projectSettingsModal.backend
           : undefined,
-      subTabsEnabled: projectSettingsModal.subTabsEnabled ? undefined : false,
+      subTabsEnabled: projectSettingsModal.subTabsEnabled === globalSubTabsEnabled
+        ? undefined
+        : projectSettingsModal.subTabsEnabled,
     })
 
     setProjectSettingsModal(null)
@@ -228,6 +236,7 @@ export function useProjectSettingsModal({
     installedVoices,
     globalVoiceSettings,
     globalPermissions,
+    globalSubTabsEnabled,
     apiStatus,
     setApiStatus,
     handleOpenProjectSettings,
