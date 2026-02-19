@@ -130,9 +130,11 @@ export function useProjectHandlers({
       })
 
       // Check if there's already a tile for this project and add as sub-tab
-      const existingTile = findTileForProject(tileLayout, openTabs, projectPath)
-      if (existingTile) {
-        setTileLayout(addTabToExistingTile(tileLayout, existingTile.id, ptyId))
+      if (project?.subTabsEnabled !== false) {
+        const existingTile = findTileForProject(tileLayout, openTabs, projectPath)
+        if (existingTile) {
+          setTileLayout(addTabToExistingTile(tileLayout, existingTile.id, ptyId))
+        }
       }
 
       // If an initial prompt was provided, send it after a short delay
@@ -191,7 +193,7 @@ export function useProjectHandlers({
           return tab && tab.projectPath === projectPath
         })
 
-        if (targetHasSameProject && targetTile) {
+        if (targetHasSameProject && targetTile && project?.subTabsEnabled !== false) {
           console.log('[App] Adding as sub-tab to existing tile')
           newLayout = addTabToExistingTile(tileLayout, targetTile.id, ptyId)
         } else {

@@ -54,6 +54,7 @@ export interface SidebarState {
   installedVoices: ReturnType<typeof useProjectSettingsModal>['installedVoices']
   globalVoiceSettings: ReturnType<typeof useProjectSettingsModal>['globalVoiceSettings']
   globalPermissions: ReturnType<typeof useProjectSettingsModal>['globalPermissions']
+  globalSubTabsEnabled: ReturnType<typeof useProjectSettingsModal>['globalSubTabsEnabled']
   apiStatus: ReturnType<typeof useProjectSettingsModal>['apiStatus']
   setApiStatus: ReturnType<typeof useProjectSettingsModal>['setApiStatus']
   handleOpenProjectSettings: ReturnType<typeof useProjectSettingsModal>['handleOpenProjectSettings']
@@ -176,6 +177,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     installedVoices,
     globalVoiceSettings,
     globalPermissions,
+    globalSubTabsEnabled,
     apiStatus,
     setApiStatus,
     handleOpenProjectSettings,
@@ -304,6 +306,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     installedVoices,
     globalVoiceSettings,
     globalPermissions,
+    globalSubTabsEnabled,
     apiStatus,
     setApiStatus,
     handleOpenProjectSettings,

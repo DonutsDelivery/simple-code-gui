@@ -89,6 +89,7 @@ export interface GeneralSettings {
   permissionMode: string
   customTool: string
   backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  subTabsEnabled: boolean
 }
 
 export interface VoiceSettings {
@@ -125,7 +126,8 @@ export const DEFAULT_GENERAL: GeneralSettings = {
   autoAcceptTools: [],
   permissionMode: 'default',
   customTool: '',
-  backend: 'default'
+  backend: 'default',
+  subTabsEnabled: true
 }
 
 export const DEFAULT_VOICE: VoiceSettings = {
@@ -167,7 +169,7 @@ export interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
   onThemeChange: (theme: Theme) => void
-  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => void
+  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'; subTabsEnabled?: boolean }) => void
   appVersion?: string
   updateStatus?: UpdateStatus
   onDownloadUpdate?: () => void

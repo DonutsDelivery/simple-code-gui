@@ -6,6 +6,7 @@ export interface Project {
   path: string
   name: string
   color?: string
+  subTabsEnabled?: boolean
 }
 
 export type { OpenTab }
@@ -21,7 +22,10 @@ export interface TiledTerminalViewProps {
   onLayoutChange: (layout: TileLayout[]) => void
   onOpenSessionAtPosition?: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }) => void
   onAddTab?: (projectPath: string) => void
+  onUngroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
+  onGroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
   onUndoCloseTab?: () => void
+  globalSubTabsEnabled?: boolean
   api?: Api
 }
 

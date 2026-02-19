@@ -43,7 +43,16 @@ const TabItem = memo(function TabItem({ tab, isActive, onSelect, onClose, onNewS
       onClick={handleClick}
       onKeyDown={handleKeyDown}
     >
-      <span className="tab-title" title={tab.title}>{tab.title}</span>
+      <span className="tab-title" title={tab.title}>
+        {(() => {
+          const projectFolder = tab.projectPath.split(/[/\\]/).pop() || ''
+          const prefix = projectFolder + ' - '
+          if (tab.title.startsWith(prefix)) {
+            return <><strong>{projectFolder}</strong>{' - ' + tab.title.slice(prefix.length)}</>
+          }
+          return tab.title
+        })()}
+      </span>
       <button
         className="tab-new-session"
         onClick={handleNewSession}

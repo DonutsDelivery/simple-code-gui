@@ -3,7 +3,7 @@ import { TitleBar } from '../components/TitleBar'
 import { Sidebar } from '../components/Sidebar'
 import { TerminalTabs } from '../components/TerminalTabs'
 import { Terminal } from '../components/terminal/Terminal'
-import { TiledTerminalView } from '../components/TiledTerminalView'
+import { TiledTerminalView, ungroupTileLayout, groupProjectTiles } from '../components/TiledTerminalView'
 import { SettingsModal } from '../components/SettingsModal'
 import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -134,6 +134,17 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     setActiveTab,
     setTileLayout
   })
+
+  const handleUngroupTile = useCallback((tileId: string, projectPath: string, containerSize: { width: number; height: number }) => {
+    setTileLayout(ungroupTileLayout(tileLayout, tileId, containerSize.width, containerSize.height))
+    updateProject(projectPath, { subTabsEnabled: false })
+  }, [tileLayout, setTileLayout, updateProject])
+
+  const handleGroupTile = useCallback((tileId: string, projectPath: string, containerSize: { width: number; height: number }) => {
+    setTileLayout(groupProjectTiles(tileLayout, projectPath, openTabs, containerSize.width, containerSize.height))
+    const globalEnabled = settings?.subTabsEnabled !== false
+    updateProject(projectPath, { subTabsEnabled: globalEnabled ? undefined : true })
+  }, [tileLayout, openTabs, setTileLayout, updateProject, settings])
 
   // App-specific state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
@@ -351,7 +362,10 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                       onLayoutChange={setTileLayout}
                       onOpenSessionAtPosition={handleOpenSessionAtPosition}
                       onAddTab={(projectPath) => handleOpenSession(projectPath, undefined, undefined, undefined, true)}
+                      onUngroupTile={handleUngroupTile}
+                      onGroupTile={handleGroupTile}
                       onUndoCloseTab={canUndoCloseTab ? handleUndoCloseTab : undefined}
+                      globalSubTabsEnabled={settings?.subTabsEnabled !== false}
                       api={api}
                     />
                   </ErrorBoundary>

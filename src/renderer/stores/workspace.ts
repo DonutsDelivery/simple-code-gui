@@ -24,6 +24,7 @@ export interface Project {
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   categoryId?: string
   order?: number
+  subTabsEnabled?: boolean
 }
 
 export interface OpenTab {

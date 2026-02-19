@@ -99,6 +99,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
     moveProjectToCategory,
     removeCategory,
     globalPermissions,
+    globalSubTabsEnabled,
     globalVoiceSettings,
     installedVoices,
     handleOpenProjectSettings,
@@ -389,6 +390,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
         <ProjectSettingsModal
           state={projectSettingsModal}
           globalPermissions={globalPermissions}
+          globalSubTabsEnabled={globalSubTabsEnabled}
           globalVoiceSettings={globalVoiceSettings}
           installedVoices={installedVoices}
           onClose={() => setProjectSettingsModal(null)}

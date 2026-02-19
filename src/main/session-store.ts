@@ -26,6 +26,7 @@ export interface Project {
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' // Per-project backend (overrides global)
   categoryId?: string         // Category this project belongs to
   order?: number              // Order within category or uncategorized list
+  subTabsEnabled?: boolean    // Whether to group sessions into sub-tabs in tiled view (default: true)
 }
 
 export interface OpenTab {
@@ -90,6 +91,7 @@ export interface Settings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  subTabsEnabled?: boolean  // default: true
 }
 
 

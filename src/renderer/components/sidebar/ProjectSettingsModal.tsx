@@ -6,6 +6,7 @@ import { COMMON_TOOLS, PERMISSION_MODES, API_SESSION_MODES, API_MODELS } from '.
 interface ProjectSettingsModalProps {
   state: ProjectSettingsModalState
   globalPermissions: { tools: string[]; mode: string }
+  globalSubTabsEnabled?: boolean
   globalVoiceSettings: { voice: string; engine: string }
   installedVoices: InstalledVoice[]
   onClose: () => void
@@ -19,6 +20,7 @@ interface ProjectSettingsModalProps {
 export function ProjectSettingsModal({
   state,
   globalPermissions,
+  globalSubTabsEnabled = true,
   globalVoiceSettings,
   installedVoices,
   onClose,
@@ -277,6 +279,27 @@ export function ProjectSettingsModal({
               {installedVoices.length === 0 && (
                 <p className="form-hint">No voices installed. Install voices in Settings.</p>
               )}
+            </div>
+          </div>
+
+          {/* Tiled View Section */}
+          <div className="settings-section">
+            <h3>Tiled View</h3>
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.subTabsEnabled}
+                  onChange={(e) => onChange({ subTabsEnabled: e.target.checked })}
+                />
+                Group sessions from this project into sub-tabs
+              </label>
+              <p className="form-hint">
+                When enabled, opening multiple sessions from this project stacks them as sub-tabs within a single tile.
+              </p>
+              <p className="form-hint global-hint">
+                Global default: {globalSubTabsEnabled ? 'enabled' : 'disabled'}
+              </p>
             </div>
           </div>
         </div>

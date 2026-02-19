@@ -27,6 +27,8 @@ interface TileTerminalProps {
   onFocusTab: (id: string) => void
   onSwitchSubTab: (tileId: string, tabId: string) => void
   onAddTab?: (projectPath: string) => void
+  onUngroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
+  onGroupTile?: (tileId: string, projectPath: string, containerSize: { width: number; height: number }) => void
   onDragStart: (e: React.DragEvent, tileId: string) => void
   onDragEnd: () => void
   onContainerDrop: (e: React.DragEvent) => void
@@ -57,6 +59,8 @@ export function TileTerminal({
   onFocusTab,
   onSwitchSubTab,
   onAddTab,
+  onUngroupTile,
+  onGroupTile,
   onDragStart,
   onDragEnd,
   onContainerDrop,
@@ -89,6 +93,28 @@ export function TileTerminal({
       onAddTab(projectPath)
     }
   }, [tabs, onAddTab])
+
+  const handleUngroup = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const projectPath = tabs[0]?.projectPath
+    if (projectPath && onUngroupTile) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const containerSize = rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 }
+      onUngroupTile(tile.id, projectPath, containerSize)
+    }
+  }, [tile.id, tabs, onUngroupTile, containerRef])
+
+  const handleGroup = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const projectPath = tabs[0]?.projectPath
+    if (projectPath && onGroupTile) {
+      const rect = containerRef.current?.getBoundingClientRect()
+      const containerSize = rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 }
+      onGroupTile(tile.id, projectPath, containerSize)
+    }
+  }, [tile.id, tabs, onGroupTile, containerRef])
 
   function handleTileDragOver(e: React.DragEvent): void {
     const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
@@ -163,23 +189,42 @@ export function TileTerminal({
       >
         {hasMultipleTabs ? (
           <>
-            <div className="tile-subtabs">
-              {tabs.map(tab => (
-                <div
-                  key={tab.id}
-                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}`}
-                  onClick={() => handleSubTabClick(tab.id)}
-                >
-                  <span className="subtab-title" title={tab.title}>{tab.title}</span>
-                  <button
-                    className="subtab-close"
-                    draggable={false}
-                    onClick={(e) => handleSubTabClose(e, tab.id)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    title="Close"
-                  >&times;</button>
-                </div>
-              ))}
+            <div className="tile-title-group">
+              {project?.name && (
+                <span className="tile-project-name">{project.name}</span>
+              )}
+              {onUngroupTile && (
+                <button
+                  className="tile-ungroup"
+                  draggable={false}
+                  onClick={handleUngroup}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="Ungroup into separate tiles"
+                >⊞</button>
+              )}
+              <div className="tile-subtabs">
+                {tabs.map(tab => {
+                  const projectFolder = tab.projectPath.split(/[/\\]/).pop() || ''
+                  const prefix = projectFolder + ' - '
+                  const sessionTitle = tab.title.startsWith(prefix) ? tab.title.slice(prefix.length) : tab.title
+                  return (
+                  <div
+                    key={tab.id}
+                    className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}`}
+                    onClick={() => handleSubTabClick(tab.id)}
+                  >
+                    <span className="subtab-title" title={tab.title}>{sessionTitle}</span>
+                    <button
+                      className="subtab-close"
+                      draggable={false}
+                      onClick={(e) => handleSubTabClose(e, tab.id)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Close"
+                    >&times;</button>
+                  </div>
+                  )
+                })}
+              </div>
             </div>
             {onAddTab && (
               <button
@@ -193,7 +238,26 @@ export function TileTerminal({
           </>
         ) : (
           <>
-            <span className="tile-title" title={activeTab?.title}>{activeTab?.title}</span>
+            <div className="tile-title-group">
+              {project?.name && (
+                <span className="tile-project-name">{project.name}</span>
+              )}
+              {onGroupTile && project?.subTabsEnabled === false && (
+                <button
+                  className="tile-group"
+                  draggable={false}
+                  onClick={handleGroup}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="Group sessions into sub-tabs"
+                >⊟</button>
+              )}
+              {activeTab && (() => {
+                const projectFolder = activeTab.projectPath.split(/[/\\]/).pop() || ''
+                const prefix = projectFolder + ' - '
+                const sessionTitle = activeTab.title.startsWith(prefix) ? activeTab.title.slice(prefix.length) : activeTab.title
+                return <span className="tile-session-name" title={activeTab.title}>{sessionTitle}</span>
+              })()}
+            </div>
             <div className="tile-header-actions">
               {onAddTab && (
                 <button

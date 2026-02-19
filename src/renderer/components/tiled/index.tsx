@@ -16,7 +16,7 @@ import { TileTerminal } from './TileTerminal.js'
 import { DropZoneOverlay } from './DropZoneOverlay.js'
 
 export type { TileLayout, DropZone } from '../tiled-layout-utils.js'
-export { splitTile, addTileToLayout, addTabToExistingTile, findTileForProject } from '../tiled-layout-utils.js'
+export { splitTile, addTileToLayout, addTabToExistingTile, findTileForProject, ungroupTileLayout, groupProjectTiles } from '../tiled-layout-utils.js'
 
 const GAP = 4
 
@@ -31,7 +31,10 @@ export function TiledTerminalView({
   onLayoutChange,
   onOpenSessionAtPosition,
   onAddTab,
+  onUngroupTile,
+  onGroupTile,
   onUndoCloseTab,
+  globalSubTabsEnabled,
   api
 }: TiledTerminalViewProps): React.ReactElement | null {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -69,7 +72,7 @@ export function TiledTerminalView({
   const [hoveredEdge, setHoveredEdge] = useState<{ tileId: string; edge: string } | null>(null)
 
   const { effectiveLayout, effectiveLayoutRef } = useEffectiveLayout(
-    layout, tabs, containerSizeRef, onLayoutChange
+    layout, tabs, projects, containerSizeRef, onLayoutChange, globalSubTabsEnabled
   )
 
   // Ctrl+Shift+T to undo close tab
@@ -161,6 +164,12 @@ export function TiledTerminalView({
           : tileTabs[0].id
 
         const project = projects.find(p => p.path === tileTabs[0].projectPath)
+        const effectiveProject = project ? {
+          ...project,
+          subTabsEnabled: project.subTabsEnabled !== undefined
+            ? project.subTabsEnabled
+            : (globalSubTabsEnabled ?? true)
+        } : project
         const isFocused = focusedTabId != null && tile.tabIds.includes(focusedTabId)
 
         return (
@@ -169,7 +178,7 @@ export function TiledTerminalView({
             tile={tile}
             tabs={tileTabs}
             activeSubTabId={activeSubTabId}
-            project={project}
+            project={effectiveProject}
             theme={theme}
             api={api}
             GAP={GAP}
@@ -185,6 +194,8 @@ export function TiledTerminalView({
             onFocusTab={onFocusTab}
             onSwitchSubTab={handleSwitchSubTab}
             onAddTab={onAddTab}
+            onUngroupTile={onUngroupTile}
+            onGroupTile={onGroupTile}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onContainerDrop={handleContainerDrop}

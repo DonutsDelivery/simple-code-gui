@@ -56,6 +56,7 @@ export interface ProjectSettingsModalState {
   ttsVoice: string
   ttsEngine: 'piper' | 'xtts' | ''
   backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  subTabsEnabled: boolean
 }
 
 export interface InstalledVoice {
