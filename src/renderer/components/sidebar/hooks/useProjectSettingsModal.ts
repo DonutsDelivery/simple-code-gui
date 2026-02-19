@@ -91,6 +91,7 @@ export function useProjectSettingsModal({
       ttsVoice: project.ttsVoice || '',
       ttsEngine: project.ttsEngine || '',
       backend: project.backend || 'default',
+      subTabsEnabled: project.subTabsEnabled !== false,
     })
   }, [])
 
@@ -163,6 +164,7 @@ export function useProjectSettingsModal({
         projectSettingsModal.backend !== 'default'
           ? projectSettingsModal.backend
           : undefined,
+      subTabsEnabled: projectSettingsModal.subTabsEnabled ? undefined : false,
     })
 
     setProjectSettingsModal(null)

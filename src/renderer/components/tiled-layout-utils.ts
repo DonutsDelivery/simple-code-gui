@@ -141,11 +141,13 @@ function makeTile(id: string, x: number, y: number, width: number, height: numbe
   return { id, tabIds: tIds, activeTabId: activeTabId || tIds[0], x, y, width, height }
 }
 
-export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, containerHeight = 1080): TileLayout[] {
-  // Group tabs by projectPath
+export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, containerHeight = 1080, disabledProjectPaths?: Set<string>): TileLayout[] {
+  // Group tabs by projectPath (or individually if project has sub-tabs disabled)
   const groups = new Map<string, OpenTab[]>()
   for (const tab of tabs) {
-    const key = tab.projectPath
+    const key = disabledProjectPaths?.has(tab.projectPath)
+      ? tab.id          // unique key per tab → its own group
+      : tab.projectPath // group by project
     const group = groups.get(key) || []
     group.push(tab)
     groups.set(key, group)

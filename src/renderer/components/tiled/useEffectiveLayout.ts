@@ -15,6 +15,7 @@ import type { OpenTab } from './types.js'
 export function useEffectiveLayout(
   layout: TileLayout[],
   tabs: OpenTab[],
+  projects: { path: string; subTabsEnabled?: boolean }[],
   containerSizeRef: MutableRefObject<{ width: number; height: number }>,
   onLayoutChange: (layout: TileLayout[]) => void
 ): {
@@ -28,8 +29,12 @@ export function useEffectiveLayout(
   const effectiveLayout = useMemo(() => {
     const { width, height } = containerSizeRef.current
 
+    const disabledPaths = new Set(
+      projects.filter(p => p.subTabsEnabled === false).map(p => p.path)
+    )
+
     if (layout.length === 0) {
-      return generateDefaultLayout(tabs, width, height)
+      return generateDefaultLayout(tabs, width, height, disabledPaths)
     }
 
     // Ensure all tiles are migrated to the new format
@@ -53,7 +58,10 @@ export function useEffectiveLayout(
 
     // Add new tabs - group by project into existing tiles when possible
     for (const addedTab of addedTabs) {
-      const existingTile = findTileForProject(newLayout, tabs, addedTab.projectPath)
+      const isSubTabsEnabled = !disabledPaths.has(addedTab.projectPath)
+      const existingTile = isSubTabsEnabled
+        ? findTileForProject(newLayout, tabs, addedTab.projectPath)
+        : undefined
       if (existingTile) {
         newLayout = addTabToExistingTile(newLayout, existingTile.id, addedTab.id)
       } else {
@@ -68,7 +76,7 @@ export function useEffectiveLayout(
     }
 
     return validateLayout(newLayout, tabs, width, height)
-  }, [layout, tabs, containerSizeRef])
+  }, [layout, tabs, projects, containerSizeRef])
 
   effectiveLayoutRef.current = effectiveLayout
 

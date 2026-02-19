@@ -69,7 +69,7 @@ export function TiledTerminalView({
   const [hoveredEdge, setHoveredEdge] = useState<{ tileId: string; edge: string } | null>(null)
 
   const { effectiveLayout, effectiveLayoutRef } = useEffectiveLayout(
-    layout, tabs, containerSizeRef, onLayoutChange
+    layout, tabs, projects, containerSizeRef, onLayoutChange
   )
 
   // Ctrl+Shift+T to undo close tab

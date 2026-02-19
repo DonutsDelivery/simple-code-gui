@@ -279,6 +279,24 @@ export function ProjectSettingsModal({
               )}
             </div>
           </div>
+
+          {/* Tiled View Section */}
+          <div className="settings-section">
+            <h3>Tiled View</h3>
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.subTabsEnabled}
+                  onChange={(e) => onChange({ subTabsEnabled: e.target.checked })}
+                />
+                Group sessions from this project into sub-tabs
+              </label>
+              <p className="form-hint">
+                When enabled, opening multiple sessions from this project stacks them as sub-tabs within a single tile.
+              </p>
+            </div>
+          </div>
         </div>
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose} disabled={state.apiStatus === 'checking'}>Cancel</button>

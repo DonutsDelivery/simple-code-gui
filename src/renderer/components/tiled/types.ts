@@ -6,6 +6,7 @@ export interface Project {
   path: string
   name: string
   color?: string
+  subTabsEnabled?: boolean
 }
 
 export type { OpenTab }
