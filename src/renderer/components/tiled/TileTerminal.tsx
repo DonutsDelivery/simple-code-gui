@@ -189,23 +189,42 @@ export function TileTerminal({
       >
         {hasMultipleTabs ? (
           <>
-            <div className="tile-subtabs">
-              {tabs.map(tab => (
-                <div
-                  key={tab.id}
-                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}`}
-                  onClick={() => handleSubTabClick(tab.id)}
-                >
-                  <span className="subtab-title" title={tab.title}>{tab.title}</span>
-                  <button
-                    className="subtab-close"
-                    draggable={false}
-                    onClick={(e) => handleSubTabClose(e, tab.id)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    title="Close"
-                  >&times;</button>
-                </div>
-              ))}
+            <div className="tile-title-group">
+              {project?.name && (
+                <span className="tile-project-name">{project.name}</span>
+              )}
+              {onUngroupTile && (
+                <button
+                  className="tile-ungroup"
+                  draggable={false}
+                  onClick={handleUngroup}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="Ungroup into separate tiles"
+                >⊞</button>
+              )}
+              <div className="tile-subtabs">
+                {tabs.map(tab => {
+                  const projectFolder = tab.projectPath.split(/[/\\]/).pop() || ''
+                  const prefix = projectFolder + ' - '
+                  const sessionTitle = tab.title.startsWith(prefix) ? tab.title.slice(prefix.length) : tab.title
+                  return (
+                  <div
+                    key={tab.id}
+                    className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}`}
+                    onClick={() => handleSubTabClick(tab.id)}
+                  >
+                    <span className="subtab-title" title={tab.title}>{sessionTitle}</span>
+                    <button
+                      className="subtab-close"
+                      draggable={false}
+                      onClick={(e) => handleSubTabClose(e, tab.id)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Close"
+                    >&times;</button>
+                  </div>
+                  )
+                })}
+              </div>
             </div>
             {onAddTab && (
               <button
@@ -216,28 +235,12 @@ export function TileTerminal({
                 title="New session"
               >+</button>
             )}
-            {onUngroupTile && (
-              <button
-                className="tile-ungroup"
-                draggable={false}
-                onClick={handleUngroup}
-                onMouseDown={(e) => e.stopPropagation()}
-                title="Ungroup into separate tiles"
-              >⊞</button>
-            )}
           </>
         ) : (
           <>
-            <span className="tile-title" title={activeTab?.title}>{activeTab?.title}</span>
-            <div className="tile-header-actions">
-              {onAddTab && (
-                <button
-                  className="tile-add-tab"
-                  draggable={false}
-                  onClick={handleAddTab}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  title="New session"
-                >+</button>
+            <div className="tile-title-group">
+              {project?.name && (
+                <span className="tile-project-name">{project.name}</span>
               )}
               {onGroupTile && project?.subTabsEnabled === false && (
                 <button
@@ -247,6 +250,23 @@ export function TileTerminal({
                   onMouseDown={(e) => e.stopPropagation()}
                   title="Group sessions into sub-tabs"
                 >⊟</button>
+              )}
+              {activeTab && (() => {
+                const projectFolder = activeTab.projectPath.split(/[/\\]/).pop() || ''
+                const prefix = projectFolder + ' - '
+                const sessionTitle = activeTab.title.startsWith(prefix) ? activeTab.title.slice(prefix.length) : activeTab.title
+                return <span className="tile-session-name" title={activeTab.title}>{sessionTitle}</span>
+              })()}
+            </div>
+            <div className="tile-header-actions">
+              {onAddTab && (
+                <button
+                  className="tile-add-tab"
+                  draggable={false}
+                  onClick={handleAddTab}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  title="New session"
+                >+</button>
               )}
               <button
                 className="tile-close"

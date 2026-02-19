@@ -1208,6 +1208,49 @@ html, body, #root {
   flex-shrink: 0;
 }
 
+.tile-title-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.tile-title-group > .tile-subtabs {
+  flex: 0 0 auto;
+}
+
+.tile-project-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tile-title-group > .tile-project-name:first-child + .tile-ungroup + .tile-subtabs,
+.tile-title-group > .tile-project-name:first-child + .tile-subtabs,
+.tile-title-group > .tile-project-name:first-child + .tile-group + .tile-session-name,
+.tile-title-group > .tile-project-name:first-child + .tile-session-name {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 6px;
+  margin-left: 2px;
+}
+
+.tile-session-name {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .tile-title {
   font-size: 13px;
   font-weight: 500;
@@ -1215,6 +1258,7 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .tile-close {
@@ -1316,6 +1360,29 @@ html, body, #root {
 }
 
 .tile-add-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.tile-group,
+.tile-ungroup {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.tile-group:hover,
+.tile-ungroup:hover {
   color: var(--text-primary);
   background: var(--bg-elevated);
 }
