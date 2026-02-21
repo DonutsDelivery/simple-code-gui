@@ -3,7 +3,6 @@
 </p>
 
 <p align="center">
-  <a href="https://donutsdelivery.online/#simplecodegui"><img src="https://img.shields.io/badge/Website-donutsdelivery.online-blue?logo=googlechrome&logoColor=white" alt="Website"></a>
   <a href="https://discord.gg/ZhvPhXrdZ4"><img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <img src="https://img.shields.io/github/v/release/DonutsDelivery/simple-code-gui" alt="GitHub Release">
   <img src="https://img.shields.io/github/downloads/DonutsDelivery/simple-code-gui/total" alt="Downloads">
@@ -15,27 +14,7 @@ A desktop GUI for managing multiple AI coding assistant sessions across differen
 
 Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants on multiple projects simultaneously, instantly resume past conversations, and switch between sessions with a click. Features voice input/output, image pasting, task tracking with Beads integration, and 9 color themes.
 
-![Main Interface - Tiled View](https://donutsdelivery.online/assets/mockups/thumbs/simplecodegui-mockup-1.svg)
-
-## Download
-
-| Platform | Download |
-|----------|----------|
-| Windows | [Installer (.exe)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-Setup-1.3.50.exe) \| [Portable (.exe)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-Portable-1.3.50.exe) |
-| macOS (untested) | [Apple Silicon (.dmg)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50-arm64.dmg) |
-| Linux | [AppImage](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.AppImage) \| [.deb](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.deb) \| [.rpm](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.rpm) |
-| Arch Linux | `yay -S simple-code-gui` |
-
-[All releases](https://github.com/DonutsDelivery/simple-code-gui/releases)
-
-<details>
-<summary>macOS: "App is damaged" error fix</summary>
-
-This is macOS Gatekeeper blocking unsigned apps. Run:
-```bash
-sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
-```
-</details>
+![Main Interface - Tiled View](assets/main.png)
 
 ## Features
 
@@ -52,6 +31,8 @@ sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
 - **Tiled View** - See multiple terminals side-by-side (toggle with grid button)
 - **Workspace Persistence** - Restores your open tabs and layout on restart
 
+![Tabbed Interface](assets/main%20tabbed.png)
+
 ### Project Organization
 - **Project Sidebar** - Save and organize project folders for quick access
 - **Create Projects** - Make new project directories without leaving the app
@@ -59,6 +40,8 @@ sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
 - **Project Icons** - Custom emoji icons for each project
 - **Per-Project Settings** - Override global settings per project (backend, permissions, voice)
 - **Run Executable** - Launch your app directly from the sidebar
+
+![Per-Project Settings](assets/per-project%20settings.png)
 
 ### Voice Features
 - **Speech-to-Text** - Whisper models for voice input (tiny to large)
@@ -79,18 +62,43 @@ sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
 - **Settings Panel** - Configure themes, permissions, backend, and voice
 - **Window Memory** - Remembers size and position
 
+<p>
+<img src="assets/settings 1.png" width="400" alt="Settings - Themes & Permissions">
+<img src="assets/settings 2.png" width="400" alt="Settings - Voice">
+</p>
+
 ### Task Tracking (Beads Integration)
 - **Task Panel** - Manage project tasks without leaving the app
 - **Create Tasks** - Add tasks with title, description, and priority
 - **Track Progress** - Start, complete, and delete tasks
 - **Auto-Refresh** - Task list updates automatically
 
+![Beads Task Panel & TTS Controls](assets/beads%20and%20tts%20settings.png)
+
 ### Setup & Updates
 - **Auto-Install Dependencies** - Installs Claude Code, Node.js, Git if missing
 - **Auto Updates** - Downloads and installs updates automatically
 - **Cross-Platform** - Windows, macOS (Apple Silicon), and Linux
 
-## Building from Source
+## Installation
+
+### Windows / macOS / Linux
+
+Download from [GitHub Releases](https://github.com/DonutsDelivery/simple-code-gui/releases):
+
+| Platform | Download |
+|----------|----------|
+| Windows | `.exe` installer or portable |
+| macOS (untested)| `.dmg` (Apple Silicon) |
+| Linux | `.AppImage` or `.deb` |
+
+### Arch Linux (AUR)
+
+```bash
+yay -S simple-code-gui
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/DonutsDelivery/simple-code-gui.git

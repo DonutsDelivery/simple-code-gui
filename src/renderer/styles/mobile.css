@@ -1418,16 +1418,12 @@ body.barcode-scanner-active #root {
   gap: 8px;
   padding: 8px 12px;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   /* Hide scrollbar but keep scroll functionality */
   scrollbar-width: none;
   -ms-overflow-style: none;
-}
-
-.mobile-terminal-bar {
-  overflow: visible;
 }
 
 .mobile-terminal-bar-scroll::-webkit-scrollbar {
@@ -1488,13 +1484,6 @@ body.barcode-scanner-active #root {
   font-size: 13px;
 }
 
-.mobile-bar-caret {
-  font-size: 10px;
-  opacity: 0.6;
-  margin-left: 4px;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
 .mobile-bar-divider {
   flex-shrink: 0;
   width: 1px;
@@ -1508,13 +1497,10 @@ body.barcode-scanner-active #root {
   flex-shrink: 0;
 }
 
-.mobile-bar-btn--menu.active .mobile-bar-caret {
-  transform: rotate(180deg);
-  opacity: 1;
-}
-
 .mobile-bar-dropdown {
-  position: fixed;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
   min-width: 180px;
   max-height: 300px;
   overflow-y: auto;
@@ -1572,31 +1558,6 @@ body.barcode-scanner-active #root {
 /* Terminal bar safe area on mobile */
 body.is-mobile-app .terminal-bar {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* Make terminal content wrapper avoid overflow bleed */
-body.is-mobile-app .terminal-content-wrapper {
-  position: relative;
-  overflow: hidden;
-}
-
-/* Larger touch targets for terminal bar buttons on mobile */
-body.is-mobile-app .terminal-bar-btn {
-  min-width: 44px;
-  min-height: 40px;
-  height: 40px;
-  font-size: 15px;
-}
-
-/* Ensure the primary (Enter) button stands out */
-body.is-mobile-app .terminal-bar-btn--primary {
-  background: var(--accent, #f97316);
-  border-color: var(--accent, #f97316);
-  color: white;
-}
-
-body.is-mobile-app .terminal-bar-btn--primary:active {
-  background: var(--accent-hover, #ea580c);
 }
 
 /* ============================================
@@ -1744,8 +1705,6 @@ body.is-mobile-app .terminal-bar-btn--primary:active {
 /* Terminal content fills available space - bar is inside terminal-container */
 .mobile-slide-content--terminal {
   position: relative;
-  /* Allow dropdowns to overflow */
-  overflow: visible !important;
 }
 
 /* ----------------------------------------

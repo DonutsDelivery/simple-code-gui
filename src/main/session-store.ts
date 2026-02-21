@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { syncMetaProjects } from './meta-project-sync'
 
@@ -23,7 +23,7 @@ export interface Project {
   color?: string              // Project color for visual identification
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' // Per-project backend (overrides global)
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' // Per-project backend (overrides global)
   categoryId?: string         // Category this project belongs to
   order?: number              // Order within category or uncategorized list
 }
@@ -33,14 +33,11 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
-  ptyId?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface TileLayout {
   id: string
-  tabIds: string[]
-  activeTabId: string
   x: number
   y: number
   width: number
@@ -63,35 +60,17 @@ export interface WindowBounds {
   height: number
 }
 
-export interface ThemeCustomization {
-  accentColor: string | null
-  backgroundColor: string | null
-  textColor: string | null
-  terminalColors: {
-    black?: string
-    red?: string
-    green?: string
-    yellow?: string
-    blue?: string
-    magenta?: string
-    cyan?: string
-    white?: string
-  } | null
-}
-
 export interface Settings {
   defaultProjectDir: string
   theme: string
-  themeCustomization?: ThemeCustomization | null
+  autoAcceptTools?: string[]  // List of tool patterns to auto-accept (e.g., "Bash(git:*)", "Read", "Write")
+  permissionMode?: string     // Permission mode: default, acceptEdits, dontAsk, bypassPermissions
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode'
   voiceOutputEnabled?: boolean
   voiceVolume?: number
   voiceSpeed?: number
   voiceSkipOnNew?: boolean
-  autoAcceptTools?: string[]
-  permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
-
 
 interface StoredData {
   workspace: Workspace
@@ -101,7 +80,6 @@ interface StoredData {
 
 export class SessionStore {
   private configPath: string
-  private backupPath: string
   private data: StoredData
 
   constructor() {
@@ -110,49 +88,18 @@ export class SessionStore {
       mkdirSync(configDir, { recursive: true })
     }
     this.configPath = join(configDir, 'workspace.json')
-    this.backupPath = join(configDir, 'workspace.json.backup')
     this.data = this.load()
   }
 
-  private loadFile(path: string): StoredData | null {
-    try {
-      if (!existsSync(path)) return null
-      const stat = statSync(path)
-      if (stat.size === 0) return null
-      const content = readFileSync(path, 'utf-8')
-      const data = JSON.parse(content)
-      if (!data?.workspace) return null
-      return data
-    } catch (e) {
-      console.error(`[SessionStore] Failed to load ${path}:`, e)
-      return null
-    }
-  }
-
   private load(): StoredData {
-    // Try main file first
-    const main = this.loadFile(this.configPath)
-    if (main && (main.workspace.projects?.length || 0) > 0) {
-      return main
-    }
-
-    // Main file is empty/corrupt/missing — try backup
-    const backup = this.loadFile(this.backupPath)
-    if (backup && (backup.workspace.projects?.length || 0) > 0) {
-      console.log('[SessionStore] Main config empty/corrupt, restored from backup (' +
-        backup.workspace.projects.length + ' projects)')
-      // Restore backup as main file immediately
-      try {
-        writeFileSync(this.configPath, JSON.stringify(backup, null, 2))
-      } catch (e) {
-        console.error('[SessionStore] Failed to restore backup to main:', e)
+    try {
+      if (existsSync(this.configPath)) {
+        const content = readFileSync(this.configPath, 'utf-8')
+        return JSON.parse(content)
       }
-      return backup
+    } catch (e) {
+      console.error('Failed to load workspace:', e)
     }
-
-    // If main loaded but had 0 projects (valid empty state), use it
-    if (main) return main
-
     return {
       workspace: {
         projects: [],
@@ -164,38 +111,9 @@ export class SessionStore {
 
   private save(): void {
     try {
-      const json = JSON.stringify(this.data, null, 2)
-
-      // Validate we can parse what we're about to write
-      JSON.parse(json)
-
-      // Back up existing file before overwriting (if it has content)
-      if (existsSync(this.configPath)) {
-        try {
-          const stat = statSync(this.configPath)
-          if (stat.size > 0) {
-            // Only update backup if existing file is valid and has projects
-            const existing = this.loadFile(this.configPath)
-            if (existing && (existing.workspace.projects?.length || 0) > 0) {
-              writeFileSync(this.backupPath, readFileSync(this.configPath))
-            }
-          }
-        } catch (e) {
-          console.error('[SessionStore] Failed to update backup:', e)
-        }
-      }
-
-      // Atomic write: write to temp file, then rename
-      const tmpPath = this.configPath + '.tmp'
-      writeFileSync(tmpPath, json)
-
-      // Verify the temp file was written completely
-      const written = readFileSync(tmpPath, 'utf-8')
-      JSON.parse(written) // throws if truncated/corrupt
-
-      renameSync(tmpPath, this.configPath)
+      writeFileSync(this.configPath, JSON.stringify(this.data, null, 2))
     } catch (e) {
-      console.error('[SessionStore] Failed to save workspace:', e)
+      console.error('Failed to save workspace:', e)
     }
   }
 
@@ -233,7 +151,7 @@ export class SessionStore {
   }
 
   getSettings(): Settings {
-    return this.data.settings ?? { defaultProjectDir: '', theme: 'default', backend: 'default' }
+    return this.data.settings ?? { defaultProjectDir: '', theme: 'default' }
   }
 
   saveSettings(settings: Settings): void {

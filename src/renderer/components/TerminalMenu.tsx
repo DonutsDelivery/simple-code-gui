@@ -10,8 +10,8 @@ function isEventTargetNode(target: EventTarget | null): target is Node {
 interface TerminalMenuProps {
   ptyId: string
   onCommand: (command: string, options?: AutoWorkOptions) => void
-  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
-  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => void
+  currentBackend: string
+  onBackendChange: (backend: string) => void
 }
 
 export interface AutoWorkOptions {
@@ -189,7 +189,7 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
     }
 
     if (categoryId === 'backend') {
-      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider')
+      onBackendChange(item.id)
       setOpenDropdown(null)
       return
     }

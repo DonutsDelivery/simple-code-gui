@@ -1,5 +1,4 @@
 import type { Terminal as XTerm } from '@xterm/xterm'
-import type { MutableRefObject } from 'react'
 import type { TerminalGlobals } from './types.js'
 import { BUFFER_KEY, ERROR_HANDLER_KEY, MAX_BUFFER_CHUNKS } from './constants.js'
 
@@ -143,7 +142,7 @@ export function isClaudeProseResponse(text: string): boolean {
 }
 
 // Format a single path for backend-specific syntax
-export function formatPathForBackend(path: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
+export function formatPathForBackend(path: string, backend?: string): string {
   const normalized = backend && backend !== 'default' ? backend : 'claude'
   const escaped = path.includes('"') ? path.replace(/"/g, '\\"') : path
   const safePath = /\s/.test(escaped) ? `"${escaped}"` : escaped
@@ -158,19 +157,17 @@ export function formatPathForBackend(path: string, backend?: 'default' | 'claude
 }
 
 // Format multiple paths for backend
-export function formatPathsForBackend(paths: string[], backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
+export function formatPathsForBackend(paths: string[], backend?: string): string {
   return paths.map((path) => formatPathForBackend(path, backend)).join(' ')
 }
 
 // Custom paste handler for xterm
-export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider', currentLineInputRef?: MutableRefObject<string>): Promise<void> {
+export async function handlePaste(term: XTerm, ptyId: string, backend?: string): Promise<void> {
   try {
     // Check if clipboard has an image or file
     const imageResult = await window.electronAPI?.readClipboardImage()
-    if (imageResult?.success && imageResult.hasImage && imageResult.path) {
-      const formatted = formatPathForBackend(imageResult.path, backend)
-      window.electronAPI?.writePty(ptyId, formatted)
-      if (currentLineInputRef) currentLineInputRef.current += formatted
+    if (imageResult.success && imageResult.hasImage && imageResult.path) {
+      window.electronAPI?.writePty(ptyId, formatPathForBackend(imageResult.path, backend))
       return
     }
 
@@ -185,9 +182,7 @@ export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default
           .map(line => decodeURIComponent(line.replace('file://', '')))
           .join(' ')
       }
-      const pasteText = cleanText || text
-      window.electronAPI?.writePty(ptyId, pasteText)
-      if (currentLineInputRef) currentLineInputRef.current += pasteText
+      window.electronAPI?.writePty(ptyId, cleanText || text)
     }
   } catch (e) {
     console.error('Paste failed:', e)

@@ -1,6 +1,0 @@
-export type { ThemeCustomization, Settings } from './settings.js'
-export type { ProjectCategory, Project, OpenTab, Workspace, TileLayout, Session } from './workspace.js'
-export type { BeadsTask, BeadsCloseResult } from './beads.js'
-export type { VoiceSettings } from './voice.js'
-export type { Extension } from './extension.js'
-export type { ElectronAPI } from './api.js'

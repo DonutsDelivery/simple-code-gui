@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readdirSync, lstatSync, readlinkSync, unlinkSync, rmSync, symlinkSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, readdirSync, lstatSync, readlinkSync, unlinkSync, rmdirSync, symlinkSync } from 'fs'
+import { join, basename } from 'path'
 import type { Workspace, Project, ProjectCategory } from './session-store'
 
 const UNCATEGORIZED_FOLDER = 'Uncategorized'
@@ -13,62 +13,51 @@ function getMetaProjectsBasePath(): string {
 }
 
 /**
- * Get current symlinks in a category directory
- * Returns map of symlink name -> target path
+ * Safely remove a directory and all its contents (symlinks only, not actual files)
  */
-function getCurrentSymlinks(categoryDir: string): Map<string, string> {
-  const symlinks = new Map<string, string>()
-  if (!existsSync(categoryDir)) return symlinks
+function removeSymlinkDirectory(dirPath: string): void {
+  if (!existsSync(dirPath)) return
 
   try {
-    const entries = readdirSync(categoryDir)
+    const entries = readdirSync(dirPath)
     for (const entry of entries) {
-      const entryPath = join(categoryDir, entry)
-      try {
-        const stat = lstatSync(entryPath)
-        if (stat.isSymbolicLink()) {
-          const target = readlinkSync(entryPath)
-          symlinks.set(entry, target)
-        }
-      } catch {
-        // Skip entries we can't stat
-      }
-    }
-  } catch {
-    // Directory might not exist or be readable
-  }
-  return symlinks
-}
+      const entryPath = join(dirPath, entry)
+      const stat = lstatSync(entryPath)
 
-/**
- * Remove a single symlink
- */
-function removeSymlink(symlinkPath: string): void {
-  try {
-    if (existsSync(symlinkPath)) {
-      const stat = lstatSync(symlinkPath)
       if (stat.isSymbolicLink()) {
-        unlinkSync(symlinkPath)
+        unlinkSync(entryPath)
+      } else if (stat.isDirectory()) {
+        // Recursively clean subdirectories
+        removeSymlinkDirectory(entryPath)
       }
+      // Skip regular files - shouldn't exist but don't delete user data
     }
+    rmdirSync(dirPath)
   } catch (e) {
-    console.warn(`Failed to remove symlink ${symlinkPath}:`, e)
+    console.warn(`Failed to remove directory ${dirPath}:`, e)
   }
 }
 
 /**
- * Remove an empty category directory (only if it's empty)
+ * Clear all existing symlinks and category folders
  */
-function removeEmptyCategoryDir(categoryDir: string): void {
-  if (!existsSync(categoryDir)) return
+function clearMetaProjects(basePath: string): void {
+  if (!existsSync(basePath)) return
 
   try {
-    const entries = readdirSync(categoryDir)
-    if (entries.length === 0) {
-      rmSync(categoryDir, { recursive: true, force: true })
+    const entries = readdirSync(basePath)
+    for (const entry of entries) {
+      const entryPath = join(basePath, entry)
+      const stat = lstatSync(entryPath)
+
+      if (stat.isSymbolicLink()) {
+        unlinkSync(entryPath)
+      } else if (stat.isDirectory()) {
+        removeSymlinkDirectory(entryPath)
+      }
     }
   } catch (e) {
-    console.warn(`Failed to remove empty category dir ${categoryDir}:`, e)
+    console.warn('Failed to clear meta-projects:', e)
   }
 }
 
@@ -169,10 +158,6 @@ function groupProjectsByCategory(
  * │   └── MyApp -> /home/user/Projects/MyApp
  * └── Uncategorized/
  *     └── RandomProject -> /home/user/RandomProject
- *
- * IMPORTANT: This function does incremental updates to avoid breaking
- * running sessions that have their cwd in a category folder. It only
- * removes/adds symlinks as needed rather than deleting entire directories.
  */
 export function syncMetaProjects(workspace: Workspace): void {
   const basePath = getMetaProjectsBasePath()
@@ -187,92 +172,37 @@ export function syncMetaProjects(workspace: Workspace): void {
     }
   }
 
+  // Clear existing structure (full rebuild approach - simple and safe)
+  clearMetaProjects(basePath)
+
   // Build category mapping
   const categoryMap = buildCategoryMap(workspace.categories)
 
   // Group projects by category
   const projectGroups = groupProjectsByCategory(workspace.projects, categoryMap)
 
-  // Track which category dirs should exist
-  const expectedCategoryDirs = new Set<string>()
-  for (const categoryName of projectGroups.keys()) {
-    expectedCategoryDirs.add(categoryName)
-  }
-
-  // Process each category - add/update symlinks
+  // Create category directories and symlinks
   for (const [categoryName, projects] of projectGroups) {
     const categoryDir = join(basePath, categoryName)
 
-    // Create category directory if it doesn't exist
-    if (!existsSync(categoryDir)) {
-      try {
-        mkdirSync(categoryDir, { recursive: true })
-      } catch (e) {
-        console.warn(`Failed to create category directory ${categoryDir}:`, e)
-        continue
-      }
+    // Create category directory
+    try {
+      mkdirSync(categoryDir, { recursive: true })
+    } catch (e) {
+      console.warn(`Failed to create category directory ${categoryDir}:`, e)
+      continue
     }
 
-    // Get current symlinks in this category
-    const currentSymlinks = getCurrentSymlinks(categoryDir)
-
-    // Build map of what symlinks should exist (project path -> desired symlink name)
-    const desiredSymlinks = new Map<string, string>()
+    // Track used names within this category for collision handling
     const usedNames = new Set<string>()
 
+    // Create symlinks for each project
     for (const project of projects) {
       const symlinkName = getUniqueSymlinkName(categoryDir, project.name, usedNames)
-      desiredSymlinks.set(project.path, symlinkName)
-    }
+      const symlinkPath = join(categoryDir, symlinkName)
 
-    // Remove symlinks that shouldn't exist or point to wrong targets
-    for (const [name, target] of currentSymlinks) {
-      // Check if this symlink is still needed
-      let shouldKeep = false
-      for (const [projectPath, desiredName] of desiredSymlinks) {
-        if (target === projectPath && name === desiredName) {
-          shouldKeep = true
-          break
-        }
-      }
-      if (!shouldKeep) {
-        removeSymlink(join(categoryDir, name))
-      }
+      createSymlink(project.path, symlinkPath)
     }
-
-    // Refresh current symlinks after removals
-    const remainingSymlinks = getCurrentSymlinks(categoryDir)
-    const existingTargets = new Set(remainingSymlinks.values())
-
-    // Create new symlinks that don't exist yet
-    for (const [projectPath, symlinkName] of desiredSymlinks) {
-      if (!existingTargets.has(projectPath)) {
-        createSymlink(projectPath, join(categoryDir, symlinkName))
-      }
-    }
-  }
-
-  // Remove category directories that shouldn't exist anymore
-  // But only remove symlinks inside, keep the directory if it still has content
-  try {
-    const existingDirs = readdirSync(basePath)
-    for (const dirName of existingDirs) {
-      if (!expectedCategoryDirs.has(dirName)) {
-        const dirPath = join(basePath, dirName)
-        const stat = lstatSync(dirPath)
-        if (stat.isDirectory() && !stat.isSymbolicLink()) {
-          // Remove all symlinks in this directory
-          const symlinks = getCurrentSymlinks(dirPath)
-          for (const name of symlinks.keys()) {
-            removeSymlink(join(dirPath, name))
-          }
-          // Try to remove directory if empty
-          removeEmptyCategoryDir(dirPath)
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to clean up old category directories:', e)
   }
 }
 
