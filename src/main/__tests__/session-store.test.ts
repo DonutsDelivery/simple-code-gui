@@ -287,7 +287,7 @@ describe('SessionStore', () => {
         }],
         activeTabId: 'tab1',
         viewMode: 'tiled',
-        tileLayout: [{ id: 'tile1', x: 0, y: 0, width: 100, height: 100 }],
+        tileLayout: [{ id: 'tile1', tabIds: ['tile1'], activeTabId: 'tile1', x: 0, y: 0, width: 100, height: 100 }],
         categories: [{ id: 'cat1', name: 'Category 1', collapsed: false, order: 0 }]
       }
 

@@ -13,7 +13,7 @@ export interface DiscoveredSession {
   fileSize: number
 }
 
-export type SessionBackend = 'claude' | 'opencode'
+export type SessionBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 
 // Message types that indicate actual conversation content (not just summaries)
 const CONVERSATION_TYPES = ['user', 'assistant']
@@ -190,7 +190,7 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
   }
 }
 
-export async function discoverSessions(projectPath: string, backend: 'claude' | 'opencode' = 'claude'): Promise<DiscoveredSession[]> {
+export async function discoverSessions(projectPath: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude'): Promise<DiscoveredSession[]> {
   if (backend === 'opencode') {
     return discoverOpenCodeSessions(projectPath)
   }

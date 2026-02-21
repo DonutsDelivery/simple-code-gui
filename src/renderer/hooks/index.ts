@@ -8,7 +8,13 @@ export {
   useHostConnection,
   type HostConfig,
   type ConnectionState,
+  type ConnectionMethod,
+  type PendingFile,
   type HostConnectionState,
   type HostConnectionActions,
   type UseHostConnectionReturn
 } from './useHostConnection'
+export { useWorkspaceLoader } from './useWorkspaceLoader'
+export { useSessionPolling } from './useSessionPolling'
+export { useApiListeners } from './useApiListeners'
+export { useProjectHandlers } from './useProjectHandlers'

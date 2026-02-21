@@ -105,9 +105,20 @@ export function getDefaultConfig(): Omit<HostConfig, 'token'> {
 // =============================================================================
 
 /**
+ * Validate port number - returns true if valid
+ */
+function isValidPort(port: number): boolean {
+  return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
+}
+
+/**
  * Build the base HTTP URL for API requests
  */
 export function buildBaseUrl(config: HostConfig): string {
+  if (!isValidPort(config.port)) {
+    console.error('[hostConfig] Invalid port for buildBaseUrl:', config.port)
+    throw new Error(`Invalid port: ${config.port}`)
+  }
   const protocol = config.secure ? 'https' : 'http'
   return `${protocol}://${config.host}:${config.port}`
 }
@@ -116,6 +127,10 @@ export function buildBaseUrl(config: HostConfig): string {
  * Build the WebSocket URL
  */
 export function buildWsUrl(config: HostConfig): string {
+  if (!isValidPort(config.port)) {
+    console.error('[hostConfig] Invalid port for buildWsUrl:', config.port)
+    throw new Error(`Invalid port: ${config.port}`)
+  }
   const protocol = config.secure ? 'wss' : 'ws'
   return `${protocol}://${config.host}:${config.port}/ws`
 }
@@ -176,6 +191,12 @@ export function parseConnectionUrl(url: string): HostConfig | null {
     const secure = parsed.protocol === 'https:'
 
     if (!host || !token) {
+      return null
+    }
+
+    // Validate port
+    if (!isValidPort(port)) {
+      console.error('[hostConfig] parseConnectionUrl: Invalid port:', port)
       return null
     }
 

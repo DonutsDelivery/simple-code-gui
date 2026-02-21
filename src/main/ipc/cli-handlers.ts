@@ -129,8 +129,8 @@ async function checkPipInstalled(): Promise<boolean> {
 }
 
 function checkGSDInstalled(): boolean {
-  const gsdCommandsDir = join(homedir(), '.claude', 'commands')
-  const gsdMarkerFile = join(gsdCommandsDir, 'gsd:new-project.md')
+  const gsdCommandsDir = join(homedir(), '.claude', 'commands', 'gsd')
+  const gsdMarkerFile = join(gsdCommandsDir, 'new-project.md')
   return existsSync(gsdMarkerFile)
 }
 

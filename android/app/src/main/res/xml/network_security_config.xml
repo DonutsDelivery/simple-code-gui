@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!--
-        Allow cleartext HTTP for local network connections.
-        Android's domain-config doesn't support IP addresses, only hostnames.
-        Since we connect to local servers via IP, we need to allow cleartext globally.
-        Security is provided by the token-based authentication, not TLS.
+        Allow cleartext HTTP for backwards compatibility with v2 servers.
+        Also trust user certificates for self-signed TLS (v3 servers).
+        Security is provided by certificate pinning via fingerprint verification.
     -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
+            <!-- Trust system CAs -->
             <certificates src="system" />
+            <!-- Trust user-installed CAs (needed for self-signed certs) -->
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>

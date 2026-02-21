@@ -1,12 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Theme, getThemeById, applyTheme, themes } from '../themes'
 
+export interface TerminalColorsCustomization {
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+}
+
+export interface ThemeCustomization {
+  accentColor: string | null
+  backgroundColor: string | null
+  textColor: string | null
+  terminalColors: TerminalColorsCustomization | null
+}
+
 export interface AppSettings {
   defaultProjectDir: string
   theme: string
+  themeCustomization?: ThemeCustomization | null
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 interface UseSettingsReturn {
@@ -31,11 +50,14 @@ export function useSettings(): UseSettingsReturn {
     const loadSettings = async () => {
       try {
         const loadedSettings = await window.electronAPI?.getSettings()
+        if (!loadedSettings) {
+          return
+        }
         setSettings(loadedSettings)
 
-        // Apply theme
+        // Apply theme with customization
         const theme = getThemeById(loadedSettings.theme || 'default')
-        applyTheme(theme)
+        applyTheme(theme, loadedSettings.themeCustomization)
         setCurrentTheme(theme)
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -51,9 +73,9 @@ export function useSettings(): UseSettingsReturn {
   }, [])
 
   const updateTheme = useCallback((theme: Theme) => {
-    applyTheme(theme)
+    applyTheme(theme, settings?.themeCustomization)
     setCurrentTheme(theme)
-  }, [])
+  }, [settings?.themeCustomization])
 
   return {
     settings,

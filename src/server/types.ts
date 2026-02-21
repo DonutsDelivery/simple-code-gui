@@ -132,7 +132,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   categoryId?: string
   order?: number
 }
@@ -143,11 +143,13 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: Backend
 }
 
 export interface TileLayout {
   id: string
+  tabIds: string[]
+  activeTabId: string
   x: number
   y: number
   width: number
@@ -167,9 +169,28 @@ export interface Workspace {
 // Settings Types
 // =============================================================================
 
+export interface TerminalColorsCustomization {
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+}
+
+export interface ThemeCustomization {
+  accentColor: string | null
+  backgroundColor: string | null
+  textColor: string | null
+  terminalColors: TerminalColorsCustomization | null
+}
+
 export interface Settings {
   defaultProjectDir: string
   theme: string
+  themeCustomization?: ThemeCustomization | null
   voiceOutputEnabled?: boolean
   voiceVolume?: number
   voiceSpeed?: number
@@ -262,7 +283,7 @@ export interface MobileApiServerConfig {
   host: string
   enableCors: boolean
   corsOrigins?: string[]
-  tokenExpiry?: number // milliseconds, null = never
+  tokenExpiry?: number | null // milliseconds, null = never
   enableWebSocket: boolean
   maxConnections?: number
 }

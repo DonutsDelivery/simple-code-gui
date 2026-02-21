@@ -12,10 +12,12 @@ import {
   VoiceInputSettings,
   VoiceOutputSettings,
   UninstallTTSSection,
+  VersionSettings,
   DEFAULT_GENERAL,
   DEFAULT_VOICE,
   DEFAULT_XTTS,
   DEFAULT_UI,
+  DEFAULT_THEME_CUSTOMIZATION,
 } from './settings'
 import type {
   GeneralSettings,
@@ -23,9 +25,40 @@ import type {
   XttsSettings,
   UIState,
   SettingsModalProps,
+  ThemeCustomization,
 } from './settings'
 
-export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: SettingsModalProps): React.ReactElement | null {
+// Migrate old slider-based customization to new color-based format
+function migrateThemeCustomization(saved: unknown): ThemeCustomization {
+  if (!saved || typeof saved !== 'object') return DEFAULT_THEME_CUSTOMIZATION
+  const obj = saved as Record<string, unknown>
+  // Old format had terminalSaturation/backgroundBrightness — discard and use defaults
+  if ('terminalSaturation' in obj || 'backgroundBrightness' in obj) {
+    return {
+      accentColor: (typeof obj.accentColor === 'string' ? obj.accentColor : null),
+      backgroundColor: null,
+      textColor: null,
+      terminalColors: null
+    }
+  }
+  return {
+    accentColor: (typeof obj.accentColor === 'string' ? obj.accentColor : null),
+    backgroundColor: (typeof obj.backgroundColor === 'string' ? obj.backgroundColor : null),
+    textColor: (typeof obj.textColor === 'string' ? obj.textColor : null),
+    terminalColors: (obj.terminalColors && typeof obj.terminalColors === 'object' ? obj.terminalColors as ThemeCustomization['terminalColors'] : null)
+  }
+}
+
+export function SettingsModal({
+  isOpen,
+  onClose,
+  onThemeChange,
+  onSaved,
+  appVersion,
+  updateStatus,
+  onDownloadUpdate,
+  onInstallUpdate
+}: SettingsModalProps): React.ReactElement | null {
   // Grouped state: general settings (theme, directory, permissions, backend)
   const [general, setGeneral] = useState<GeneralSettings>(DEFAULT_GENERAL)
 
@@ -77,9 +110,10 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
           ...prev,
           defaultProjectDir: settings.defaultProjectDir || '',
           selectedTheme: settings.theme || 'default',
+          themeCustomization: migrateThemeCustomization(settings.themeCustomization),
           autoAcceptTools: settings.autoAcceptTools || [],
           permissionMode: settings.permissionMode || 'default',
-          backend: settings.backend || 'claude'
+          backend: settings.backend || 'default'
         }))
       })
 
@@ -102,20 +136,20 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
       })?.catch(e => console.error('Failed to load voice settings:', e))
 
       // Load voice status
-      window.electronAPI?.voiceCheckWhisper?.()?.then(status => {
-        setVoice(prev => ({ ...prev, whisperStatus: status }))
-      })?.catch(e => console.error('Failed to check Whisper status:', e))
+      window.electronAPI?.voiceCheckWhisper?.()?.then((status) => {
+        setVoice((prev) => ({ ...prev, whisperStatus: status }))
+      })?.catch((e) => console.error('Failed to check Whisper status:', e))
 
-      window.electronAPI?.voiceCheckTTS?.()?.then(status => {
-        setVoice(prev => ({ ...prev, ttsStatus: status }))
-      })?.catch(e => console.error('Failed to check TTS status:', e))
+      window.electronAPI?.voiceCheckTTS?.()?.then((status) => {
+        setVoice((prev) => ({ ...prev, ttsStatus: status }))
+      })?.catch((e) => console.error('Failed to check TTS status:', e))
 
       refreshInstalledVoices()
 
       // Load installed extensions
-      window.electronAPI?.extensionsGetInstalled?.()?.then(exts => {
+      window.electronAPI?.extensionsGetInstalled?.()?.then((exts) => {
         setInstalledExtensions(exts || [])
-      })?.catch(e => console.error('Failed to load installed extensions:', e))
+      })?.catch((e) => console.error('Failed to load installed extensions:', e))
     } else {
       setUI(prev => ({ ...prev, playingPreview: null, previewLoading: null }))
     }
@@ -125,6 +159,7 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
     const newSettings = {
       defaultProjectDir: general.defaultProjectDir,
       theme: general.selectedTheme,
+      themeCustomization: general.themeCustomization,
       autoAcceptTools: general.autoAcceptTools,
       permissionMode: general.permissionMode,
       backend: general.backend
@@ -232,16 +267,25 @@ export function SettingsModal({ isOpen, onClose, onThemeChange, onSaved }: Setti
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal settings-modal" ref={focusTrapRef} onClick={(e) => e.stopPropagation()}>
+      <div className="modal settings-modal" ref={focusTrapRef as React.RefObject<HTMLDivElement>} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Settings</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-content">
+          <VersionSettings
+            appVersion={appVersion}
+            updateStatus={updateStatus}
+            onDownloadUpdate={onDownloadUpdate}
+            onInstallUpdate={onInstallUpdate}
+          />
+
           <ThemeSettings
             selectedTheme={general.selectedTheme}
+            customization={general.themeCustomization}
             onThemeChange={onThemeChange}
             onSelect={(themeId) => setGeneral(prev => ({ ...prev, selectedTheme: themeId }))}
+            onCustomizationChange={(customization) => setGeneral(prev => ({ ...prev, themeCustomization: customization }))}
           />
 
           <ProjectDirectorySettings

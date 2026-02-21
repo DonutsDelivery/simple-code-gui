@@ -1,7 +1,11 @@
 import * as pty from 'node-pty'
 import * as fs from 'fs'
 import * as path from 'path'
-import { isWindows, getEnhancedPathWithPortable, getAdditionalPaths } from './platform'
+import {
+  isWindows,
+  getEnhancedPathWithPortable,
+  getAdditionalPaths,
+} from './platform'
 import { getPortableBinDirs } from './portable-deps'
 
 interface ClaudeProcess {
@@ -9,7 +13,7 @@ interface ClaudeProcess {
   pty: pty.IPty
   cwd: string
   sessionId?: string
-  backend?: string
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   disposables: { dispose: () => void }[]
 }
 
@@ -20,6 +24,7 @@ interface ExtendedPtyForkOptions extends pty.IPtyForkOptions {
 
 function getEnhancedEnv(): { [key: string]: string } {
   const env = { ...process.env } as { [key: string]: string }
+  delete env.CLAUDECODE
   const enhancedPath = getEnhancedPathWithPortable()
 
   // On Windows, environment variables are case-insensitive but we need to set the right one
@@ -33,7 +38,13 @@ function getEnhancedEnv(): { [key: string]: string } {
       const gitBashPaths = [
         'C:\\Program Files\\Git\\bin\\bash.exe',
         'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
-        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Git', 'bin', 'bash.exe'),
+        path.join(
+          process.env.LOCALAPPDATA || '',
+          'Programs',
+          'Git',
+          'bin',
+          'bash.exe'
+        ),
         path.join(process.env.PROGRAMFILES || '', 'Git', 'bin', 'bash.exe'),
       ]
       for (const bashPath of gitBashPaths) {
@@ -53,7 +64,9 @@ function getEnhancedEnv(): { [key: string]: string } {
 }
 
 // Find executable for the given backend
-function findExecutable(backend: string = 'claude'): string {
+function findExecutable(
+  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude'
+): string {
   if (backend === 'gemini') {
     return findGeminiExecutable()
   }
@@ -159,29 +172,36 @@ function findOpenCodeExecutable(): string {
   return 'opencode'
 }
 
-// Find claude executable - on Windows, npm installs .cmd files
+// Find claude executable - on Windows, npm installs .cmd files, native installer creates .exe
 function findClaudeExecutable(): string {
   if (!isWindows) {
     return 'claude'
   }
 
-  // On Windows, check for claude.cmd in portable npm-global first
+  // Windows: check for both .cmd (npm) and .exe (native) installations
+  const extensions = ['claude.cmd', 'claude.exe']
+
+  // Check portable npm-global first
   const portableDirs = getPortableBinDirs()
   for (const dir of portableDirs) {
-    const claudeCmd = path.join(dir, 'claude.cmd')
-    if (fs.existsSync(claudeCmd)) {
-      console.log('Found Claude at (portable):', claudeCmd)
-      return claudeCmd
+    for (const ext of extensions) {
+      const claudePath = path.join(dir, ext)
+      if (fs.existsSync(claudePath)) {
+        console.log('Found Claude at (portable):', claudePath)
+        return claudePath
+      }
     }
   }
 
-  // Then check for claude.cmd in system npm paths
+  // Then check system paths (includes ~/.local/bin for native installs)
   const additionalPaths = getAdditionalPaths()
   for (const dir of additionalPaths) {
-    const claudeCmd = path.join(dir, 'claude.cmd')
-    if (fs.existsSync(claudeCmd)) {
-      console.log('Found Claude at:', claudeCmd)
-      return claudeCmd
+    for (const ext of extensions) {
+      const claudePath = path.join(dir, ext)
+      if (fs.existsSync(claudePath)) {
+        console.log('Found Claude at:', claudePath)
+        return claudePath
+      }
     }
   }
 
@@ -215,8 +235,20 @@ function findAiderExecutable(): string {
 
   // Check common Python Scripts locations
   const pythonPaths = [
-    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'Scripts'),
-    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'Scripts'),
+    path.join(
+      process.env.LOCALAPPDATA || '',
+      'Programs',
+      'Python',
+      'Python312',
+      'Scripts'
+    ),
+    path.join(
+      process.env.LOCALAPPDATA || '',
+      'Programs',
+      'Python',
+      'Python311',
+      'Scripts'
+    ),
     path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts'),
     path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts'),
   ]
@@ -234,7 +266,11 @@ function findAiderExecutable(): string {
 
 // Build backend-specific permission arguments
 // Maps our internal permission modes to each backend's CLI flags
-function buildPermissionArgs(backend: string = 'claude', permissionMode?: string, autoAcceptTools?: string[]): string[] {
+function buildPermissionArgs(
+  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude',
+  permissionMode?: string,
+  autoAcceptTools?: string[]
+): string[] {
   const args: string[] = []
 
   switch (backend) {
@@ -305,7 +341,10 @@ function buildPermissionArgs(backend: string = 'claude', permissionMode?: string
   return args
 }
 
-function buildResumeArgs(backend: string = 'claude', sessionId?: string): string[] {
+function buildResumeArgs(
+  backend: string = 'claude',
+  sessionId?: string
+): string[] {
   if (!sessionId) {
     return []
   }
@@ -329,7 +368,14 @@ export class PtyManager {
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
   private exitCallbacks: Map<string, (code: number) => void> = new Map()
 
-  spawn(cwd: string, sessionId?: string, autoAcceptTools?: string[], permissionMode?: string, model?: string, backend?: string): string {
+  spawn(
+    cwd: string,
+    sessionId?: string,
+    autoAcceptTools?: string[],
+    permissionMode?: string,
+    model?: string,
+    backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  ): string {
     const id = crypto.randomUUID()
 
     const args: string[] = []
@@ -341,7 +387,11 @@ export class PtyManager {
     }
 
     // Add backend-specific permission arguments
-    const permissionArgs = buildPermissionArgs(backend || 'claude', permissionMode, autoAcceptTools)
+    const permissionArgs = buildPermissionArgs(
+      backend || 'claude',
+      permissionMode,
+      autoAcceptTools
+    )
     args.push(...permissionArgs)
 
     const exe = findExecutable(backend)
@@ -353,12 +403,12 @@ export class PtyManager {
       rows: 30,
       cwd,
       env: getEnhancedEnv(),
-      handleFlowControl: true  // Enable XON/XOFF flow control for better backpressure handling
+      handleFlowControl: true, // Enable XON/XOFF flow control for better backpressure handling
     }
 
-    // Windows: try winpty instead of ConPTY for better escape sequence handling
+    // Windows: use ConPTY for better escape sequence and UTF-8 handling
     if (isWindows) {
-      ptyOptions.useConpty = false
+      ptyOptions.useConpty = true
     }
 
     const shell = pty.spawn(exe, args, ptyOptions)
@@ -368,14 +418,20 @@ export class PtyManager {
       pty: shell,
       cwd,
       sessionId,
-      backend,
-      disposables: []
+      backend: backend as
+        | 'claude'
+        | 'gemini'
+        | 'codex'
+        | 'opencode'
+        | 'aider'
+        | undefined,
+      disposables: [],
     }
 
     this.processes.set(id, proc)
 
     // Store disposables from onData/onExit for proper cleanup
-    const dataDisposable = shell.onData((data) => {
+    const dataDisposable = shell.onData(data => {
       const callback = this.dataCallbacks.get(id)
       if (callback) {
         callback(data)

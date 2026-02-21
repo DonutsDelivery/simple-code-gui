@@ -21,7 +21,7 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   categoryId?: string
   order?: number
 }
@@ -32,7 +32,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 interface WorkspaceState {

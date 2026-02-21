@@ -1,5 +1,7 @@
 export interface TileLayout {
   id: string
+  tabIds: string[]    // Ordered list of OpenTab IDs in this tile
+  activeTabId: string // Currently visible sub-tab
   x: number      // Left position as percentage (0-100)
   y: number      // Top position as percentage (0-100)
   width: number  // Width as percentage (0-100)
@@ -11,7 +13,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
-  backend?: string
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export type DropZoneType =
@@ -134,11 +136,29 @@ function findOptimalGrid(count: number, containerWidth: number, containerHeight:
   return { rows: bestRows, cols: bestCols }
 }
 
+function makeTile(id: string, x: number, y: number, width: number, height: number, tabIds?: string[], activeTabId?: string): TileLayout {
+  const tIds = tabIds || [id]
+  return { id, tabIds: tIds, activeTabId: activeTabId || tIds[0], x, y, width, height }
+}
+
 export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, containerHeight = 1080): TileLayout[] {
-  const count = tabs.length
+  // Group tabs by projectPath
+  const groups = new Map<string, OpenTab[]>()
+  for (const tab of tabs) {
+    const key = tab.projectPath
+    const group = groups.get(key) || []
+    group.push(tab)
+    groups.set(key, group)
+  }
+
+  const groupList = [...groups.values()]
+  const count = groupList.length
   if (count === 0) return []
   if (count === 1) {
-    return [{ id: tabs[0].id, x: 0, y: 0, width: 100, height: 100 }]
+    const group = groupList[0]
+    const tileId = group[0].id
+    const tabIds = group.map(t => t.id)
+    return [makeTile(tileId, 0, 0, 100, 100, tabIds, tabIds[tabIds.length - 1])]
   }
 
   const { rows, cols } = findOptimalGrid(count, containerWidth, containerHeight)
@@ -148,32 +168,26 @@ export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, co
   const fullRows = Math.floor(count / cols)
   const lastRowCount = count % cols
 
-  let tabIndex = 0
+  let groupIndex = 0
 
   for (let row = 0; row < fullRows; row++) {
     for (let col = 0; col < cols; col++) {
-      layout.push({
-        id: tabs[tabIndex].id,
-        x: col * colWidth,
-        y: row * rowHeight,
-        width: colWidth,
-        height: rowHeight
-      })
-      tabIndex++
+      const group = groupList[groupIndex]
+      const tileId = group[0].id
+      const tabIds = group.map(t => t.id)
+      layout.push(makeTile(tileId, col * colWidth, row * rowHeight, colWidth, rowHeight, tabIds, tabIds[tabIds.length - 1]))
+      groupIndex++
     }
   }
 
   if (lastRowCount > 0) {
     const lastRowColWidth = 100 / lastRowCount
     for (let col = 0; col < lastRowCount; col++) {
-      layout.push({
-        id: tabs[tabIndex].id,
-        x: col * lastRowColWidth,
-        y: fullRows * rowHeight,
-        width: lastRowColWidth,
-        height: rowHeight
-      })
-      tabIndex++
+      const group = groupList[groupIndex]
+      const tileId = group[0].id
+      const tabIds = group.map(t => t.id)
+      layout.push(makeTile(tileId, col * lastRowColWidth, fullRows * rowHeight, lastRowColWidth, rowHeight, tabIds, tabIds[tabIds.length - 1]))
+      groupIndex++
     }
   }
 
@@ -181,24 +195,48 @@ export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, co
 }
 
 export function validateLayout(layout: TileLayout[], tabs: OpenTab[], containerWidth = 1920, containerHeight = 1080): TileLayout[] {
-  for (const tile of layout) {
+  const tabIdSet = new Set(tabs.map(t => t.id))
+
+  // Filter stale tabIds that no longer correspond to actual tabs
+  let cleaned = layout.map(tile => {
+    const validTabIds = (tile.tabIds || []).filter(id => tabIdSet.has(id))
+    if (validTabIds.length === tile.tabIds?.length) return tile
+    const activeTabId = validTabIds.includes(tile.activeTabId) ? tile.activeTabId : validTabIds[0]
+    return { ...tile, tabIds: validTabIds, activeTabId: activeTabId || tile.activeTabId }
+  })
+
+  // Remove tiles that have no valid tabs and reclaim their space
+  let emptyTileIds = cleaned.filter(t => t.tabIds.length === 0).map(t => t.id)
+  for (const emptyId of emptyTileIds) {
+    cleaned = removeTilePreservingStructure(cleaned, emptyId, tabs, containerWidth, containerHeight)
+  }
+
+  for (const tile of cleaned) {
     if (tile.x < 0 || tile.y < 0 ||
         tile.x + tile.width > 100.5 || tile.y + tile.height > 100.5 ||
         tile.width < 5 || tile.height < 5) {
       console.warn('Detected out-of-bounds tile, resetting to default layout', tile)
       return generateDefaultLayout(tabs, containerWidth, containerHeight)
     }
+    if (!tile.tabIds || tile.tabIds.length === 0) {
+      console.warn('Detected tile with empty tabIds, resetting to default layout', tile)
+      return generateDefaultLayout(tabs, containerWidth, containerHeight)
+    }
+    if (!tile.activeTabId || !tile.tabIds.includes(tile.activeTabId)) {
+      console.warn('Detected tile with invalid activeTabId, fixing', tile)
+      tile.activeTabId = tile.tabIds[0]
+    }
   }
 
-  for (let i = 0; i < layout.length; i++) {
-    for (let j = i + 1; j < layout.length; j++) {
-      if (tilesOverlap(layout[i], layout[j])) {
+  for (let i = 0; i < cleaned.length; i++) {
+    for (let j = i + 1; j < cleaned.length; j++) {
+      if (tilesOverlap(cleaned[i], cleaned[j])) {
         console.warn('Detected overlapping tiles, resetting to default layout')
         return generateDefaultLayout(tabs, containerWidth, containerHeight)
       }
     }
   }
-  return layout
+  return cleaned
 }
 
 export function removeTilePreservingStructure(
@@ -284,21 +322,33 @@ export function splitTile(
   const isHorizontal = direction === 'top' || direction === 'bottom'
   const newLayout = layout.filter(t => t.id !== targetTileId)
 
+  // The target tile keeps its tabIds; the new tile gets a single tab
+  const targetTabIds = target.tabIds || [targetTileId]
+  const targetActiveTabId = target.activeTabId || targetTabIds[0]
+
   if (isHorizontal) {
     const halfHeight = target.height / 2
     const topTileId = direction === 'top' ? newTileId : targetTileId
     const bottomTileId = direction === 'bottom' ? newTileId : targetTileId
     newLayout.push(
-      { id: topTileId, x: target.x, y: target.y, width: target.width, height: halfHeight },
-      { id: bottomTileId, x: target.x, y: target.y + halfHeight, width: target.width, height: halfHeight }
+      makeTile(topTileId, target.x, target.y, target.width, halfHeight,
+        topTileId === targetTileId ? targetTabIds : [newTileId],
+        topTileId === targetTileId ? targetActiveTabId : newTileId),
+      makeTile(bottomTileId, target.x, target.y + halfHeight, target.width, halfHeight,
+        bottomTileId === targetTileId ? targetTabIds : [newTileId],
+        bottomTileId === targetTileId ? targetActiveTabId : newTileId)
     )
   } else {
     const halfWidth = target.width / 2
     const leftTileId = direction === 'left' ? newTileId : targetTileId
     const rightTileId = direction === 'right' ? newTileId : targetTileId
     newLayout.push(
-      { id: leftTileId, x: target.x, y: target.y, width: halfWidth, height: target.height },
-      { id: rightTileId, x: target.x + halfWidth, y: target.y, width: halfWidth, height: target.height }
+      makeTile(leftTileId, target.x, target.y, halfWidth, target.height,
+        leftTileId === targetTileId ? targetTabIds : [newTileId],
+        leftTileId === targetTileId ? targetActiveTabId : newTileId),
+      makeTile(rightTileId, target.x + halfWidth, target.y, halfWidth, target.height,
+        rightTileId === targetTileId ? targetTabIds : [newTileId],
+        rightTileId === targetTileId ? targetActiveTabId : newTileId)
     )
   }
 
@@ -313,7 +363,7 @@ export function addTileToLayout(
   containerHeight: number
 ): TileLayout[] {
   if (layout.length === 0) {
-    return [{ id: newTileId, x: 0, y: 0, width: 100, height: 100 }]
+    return [makeTile(newTileId, 0, 0, 100, 100)]
   }
 
   if (activeTabId) {
@@ -327,7 +377,7 @@ export function addTileToLayout(
 
   const rows = detectRows(layout)
   if (rows.length === 0) {
-    return [{ id: newTileId, x: 0, y: 0, width: 100, height: 100 }]
+    return [makeTile(newTileId, 0, 0, 100, 100)]
   }
 
   const shortestRow = rows.reduce((min, row) =>
@@ -348,13 +398,7 @@ export function addTileToLayout(
     return t
   })
 
-  updatedLayout.push({
-    id: newTileId,
-    x: currentX,
-    y: shortestRow.y,
-    width: newWidth,
-    height: shortestRow.height
-  })
+  updatedLayout.push(makeTile(newTileId, currentX, shortestRow.y, newWidth, shortestRow.height))
 
   return updatedLayout
 }
@@ -409,6 +453,71 @@ export function computeDropZone(
   }
 
   return { type, targetTileId: targetTile.id, bounds }
+}
+
+/** Migrate a legacy tile (without tabIds) to the new format */
+export function migrateTile(tile: TileLayout): TileLayout {
+  if (tile.tabIds && tile.tabIds.length > 0) return tile
+  return { ...tile, tabIds: [tile.id], activeTabId: tile.activeTabId || tile.id }
+}
+
+/** Add a tab to an existing tile's tabIds */
+export function addTabToExistingTile(layout: TileLayout[], tileId: string, tabId: string): TileLayout[] {
+  return layout.map(tile => {
+    if (tile.id === tileId) {
+      const tabIds = [...tile.tabIds, tabId]
+      return { ...tile, tabIds, activeTabId: tabId }
+    }
+    return tile
+  })
+}
+
+/** Find a tile that contains a tab for the given project */
+export function findTileForProject(layout: TileLayout[], tabs: OpenTab[], projectPath: string): TileLayout | undefined {
+  return layout.find(tile =>
+    tile.tabIds.some(tabId => {
+      const tab = tabs.find(t => t.id === tabId)
+      return tab && tab.projectPath === projectPath
+    })
+  )
+}
+
+/** Remove a tab from its tile. If the tile becomes empty, remove the tile and reclaim space. */
+export function removeTabFromTile(
+  layout: TileLayout[],
+  tabId: string,
+  tabs: OpenTab[],
+  containerWidth: number,
+  containerHeight: number
+): TileLayout[] {
+  const tile = layout.find(t => t.tabIds.includes(tabId))
+  if (!tile) return layout
+
+  const newTabIds = tile.tabIds.filter(id => id !== tabId)
+  if (newTabIds.length === 0) {
+    // Tile is empty, remove it entirely and reclaim space
+    return removeTilePreservingStructure(layout, tile.id, tabs, containerWidth, containerHeight)
+  }
+
+  // Update the tile with the remaining tabs
+  const newActiveTabId = tile.activeTabId === tabId ? newTabIds[newTabIds.length - 1] : tile.activeTabId
+  return layout.map(t => {
+    if (t.id === tile.id) {
+      return { ...t, tabIds: newTabIds, activeTabId: newActiveTabId }
+    }
+    return t
+  })
+}
+
+/** Get all tab IDs across all tiles */
+export function getAllTabIdsFromLayout(layout: TileLayout[]): Set<string> {
+  const ids = new Set<string>()
+  for (const tile of layout) {
+    for (const tabId of tile.tabIds) {
+      ids.add(tabId)
+    }
+  }
+  return ids
 }
 
 export function findTilesOnDivider(

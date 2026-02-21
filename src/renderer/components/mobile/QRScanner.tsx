@@ -11,6 +11,9 @@ export interface ParsedConnectionUrl {
   fingerprint?: string
   nonce?: string
   nonceExpires?: number
+  // v3 security fields (TLS certificate pinning)
+  certFingerprint?: string
+  secure?: boolean
 }
 
 interface QRScannerProps {
@@ -20,11 +23,12 @@ interface QRScannerProps {
 }
 
 /**
- * V2 QR code JSON format
+ * V2/V3 QR code JSON format
+ * V3 adds TLS certificate pinning fields
  */
-interface QRCodeV2 {
+interface QRCodePayload {
   type: 'claude-terminal'
-  version: 2
+  version: 2 | 3
   host: string
   hosts?: string[]  // Multiple IPs for fallback connection attempts
   port: number
@@ -32,38 +36,44 @@ interface QRCodeV2 {
   fingerprint: string
   nonce: string
   nonceExpires: number
+  // v3 TLS fields
+  certFingerprint?: string
+  secure?: boolean
 }
 
 /**
  * Parse connection data from QR code
- * Supports both v1 (URL format) and v2 (JSON format)
+ * Supports v1 (URL format), v2 (JSON), and v3 (JSON with TLS)
  */
 export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
-  // Try parsing as JSON (v2 format)
+  // Try parsing as JSON (v2/v3 format)
   try {
     const parsed = JSON.parse(data)
-    if (parsed.type === 'claude-terminal' && parsed.version === 2) {
-      const v2 = parsed as QRCodeV2
+    if (parsed.type === 'claude-terminal' && (parsed.version === 2 || parsed.version === 3)) {
+      const qr = parsed as QRCodePayload
 
       // Validate required fields
-      if (!v2.host || !v2.token || !v2.fingerprint || !v2.nonce) {
+      if (!qr.host || !qr.token || !qr.fingerprint || !qr.nonce) {
         return null
       }
 
       // Check if nonce has expired
-      if (v2.nonceExpires && Date.now() > v2.nonceExpires) {
+      if (qr.nonceExpires && Date.now() > qr.nonceExpires) {
         return null // Expired nonce
       }
 
       return {
-        host: v2.host,
-        hosts: v2.hosts,  // Include all IPs for multi-IP connection attempts
-        port: v2.port || 38470,
-        token: v2.token,
-        version: 2,
-        fingerprint: v2.fingerprint,
-        nonce: v2.nonce,
-        nonceExpires: v2.nonceExpires
+        host: qr.host,
+        hosts: qr.hosts,  // Include all IPs for multi-IP connection attempts
+        port: qr.port || 38470,
+        token: qr.token,
+        version: qr.version,
+        fingerprint: qr.fingerprint,
+        nonce: qr.nonce,
+        nonceExpires: qr.nonceExpires,
+        // v3 TLS fields
+        certFingerprint: qr.certFingerprint,
+        secure: qr.secure
       }
     }
   } catch {

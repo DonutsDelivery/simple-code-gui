@@ -1,5 +1,5 @@
 import type { Theme } from '../../themes'
-import type { WhisperModelSize } from '../../contexts/VoiceContext'
+type WhisperModelSize = 'tiny.en' | 'base.en' | 'small.en' | 'medium.en' | 'large-v3'
 
 // Whisper models available
 export const WHISPER_MODELS: Array<{ value: WhisperModelSize; label: string; desc: string }> = [
@@ -45,6 +45,7 @@ export const PERMISSION_MODES = [
 ]
 
 export const BACKEND_MODES = [
+  { label: 'Default', value: 'default', desc: 'Use the global backend selection' },
   { label: 'Claude', value: 'claude', desc: 'Use Claude for code generation' },
   { label: 'Gemini', value: 'gemini', desc: 'Use Gemini for code generation' },
   { label: 'Codex', value: 'codex', desc: 'Use Codex for code generation' },
@@ -52,14 +53,42 @@ export const BACKEND_MODES = [
   { label: 'Aider', value: 'aider', desc: 'Use Aider AI pair programmer' },
 ]
 
+// Terminal ANSI colors customization
+export interface TerminalColorsCustomization {
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+}
+
+// Theme customization options
+export interface ThemeCustomization {
+  accentColor: string | null
+  backgroundColor: string | null
+  textColor: string | null
+  terminalColors: TerminalColorsCustomization | null
+}
+
+export const DEFAULT_THEME_CUSTOMIZATION: ThemeCustomization = {
+  accentColor: null,
+  backgroundColor: null,
+  textColor: null,
+  terminalColors: null
+}
+
 // Grouped state interfaces to reduce useState calls
 export interface GeneralSettings {
   defaultProjectDir: string
   selectedTheme: string
+  themeCustomization: ThemeCustomization
   autoAcceptTools: string[]
   permissionMode: string
   customTool: string
-  backend: string
+  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 }
 
 export interface VoiceSettings {
@@ -92,10 +121,11 @@ export interface UIState {
 export const DEFAULT_GENERAL: GeneralSettings = {
   defaultProjectDir: '',
   selectedTheme: 'default',
+  themeCustomization: DEFAULT_THEME_CUSTOMIZATION,
   autoAcceptTools: [],
   permissionMode: 'default',
   customTool: '',
-  backend: 'claude'
+  backend: 'default'
 }
 
 export const DEFAULT_VOICE: VoiceSettings = {
@@ -124,9 +154,22 @@ export const DEFAULT_UI: UIState = {
   ttsRemovalResult: null
 }
 
+export type UpdateStatusType = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'
+
+export interface UpdateStatus {
+  status: UpdateStatusType
+  version?: string
+  progress?: number
+  error?: string
+}
+
 export interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
   onThemeChange: (theme: Theme) => void
-  onSaved?: (settings: { defaultProjectDir: string; theme: string; autoAcceptTools?: string[]; permissionMode?: string; backend?: string }) => void
+  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => void
+  appVersion?: string
+  updateStatus?: UpdateStatus
+  onDownloadUpdate?: () => void
+  onInstallUpdate?: () => void
 }
