@@ -130,15 +130,21 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'path query parameter is required' })
       }
 
-      const normalizedPath = resolve(filePath)
-      if (!existsSync(normalizedPath)) {
-        return res.status(404).json({ error: 'Path does not exist' })
+      // Validate path against blocked system directories and traversal attacks
+      const pathValidation = validateProjectPath(filePath)
+      // validateProjectPath requires a directory; fall back to file validation
+      const validation = pathValidation.valid
+        ? pathValidation
+        : validateFilePath(filePath)
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error })
       }
+      const safePath = validation.normalizedPath!
 
-      const stats = statSync(normalizedPath)
+      const stats = statSync(safePath)
       res.json({
-        path: normalizedPath,
-        name: basename(normalizedPath),
+        path: safePath,
+        name: basename(safePath),
         type: stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file',
         size: stats.size,
         modified: stats.mtime.toISOString(),
@@ -159,7 +165,13 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'path is required in request body' })
       }
 
-      const result = sendFileToMobile(filePath, message)
+      // Validate path before passing to sendFileToMobile
+      const pathValidation = validateFilePath(filePath)
+      if (!pathValidation.valid) {
+        return res.status(400).json({ error: pathValidation.error })
+      }
+
+      const result = sendFileToMobile(pathValidation.normalizedPath!, message)
       if (result.success) {
         res.json({
           success: true,

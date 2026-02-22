@@ -481,8 +481,11 @@ export function useHostConnection(): UseHostConnectionReturn {
           )
         }
       } else {
-        // Verification failed - log but continue (might be network issue)
-        console.warn('Handshake verification failed:', result.error, '- proceeding anyway')
+        // Verification failed - do not proceed (nonce expired, invalid, or replayed)
+        console.error('Handshake verification failed:', result.error)
+        setError(`Handshake verification failed: ${result.error || 'unknown error'}. Try scanning the QR code again.`)
+        setConnectionState('error')
+        return
       }
 
       // Clear the nonce from host config
