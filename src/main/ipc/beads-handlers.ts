@@ -87,6 +87,11 @@ export function registerBeadsHandlers(getMainWindow: () => BrowserWindow | null)
 
   ipcMain.handle('beads:init', async (_, cwd: string) => {
     try {
+      const beadsDir = join(cwd, '.beads')
+      if (existsSync(beadsDir)) {
+        // Already initialized — don't re-init and risk destroying existing tasks
+        return { success: true }
+      }
       await execAsync('bd init', { ...getBeadsExecOptions(), cwd })
       return { success: true }
     } catch (e: any) {

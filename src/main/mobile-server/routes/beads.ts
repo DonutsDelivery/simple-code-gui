@@ -61,6 +61,11 @@ export function setupBeadsRoutes(app: Express): void {
       }
       const safeCwd = pathValidation.normalizedPath!
 
+      const beadsDir = join(safeCwd, '.beads')
+      if (existsSync(beadsDir)) {
+        // Already initialized — don't re-init and risk destroying existing tasks
+        return res.json({ success: true })
+      }
       await execAsync('bd init', { ...getBeadsExecOptions(), cwd: safeCwd })
       res.json({ success: true })
     } catch (error: any) {
