@@ -1,7 +1,7 @@
 import { useEffect, useCallback, MutableRefObject } from 'react'
 import type { TileLayout } from '../tiled-layout-utils.js'
 import { findTilesOnDivider, MIN_SIZE } from '../tiled-layout-utils.js'
-import type { TileResizeState, ResizeEdge } from './types.js'
+import type { TileResizeState, ResizeEdge, ClientToCanvasPercent } from './types.js'
 
 function getCursorForEdge(edge: string): string {
   switch (edge) {
@@ -66,7 +66,8 @@ export function useTileResizeEffect(
   containerRef: MutableRefObject<HTMLDivElement | null>,
   effectiveLayoutRef: MutableRefObject<TileLayout[]>,
   onLayoutChangeRef: MutableRefObject<(layout: TileLayout[]) => void>,
-  setTileResizing: (state: TileResizeState | null) => void
+  setTileResizing: (state: TileResizeState | null) => void,
+  clientToCanvasPercentRef?: MutableRefObject<ClientToCanvasPercent>
 ): void {
   useEffect(() => {
     if (!tileResizing || !containerRef.current) return
@@ -89,8 +90,11 @@ export function useTileResizeEffect(
         } = tileResizing
         const currentLayout = effectiveLayoutRef.current
 
-        const mouseXPercent = ((e.clientX - rect.left) / rect.width) * 100
-        const mouseYPercent = ((e.clientY - rect.top) / rect.height) * 100
+        const canvasCoords = clientToCanvasPercentRef?.current
+          ? clientToCanvasPercentRef.current(e.clientX, e.clientY)
+          : { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 }
+        const mouseXPercent = canvasCoords.x
+        const mouseYPercent = canvasCoords.y
 
         const tileUpdates = new Map<string, TileLayout>()
 
@@ -196,5 +200,5 @@ export function useTileResizeEffect(
       window.removeEventListener('mousemove', handleTileResizeMove)
       window.removeEventListener('mouseup', handleTileResizeUp)
     }
-  }, [tileResizing, containerRef, effectiveLayoutRef, onLayoutChangeRef, setTileResizing])
+  }, [tileResizing, containerRef, effectiveLayoutRef, onLayoutChangeRef, setTileResizing, clientToCanvasPercentRef])
 }

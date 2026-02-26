@@ -142,23 +142,22 @@ function makeTile(id: string, x: number, y: number, width: number, height: numbe
 }
 
 export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, containerHeight = 1080): TileLayout[] {
-  // Group tabs by projectPath
-  const groups = new Map<string, OpenTab[]>()
-  for (const tab of tabs) {
-    const key = tab.projectPath
-    const group = groups.get(key) || []
-    group.push(tab)
-    groups.set(key, group)
-  }
-
-  const groupList = [...groups.values()]
-  const count = groupList.length
+  // Each tab gets its own tile (no grouping by project)
+  const count = tabs.length
   if (count === 0) return []
   if (count === 1) {
-    const group = groupList[0]
-    const tileId = group[0].id
-    const tabIds = group.map(t => t.id)
-    return [makeTile(tileId, 0, 0, 100, 100, tabIds, tabIds[tabIds.length - 1])]
+    return [makeTile(tabs[0].id, 0, 0, 100, 100)]
+  }
+
+  // For 3+ tiles, lay out in a single horizontal row where each tile gets
+  // at least 50% viewport width (canvas extends beyond viewport)
+  if (count >= 3) {
+    const layout: TileLayout[] = []
+    const tileWidth = 50  // Each tile gets 50% of viewport width
+    for (let i = 0; i < count; i++) {
+      layout.push(makeTile(tabs[i].id, i * tileWidth, 0, tileWidth, 100))
+    }
+    return layout
   }
 
   const { rows, cols } = findOptimalGrid(count, containerWidth, containerHeight)
@@ -168,26 +167,20 @@ export function generateDefaultLayout(tabs: OpenTab[], containerWidth = 1920, co
   const fullRows = Math.floor(count / cols)
   const lastRowCount = count % cols
 
-  let groupIndex = 0
+  let tabIndex = 0
 
   for (let row = 0; row < fullRows; row++) {
     for (let col = 0; col < cols; col++) {
-      const group = groupList[groupIndex]
-      const tileId = group[0].id
-      const tabIds = group.map(t => t.id)
-      layout.push(makeTile(tileId, col * colWidth, row * rowHeight, colWidth, rowHeight, tabIds, tabIds[tabIds.length - 1]))
-      groupIndex++
+      layout.push(makeTile(tabs[tabIndex].id, col * colWidth, row * rowHeight, colWidth, rowHeight))
+      tabIndex++
     }
   }
 
   if (lastRowCount > 0) {
     const lastRowColWidth = 100 / lastRowCount
     for (let col = 0; col < lastRowCount; col++) {
-      const group = groupList[groupIndex]
-      const tileId = group[0].id
-      const tabIds = group.map(t => t.id)
-      layout.push(makeTile(tileId, col * lastRowColWidth, fullRows * rowHeight, lastRowColWidth, rowHeight, tabIds, tabIds[tabIds.length - 1]))
-      groupIndex++
+      layout.push(makeTile(tabs[tabIndex].id, col * lastRowColWidth, fullRows * rowHeight, lastRowColWidth, rowHeight))
+      tabIndex++
     }
   }
 
@@ -213,7 +206,7 @@ export function validateLayout(layout: TileLayout[], tabs: OpenTab[], containerW
 
   for (const tile of cleaned) {
     if (tile.x < 0 || tile.y < 0 ||
-        tile.x + tile.width > 100.5 || tile.y + tile.height > 100.5 ||
+        tile.y + tile.height > 100.5 ||
         tile.width < 5 || tile.height < 5) {
       console.warn('Detected out-of-bounds tile, resetting to default layout', tile)
       return generateDefaultLayout(tabs, containerWidth, containerHeight)
@@ -364,6 +357,12 @@ export function addTileToLayout(
 ): TileLayout[] {
   if (layout.length === 0) {
     return [makeTile(newTileId, 0, 0, 100, 100)]
+  }
+
+  // When layout already has 3+ tiles, place new tile to the right of the rightmost edge
+  if (layout.length >= 3) {
+    const rightmostEdge = Math.max(...layout.map(t => t.x + t.width))
+    return [...layout, makeTile(newTileId, rightmostEdge, 0, 50, 100)]
   }
 
   if (activeTabId) {

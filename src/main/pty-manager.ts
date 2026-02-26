@@ -8,6 +8,9 @@ import {
 } from './platform'
 import { getPortableBinDirs } from './portable-deps'
 
+// Backends that use Ink (React for CLI) and are sensitive to rapid resize during startup
+const INK_BACKENDS = new Set(['gemini'])
+
 interface ClaudeProcess {
   id: string
   pty: pty.IPty
@@ -15,6 +18,10 @@ interface ClaudeProcess {
   sessionId?: string
   backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
   disposables: { dispose: () => void }[]
+  spawnedAt: number
+  resizeTimeout?: ReturnType<typeof setTimeout>
+  lastResizeCols?: number
+  lastResizeRows?: number
 }
 
 // Extended node-pty options - useConpty is a Windows-specific option not in @types/node-pty
@@ -426,6 +433,7 @@ export class PtyManager {
         | 'aider'
         | undefined,
       disposables: [],
+      spawnedAt: Date.now(),
     }
 
     this.processes.set(id, proc)
@@ -460,19 +468,44 @@ export class PtyManager {
 
   resize(id: string, cols: number, rows: number): void {
     const proc = this.processes.get(id)
-    if (proc) {
+    if (!proc) return
+
+    // Skip if dimensions haven't changed
+    if (proc.lastResizeCols === cols && proc.lastResizeRows === rows) return
+
+    // Debounce resize events - Ink-based CLIs (e.g. Gemini) crash with
+    // infinite re-render loops when they receive rapid SIGWINCH during startup
+    if (proc.resizeTimeout) {
+      clearTimeout(proc.resizeTimeout)
+    }
+
+    const elapsed = Date.now() - proc.spawnedAt
+    const isInkBackend = INK_BACKENDS.has(proc.backend || '')
+    // During first 5s of Ink-backend startup, coalesce resizes with 1.5s debounce
+    // to let the CLI finish initialization before sending SIGWINCH
+    const debounceMs = isInkBackend && elapsed < 5000 ? 1500 : 50
+
+    proc.resizeTimeout = setTimeout(() => {
+      proc.resizeTimeout = undefined
+      proc.lastResizeCols = cols
+      proc.lastResizeRows = rows
       try {
         proc.pty.resize(cols, rows)
       } catch (e) {
         // PTY may have already exited, ignore resize errors
         console.log('PTY resize ignored (may have exited):', id)
       }
-    }
+    }, debounceMs)
   }
 
   private cleanupProcess(id: string): void {
     const proc = this.processes.get(id)
     if (proc) {
+      // Clear pending resize debounce
+      if (proc.resizeTimeout) {
+        clearTimeout(proc.resizeTimeout)
+        proc.resizeTimeout = undefined
+      }
       // Dispose all event listeners first
       for (const disposable of proc.disposables) {
         try {

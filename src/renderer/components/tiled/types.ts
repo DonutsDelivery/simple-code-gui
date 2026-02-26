@@ -47,4 +47,6 @@ export interface TileResizeState {
 
 export type ResizeEdge = TileResizeState['edge']
 
+export type ClientToCanvasPercent = (clientX: number, clientY: number) => { x: number; y: number }
+
 export { TileLayout, DropZone }

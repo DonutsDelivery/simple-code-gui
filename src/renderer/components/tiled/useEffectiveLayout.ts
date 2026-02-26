@@ -4,8 +4,6 @@ import {
   generateDefaultLayout,
   validateLayout,
   addTileToLayout,
-  addTabToExistingTile,
-  findTileForProject,
   removeTabFromTile,
   getAllTabIdsFromLayout,
   migrateTile
@@ -51,16 +49,11 @@ export function useEffectiveLayout(
       newLayout = removeTabFromTile(newLayout, removedId, tabs, width, height)
     }
 
-    // Add new tabs - group by project into existing tiles when possible
+    // Add new tabs - each gets its own tile (no auto-grouping by project)
     for (const addedTab of addedTabs) {
-      const existingTile = findTileForProject(newLayout, tabs, addedTab.projectPath)
-      if (existingTile) {
-        newLayout = addTabToExistingTile(newLayout, existingTile.id, addedTab.id)
-      } else {
-        const existingIds = newLayout.map(l => l.id)
-        const activeId = existingIds.length > 0 ? existingIds[existingIds.length - 1] : null
-        newLayout = addTileToLayout(newLayout, addedTab.id, activeId, width, height)
-      }
+      const existingIds = newLayout.map(l => l.id)
+      const activeId = existingIds.length > 0 ? existingIds[existingIds.length - 1] : null
+      newLayout = addTileToLayout(newLayout, addedTab.id, activeId, width, height)
     }
 
     if (tabs.length > 0) {

@@ -12,17 +12,26 @@ const DROP_ZONE_LABELS: Record<DropZoneType, string> = {
 interface DropZoneOverlayProps {
   currentDropZone: DropZone
   draggedSidebarProject: string | null
+  swapLabel?: string
   GAP: number
+  viewportSize: { width: number; height: number }
 }
 
 export function DropZoneOverlay({
   currentDropZone,
   draggedSidebarProject,
-  GAP
+  swapLabel,
+  GAP,
+  viewportSize
 }: DropZoneOverlayProps): React.ReactElement {
-  const label = draggedSidebarProject
-    ? (currentDropZone.type === 'swap' ? 'Open Here' : `Open ${DROP_ZONE_LABELS[currentDropZone.type].replace('Add ', '')}`)
-    : DROP_ZONE_LABELS[currentDropZone.type]
+  let label: string
+  if (currentDropZone.type === 'swap' && swapLabel) {
+    label = swapLabel
+  } else if (draggedSidebarProject) {
+    label = currentDropZone.type === 'swap' ? 'Add as Tab' : `Open ${DROP_ZONE_LABELS[currentDropZone.type].replace('Add ', '')}`
+  } else {
+    label = DROP_ZONE_LABELS[currentDropZone.type]
+  }
 
   let background: string
   if (draggedSidebarProject) {
@@ -38,10 +47,10 @@ export function DropZoneOverlay({
       className="drop-zone-overlay"
       style={{
         position: 'absolute',
-        left: `calc(${currentDropZone.bounds.x}% + ${GAP}px)`,
-        top: `calc(${currentDropZone.bounds.y}% + ${GAP}px)`,
-        width: `calc(${currentDropZone.bounds.width}% - ${GAP}px)`,
-        height: `calc(${currentDropZone.bounds.height}% - ${GAP}px)`,
+        left: `${currentDropZone.bounds.x / 100 * viewportSize.width + GAP}px`,
+        top: `${currentDropZone.bounds.y / 100 * viewportSize.height + GAP}px`,
+        width: `${currentDropZone.bounds.width / 100 * viewportSize.width - GAP}px`,
+        height: `${currentDropZone.bounds.height / 100 * viewportSize.height - GAP}px`,
         background,
         border: '2px dashed var(--accent)',
         borderRadius: 'var(--radius-sm)',

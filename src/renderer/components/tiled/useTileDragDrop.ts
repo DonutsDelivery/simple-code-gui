@@ -4,9 +4,10 @@ import {
   computeDropZone,
   validateLayout,
   removeTilePreservingStructure,
-  splitTile
+  splitTile,
+  addTabToExistingTile
 } from '../tiled-layout-utils.js'
-import type { OpenTab } from './types.js'
+import type { OpenTab, ClientToCanvasPercent } from './types.js'
 
 interface DragDropState {
   draggedTile: string | null
@@ -36,7 +37,8 @@ export function useHandleContainerDragOver(
   containerRef: MutableRefObject<HTMLDivElement | null>,
   effectiveLayout: TileLayout[],
   state: Pick<DragDropState, 'draggedTile' | 'draggedSidebarProject'>,
-  actions: Pick<DragDropActions, 'setDraggedSidebarProject' | 'setDropTarget' | 'setCurrentDropZone'>
+  actions: Pick<DragDropActions, 'setDraggedSidebarProject' | 'setDropTarget' | 'setCurrentDropZone'>,
+  clientToCanvasPercentRef?: MutableRefObject<ClientToCanvasPercent>
 ): (e: React.DragEvent) => void {
   const { draggedTile, draggedSidebarProject } = state
   const { setDraggedSidebarProject, setDropTarget, setCurrentDropZone } = actions
@@ -54,9 +56,9 @@ export function useHandleContainerDragOver(
         setDraggedSidebarProject('pending')
       }
 
-      const rect = containerRef.current.getBoundingClientRect()
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 100
-      const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+      const { x: mouseX, y: mouseY } = clientToCanvasPercentRef?.current
+        ? clientToCanvasPercentRef.current(e.clientX, e.clientY)
+        : (() => { const rect = containerRef.current!.getBoundingClientRect(); return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } })()
 
       const zone = computeDropZone(effectiveLayout, null, mouseX, mouseY)
       setCurrentDropZone(zone)
@@ -66,14 +68,14 @@ export function useHandleContainerDragOver(
 
     if (!draggedTile) return
 
-    const rect = containerRef.current.getBoundingClientRect()
-    const mouseX = ((e.clientX - rect.left) / rect.width) * 100
-    const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+    const { x: mouseX, y: mouseY } = clientToCanvasPercentRef?.current
+      ? clientToCanvasPercentRef.current(e.clientX, e.clientY)
+      : (() => { const rect = containerRef.current!.getBoundingClientRect(); return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } })()
 
     const zone = computeDropZone(effectiveLayout, draggedTile, mouseX, mouseY)
     setCurrentDropZone(zone)
     setDropTarget(zone?.targetTileId || null)
-  }, [containerRef, draggedTile, draggedSidebarProject, effectiveLayout, setDraggedSidebarProject, setDropTarget, setCurrentDropZone])
+  }, [containerRef, draggedTile, draggedSidebarProject, effectiveLayout, setDraggedSidebarProject, setDropTarget, setCurrentDropZone, clientToCanvasPercentRef])
 }
 
 export function useHandleContainerDragLeave(
@@ -103,16 +105,34 @@ export function useApplyDropZone(
     const { width, height } = containerSizeRef.current
 
     if (zone.type === 'swap') {
-      const sourceLayout = layout.find(t => t.id === draggedId)
-      const targetLayout = layout.find(t => t.id === zone.targetTileId)
+      const sourceTile = layout.find(t => t.id === draggedId)
+      const targetTile = layout.find(t => t.id === zone.targetTileId)
 
-      if (sourceLayout && targetLayout) {
+      if (sourceTile && targetTile) {
+        // Check if source and target share a project → merge tabs
+        const sourceProject = sourceTile.tabIds
+          .map(id => tabs.find(t => t.id === id)?.projectPath)
+          .find(p => p != null)
+        const targetProject = targetTile.tabIds
+          .map(id => tabs.find(t => t.id === id)?.projectPath)
+          .find(p => p != null)
+
+        if (sourceProject && sourceProject === targetProject) {
+          // Merge: add source tabs into target tile, then remove source tile
+          let merged = layout
+          for (const tabId of sourceTile.tabIds) {
+            merged = addTabToExistingTile(merged, targetTile.id, tabId)
+          }
+          return removeTilePreservingStructure(merged, draggedId, tabs, width, height)
+        }
+
+        // Different projects → swap positions
         return layout.map(tile => {
           if (tile.id === draggedId) {
-            return { ...tile, x: targetLayout.x, y: targetLayout.y, width: targetLayout.width, height: targetLayout.height }
+            return { ...tile, x: targetTile.x, y: targetTile.y, width: targetTile.width, height: targetTile.height }
           }
           if (tile.id === zone.targetTileId) {
-            return { ...tile, x: sourceLayout.x, y: sourceLayout.y, width: sourceLayout.width, height: sourceLayout.height }
+            return { ...tile, x: sourceTile.x, y: sourceTile.y, width: sourceTile.width, height: sourceTile.height }
           }
           return tile
         })
@@ -134,7 +154,8 @@ export function useHandleContainerDrop(
   onLayoutChange: (layout: TileLayout[]) => void,
   applyDropZone: (layout: TileLayout[], draggedId: string, zone: DropZone) => TileLayout[],
   onOpenSessionAtPosition: ((projectPath: string, dropZone: DropZone | null, containerSize: { width: number, height: number }, currentLayout?: TileLayout[]) => void) | undefined,
-  actions: DragDropActions
+  actions: DragDropActions,
+  clientToCanvasPercentRef?: MutableRefObject<ClientToCanvasPercent>
 ): (e: React.DragEvent) => void {
   const { setDraggedTile, setDraggedSidebarProject, setDropTarget, setCurrentDropZone } = actions
 
@@ -147,9 +168,9 @@ export function useHandleContainerDrop(
 
     let dropZone: DropZone | null = null
     if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect()
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 100
-      const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+      const { x: mouseX, y: mouseY } = clientToCanvasPercentRef?.current
+        ? clientToCanvasPercentRef.current(e.clientX, e.clientY)
+        : (() => { const rect = containerRef.current!.getBoundingClientRect(); return { x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 } })()
       const currentLayout = effectiveLayoutRef.current
       dropZone = computeDropZone(currentLayout, null, mouseX, mouseY)
     }
@@ -188,7 +209,7 @@ export function useHandleContainerDrop(
     setDraggedTile(null)
     setDropTarget(null)
     setCurrentDropZone(null)
-  }, [containerRef, effectiveLayoutRef, containerSizeRef, tabs, onLayoutChange, applyDropZone, onOpenSessionAtPosition, setDraggedTile, setDraggedSidebarProject, setDropTarget, setCurrentDropZone])
+  }, [containerRef, effectiveLayoutRef, containerSizeRef, tabs, onLayoutChange, applyDropZone, onOpenSessionAtPosition, setDraggedTile, setDraggedSidebarProject, setDropTarget, setCurrentDropZone, clientToCanvasPercentRef])
 }
 
 export function useHandleDragEnd(

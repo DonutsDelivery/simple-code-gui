@@ -3,7 +3,7 @@ import type { Api } from '../api'
 import type { BackendId } from '../api/types'
 import type { AppSettings } from './useSettings'
 import { OpenTab, Project } from '../stores/workspace'
-import { TileLayout, DropZone, splitTile, addTileToLayout, addTabToExistingTile, findTileForProject } from '../components/TiledTerminalView'
+import { TileLayout, DropZone, splitTile, addTileToLayout, addTabToExistingTile } from '../components/TiledTerminalView'
 import { clearTerminalBuffer } from '../components/terminal/Terminal'
 
 interface UseProjectHandlersOptions {
@@ -129,13 +129,6 @@ export function useProjectHandlers({
         backend: effectiveBackend
       })
 
-      // Check if there's already a tile for this project and add as sub-tab
-      const currentTileLayout = tileLayoutRef.current
-      const existingTile = findTileForProject(currentTileLayout, openTabs, projectPath)
-      if (existingTile) {
-        setTileLayout(addTabToExistingTile(currentTileLayout, existingTile.id, ptyId))
-      }
-
       // If an initial prompt was provided, send it after a short delay
       if (initialPrompt) {
         setTimeout(() => {
@@ -193,20 +186,14 @@ export function useProjectHandlers({
       // Re-read the latest layout after the async spawn (layout may have changed during await)
       const latestLayout = currentLayout || tileLayoutRef.current
 
-      // Check if dropping on center/swap of a tile that has the same project → add as sub-tab
+      // Sidebar drag onto swap zone → always tab into target tile
       if (dropZone && dropZone.type === 'swap') {
         const targetTile = latestLayout.find(t => t.id === dropZone.targetTileId)
-        const targetTabIds = targetTile?.tabIds || [dropZone.targetTileId]
-        const targetHasSameProject = targetTabIds.some(tabId => {
-          const tab = openTabs.find(t => t.id === tabId)
-          return tab && tab.projectPath === projectPath
-        })
-
-        if (targetHasSameProject && targetTile) {
+        if (targetTile) {
           console.log('[App] Adding as sub-tab to existing tile')
           newLayout = addTabToExistingTile(latestLayout, targetTile.id, ptyId)
         } else {
-          console.log('[App] Using addTileToLayout for swap')
+          console.log('[App] Using addTileToLayout for swap (target not found)')
           newLayout = addTileToLayout(latestLayout, ptyId, dropZone.targetTileId, containerSize.width, containerSize.height)
         }
       } else if (dropZone && dropZone.type !== 'swap') {

@@ -5,7 +5,7 @@ import type { TileLayout, DropZone } from '../tiled-layout-utils.js'
 import { computeDropZone } from '../tiled-layout-utils.js'
 import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
-import type { OpenTab, Project, ResizeEdge } from './types.js'
+import type { OpenTab, Project, ResizeEdge, ClientToCanvasPercent } from './types.js'
 
 interface TileTerminalProps {
   tile: TileLayout
@@ -23,6 +23,8 @@ interface TileTerminalProps {
   effectiveLayout: TileLayout[]
   containerRef: React.RefObject<HTMLDivElement | null>
   highlightedEdges: Set<string>
+  viewportSize: { width: number; height: number }
+  clientToCanvasPercent: ClientToCanvasPercent
   onCloseTab: (id: string) => void
   onFocusTab: (id: string) => void
   onSwitchSubTab: (tileId: string, tabId: string) => void
@@ -53,6 +55,8 @@ export function TileTerminal({
   effectiveLayout,
   containerRef,
   highlightedEdges,
+  viewportSize,
+  clientToCanvasPercent,
   onCloseTab,
   onFocusTab,
   onSwitchSubTab,
@@ -98,14 +102,10 @@ export function TileTerminal({
       if (!draggedSidebarProject) {
         setDraggedSidebarProject('pending')
       }
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect()
-        const mouseX = ((e.clientX - rect.left) / rect.width) * 100
-        const mouseY = ((e.clientY - rect.top) / rect.height) * 100
-        const zone = computeDropZone(effectiveLayout, null, mouseX, mouseY)
-        setCurrentDropZone(zone)
-        setDropTarget(zone?.targetTileId || tile.id)
-      }
+      const { x: mouseX, y: mouseY } = clientToCanvasPercent(e.clientX, e.clientY)
+      const zone = computeDropZone(effectiveLayout, null, mouseX, mouseY)
+      setCurrentDropZone(zone)
+      setDropTarget(zone?.targetTileId || tile.id)
     }
   }
 
@@ -121,13 +121,7 @@ export function TileTerminal({
   function handleOverlayDragOver(e: React.DragEvent): void {
     e.preventDefault()
     e.stopPropagation()
-    if (!containerRef.current) {
-      setDropTarget(tile.id)
-      return
-    }
-    const rect = containerRef.current.getBoundingClientRect()
-    const mouseX = ((e.clientX - rect.left) / rect.width) * 100
-    const mouseY = ((e.clientY - rect.top) / rect.height) * 100
+    const { x: mouseX, y: mouseY } = clientToCanvasPercent(e.clientX, e.clientY)
     const zone = computeDropZone(effectiveLayout, draggedTile, mouseX, mouseY)
     setCurrentDropZone(zone)
     setDropTarget(zone?.targetTileId || tile.id)
@@ -141,10 +135,10 @@ export function TileTerminal({
       className={`terminal-tile ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''} ${isDropTarget ? 'drop-target' : ''}`}
       style={{
         position: 'absolute',
-        left: `calc(${tile.x}% + ${GAP}px)`,
-        top: `calc(${tile.y}% + ${GAP}px)`,
-        width: `calc(${tile.width}% - ${GAP}px)`,
-        height: `calc(${tile.height}% - ${GAP}px)`,
+        left: `${tile.x / 100 * viewportSize.width + GAP}px`,
+        top: `${tile.y / 100 * viewportSize.height + GAP}px`,
+        width: `${tile.width / 100 * viewportSize.width - GAP}px`,
+        height: `${tile.height / 100 * viewportSize.height - GAP}px`,
         display: 'flex',
         flexDirection: 'column',
         background: projectColor ? `color-mix(in srgb, ${projectColor} 20%, var(--bg-elevated))` : 'var(--bg-elevated)',

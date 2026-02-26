@@ -258,16 +258,73 @@ describe('PtyManager', () => {
   })
 
   describe('resize()', () => {
-    it('should resize the PTY process', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('should resize the PTY process after debounce', () => {
       const id = manager.spawn('/test/dir')
 
       manager.resize(id, 200, 50)
 
+      // Not called immediately (debounced)
+      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+
+      // Advance past debounce period (50ms for non-Ink backends)
+      vi.advanceTimersByTime(60)
+
+      expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
+    })
+
+    it('should debounce rapid resize calls', () => {
+      const id = manager.spawn('/test/dir')
+
+      manager.resize(id, 100, 30)
+      manager.resize(id, 150, 40)
+      manager.resize(id, 200, 50)
+
+      vi.advanceTimersByTime(60)
+
+      // Only the last resize should fire
+      expect(mockPtyProcess.resize).toHaveBeenCalledTimes(1)
+      expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
+    })
+
+    it('should skip resize if dimensions unchanged', () => {
+      const id = manager.spawn('/test/dir')
+
+      manager.resize(id, 200, 50)
+      vi.advanceTimersByTime(60)
+      mockPtyProcess.resize.mockClear()
+
+      // Same dimensions again
+      manager.resize(id, 200, 50)
+      vi.advanceTimersByTime(60)
+
+      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+    })
+
+    it('should use longer debounce for Ink-based backends during startup', () => {
+      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, 'gemini')
+
+      manager.resize(id, 200, 50)
+
+      // At 60ms - should NOT have fired (Ink startup debounce is 1500ms)
+      vi.advanceTimersByTime(60)
+      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+
+      // At 1600ms - should have fired
+      vi.advanceTimersByTime(1500)
       expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
     })
 
     it('should do nothing for non-existent process ID', () => {
       manager.resize('non-existent-id', 200, 50)
+      vi.advanceTimersByTime(60)
 
       expect(mockPtyProcess.resize).not.toHaveBeenCalled()
     })
@@ -278,8 +335,9 @@ describe('PtyManager', () => {
         throw new Error('pty already closed')
       })
 
-      // Should not throw
-      expect(() => manager.resize(id, 200, 50)).not.toThrow()
+      manager.resize(id, 200, 50)
+      // Should not throw when debounce fires
+      expect(() => vi.advanceTimersByTime(60)).not.toThrow()
     })
   })
 

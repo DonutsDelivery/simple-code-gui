@@ -1503,6 +1503,41 @@ html, body, #root {
   cursor: grabbing;
 }
 
+/* Pannable canvas wrapper */
+.tile-canvas {
+  will-change: transform;
+}
+
+/* Panning cursor override */
+.terminal-tiled-custom.is-panning {
+  cursor: grabbing;
+}
+
+.terminal-tiled-custom.is-panning * {
+  cursor: grabbing !important;
+}
+
+/* Edge gradient indicators for off-screen tiles */
+.pan-indicator-left,
+.pan-indicator-right {
+  position: absolute;
+  top: 0;
+  width: 24px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 150;
+}
+
+.pan-indicator-left {
+  left: 0;
+  background: linear-gradient(to right, rgba(var(--accent-rgb), 0.3), transparent);
+}
+
+.pan-indicator-right {
+  right: 0;
+  background: linear-gradient(to left, rgba(var(--accent-rgb), 0.3), transparent);
+}
+
 /* Drop zone overlay for tile rearrangement */
 .drop-zone-overlay {
   backdrop-filter: blur(2px);
