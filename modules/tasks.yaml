@@ -15,3 +15,19 @@ relates_to: []
 tests: []
 traits: []
 notes: []
+features:
+  - _ulid: 01KK67D0FDNH5K951SXXWFSQYM
+    slugs:
+      - beads-backend
+    title: Beads Task Backend
+    type: feature
+    tags: []
+    description: Task CRUD via Beads CLI (bd command). File watchers on .beads/ directory with 500ms
+      debounce. Task ID validation, shell injection prevention via spawn().
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:44.525Z
