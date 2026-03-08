@@ -90,3 +90,9 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:01:01.869Z
+    acceptance_criteria:
+      - id: ac-1
+        given: the app is running in a browser (no window.electronAPI)
+        when: the user connects with host, port, and token
+        then: HttpBackend is created using WebSocket for PTY data and HTTP for all other operations,
+          providing the same Api interface as ElectronBackend
