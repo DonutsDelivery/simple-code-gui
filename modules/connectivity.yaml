@@ -16,3 +16,20 @@ relates_to: []
 tests: []
 traits: []
 notes: []
+features:
+  - _ulid: 01KK67DB6KDCNTJXZ88124DXNB
+    slugs:
+      - prompt-api
+    title: HTTP Prompt API
+    type: feature
+    tags: []
+    description: "Per-project HTTP server for external prompt injection. Session modes: existing (reuse
+      terminal), new-keep (spawn and keep), new-close (spawn and auto-close). Rate limited to 10
+      req/60s per IP."
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:55.507Z
