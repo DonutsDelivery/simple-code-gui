@@ -93,6 +93,8 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:18.579Z
+    status:
+      implementation: implemented
   - _ulid: 01KK67C9AQPXS2BZXTN88KXCNT
     slugs:
       - sidebar
