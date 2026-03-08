@@ -49,3 +49,19 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:58.082Z
+  - _ulid: 01KK67DFJH7RN2ATAG7E69AZVN
+    slugs:
+      - mobile-server
+    title: Mobile Server
+    type: feature
+    tags: []
+    description: WebSocket + HTTP server for mobile app connectivity. Token-based auth, IP whitelisting,
+      device fingerprinting, rate limiting, nonce-based CSRF protection. Streams terminal data,
+      supports file transfer.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:59.986Z
