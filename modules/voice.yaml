@@ -37,6 +37,8 @@ features:
         given: whisper model is loaded and microphone is active
         when: the user speaks and then pauses beyond the silence threshold
         then: the audio is transcribed and the text is auto-submitted to the active terminal
+    status:
+      implementation: implemented
   - _ulid: 01KK67CQ3Q3D97KVYWK5MW5WKP
     slugs:
       - tts
