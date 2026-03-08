@@ -63,3 +63,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:01:10.166Z
+  - _ulid: 01KK67DTW3HCHEA5G8TSNDK5FX
+    slugs:
+      - auto-update
+    title: Auto-Update
+    type: feature
+    tags: []
+    description: Check for, download, and install app updates via electron-updater. Status events
+      relayed to renderer for progress UI.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:01:11.556Z
