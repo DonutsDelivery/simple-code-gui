@@ -117,3 +117,19 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:09.097Z
+constraints:
+  - _ulid: 01KK67F1A0FJC86K6NECKWHRA3
+    slugs:
+      - context-bridge
+    title: Context Bridge Isolation
+    type: constraint
+    tags: []
+    description: All main process capabilities exposed to renderer through Electron contextBridge. No
+      direct ipcRenderer access in renderer code.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:01:50.912Z
