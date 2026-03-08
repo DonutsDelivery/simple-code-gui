@@ -66,6 +66,10 @@ features:
         given: a project has kspec initialized
         when: the task panel loads
         then: the kspec adapter is auto-detected and used for all task operations transparently
+      - id: ac-2
+        given: a project has beads initialized
+        when: user clicks upgrade to kspec
+        then: tasks are migrated from beads to kspec format and the adapter switches to kspec backend
   - _ulid: 01KK67D5YWCHVC8RJGVH5MGVKD
     slugs:
       - task-panel
