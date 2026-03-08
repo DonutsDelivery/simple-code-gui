@@ -33,3 +33,19 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:55.507Z
+  - _ulid: 01KK67DDQ2F5G1QH5Q04JRF943
+    slugs:
+      - orchestrator
+    title: MCP Orchestrator
+    type: feature
+    tags: []
+    description: Localhost HTTP API (port 19836) enabling MCP-based cross-session control. List
+      sessions, read output (last N lines), send input to any PTY. Companion MCP server script for
+      Claude CLI integration.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:58.082Z
