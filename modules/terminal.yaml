@@ -67,6 +67,11 @@ features:
         when: a session is spawned
         then: the gemini CLI executable is located and launched with Gemini-specific flags for approval mode
           and allowed tools
+      - id: ac-2
+        given: a backend has permission mode configured
+        when: a session is spawned
+        then: "backend-specific CLI flags are applied: Claude uses --permission-mode, Gemini uses
+          --approval-mode, Codex uses --full-auto, Aider uses --yes"
   - _ulid: 01KK67BTQMCZXZ3WPE6KE4K8FF
     slugs:
       - session-discovery
