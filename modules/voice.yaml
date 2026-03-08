@@ -62,3 +62,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:36.914Z
+  - _ulid: 01KK67CVN0NHA26Q58GTA308S2
+    slugs:
+      - voice-catalog
+    title: Voice Catalog
+    type: feature
+    tags: []
+    description: Browse, download, and manage TTS voices from HuggingFace catalog. Import custom voices,
+      remove voices, organize voice library.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:39.585Z
