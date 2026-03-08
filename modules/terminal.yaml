@@ -46,6 +46,8 @@ features:
         given: a PTY session is running
         when: the user closes the tab or app exits
         then: the PTY process is terminated and all listeners are cleaned up
+    status:
+      implementation: implemented
   - _ulid: 01KK67BRJR4864JXD28BE8HNK2
     slugs:
       - multi-backend
