@@ -15,3 +15,19 @@ relates_to: []
 tests: []
 traits: []
 notes: []
+features:
+  - _ulid: 01KK67BPRJVNKGYEGMA7EPB4TY
+    slugs:
+      - pty-lifecycle
+    title: PTY Session Lifecycle
+    type: feature
+    tags: []
+    description: Spawn, manage, resize, and terminate PTY processes running AI CLI backends. Ring buffer
+      captures last 200 lines with ANSI stripping.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:01.811Z
