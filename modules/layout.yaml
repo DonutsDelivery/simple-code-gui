@@ -31,3 +31,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:13.357Z
+  - _ulid: 01KK67C43QN01EYHYHABV8BBVE
+    slugs:
+      - tile-drag-drop
+    title: Tile Drag & Drop
+    type: feature
+    tags: []
+    description: Drag projects from sidebar or tabs between tiles. Drop zones support swap,
+      split-top/bottom/left/right. Visual preview during drag.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:15.480Z
