@@ -76,3 +76,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:07.658Z
+  - _ulid: 01KK67BXW9RQP8D62KHVSF3CW9
+    slugs:
+      - cli-install
+    title: CLI Tool Installation
+    type: feature
+    tags: []
+    description: Check, install, and manage AI CLI tools (Claude, Gemini, Codex, OpenCode, Aider) with
+      portable Node.js/Python support for offline-first workflows.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:09.097Z
