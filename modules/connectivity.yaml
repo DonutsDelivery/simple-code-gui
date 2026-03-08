@@ -55,6 +55,10 @@ features:
         when: GET /sessions is called on localhost:19836
         then: a JSON array of all sessions is returned with id, cwd, backend, projectPath, projectName, and
           spawnedAt
+      - id: ac-2
+        given: a PTY session exists
+        when: POST /sessions/{id}/input is called with text
+        then: the text followed by carriage return is written to the PTY, simulating user keyboard input
   - _ulid: 01KK67DFJH7RN2ATAG7E69AZVN
     slugs:
       - mobile-server
