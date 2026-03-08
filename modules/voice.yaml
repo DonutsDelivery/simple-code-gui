@@ -47,3 +47,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:34.935Z
+  - _ulid: 01KK67CS1JS018H9N2C3H7880X
+    slugs:
+      - voice-cloning
+    title: Voice Cloning (XTTS)
+    type: feature
+    tags: []
+    description: Create custom TTS voices from audio samples. Supports sample recording, audio file
+      import, clip extraction, and HuggingFace sample voice downloads.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:36.914Z
