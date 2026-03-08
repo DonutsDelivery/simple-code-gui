@@ -76,6 +76,8 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:36.914Z
+    status:
+      implementation: implemented
   - _ulid: 01KK67CVN0NHA26Q58GTA308S2
     slugs:
       - voice-catalog
