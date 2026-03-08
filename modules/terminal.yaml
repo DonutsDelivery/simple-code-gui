@@ -61,6 +61,12 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:03.672Z
+    acceptance_criteria:
+      - id: ac-1
+        given: a project has backend set to gemini
+        when: a session is spawned
+        then: the gemini CLI executable is located and launched with Gemini-specific flags for approval mode
+          and allowed tools
   - _ulid: 01KK67BTQMCZXZ3WPE6KE4K8FF
     slugs:
       - session-discovery
