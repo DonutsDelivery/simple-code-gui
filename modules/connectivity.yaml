@@ -101,3 +101,19 @@ features:
         when: the user connects with host, port, and token
         then: HttpBackend is created using WebSocket for PTY data and HTTP for all other operations,
           providing the same Api interface as ElectronBackend
+constraints:
+  - _ulid: 01KK67F4TXEGT9PY2C2KGSNBW2
+    slugs:
+      - orchestrator-localhost
+    title: Localhost-Only Orchestrator
+    type: constraint
+    tags: []
+    description: Orchestrator API only accepts connections from localhost (127.0.0.1, ::1,
+      ::ffff:127.0.0.1). No external network access.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:01:54.525Z
