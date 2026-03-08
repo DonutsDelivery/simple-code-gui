@@ -31,3 +31,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:44.525Z
+  - _ulid: 01KK67D2TP6ANDE0XJR4WWXKAF
+    slugs:
+      - kspec-backend
+    title: Kspec Task Backend
+    type: feature
+    tags: []
+    description: Spec-driven task management via kspec CLI. Daemon lifecycle management, auto-injection
+      of task instructions into CLAUDE.md, dispatch for autonomous agents.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:46.934Z
