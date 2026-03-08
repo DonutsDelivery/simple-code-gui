@@ -42,6 +42,8 @@ features:
         when: a tile is split
         then: the tile divides into two tiles in the specified direction (top/bottom/left/right) each
           getting half the space
+    status:
+      implementation: implemented
   - _ulid: 01KK67C43QN01EYHYHABV8BBVE
     slugs:
       - tile-drag-drop
