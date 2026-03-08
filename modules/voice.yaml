@@ -52,6 +52,11 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:34.935Z
+    acceptance_criteria:
+      - id: ac-1
+        given: TTS is enabled and a project has a custom voice configured
+        when: the active tab switches to that project
+        then: the TTS engine and voice are switched to the project-specific settings
   - _ulid: 01KK67CS1JS018H9N2C3H7880X
     slugs:
       - voice-cloning
