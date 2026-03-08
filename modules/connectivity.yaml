@@ -1,0 +1,18 @@
+_ulid: 01KK67BGNHP8DWNG777BRMSR8A
+slugs:
+  - connectivity
+title: Connectivity
+type: module
+status:
+  maturity: draft
+  implementation: not_started
+description: HTTP API server for prompt injection, mobile WebSocket server, and MCP orchestrator for
+  cross-session control
+tags:
+  - feature
+depends_on: []
+implements: []
+relates_to: []
+tests: []
+traits: []
+notes: []
