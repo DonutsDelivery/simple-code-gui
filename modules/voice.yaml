@@ -1,0 +1,18 @@
+_ulid: 01KK67BDK2JJG20G7JD78SPBCA
+slugs:
+  - voice
+title: Voice I/O
+type: module
+status:
+  maturity: draft
+  implementation: not_started
+description: Speech-to-text input (Whisper), text-to-speech output (Piper, XTTS), voice cloning, and
+  per-project voice settings
+tags:
+  - feature
+depends_on: []
+implements: []
+relates_to: []
+tests: []
+traits: []
+notes: []
