@@ -31,6 +31,12 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:01.811Z
+    acceptance_criteria:
+      - id: ac-1
+        given: user opens a project
+        when: a terminal session is spawned
+        then: a PTY process is created with node-pty using the resolved backend executable, correct cwd, and
+          xterm-256color terminal type
   - _ulid: 01KK67BRJR4864JXD28BE8HNK2
     slugs:
       - multi-backend
