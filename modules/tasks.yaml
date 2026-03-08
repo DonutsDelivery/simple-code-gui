@@ -74,6 +74,8 @@ features:
         given: a project has beads initialized
         when: user clicks upgrade to kspec
         then: tasks are migrated from beads to kspec format and the adapter switches to kspec backend
+    status:
+      implementation: implemented
   - _ulid: 01KK67D5YWCHVC8RJGVH5MGVKD
     slugs:
       - task-panel
