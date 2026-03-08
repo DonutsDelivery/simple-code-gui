@@ -15,3 +15,19 @@ relates_to: []
 tests: []
 traits: []
 notes: []
+features:
+  - _ulid: 01KK67C21DPVGAHNPTREZFH029
+    slugs:
+      - tiled-layout
+    title: Tiled Terminal Layout
+    type: feature
+    tags: []
+    description: Flexible grid layout where terminals are positioned as tiles using percentage-based
+      coordinates. Supports splitting, swapping, and multi-tab tiles on a pannable canvas.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:13.357Z
