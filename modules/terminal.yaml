@@ -1,0 +1,17 @@
+_ulid: 01KK67BAXYFC28NYYSCWDPARHC
+slugs:
+  - terminal
+title: Terminal Management
+type: module
+status:
+  maturity: draft
+  implementation: not_started
+description: Core PTY session management, multi-backend CLI support, and terminal lifecycle
+tags:
+  - core
+depends_on: []
+implements: []
+relates_to: []
+tests: []
+traits: []
+notes: []
