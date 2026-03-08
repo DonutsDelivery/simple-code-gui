@@ -61,6 +61,11 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:48.254Z
+    acceptance_criteria:
+      - id: ac-1
+        given: a project has kspec initialized
+        when: the task panel loads
+        then: the kspec adapter is auto-detected and used for all task operations transparently
   - _ulid: 01KK67D5YWCHVC8RJGVH5MGVKD
     slugs:
       - task-panel
