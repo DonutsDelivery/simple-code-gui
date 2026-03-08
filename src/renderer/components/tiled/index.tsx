@@ -76,12 +76,14 @@ export function TiledTerminalView({
     layout, tabs, containerSizeRef, onLayoutChange
   )
 
-  // Compute canvas width from tile positions
+  // Compute canvas width from tile positions, with padding so the rightmost edge is accessible
+  const CANVAS_PADDING = 180 // px of extra space past the rightmost tile for resize handles
   const canvasWidth = useMemo(() => {
     if (effectiveLayout.length === 0) return viewportSize.width
     const rightmostEdge = Math.max(...effectiveLayout.map(t => t.x + t.width))
     const rightmostPx = rightmostEdge / 100 * viewportSize.width
-    return Math.max(viewportSize.width, rightmostPx)
+    if (rightmostPx <= viewportSize.width) return viewportSize.width
+    return rightmostPx + CANVAS_PADDING
   }, [effectiveLayout, viewportSize.width])
 
   const { panX, isPanning, handlePanStart, clientToCanvasPercent, clientToCanvasPercentRef } = usePanning(

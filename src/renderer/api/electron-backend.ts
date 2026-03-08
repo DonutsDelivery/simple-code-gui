@@ -105,6 +105,17 @@ declare global {
       beadsUnwatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
       onBeadsTasksChanged: (callback: (data: { cwd: string }) => void) => () => void
 
+      // Kspec
+      kspecCheck: (cwd: string) => Promise<{ exists: boolean }>
+      kspecInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
+      kspecEnsureDaemon: (cwd: string) => Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
+      kspecCheckCli: () => Promise<{ installed: boolean; version?: string }>
+      kspecInstallCli: () => Promise<{ success: boolean; error?: string }>
+      kspecMigrateFromBeads: (cwd: string) => Promise<{ success: boolean; migrated: number; error?: string }>
+      kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
+      kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
+      kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
+
       // Install progress
       pythonInstall: () => Promise<{ success: boolean; error?: string; method?: string }>
       onInstallProgress: (callback: (data: { type: string; status: string; percent?: number }) => void) => () => void

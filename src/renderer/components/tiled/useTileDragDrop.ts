@@ -141,7 +141,9 @@ export function useApplyDropZone(
     }
 
     const direction = zone.type.replace('split-', '') as 'top' | 'bottom' | 'left' | 'right'
-    const withoutDragged = removeTilePreservingStructure(layout, draggedId, tabs, width, height)
+    // For drag operations, just remove the tile without expanding neighbors.
+    // The tile is being moved, not deleted — expansion would distort the layout.
+    const withoutDragged = layout.filter(t => t.id !== draggedId)
     return splitTile(withoutDragged, zone.targetTileId, draggedId, direction)
   }, [tabs, containerSizeRef])
 }
@@ -190,6 +192,7 @@ export function useHandleContainerDrop(
       // Pass the effective layout so handleOpenSessionAtPosition uses the same layout
       // that computeDropZone used (avoids stale closure / state mismatch)
       const layoutForPosition = effectiveLayoutRef.current
+
       console.log('[TiledTerminalView] Calling onOpenSessionAtPosition with:', projectPath, dropZone, containerSizeRef.current, 'layoutTiles:', layoutForPosition.length)
       onOpenSessionAtPosition(projectPath, dropZone, containerSizeRef.current, layoutForPosition)
       setDraggedSidebarProject(null)

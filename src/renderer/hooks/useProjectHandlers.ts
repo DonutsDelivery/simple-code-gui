@@ -53,6 +53,10 @@ export function useProjectHandlers({
   const closedTabsRef = useRef<ClosedTabInfo[]>([])
   const [closedTabCount, setClosedTabCount] = useState(0)
 
+  // Keep a ref to the latest tileLayout so async callbacks always read the freshest state
+  const tileLayoutRef = useRef(tileLayout)
+  tileLayoutRef.current = tileLayout
+
   const handleAddProject = useCallback(async () => {
     const path = await api.addProject()
     if (path) {
@@ -120,6 +124,12 @@ export function useProjectHandlers({
       await api.ttsInstallInstructions?.(projectPath)
 
       const ptyId = await api.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
+
+      // Compute tile layout BEFORE adding tab so both update together,
+      // preventing useEffectiveLayout from auto-adding at the wrong position
+      const currentLayout = tileLayoutRef.current
+      const newLayout = addTileToLayout(currentLayout, ptyId, null, window.innerWidth, window.innerHeight)
+
       addTab({
         id: ptyId,
         projectPath,
@@ -128,6 +138,7 @@ export function useProjectHandlers({
         ptyId,
         backend: effectiveBackend
       })
+      setTileLayout(newLayout)
 
       // If an initial prompt was provided, send it after a short delay
       if (initialPrompt) {
@@ -144,10 +155,6 @@ export function useProjectHandlers({
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
   }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, setTileLayout])
-
-  // Keep a ref to the latest tileLayout so async callbacks always read the freshest state
-  const tileLayoutRef = useRef(tileLayout)
-  tileLayoutRef.current = tileLayout
 
   const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentLayout?: TileLayout[]) => {
     // Use the effective layout passed from the drop handler (matches what computeDropZone used),

@@ -85,6 +85,17 @@ export interface ElectronAPI {
   beadsUnwatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
   onBeadsTasksChanged: (callback: (data: { cwd: string }) => void) => () => void
 
+  // Kspec
+  kspecCheck: (cwd: string) => Promise<{ exists: boolean }>
+  kspecInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
+  kspecEnsureDaemon: (cwd: string) => Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
+  kspecCheckCli: () => Promise<{ installed: boolean; version?: string }>
+  kspecInstallCli: () => Promise<{ success: boolean; error?: string }>
+  kspecMigrateFromBeads: (cwd: string) => Promise<{ success: boolean; migrated: number; error?: string }>
+  kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
+  kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
+  kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
+
   // TTS instructions (CLAUDE.md)
   ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
   ttsRemoveInstructions: (projectPath: string) => Promise<{ success: boolean }>

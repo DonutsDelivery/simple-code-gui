@@ -1,31 +1,79 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
+import type { BackendKind, AutomationEligibility } from './adapters/types.js'
+
+const BEADS_TYPES = [
+  { value: 'task', label: 'Task' },
+  { value: 'bug', label: 'Bug' },
+  { value: 'feature', label: 'Feature' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'chore', label: 'Chore' },
+] as const
+
+const KSPEC_TYPES = [
+  { value: 'task', label: 'Task' },
+  { value: 'bug', label: 'Bug' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'spike', label: 'Spike' },
+  { value: 'infra', label: 'Infra' },
+] as const
+
+const BEADS_PRIORITIES = [
+  { value: 0, label: 'P0 - Critical' },
+  { value: 1, label: 'P1 - High' },
+  { value: 2, label: 'P2 - Medium' },
+  { value: 3, label: 'P3 - Low' },
+  { value: 4, label: 'P4 - Lowest' },
+] as const
+
+const KSPEC_PRIORITIES = [
+  { value: 1, label: 'P1 - Highest' },
+  { value: 2, label: 'P2 - High' },
+  { value: 3, label: 'P3 - Medium' },
+  { value: 4, label: 'P4 - Low' },
+  { value: 5, label: 'P5 - Lowest' },
+] as const
+
+const AUTOMATION_OPTIONS = [
+  { value: '', label: 'Unassessed' },
+  { value: 'eligible', label: 'Eligible' },
+  { value: 'needs_review', label: 'Needs Review' },
+  { value: 'manual_only', label: 'Manual Only' },
+] as const
 
 interface CreateTaskModalProps {
   show: boolean
   onClose: () => void
   onCreate: () => void
+  backendKind: BackendKind
   title: string
   setTitle: (title: string) => void
-  type: 'task' | 'bug' | 'feature' | 'epic' | 'chore'
-  setType: (type: 'task' | 'bug' | 'feature' | 'epic' | 'chore') => void
+  type: string
+  setType: (type: string) => void
   priority: number
   setPriority: (priority: number) => void
   description: string
   setDescription: (description: string) => void
   labels: string
   setLabels: (labels: string) => void
+  automation?: AutomationEligibility | ''
+  setAutomation?: (automation: AutomationEligibility | '') => void
 }
 
 export function CreateTaskModal({
-  show, onClose, onCreate,
+  show, onClose, onCreate, backendKind,
   title, setTitle,
   type, setType,
   priority, setPriority,
   description, setDescription,
-  labels, setLabels
+  labels, setLabels,
+  automation, setAutomation
 }: CreateTaskModalProps) {
   if (!show) return null
+
+  const isKspec = backendKind === 'kspec'
+  const types = isKspec ? KSPEC_TYPES : BEADS_TYPES
+  const priorities = isKspec ? KSPEC_PRIORITIES : BEADS_PRIORITIES
 
   return ReactDOM.createPortal(
     <div className="beads-modal-overlay" onClick={onClose}>
@@ -56,25 +104,35 @@ export function CreateTaskModal({
           <div className="beads-form-row">
             <div className="beads-form-group">
               <label htmlFor="task-type">Type</label>
-              <select id="task-type" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-                <option value="task">Task</option>
-                <option value="bug">Bug</option>
-                <option value="feature">Feature</option>
-                <option value="epic">Epic</option>
-                <option value="chore">Chore</option>
+              <select id="task-type" value={type} onChange={(e) => setType(e.target.value)}>
+                {types.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
             </div>
             <div className="beads-form-group">
               <label htmlFor="task-priority">Priority</label>
               <select id="task-priority" value={priority} onChange={(e) => setPriority(parseInt(e.target.value))}>
-                <option value="0">P0 - Critical</option>
-                <option value="1">P1 - High</option>
-                <option value="2">P2 - Medium</option>
-                <option value="3">P3 - Low</option>
-                <option value="4">P4 - Lowest</option>
+                {priorities.map(p => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
               </select>
             </div>
           </div>
+          {isKspec && setAutomation && (
+            <div className="beads-form-group">
+              <label htmlFor="task-automation">Automation</label>
+              <select
+                id="task-automation"
+                value={automation ?? ''}
+                onChange={(e) => setAutomation(e.target.value as AutomationEligibility | '')}
+              >
+                {AUTOMATION_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="beads-form-group">
             <label htmlFor="task-description">Description</label>
             <textarea

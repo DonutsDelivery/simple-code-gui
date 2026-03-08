@@ -195,6 +195,7 @@ export interface Settings {
   voiceVolume?: number
   voiceSpeed?: number
   voiceSkipOnNew?: boolean
+  voiceSilenceThreshold?: number
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: Backend

@@ -1,10 +1,11 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { BeadsTask, getPriorityClass, formatStatusLabel } from './types.js'
+import type { UnifiedTask } from './adapters/types.js'
+import { getPriorityClass, formatStatusLabel } from './types.js'
 
 interface TaskDetailModalProps {
   show: boolean
-  task: BeadsTask | null
+  task: UnifiedTask | null
   loading: boolean
   editing: boolean
   setEditing: (editing: boolean) => void
@@ -93,7 +94,7 @@ export function TaskDetailModal({
                   <span className={`beads-detail-priority ${getPriorityClass(task.priority)}`}>
                     P{task.priority ?? 2}
                   </span>
-                  <span className="beads-detail-type">{task.issue_type || 'task'}</span>
+                  <span className="beads-detail-type">{task.type || 'task'}</span>
                 </div>
                 {task.description && (
                   <div className="beads-detail-description">
@@ -105,14 +106,11 @@ export function TaskDetailModal({
                   {task.created_at && <span>Created: {new Date(task.created_at).toLocaleString()}</span>}
                   {task.updated_at && <span>Updated: {new Date(task.updated_at).toLocaleString()}</span>}
                 </div>
-                {(task.dependency_count !== undefined || task.dependent_count !== undefined) && (
-                  <div className="beads-detail-deps">
-                    {task.dependency_count !== undefined && task.dependency_count > 0 && (
-                      <span>Blocked by: {task.dependency_count} task(s)</span>
-                    )}
-                    {task.dependent_count !== undefined && task.dependent_count > 0 && (
-                      <span>Blocking: {task.dependent_count} task(s)</span>
-                    )}
+                {task.tags && task.tags.length > 0 && (
+                  <div className="beads-detail-tags">
+                    {task.tags.map(tag => (
+                      <span key={tag} className="beads-detail-tag">{tag}</span>
+                    ))}
                   </div>
                 )}
               </>

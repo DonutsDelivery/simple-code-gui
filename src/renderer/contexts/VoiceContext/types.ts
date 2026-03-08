@@ -10,6 +10,7 @@ export interface WhisperInstance {
 export interface WhisperTranscriberConfig {
   modelUrl: string
   modelSize: string  // Library accepts any string, we pass our WhisperModelSize
+  audioIntervalMs?: number
   onTranscription: (text: string) => void
   onProgress?: (progress: number) => void
   onStatus?: (status: string) => void
@@ -49,6 +50,9 @@ export interface VoiceContextValue {
   currentTranscription: string  // Live transcription while recording
   whisperModel: WhisperModelSize
   setWhisperModel: (model: WhisperModelSize) => void
+  audioLevel: number            // Current mic input level 0-100
+  silenceThreshold: number      // Level below which audio is considered silence 0-100
+  setSilenceThreshold: (threshold: number) => void
   startRecording: (onTranscription: (text: string) => void) => Promise<void>
   stopRecording: () => void
 }

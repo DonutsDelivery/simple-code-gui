@@ -6,18 +6,20 @@ interface BeadsInstallViewProps {
   onInstallPython: () => void
   onInstallBeads: () => void
   onInitBeads: () => void
+  onInitKspec: () => void
 }
 
 export function BeadsInstallView({
   beadsState,
   onInstallPython,
   onInstallBeads,
-  onInitBeads
+  onInitBeads,
+  onInitKspec
 }: BeadsInstallViewProps): React.ReactElement | null {
   if (beadsState.status === 'not_installed') {
     return (
       <div className="beads-empty">
-        <p>Beads CLI (<code>bd</code>) not found.</p>
+        <p>No task CLI found. Install one to get started:</p>
         {beadsState.installError && (
           <p className="beads-install-error" role="alert" aria-live="assertive">
             {beadsState.installError}
@@ -47,7 +49,7 @@ export function BeadsInstallView({
               ? 'Installing...'
               : beadsState.needsPython
                 ? '2. Install Beads'
-                : 'Install Beads CLI'}
+                : 'Install Beads (Python)'}
           </button>
         </div>
       </div>
@@ -57,13 +59,13 @@ export function BeadsInstallView({
   if (beadsState.status === 'not_initialized') {
     return (
       <div className="beads-empty">
-        <p>No Beads initialized.</p>
+        <p>No task tracker initialized.</p>
         <button
           className="beads-init-btn"
           onClick={onInitBeads}
           disabled={beadsState.initializing}
         >
-          {beadsState.initializing ? 'Initializing...' : 'Initialize Beads'}
+          {beadsState.initializing ? 'Initializing...' : 'Initialize Tasks'}
         </button>
       </div>
     )

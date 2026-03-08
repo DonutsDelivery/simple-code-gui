@@ -11,6 +11,41 @@ import { getPortableBinDirs } from './portable-deps'
 // Backends that use Ink (React for CLI) and are sensitive to rapid resize during startup
 const INK_BACKENDS = new Set(['gemini'])
 
+// Ring buffer for storing recent PTY output
+const OUTPUT_BUFFER_MAX_LINES = 200
+
+class OutputBuffer {
+  private lines: string[] = []
+  private partial: string = '' // incomplete line (no newline yet)
+
+  append(data: string): void {
+    // Split incoming data by newlines, preserving partial lines
+    const text = this.partial + data
+    const parts = text.split('\n')
+    // Last element is either empty (if data ended with \n) or a partial line
+    this.partial = parts.pop() || ''
+    for (const line of parts) {
+      // Strip ANSI escape sequences for readability
+      const clean = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim()
+      if (clean) {
+        this.lines.push(clean)
+        if (this.lines.length > OUTPUT_BUFFER_MAX_LINES) {
+          this.lines.shift()
+        }
+      }
+    }
+  }
+
+  getRecent(maxLines: number = 50): string[] {
+    return this.lines.slice(-maxLines)
+  }
+
+  clear(): void {
+    this.lines = []
+    this.partial = ''
+  }
+}
+
 interface ClaudeProcess {
   id: string
   pty: pty.IPty
@@ -22,6 +57,7 @@ interface ClaudeProcess {
   resizeTimeout?: ReturnType<typeof setTimeout>
   lastResizeCols?: number
   lastResizeRows?: number
+  outputBuffer: OutputBuffer
 }
 
 // Extended node-pty options - useConpty is a Windows-specific option not in @types/node-pty
@@ -434,12 +470,14 @@ export class PtyManager {
         | undefined,
       disposables: [],
       spawnedAt: Date.now(),
+      outputBuffer: new OutputBuffer(),
     }
 
     this.processes.set(id, proc)
 
     // Store disposables from onData/onExit for proper cleanup
     const dataDisposable = shell.onData(data => {
+      proc.outputBuffer.append(data)
       const callback = this.dataCallbacks.get(id)
       if (callback) {
         callback(data)
@@ -556,5 +594,27 @@ export class PtyManager {
 
   onExit(id: string, callback: (code: number) => void): void {
     this.exitCallbacks.set(id, callback)
+  }
+
+  // Orchestrator API: list all active sessions
+  listSessions(): Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> {
+    const sessions: Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> = []
+    for (const [id, proc] of this.processes) {
+      sessions.push({
+        id,
+        cwd: proc.cwd,
+        backend: proc.backend || 'claude',
+        sessionId: proc.sessionId,
+        spawnedAt: proc.spawnedAt,
+      })
+    }
+    return sessions
+  }
+
+  // Orchestrator API: read recent output from a PTY
+  readOutput(id: string, maxLines: number = 50): string[] | null {
+    const proc = this.processes.get(id)
+    if (!proc) return null
+    return proc.outputBuffer.getRecent(maxLines)
   }
 }

@@ -1,10 +1,10 @@
 import React from 'react'
-import type { BeadsTask } from './types.js'
+import type { UnifiedTask } from './adapters/types.js'
 import { getPriorityClass, formatStatusLabel } from './types.js'
 import { TaskStatusButton } from './TaskStatusButton.js'
 
 interface BeadsTaskListProps {
-  tasks: BeadsTask[]
+  tasks: UnifiedTask[]
   panelHeight: number
   editingTaskId: string | null
   editingTitle: string
@@ -13,7 +13,7 @@ interface BeadsTaskListProps {
   onStart: (e: React.MouseEvent, taskId: string) => void
   onCycleStatus: (taskId: string, currentStatus: string) => void
   onDelete: (taskId: string) => void
-  onOpenDetail: (task: BeadsTask) => void
+  onOpenDetail: (task: UnifiedTask) => void
   setEditingTitle: (title: string) => void
   onSaveEdit: () => void
   onCancelEdit: () => void
@@ -78,7 +78,12 @@ export function BeadsTaskList({
               </div>
             )}
             <div className="beads-task-meta">
-              <span className="beads-task-id">{task.id}</span>
+              <span className="beads-task-id" title={task.id}>{task.displayId ?? task.id}</span>
+              {task.automation && (
+                <span className={`beads-task-automation automation-${task.automation}`} title={`Automation: ${task.automation}`}>
+                  {task.automation === 'eligible' ? 'auto' : task.automation === 'needs_review' ? 'review' : 'manual'}
+                </span>
+              )}
               <button
                 className={`beads-task-status status-${task.status}`}
                 onClick={(e) => {

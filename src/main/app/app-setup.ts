@@ -34,10 +34,11 @@ export function setupSecurityHeaders(): void {
         'Cross-Origin-Embedder-Policy': ['require-corp'],
         'Content-Security-Policy': [
           "default-src 'self'; " +
-          "script-src 'self' 'wasm-unsafe-eval'; " +
+          "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; " +
+          "worker-src 'self' blob:; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +
-          "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; " +
+          "connect-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com https://huggingface.co https://*.huggingface.co https://*.hf.co ws: wss: http: https:; " +
           "img-src 'self' data: blob:; " +
           "media-src 'self' blob:"
         ]

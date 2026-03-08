@@ -1,12 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
-import { BeadsTask, getPriorityClass, getPriorityLabel, formatStatusLabel, getStatusOrder } from './types.js'
+import type { UnifiedTask } from './adapters/types.js'
+import { getPriorityClass, getPriorityLabel, formatStatusLabel, getStatusOrder } from './types.js'
 
 interface BrowserModalProps {
   show: boolean
   onClose: () => void
   projectName: string | null
-  tasks: BeadsTask[]
+  backendLabel: string
+  tasks: UnifiedTask[]
   filter: 'all' | 'open' | 'in_progress' | 'closed'
   setFilter: (filter: 'all' | 'open' | 'in_progress' | 'closed') => void
   sort: 'priority' | 'created' | 'status'
@@ -17,12 +19,12 @@ interface BrowserModalProps {
   onStart: (e: React.MouseEvent, taskId: string) => void
   onCycleStatus: (taskId: string, status: string) => void
   onDelete: (taskId: string) => void
-  onOpenDetail: (task: BeadsTask) => void
+  onOpenDetail: (task: UnifiedTask) => void
   onClearCompleted: () => void
 }
 
 export function BrowserModal({
-  show, onClose, projectName, tasks,
+  show, onClose, projectName, backendLabel, tasks,
   filter, setFilter, sort, setSort,
   onRefresh, onCreateNew, onComplete, onStart,
   onCycleStatus, onDelete, onOpenDetail, onClearCompleted
@@ -62,7 +64,7 @@ export function BrowserModal({
         <div className="beads-browser-header">
           <div className="beads-browser-title-row">
             <span className="beads-icon">&#128255;</span>
-            <h2>Beads Tasks</h2>
+            <h2>{backendLabel} Tasks</h2>
             <span className="beads-browser-project">{projectName}</span>
           </div>
           <button className="beads-modal-close" onClick={onClose}>×</button>
@@ -133,7 +135,7 @@ export function BrowserModal({
                       >
                         {task.title}
                       </span>
-                      <span className="beads-browser-item-id">{task.id}</span>
+                      <span className="beads-browser-item-id" title={task.id}>{task.displayId ?? task.id}</span>
                     </div>
                     <div className="beads-browser-item-actions">
                       <button
@@ -157,22 +159,17 @@ export function BrowserModal({
                     <span className={`beads-browser-priority ${getPriorityClass(task.priority)}`}>
                       P{task.priority ?? 2} {getPriorityLabel(task.priority)}
                     </span>
-                    {task.issue_type && (
-                      <span className="beads-browser-type">{task.issue_type}</span>
+                    {task.type && (
+                      <span className="beads-browser-type">{task.type}</span>
                     )}
                     {task.created_at && (
                       <span className="beads-browser-date">
                         {new Date(task.created_at).toLocaleDateString()}
                       </span>
                     )}
-                    {(task.dependency_count ?? 0) > 0 && (
-                      <span className="beads-browser-blocked">
-                        &#128683; Blocked by {task.dependency_count}
-                      </span>
-                    )}
-                    {(task.dependent_count ?? 0) > 0 && (
-                      <span className="beads-browser-blocking">
-                        &#9940; Blocking {task.dependent_count}
+                    {task.tags && task.tags.length > 0 && (
+                      <span className="beads-browser-tags">
+                        {task.tags.join(', ')}
                       </span>
                     )}
                   </div>

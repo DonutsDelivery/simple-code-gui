@@ -1,17 +1,10 @@
-export interface BeadsTask {
-  id: string
-  title: string
-  status: string
-  priority?: number
-  created?: string
-  blockers?: string[]
-  description?: string
-  issue_type?: string
-  created_at?: string
-  updated_at?: string
-  dependency_count?: number
-  dependent_count?: number
-}
+import type { UnifiedTask } from './adapters/types.js'
+
+// Re-export UnifiedTask as the canonical task type
+export type { UnifiedTask }
+
+// Legacy alias for backward compatibility
+export type BeadsTask = UnifiedTask
 
 export const PRIORITY_LABELS = ['Critical', 'High', 'Medium', 'Low', 'Lowest']
 
@@ -49,13 +42,13 @@ export function formatStatusLabel(status: string): string {
   }
 }
 
-export function formatTaskPrompt(task: BeadsTask): string {
+export function formatTaskPrompt(task: UnifiedTask): string {
   let prompt = `Work on this task:\n\n**${task.title}** (${task.id})`
   if (task.description) {
     prompt += `\n\nDescription:\n${task.description}`
   }
-  if (task.issue_type) {
-    prompt += `\n\nType: ${task.issue_type}`
+  if (task.type) {
+    prompt += `\n\nType: ${task.type}`
   }
   if (task.priority !== undefined) {
     prompt += `\nPriority: ${getPriorityLabel(task.priority)}`

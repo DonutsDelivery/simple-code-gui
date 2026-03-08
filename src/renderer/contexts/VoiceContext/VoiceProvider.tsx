@@ -29,6 +29,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }): Reac
     }
     window.electronAPI?.getSettings().then((settings) => {
       if (settings.voiceOutputEnabled !== undefined) tts.setVoiceOutputEnabledState(settings.voiceOutputEnabled)
+      if (settings.voiceSilenceThreshold !== undefined) stt.setSilenceThresholdState(settings.voiceSilenceThreshold)
       if (settings.voiceVolume !== undefined) tts.setVolumeState(settings.voiceVolume)
       if (settings.voiceSpeed !== undefined) {
         tts.setSpeedState(settings.voiceSpeed)
@@ -101,6 +102,9 @@ export function VoiceProvider({ children }: { children: React.ReactNode }): Reac
     currentTranscription: stt.currentTranscription,
     whisperModel: stt.whisperModel,
     setWhisperModel: stt.setWhisperModel,
+    audioLevel: stt.audioLevel,
+    silenceThreshold: stt.silenceThreshold,
+    setSilenceThreshold: stt.setSilenceThreshold,
     startRecording: stt.startRecording,
     stopRecording: stt.stopRecording
   }), [
@@ -124,6 +128,9 @@ export function VoiceProvider({ children }: { children: React.ReactNode }): Reac
     stt.currentTranscription,
     stt.whisperModel,
     stt.setWhisperModel,
+    stt.audioLevel,
+    stt.silenceThreshold,
+    stt.setSilenceThreshold,
     stt.startRecording,
     stt.stopRecording
   ])

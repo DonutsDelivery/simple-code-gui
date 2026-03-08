@@ -5,6 +5,7 @@ import { ptyHandlers } from './handlers/pty.js'
 import { voiceHandlers } from './handlers/voice.js'
 import { cliHandlers } from './handlers/cli.js'
 import { beadsHandlers } from './handlers/beads.js'
+import { kspecHandlers } from './handlers/kspec.js'
 import { miscHandlers } from './handlers/misc.js'
 import type { ElectronAPI } from './types/api.js'
 
@@ -22,6 +23,7 @@ const api: ElectronAPI = {
   ...voiceHandlers,
   ...cliHandlers,
   ...beadsHandlers,
+  ...kspecHandlers,
   ...miscHandlers
 }
 

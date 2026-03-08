@@ -9,6 +9,8 @@ interface UsePanningResult {
   clientToCanvasPercentRef: MutableRefObject<ClientToCanvasPercent>
 }
 
+const DRAG_THRESHOLD = 3 // px of movement before we consider it a drag, not a click
+
 export function usePanning(
   containerRef: MutableRefObject<HTMLDivElement | null>,
   canvasWidth: number,
@@ -21,6 +23,8 @@ export function usePanning(
   panXRef.current = panX
 
   const maxPan = Math.max(0, canvasWidth - viewportWidth)
+  const maxPanRef = useRef(maxPan)
+  maxPanRef.current = maxPan
 
   // Clamp panX when bounds change (e.g. tiles removed)
   useEffect(() => {
@@ -47,39 +51,69 @@ export function usePanning(
     // Middle mouse button only
     if (e.button !== 1) return
 
-    // Don't pan if clicking inside a terminal area (preserve middle-click paste)
-    const target = e.target as HTMLElement
-    if (target.closest('.tile-terminal')) return
-
-    e.preventDefault()
-    setIsPanning(true)
-
     const startX = e.clientX
+    const startY = e.clientY
     const startPanX = panXRef.current
+    let dragging = false
     let rafId: number | null = null
 
     const handleMove = (moveE: MouseEvent) => {
+      const dx = Math.abs(moveE.clientX - startX)
+      const dy = Math.abs(moveE.clientY - startY)
+
+      // Start panning once movement exceeds threshold
+      if (!dragging && (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD)) {
+        dragging = true
+        setIsPanning(true)
+      }
+
+      if (!dragging) return
+
       if (rafId !== null) return
       rafId = requestAnimationFrame(() => {
         rafId = null
-        const dx = startX - moveE.clientX
-        const newPanX = Math.max(0, Math.min(maxPan, startPanX + dx))
+        const panDx = startX - moveE.clientX
+        const newPanX = Math.max(0, Math.min(maxPanRef.current, startPanX + panDx))
         setPanX(newPanX)
       })
     }
 
-    const handleUp = () => {
+    // Suppress middle-click paste when we're dragging (not clicking)
+    const suppressPaste = (pasteE: MouseEvent) => {
+      if (dragging && pasteE.button === 1) {
+        pasteE.preventDefault()
+        pasteE.stopPropagation()
+      }
+    }
+
+    const handleUp = (upE: MouseEvent) => {
       if (rafId !== null) cancelAnimationFrame(rafId)
-      setIsPanning(false)
+
+      if (dragging) {
+        // We were panning — suppress paste and clean up
+        setIsPanning(false)
+        upE.preventDefault()
+        upE.stopPropagation()
+        // Trigger terminal refit after panning
+        window.dispatchEvent(new Event('resize'))
+      }
+      // If not dragging, do nothing — let xterm handle paste naturally
+
       window.removeEventListener('mousemove', handleMove)
-      window.removeEventListener('mouseup', handleUp)
-      // Trigger terminal refit after panning
-      window.dispatchEvent(new Event('resize'))
+      window.removeEventListener('mouseup', handleUp, true)
+      // Defer removal: auxclick fires AFTER mouseup in the same cycle,
+      // so the suppressPaste listener must survive until then
+      setTimeout(() => {
+        window.removeEventListener('click', suppressPaste, true)
+        window.removeEventListener('auxclick', suppressPaste, true)
+      }, 0)
     }
 
     window.addEventListener('mousemove', handleMove)
-    window.addEventListener('mouseup', handleUp)
-  }, [maxPan])
+    window.addEventListener('mouseup', handleUp, true)      // capture phase
+    window.addEventListener('click', suppressPaste, true)    // capture phase
+    window.addEventListener('auxclick', suppressPaste, true) // capture phase — middle-click fires auxclick
+  }, [])
 
   return {
     panX,

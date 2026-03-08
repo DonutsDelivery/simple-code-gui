@@ -1,6 +1,6 @@
 import { useEffect, useCallback, MutableRefObject } from 'react'
 import type { TileLayout } from '../tiled-layout-utils.js'
-import { findTilesOnDivider, MIN_SIZE } from '../tiled-layout-utils.js'
+import { findContiguousTilesOnDivider, findOverlappingTilesOnDivider, MIN_SIZE } from '../tiled-layout-utils.js'
 import type { TileResizeState, ResizeEdge, ClientToCanvasPercent } from './types.js'
 
 function getCursorForEdge(edge: string): string {
@@ -38,20 +38,31 @@ export function useStartTileResize(
       const bottomDivider = tile.y + tile.height
       const topDivider = tile.y
 
+      // Find contiguous tile groups on each divider (only tiles connected to this tile)
+      // then find overlapping tiles on the opposite side of each divider
+      const tilesLeftOfRight = findContiguousTilesOnDivider(rightDivider, true, 'before', effectiveLayout, tile)
+      const tilesRightOfRight = findOverlappingTilesOnDivider(rightDivider, true, 'after', effectiveLayout, tilesLeftOfRight)
+      const tilesRightOfLeft = findContiguousTilesOnDivider(leftDivider, true, 'after', effectiveLayout, tile)
+      const tilesLeftOfLeft = findOverlappingTilesOnDivider(leftDivider, true, 'before', effectiveLayout, tilesRightOfLeft)
+      const tilesAboveBottom = findContiguousTilesOnDivider(bottomDivider, false, 'before', effectiveLayout, tile)
+      const tilesBelowBottom = findOverlappingTilesOnDivider(bottomDivider, false, 'after', effectiveLayout, tilesAboveBottom)
+      const tilesBelowTop = findContiguousTilesOnDivider(topDivider, false, 'after', effectiveLayout, tile)
+      const tilesAboveTop = findOverlappingTilesOnDivider(topDivider, false, 'before', effectiveLayout, tilesBelowTop)
+
       setTileResizing({
         tileId,
         edge,
         startX: e.clientX,
         startY: e.clientY,
         startLayout: { ...tile },
-        tilesLeftOfRightDivider: findTilesOnDivider(rightDivider, true, 'before', effectiveLayout),
-        tilesRightOfRightDivider: findTilesOnDivider(rightDivider, true, 'after', effectiveLayout),
-        tilesLeftOfLeftDivider: findTilesOnDivider(leftDivider, true, 'before', effectiveLayout),
-        tilesRightOfLeftDivider: findTilesOnDivider(leftDivider, true, 'after', effectiveLayout),
-        tilesAboveBottomDivider: findTilesOnDivider(bottomDivider, false, 'before', effectiveLayout),
-        tilesBelowBottomDivider: findTilesOnDivider(bottomDivider, false, 'after', effectiveLayout),
-        tilesAboveTopDivider: findTilesOnDivider(topDivider, false, 'before', effectiveLayout),
-        tilesBelowTopDivider: findTilesOnDivider(topDivider, false, 'after', effectiveLayout),
+        tilesLeftOfRightDivider: tilesLeftOfRight,
+        tilesRightOfRightDivider: tilesRightOfRight,
+        tilesLeftOfLeftDivider: tilesLeftOfLeft,
+        tilesRightOfLeftDivider: tilesRightOfLeft,
+        tilesAboveBottomDivider: tilesAboveBottom,
+        tilesBelowBottomDivider: tilesBelowBottom,
+        tilesAboveTopDivider: tilesAboveTop,
+        tilesBelowTopDivider: tilesBelowTop,
         rightDividerPos: rightDivider,
         leftDividerPos: leftDivider,
         bottomDividerPos: bottomDivider,
@@ -99,9 +110,11 @@ export function useTileResizeEffect(
         const tileUpdates = new Map<string, TileLayout>()
 
         const moveVerticalDivider = (originalPos: number, tilesLeft: TileLayout[], tilesRight: TileLayout[]) => {
-          if (originalPos < 1 || originalPos > 99) return
-          let minPos = MIN_SIZE
-          let maxPos = 100 - MIN_SIZE
+          if (tilesLeft.length === 0 && tilesRight.length === 0) return
+          // Block left outer boundary (x=0) but allow free resize otherwise
+          if (tilesLeft.length === 0 && originalPos < 1) return
+          let minPos = 0
+          let maxPos = Infinity
           tilesLeft.forEach(tile => { minPos = Math.max(minPos, tile.x + MIN_SIZE) })
           tilesRight.forEach(tile => { maxPos = Math.min(maxPos, tile.x + tile.width - MIN_SIZE) })
           const newPos = Math.max(minPos, Math.min(maxPos, mouseXPercent))
@@ -123,9 +136,9 @@ export function useTileResizeEffect(
         }
 
         const moveHorizontalDivider = (originalPos: number, tilesAbove: TileLayout[], tilesBelow: TileLayout[]) => {
-          if (originalPos < 1 || originalPos > 99) return
-          let minPos = MIN_SIZE
-          let maxPos = 100 - MIN_SIZE
+          if (tilesAbove.length === 0 && tilesBelow.length === 0) return
+          let minPos = 0
+          let maxPos = 100
           tilesAbove.forEach(tile => { minPos = Math.max(minPos, tile.y + MIN_SIZE) })
           tilesBelow.forEach(tile => { maxPos = Math.min(maxPos, tile.y + tile.height - MIN_SIZE) })
           const newPos = Math.max(minPos, Math.min(maxPos, mouseYPercent))

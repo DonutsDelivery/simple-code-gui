@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import ReactDOM from 'react-dom'
-import { BeadsTask, formatTaskPrompt } from './types.js'
+import type { UnifiedTask } from './adapters/types.js'
+import { formatTaskPrompt } from './types.js'
 
 // Type guard for checking if event target is a valid Node for contains() check
 function isEventTargetNode(target: EventTarget | null): target is Node {
@@ -10,7 +11,7 @@ function isEventTargetNode(target: EventTarget | null): target is Node {
 interface StartDropdownProps {
   taskId: string | null
   position: { top: number; left: number } | null
-  tasks: BeadsTask[]
+  tasks: UnifiedTask[]
   currentTabPtyId: string | null | undefined
   onStartInNewTab?: (prompt: string) => void
   onSendToCurrentTab?: (prompt: string) => void

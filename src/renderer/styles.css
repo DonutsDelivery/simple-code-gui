@@ -1522,20 +1522,22 @@ html, body, #root {
 .pan-indicator-right {
   position: absolute;
   top: 0;
-  width: 24px;
   height: 100%;
   pointer-events: none;
   z-index: 150;
+  transition: opacity 200ms ease;
 }
 
 .pan-indicator-left {
   left: 0;
-  background: linear-gradient(to right, rgba(var(--accent-rgb), 0.3), transparent);
+  width: 48px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.45), transparent);
 }
 
 .pan-indicator-right {
   right: 0;
-  background: linear-gradient(to left, rgba(var(--accent-rgb), 0.3), transparent);
+  width: 48px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.45), transparent);
 }
 
 /* Drop zone overlay for tile rearrangement */
@@ -4104,6 +4106,25 @@ html, body, #root {
   font-family: var(--font-mono);
 }
 
+.beads-task-automation {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.beads-task-automation.automation-eligible {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.beads-task-automation.automation-needs_review {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+.beads-task-automation.automation-manual_only {
+  color: var(--text-tertiary);
+  background: rgba(128, 128, 128, 0.1);
+}
+
 .beads-add-btn {
   width: 100%;
   padding: var(--space-sm);
@@ -4177,6 +4198,107 @@ html, body, #root {
   gap: var(--space-sm);
   flex-wrap: wrap;
   justify-content: center;
+}
+
+/* Kspec upgrade banner */
+.kspec-upgrade-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-xs) 0;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.kspec-upgrade-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kspec-upgrade-text strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.kspec-upgrade-text span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.kspec-upgrade-btn {
+  flex-shrink: 0;
+  padding: var(--space-xs) var(--space-md);
+  background: rgba(99, 102, 241, 0.8);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.kspec-upgrade-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 1);
+}
+
+.kspec-upgrade-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kspec-dispatch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 12px;
+}
+.kspec-dispatch-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.kspec-dispatch-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.kspec-dispatch-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+}
+.kspec-dispatch-btn {
+  padding: 2px 10px;
+  font-size: 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.kspec-dispatch-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: var(--text-primary);
+}
+.kspec-dispatch-btn.running {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.kspec-dispatch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .beads-create-form {
@@ -5703,6 +5825,60 @@ html, body, #root {
 
 .action-icon-btn.recording.enabled {
   background: #ef4444;
+}
+
+/* Voice level meter */
+.voice-level-meter {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 6px;
+  margin-bottom: 4px;
+  background: var(--bg-surface, #1e1e2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  z-index: 100;
+}
+
+.voice-level-bar-bg {
+  width: 12px;
+  height: 60px;
+  background: var(--bg-base, #111);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.voice-level-bar-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
+  transition: height 0.1s linear;
+}
+
+.voice-level-threshold {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  background: #ef4444;
+  pointer-events: none;
+}
+
+.voice-threshold-slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 16px;
+  height: 60px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #ef4444;
 }
 
 /* Voice input not yet ready */

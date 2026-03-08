@@ -27,9 +27,12 @@ export interface UseSTTHandlersResult {
   modelLoadStatus: string
   currentTranscription: string
   whisperModel: WhisperModelSize
+  audioLevel: number
+  silenceThreshold: number
 
   // Actions
   setWhisperModel: (model: WhisperModelSize) => void
+  setSilenceThreshold: (threshold: number) => void
   startRecording: (onTranscription: (text: string) => void) => Promise<void>
   stopRecording: () => void
 
@@ -38,6 +41,7 @@ export interface UseSTTHandlersResult {
 
   // State setters for settings loading
   setWhisperModelState: (model: WhisperModelSize) => void
+  setSilenceThresholdState: (threshold: number) => void
 }
 
 export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): UseSTTHandlersResult {
@@ -49,6 +53,8 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
   const [modelLoadStatus, setModelLoadStatus] = useState('')
   const [whisperModel, setWhisperModelState] = useState<WhisperModelSize>('base.en')
   const [currentTranscription, setCurrentTranscription] = useState('')
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [silenceThreshold, setSilenceThresholdState] = useState(5)
 
   // Refs
   const whisperRef = useRef<WhisperInstance | null>(null)
@@ -57,6 +63,16 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isRecordingRef = useRef(false)
 
+  // Audio monitoring refs
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const audioStreamRef = useRef<MediaStream | null>(null)
+  const levelIntervalRef = useRef<number | null>(null)
+  const silenceStartRef = useRef<number | null>(null)
+  const silenceThresholdRef = useRef(silenceThreshold)
+  const speechDetectedRef = useRef(false) // true if audio went above threshold since last chunk
+  const processingUtteranceRef = useRef(false) // guard against re-entry during stop/submit/restart
+
   const refs: STTRefs = {
     whisperRef,
     onTranscriptionRef,
@@ -64,6 +80,95 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     silenceTimerRef,
     isRecordingRef
   }
+
+  // Start audio level monitoring
+  const startAudioMonitoring = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioStreamRef.current = stream
+      const audioCtx = new AudioContext()
+      audioContextRef.current = audioCtx
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.3
+      source.connect(analyser)
+      analyserRef.current = analyser
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+      levelIntervalRef.current = window.setInterval(() => {
+        if (!analyserRef.current || !isRecordingRef.current) return
+        analyserRef.current.getByteFrequencyData(dataArray)
+        const avg = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length
+        const level = Math.round((avg / 255) * 100)
+        setAudioLevel(level)
+
+        const threshold = silenceThresholdRef.current
+        if (level < threshold) {
+          // Audio is below threshold (silence)
+          if (!silenceStartRef.current) {
+            silenceStartRef.current = Date.now()
+          } else if (!processingUtteranceRef.current) {
+            const silenceDuration = Date.now() - silenceStartRef.current
+            // After 2s of silence with speech detected: submit transcription,
+            // then stop/restart Whisper to clear the audio buffer
+            if (silenceDuration > 2000 && speechDetectedRef.current &&
+                finalTranscriptionRef.current.trim() &&
+                isRecordingRef.current && whisperRef.current) {
+              processingUtteranceRef.current = true
+
+              const callback = onTranscriptionRef.current
+              const textToSend = finalTranscriptionRef.current.trim()
+              finalTranscriptionRef.current = ''
+              setCurrentTranscription('')
+              silenceStartRef.current = null
+              speechDetectedRef.current = false
+
+              if (callback && textToSend) {
+                callback(textToSend)
+              }
+
+              // Stop and restart to clear Whisper's accumulated audio buffer
+              whisperRef.current.stopRecording()
+              if (isRecordingRef.current && whisperRef.current) {
+                whisperRef.current.startRecording().catch((error) => {
+                  console.error('Failed to restart recording after silence:', error)
+                  setIsRecording(false)
+                  isRecordingRef.current = false
+                })
+              }
+              processingUtteranceRef.current = false
+            }
+          }
+        } else {
+          // Audio is above threshold (speaking)
+          silenceStartRef.current = null
+          speechDetectedRef.current = true
+        }
+      }, 100)
+    } catch (error) {
+      console.error('Failed to start audio monitoring:', error)
+    }
+  }, [])
+
+  // Stop audio level monitoring
+  const stopAudioMonitoring = useCallback(() => {
+    if (levelIntervalRef.current !== null) {
+      clearInterval(levelIntervalRef.current)
+      levelIntervalRef.current = null
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {})
+      audioContextRef.current = null
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(t => t.stop())
+      audioStreamRef.current = null
+    }
+    analyserRef.current = null
+    silenceStartRef.current = null
+    setAudioLevel(0)
+  }, [])
 
   // Initialize Whisper transcriber - dynamically loads the module only when needed
   const initWhisper = useCallback(async () => {
@@ -83,9 +188,10 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
       const transcriber = new WhisperTranscriber({
         modelUrl,
         modelSize: whisperModel,
+        audioIntervalMs: 3000, // Feed audio to Whisper every 3s for near-realtime processing
         onTranscription: (text: string) => {
-          // ACCUMULATE transcriptions (library sends separate chunks)
-          // Filter out Whisper's silence/noise markers and artifacts
+          // Library returns CUMULATIVE transcription of all audio since startRecording()
+          // So we REPLACE (not append) the current transcription text
           const cleaned = text.trim()
             .replace(/\[BLANK_AUDIO\]/gi, '')
             .replace(/\[Silence\]/gi, '')
@@ -106,33 +212,10 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
             .trim()
 
           // Skip if empty or just short punctuation/artifacts
-          if (cleaned && cleaned.length > 1 && !/^[.,!?\-]+$/.test(cleaned)) {
-            const newText = finalTranscriptionRef.current
-              ? finalTranscriptionRef.current + ' ' + cleaned
-              : cleaned
-            finalTranscriptionRef.current = newText
-            setCurrentTranscription(newText)
-
-            // Reset silence timer - auto-submit after 3 seconds of no new speech
-            if (silenceTimerRef.current) {
-              clearTimeout(silenceTimerRef.current)
-            }
-            silenceTimerRef.current = setTimeout(async () => {
-              if (isRecordingRef.current && whisperRef.current) {
-                if (onTranscriptionRef.current && finalTranscriptionRef.current.trim()) {
-                  const callback = onTranscriptionRef.current
-                  const textToSend = finalTranscriptionRef.current.trim()
-
-                  finalTranscriptionRef.current = ''
-                  setCurrentTranscription('')
-
-                  callback(textToSend)
-
-                  whisperRef.current.stopRecording()
-                  await whisperRef.current.startRecording()
-                }
-              }
-            }, 3000)
+          // Also skip if no speech was detected (audio never exceeded threshold)
+          if (cleaned && cleaned.length > 1 && !/^[.,!?\-]+$/.test(cleaned) && speechDetectedRef.current) {
+            finalTranscriptionRef.current = cleaned
+            setCurrentTranscription(cleaned)
           }
         },
         debug: true,
@@ -145,7 +228,14 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
         }
       })
 
-      await transcriber.loadModel()
+      // Override confirm() to auto-accept the model download prompt from helpers.js
+      const originalConfirm = window.confirm
+      window.confirm = () => true
+      try {
+        await transcriber.loadModel()
+      } finally {
+        window.confirm = originalConfirm
+      }
       whisperRef.current = transcriber
       setIsModelLoaded(true)
       setModelLoadStatus('Model loaded')
@@ -168,6 +258,13 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     saveVoiceSetting('whisperModel', model)
   }, [saveVoiceSetting])
 
+  // Set silence threshold (saves to settings)
+  const setSilenceThreshold = useCallback((threshold: number) => {
+    setSilenceThresholdState(threshold)
+    silenceThresholdRef.current = threshold
+    saveVoiceSetting('voiceSilenceThreshold', threshold)
+  }, [saveVoiceSetting])
+
   // Start recording and transcribing
   const startRecording = useCallback(async (onTranscription: (text: string) => void) => {
     if (isRecording) return
@@ -175,6 +272,8 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     onTranscriptionRef.current = onTranscription
     finalTranscriptionRef.current = ''
     setCurrentTranscription('')
+    silenceStartRef.current = null
+    speechDetectedRef.current = false
 
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current)
@@ -192,6 +291,7 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
 
     try {
       await whisperRef.current.startRecording()
+      await startAudioMonitoring()
       setIsRecording(true)
       isRecordingRef.current = true
     } catch (error: unknown) {
@@ -202,7 +302,7 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
         alert('Microphone access denied. Please allow microphone access in your browser/system settings.')
       }
     }
-  }, [isRecording, initWhisper])
+  }, [isRecording, initWhisper, startAudioMonitoring])
 
   // Stop recording
   const stopRecording = useCallback(() => {
@@ -214,6 +314,7 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     }
 
     whisperRef.current.stopRecording()
+    stopAudioMonitoring()
     setIsRecording(false)
     isRecordingRef.current = false
 
@@ -224,7 +325,7 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     onTranscriptionRef.current = null
     finalTranscriptionRef.current = ''
     setCurrentTranscription('')
-  }, [isRecording])
+  }, [isRecording, stopAudioMonitoring])
 
   return {
     isRecording,
@@ -234,10 +335,14 @@ export function useSTTHandlers({ saveVoiceSetting }: UseSTTHandlersOptions): Use
     modelLoadStatus,
     currentTranscription,
     whisperModel,
+    audioLevel,
+    silenceThreshold,
     setWhisperModel,
+    setSilenceThreshold,
     startRecording,
     stopRecording,
     refs,
-    setWhisperModelState
+    setWhisperModelState,
+    setSilenceThresholdState
   }
 }

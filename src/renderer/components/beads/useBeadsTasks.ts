@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { tasksCache, beadsStatusCache } from '../../utils/lruCache.js'
-import type { BeadsTask } from './types.js'
+import type { UnifiedTask, TaskAdapter, BackendKind, AutomationEligibility, CreateTaskParams } from './adapters/types.js'
+import { detectBackend, getAdapter } from './adapters/detect.js'
 import type { BeadsState } from './useBeadsState.js'
 
 export interface TaskCrudCallbacks {
   loadTasks: (showLoading?: boolean) => Promise<void>
   handleInitBeads: () => Promise<void>
+  handleInitKspec: () => Promise<void>
+  handleUpgradeToKspec: () => Promise<void>
   handleInstallPython: () => Promise<void>
   handleInstallBeads: () => Promise<void>
   handleCreateTask: () => Promise<void>
@@ -15,6 +18,7 @@ export interface TaskCrudCallbacks {
   handleSaveEdit: () => Promise<void>
   handleCancelEdit: () => void
   handleClearCompleted: () => Promise<void>
+  upgrading: boolean
 }
 
 export interface TaskCrudState {
@@ -22,14 +26,16 @@ export interface TaskCrudState {
   setShowCreateModal: React.Dispatch<React.SetStateAction<boolean>>
   newTaskTitle: string
   setNewTaskTitle: React.Dispatch<React.SetStateAction<string>>
-  newTaskType: 'task' | 'bug' | 'feature' | 'epic' | 'chore'
-  setNewTaskType: React.Dispatch<React.SetStateAction<'task' | 'bug' | 'feature' | 'epic' | 'chore'>>
+  newTaskType: string
+  setNewTaskType: React.Dispatch<React.SetStateAction<string>>
   newTaskPriority: number
   setNewTaskPriority: React.Dispatch<React.SetStateAction<number>>
   newTaskDescription: string
   setNewTaskDescription: React.Dispatch<React.SetStateAction<string>>
   newTaskLabels: string
   setNewTaskLabels: React.Dispatch<React.SetStateAction<string>>
+  newTaskAutomation: AutomationEligibility | ''
+  setNewTaskAutomation: React.Dispatch<React.SetStateAction<AutomationEligibility | ''>>
   editingTaskId: string | null
   setEditingTaskId: React.Dispatch<React.SetStateAction<string | null>>
   editingTitle: string
@@ -41,11 +47,13 @@ interface UseBeadsTasksParams {
   projectPath: string | null
   beadsState: BeadsState
   setBeadsState: React.Dispatch<React.SetStateAction<BeadsState>>
-  tasks: BeadsTask[]
-  setTasks: React.Dispatch<React.SetStateAction<BeadsTask[]>>
+  tasks: UnifiedTask[]
+  setTasks: React.Dispatch<React.SetStateAction<UnifiedTask[]>>
   currentProjectRef: React.MutableRefObject<string | null>
   suppressWatcherReloadRef: React.MutableRefObject<boolean>
   setError: (error: string) => void
+  adapter: TaskAdapter | null
+  backendKind: BackendKind
 }
 
 export function useBeadsTasks({
@@ -56,17 +64,21 @@ export function useBeadsTasks({
   setTasks,
   currentProjectRef,
   suppressWatcherReloadRef,
-  setError
+  setError,
+  adapter,
+  backendKind
 }: UseBeadsTasksParams): TaskCrudCallbacks & TaskCrudState {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
-  const [newTaskType, setNewTaskType] = useState<'task' | 'bug' | 'feature' | 'epic' | 'chore'>('task')
+  const [newTaskType, setNewTaskType] = useState<string>('task')
   const [newTaskPriority, setNewTaskPriority] = useState<number>(2)
   const [newTaskDescription, setNewTaskDescription] = useState('')
   const [newTaskLabels, setNewTaskLabels] = useState('')
+  const [newTaskAutomation, setNewTaskAutomation] = useState<AutomationEligibility | ''>('')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const editInputRef = useRef<HTMLInputElement>(null)
+  const [upgrading, setUpgrading] = useState(false)
 
   const loadTasks = useCallback(async (showLoading = true) => {
     if (!projectPath) return
@@ -76,54 +88,57 @@ export function useBeadsTasks({
     if (showLoading) setBeadsState({ status: 'loading' })
 
     try {
-      const status = await window.electronAPI?.beadsCheck(loadingForProject)
+      // Detect backend if we don't have an adapter yet
+      const kind = backendKind !== 'none' ? backendKind : await detectBackend(loadingForProject)
+      const currentAdapter = kind !== 'none' ? getAdapter(kind) : null
 
-      if (currentProjectRef.current !== loadingForProject) {
+      if (currentProjectRef.current !== loadingForProject) return
+
+      if (!currentAdapter) {
+        // Check if beads is at least installable
+        const beadsStatus = await window.electronAPI?.beadsCheck(loadingForProject)
+        if (currentProjectRef.current !== loadingForProject) return
+
+        if (!beadsStatus?.installed) {
+          setBeadsState({ status: 'not_installed', installing: null, needsPython: false, installError: null, installStatus: null })
+          return
+        }
+
+        // Neither backend initialized — offer choice
+        setBeadsState({ status: 'not_initialized', initializing: false, availableBackends: ['beads', 'kspec'] })
         return
       }
 
-      if (!status) {
-        setBeadsState({ status: 'error', error: 'Failed to check beads status' })
-        return
-      }
+      // Backend found — check status
+      const status = await currentAdapter.check(loadingForProject)
+      if (currentProjectRef.current !== loadingForProject) return
 
       beadsStatusCache.set(loadingForProject, status)
 
-      if (!status.installed) {
-        setBeadsState({ status: 'not_installed', installing: null, needsPython: false, installError: null, installStatus: null })
-        return
-      }
-
       if (!status.initialized) {
-        setBeadsState({ status: 'not_initialized', initializing: false })
+        setBeadsState({ status: 'not_initialized', initializing: false, availableBackends: [kind] })
         return
       }
 
-      const result = await window.electronAPI?.beadsList(loadingForProject)
+      // Load tasks via adapter
+      const taskList = await currentAdapter.list(loadingForProject)
+      if (currentProjectRef.current !== loadingForProject) return
 
-      if (currentProjectRef.current !== loadingForProject) {
-        return
-      }
-
-      if (result?.success && result.tasks) {
-        setTasks(result.tasks as BeadsTask[])
-        tasksCache.set(loadingForProject, result.tasks)
-        setBeadsState({ status: 'ready' })
-      } else {
-        setBeadsState({ status: 'error', error: result?.error || 'Failed to load tasks' })
-      }
+      setTasks(taskList)
+      tasksCache.set(loadingForProject, taskList)
+      setBeadsState({ status: 'ready' })
     } catch (e) {
       if (currentProjectRef.current === loadingForProject) {
         setBeadsState({ status: 'error', error: String(e) })
       }
     }
-  }, [projectPath, setBeadsState, setTasks, currentProjectRef])
+  }, [projectPath, setBeadsState, setTasks, currentProjectRef, backendKind])
 
   const handleInitBeads = async (): Promise<void> => {
     if (!projectPath) return
     if (beadsState.status !== 'not_initialized') return
 
-    setBeadsState({ status: 'not_initialized', initializing: true })
+    setBeadsState({ status: 'not_initialized', initializing: true, availableBackends: ['beads'] })
 
     try {
       const result = await window.electronAPI?.beadsInit(projectPath)
@@ -134,6 +149,64 @@ export function useBeadsTasks({
       }
     } catch (e) {
       setBeadsState({ status: 'error', error: String(e) })
+    }
+  }
+
+  const handleInitKspec = async (): Promise<void> => {
+    if (!projectPath) return
+    if (beadsState.status !== 'not_initialized') return
+
+    setBeadsState({ status: 'not_initialized', initializing: true, availableBackends: ['kspec'] })
+
+    try {
+      const result = await window.electronAPI?.kspecInit?.(projectPath)
+      if (result?.success) {
+        // Ensure daemon is running
+        await window.electronAPI?.kspecEnsureDaemon?.(projectPath)
+        loadTasks()
+      } else {
+        setBeadsState({ status: 'error', error: result?.error || 'Failed to initialize kspec' })
+      }
+    } catch (e) {
+      setBeadsState({ status: 'error', error: String(e) })
+    }
+  }
+
+  const handleUpgradeToKspec = async (): Promise<void> => {
+    if (!projectPath) return
+    setUpgrading(true)
+
+    try {
+      // Check if kspec CLI is installed, install if not
+      const cliCheck = await window.electronAPI?.kspecCheckCli?.()
+      if (!cliCheck?.installed) {
+        const installResult = await window.electronAPI?.kspecInstallCli?.()
+        if (!installResult?.success) {
+          setError(installResult?.error || 'Failed to install kspec CLI')
+          setUpgrading(false)
+          return
+        }
+      }
+
+      // Run migration: reads beads tasks, inits kspec, creates tasks, removes .beads/
+      const result = await window.electronAPI?.kspecMigrateFromBeads?.(projectPath)
+      if (!result?.success) {
+        setError(result?.error || 'Migration failed')
+        setUpgrading(false)
+        return
+      }
+
+      // Ensure daemon is running
+      await window.electronAPI?.kspecEnsureDaemon?.(projectPath)
+
+      // Clear caches and reload — backend has changed from beads to kspec
+      tasksCache.delete(projectPath)
+      beadsStatusCache.delete(projectPath)
+      loadTasks()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setUpgrading(false)
     }
   }
 
@@ -173,31 +246,28 @@ export function useBeadsTasks({
   }
 
   const handleCreateTask = async (): Promise<void> => {
-    if (!projectPath || !newTaskTitle.trim()) return
+    if (!projectPath || !newTaskTitle.trim() || !adapter) return
 
     try {
-      const title = newTaskTitle.trim()
-      const description = newTaskDescription.trim() || undefined
-      const labels = newTaskLabels.trim() || undefined
-
-      const result = await window.electronAPI?.beadsCreate(
-        projectPath,
-        title,
-        description,
-        newTaskPriority,
-        newTaskType,
-        labels
-      )
-      if (result?.success) {
+      const result = await adapter.create(projectPath, {
+        title: newTaskTitle.trim(),
+        description: newTaskDescription.trim() || undefined,
+        priority: newTaskPriority,
+        type: newTaskType as CreateTaskParams['type'],
+        tags: newTaskLabels.trim() || undefined,
+        automation: newTaskAutomation || undefined
+      })
+      if (result.success) {
         setNewTaskTitle('')
         setNewTaskType('task')
-        setNewTaskPriority(2)
+        setNewTaskPriority(backendKind === 'kspec' ? 3 : 2)
         setNewTaskDescription('')
         setNewTaskLabels('')
+        setNewTaskAutomation('')
         setShowCreateModal(false)
         loadTasks()
       } else {
-        setError(result?.error || 'Failed to create task')
+        setError(result.error || 'Failed to create task')
       }
     } catch (e) {
       setError(String(e))
@@ -205,19 +275,19 @@ export function useBeadsTasks({
   }
 
   const handleCompleteTask = async (taskId: string): Promise<void> => {
-    if (!projectPath) return
+    if (!projectPath || !adapter) return
 
     const previousTasks = [...tasks]
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: 'closed' } : t)
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: 'closed' as const } : t)
     setTasks(updatedTasks)
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI?.beadsComplete(projectPath, taskId)
-      if (!result?.success) {
+      const result = await adapter.complete(projectPath, taskId)
+      if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
-        setError(result?.error || 'Failed to complete task')
+        setError(result.error || 'Failed to complete task')
       }
     } catch (e) {
       setTasks(previousTasks)
@@ -227,7 +297,7 @@ export function useBeadsTasks({
   }
 
   const handleDeleteTask = async (taskId: string): Promise<void> => {
-    if (!projectPath) return
+    if (!projectPath || !adapter) return
 
     const previousTasks = [...tasks]
     const updatedTasks = tasks.filter(t => t.id !== taskId)
@@ -235,11 +305,11 @@ export function useBeadsTasks({
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI?.beadsDelete(projectPath, taskId)
-      if (!result?.success) {
+      const result = await adapter.delete(projectPath, taskId)
+      if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
-        setError(result?.error || 'Failed to delete task')
+        setError(result.error || 'Failed to delete task')
       }
     } catch (e) {
       setTasks(previousTasks)
@@ -249,7 +319,7 @@ export function useBeadsTasks({
   }
 
   const handleCycleStatus = async (taskId: string, currentStatus: string): Promise<void> => {
-    if (!projectPath) return
+    if (!projectPath || !adapter) return
 
     let nextStatus: string
     switch (currentStatus) {
@@ -259,16 +329,16 @@ export function useBeadsTasks({
     }
 
     const previousTasks = [...tasks]
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: nextStatus } : t)
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: nextStatus as UnifiedTask['status'] } : t)
     setTasks(updatedTasks)
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await window.electronAPI?.beadsUpdate(projectPath, taskId, nextStatus)
-      if (!result?.success) {
+      const result = await adapter.update(projectPath, taskId, { status: nextStatus as UnifiedTask['status'] })
+      if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)
-        setError(result?.error || 'Failed to update task status')
+        setError(result.error || 'Failed to update task status')
       }
     } catch (e) {
       setTasks(previousTasks)
@@ -278,7 +348,7 @@ export function useBeadsTasks({
   }
 
   const handleSaveEdit = async (): Promise<void> => {
-    if (!projectPath || !editingTaskId || !editingTitle.trim()) {
+    if (!projectPath || !editingTaskId || !editingTitle.trim() || !adapter) {
       setEditingTaskId(null)
       return
     }
@@ -290,11 +360,11 @@ export function useBeadsTasks({
     }
 
     try {
-      const result = await window.electronAPI?.beadsUpdate(projectPath, editingTaskId, undefined, editingTitle.trim())
-      if (result?.success) {
+      const result = await adapter.update(projectPath, editingTaskId, { title: editingTitle.trim() })
+      if (result.success) {
         loadTasks()
       } else {
-        setError(result?.error || 'Failed to update task title')
+        setError(result.error || 'Failed to update task title')
       }
     } catch (e) {
       setError(String(e))
@@ -309,7 +379,7 @@ export function useBeadsTasks({
   }
 
   const handleClearCompleted = async (): Promise<void> => {
-    if (!projectPath) return
+    if (!projectPath || !adapter) return
 
     const closedTasks = tasks.filter(t => t.status === 'closed')
     if (closedTasks.length === 0) return
@@ -322,33 +392,33 @@ export function useBeadsTasks({
 
     try {
       await Promise.allSettled(
-        closedTasks.map(task => window.electronAPI?.beadsDelete(projectPath, task.id))
+        closedTasks.map(task => adapter.delete(projectPath, task.id))
       )
     } finally {
       suppressWatcherReloadRef.current = false
     }
   }
 
-  // Set up file watcher
+  // Set up watcher via adapter
   useEffect(() => {
     const isReady = beadsState.status === 'ready'
-    if (!projectPath || !isReady) return
+    if (!projectPath || !isReady || !adapter) return
 
-    window.electronAPI?.beadsWatch(projectPath)
+    adapter.watch(projectPath)
 
-    const cleanup = window.electronAPI?.onBeadsTasksChanged((data: { cwd: string }) => {
+    const cleanup = adapter.onTasksChanged((data: { cwd: string }) => {
       if (data.cwd === projectPath && !suppressWatcherReloadRef.current) {
         loadTasks(false)
       }
     })
 
     return () => {
-      window.electronAPI?.beadsUnwatch(projectPath)
-      cleanup?.()
+      adapter.unwatch(projectPath)
+      cleanup()
     }
-  }, [projectPath, beadsState.status, loadTasks, suppressWatcherReloadRef])
+  }, [projectPath, beadsState.status, loadTasks, suppressWatcherReloadRef, adapter])
 
-  // Load tasks on mount and when project changes (after cache init)
+  // Load tasks on mount and when project changes
   useEffect(() => {
     if (projectPath) {
       loadTasks(false)
@@ -358,6 +428,8 @@ export function useBeadsTasks({
   return {
     loadTasks,
     handleInitBeads,
+    handleInitKspec,
+    handleUpgradeToKspec,
     handleInstallPython,
     handleInstallBeads,
     handleCreateTask,
@@ -379,10 +451,13 @@ export function useBeadsTasks({
     setNewTaskDescription,
     newTaskLabels,
     setNewTaskLabels,
+    newTaskAutomation,
+    setNewTaskAutomation,
     editingTaskId,
     setEditingTaskId,
     editingTitle,
     setEditingTitle,
-    editInputRef
+    editInputRef,
+    upgrading
   }
 }

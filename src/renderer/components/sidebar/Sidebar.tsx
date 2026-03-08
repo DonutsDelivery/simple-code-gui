@@ -119,6 +119,7 @@ export function Sidebar({
     projects,
     openTabs,
     activeTabId,
+    focusedTabId: lastFocusedTabId ?? null,
     onOpenSession,
     onRemoveProject,
     onUpdateProject,

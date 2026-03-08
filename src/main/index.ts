@@ -5,6 +5,7 @@ import { mkdirSync, existsSync, copyFileSync, statSync } from 'fs'
 import { PtyManager } from './pty-manager.js'
 import { SessionStore } from './session-store.js'
 import { ApiServerManager } from './api-server.js'
+import { OrchestratorApi } from './orchestrator-api.js'
 import { MobileServer } from './mobile-server.js'
 import { voiceManager } from './voice-manager.js'
 import { setPortableBinDirs } from './platform.js'
@@ -17,6 +18,7 @@ import {
   registerExtensionHandlers,
   registerWindowHandlers,
   registerGsdHandlers,
+  registerKspecHandlers,
 } from './ipc/index.js'
 
 import { setupAppConfig, setupSecurityHeaders } from './app/app-setup.js'
@@ -54,6 +56,8 @@ const mobileServer = new MobileServer()
 const ptyToProject = new Map<string, string>()
 const ptyToBackend = new Map<string, string>()
 
+const orchestratorApi = new OrchestratorApi(ptyManager, ptyToProject)
+
 const getMainWindow = (): BrowserWindow | null => mainWindow
 const setMainWindow = (win: BrowserWindow | null): void => { mainWindow = win }
 
@@ -64,6 +68,7 @@ registerVoiceHandlers(getMainWindow)
 registerExtensionHandlers()
 registerWindowHandlers(getMainWindow)
 registerGsdHandlers()
+registerKspecHandlers()
 registerWorkspaceHandlers(sessionStore, getMainWindow)
 registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow)
 registerServerHandlers(apiServerManager, mobileServer)
@@ -120,6 +125,9 @@ app.whenReady().then(() => {
   createApplicationMenu(mainWindow)
   if (mainWindow) initUpdater(mainWindow)
 
+  // Start orchestrator API for MCP-based session control
+  orchestratorApi.start()
+
   // Start mobile server for phone app connectivity
   mobileServer.setPtyManager(ptyManager)
   mobileServer.setSessionStore(sessionStore)
@@ -145,6 +153,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  orchestratorApi.stop()
   mobileServer.stop()
   apiServerManager.stopAll()
   ptyManager.killAll()

@@ -26,7 +26,9 @@ function encodeProjectPath(projectPath: string): string {
   // 3. Replacing _ with -
   // 4. Replacing spaces with -
   // 5. Replacing : with - (Windows drive letters)
+  // 6. Replacing dots with dashes (e.g. .config -> -config)
   // /home/user/my_project/ becomes -home-user-my-project
+  // /home/user/.config/app becomes -home-user--config-app
   // C:\Users\bob\project becomes -C-Users-bob-project
   return projectPath
     .replace(/[/\\]+$/, '')  // Remove trailing slashes/backslashes
@@ -34,6 +36,7 @@ function encodeProjectPath(projectPath: string): string {
     .replace(/:/g, '-')      // Replace : with - (Windows drive letters)
     .replace(/_/g, '-')      // Replace _ with -
     .replace(/ /g, '-')      // Replace spaces with -
+    .replace(/\./g, '-')     // Replace dots with dashes
 }
 
 function expandHomePath(targetPath: string): string {

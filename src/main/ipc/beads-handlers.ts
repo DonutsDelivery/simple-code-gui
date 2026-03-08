@@ -93,6 +93,13 @@ export function registerBeadsHandlers(getMainWindow: () => BrowserWindow | null)
         return { success: true }
       }
       await execAsync('bd init', { ...getBeadsExecOptions(), cwd })
+
+      // Add unified task instructions to CLAUDE.md
+      try {
+        const { installTaskInstructions } = await import('./kspec-handlers.js')
+        installTaskInstructions(cwd, 'beads')
+      } catch { /* non-fatal */ }
+
       return { success: true }
     } catch (e: any) {
       return { success: false, error: e.message }

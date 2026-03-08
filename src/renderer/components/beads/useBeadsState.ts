@@ -1,28 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { tasksCache, beadsStatusCache } from '../../utils/lruCache.js'
-import type { BeadsTask } from './types.js'
+import type { UnifiedTask } from './adapters/types.js'
+import type { BackendKind, TaskAdapter } from './adapters/types.js'
+import { detectBackend, getAdapter, beadsAdapter, kspecAdapter } from './adapters/detect.js'
 
-// Discriminated union for beads panel state
+// Discriminated union for panel state
 export type BeadsState =
   | { status: 'loading' }
   | { status: 'not_installed'; installing: 'beads' | 'python' | null; needsPython: boolean; installError: string | null; installStatus: string | null }
-  | { status: 'not_initialized'; initializing: boolean }
+  | { status: 'not_initialized'; initializing: boolean; availableBackends: BackendKind[] }
   | { status: 'ready' }
   | { status: 'error'; error: string }
 
 export interface BeadsStateResult {
   beadsState: BeadsState
   setBeadsState: React.Dispatch<React.SetStateAction<BeadsState>>
-  tasks: BeadsTask[]
-  setTasks: React.Dispatch<React.SetStateAction<BeadsTask[]>>
+  tasks: UnifiedTask[]
+  setTasks: React.Dispatch<React.SetStateAction<UnifiedTask[]>>
   currentProjectRef: React.MutableRefObject<string | null>
   suppressWatcherReloadRef: React.MutableRefObject<boolean>
   setError: (error: string) => void
+  backendKind: BackendKind
+  adapter: TaskAdapter | null
 }
 
 export function useBeadsState(projectPath: string | null): BeadsStateResult {
   const [beadsState, setBeadsState] = useState<BeadsState>({ status: 'loading' })
-  const [tasks, setTasks] = useState<BeadsTask[]>([])
+  const [tasks, setTasks] = useState<UnifiedTask[]>([])
+  const [backendKind, setBackendKind] = useState<BackendKind>('none')
   const currentProjectRef = useRef<string | null>(null)
   const suppressWatcherReloadRef = useRef(false)
 
@@ -44,7 +49,7 @@ export function useBeadsState(projectPath: string | null): BeadsStateResult {
     return cleanup
   }, [])
 
-  // Initialize from cache on project change
+  // Detect backend on project change
   useEffect(() => {
     currentProjectRef.current = projectPath
 
@@ -52,23 +57,33 @@ export function useBeadsState(projectPath: string | null): BeadsStateResult {
       setTasks([])
       setBeadsState({ status: 'loading' })
 
-      const cachedTasks = tasksCache.get(projectPath) as BeadsTask[] | undefined
+      // Check cache first
+      const cachedTasks = tasksCache.get(projectPath) as UnifiedTask[] | undefined
       const cachedStatus = beadsStatusCache.get(projectPath)
       if (cachedTasks && cachedStatus) {
         setTasks(cachedTasks)
         if (cachedStatus.installed && cachedStatus.initialized) {
           setBeadsState({ status: 'ready' })
         } else if (cachedStatus.installed) {
-          setBeadsState({ status: 'not_initialized', initializing: false })
+          setBeadsState({ status: 'not_initialized', initializing: false, availableBackends: ['beads', 'kspec'] })
         } else {
           setBeadsState({ status: 'not_installed', installing: null, needsPython: false, installError: null, installStatus: null })
         }
       }
+
+      // Detect backend
+      detectBackend(projectPath).then(kind => {
+        if (currentProjectRef.current !== projectPath) return
+        setBackendKind(kind)
+      })
     } else {
       setTasks([])
+      setBackendKind('none')
       setBeadsState({ status: 'loading' })
     }
   }, [projectPath])
+
+  const adapter = getAdapter(backendKind)
 
   return {
     beadsState,
@@ -77,6 +92,8 @@ export function useBeadsState(projectPath: string | null): BeadsStateResult {
     setTasks,
     currentProjectRef,
     suppressWatcherReloadRef,
-    setError
+    setError,
+    backendKind,
+    adapter
   }
 }

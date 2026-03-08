@@ -26,6 +26,7 @@ export interface SidebarContentProps {
   projects: Project[]
   openTabs: OpenTab[]
   activeTabId: string | null
+  focusedTabId: string | null
   onOpenSession: SidebarProps['onOpenSession']
   onRemoveProject: SidebarProps['onRemoveProject']
   onUpdateProject: SidebarProps['onUpdateProject']
@@ -43,6 +44,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
     handlers,
     projects,
     activeTabId,
+    focusedTabId,
     onOpenSession,
     onRemoveProject,
     onUpdateProject,
@@ -316,6 +318,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
 
       <SidebarActions
         activeTabId={activeTabId}
+        focusedTabId={focusedTabId}
         focusedProject={focusedProject}
         apiStatus={focusedProjectPath ? apiStatus[focusedProjectPath] : undefined}
         isDebugMode={isDebugMode}

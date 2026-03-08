@@ -15,11 +15,13 @@ export function VoiceControls({
     voiceOutputEnabled, setVoiceOutputEnabled, isSpeaking, stopSpeaking, volume,
     // Voice Input
     isRecording, isModelLoading, isModelLoaded, modelLoadProgress, modelLoadStatus,
-    currentTranscription, startRecording, stopRecording
+    currentTranscription, startRecording, stopRecording,
+    audioLevel, silenceThreshold, setSilenceThreshold
   } = useVoice()
 
   const [ttsInstalled, setTtsInstalled] = useState(false)
   const [installingTTS, setInstallingTTS] = useState(false)
+  const [showLevelMeter, setShowLevelMeter] = useState(false)
 
   // Use ref to always have latest activeTabId for transcription callback
   const activeTabIdRef = useRef(activeTabId)
@@ -38,6 +40,17 @@ export function VoiceControls({
     })
     return cleanup
   }, [])
+
+  // Show level meter while recording
+  useEffect(() => {
+    if (isRecording) {
+      setShowLevelMeter(true)
+    } else {
+      // Delay hiding to avoid flicker
+      const timer = setTimeout(() => setShowLevelMeter(false), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [isRecording])
 
   const checkInstallation = async () => {
     try {
@@ -113,7 +126,7 @@ export function VoiceControls({
     if (isModelLoading) return `Loading Whisper model... ${modelLoadProgress}%`
     if (isRecording) {
       if (currentTranscription) {
-        return `Recording: "${currentTranscription}" (auto-submits after 3s silence)`
+        return `Recording: "${currentTranscription}" (auto-submits after silence)`
       }
       return 'Listening... (speak now)'
     }
@@ -122,15 +135,44 @@ export function VoiceControls({
 
   return (
     <>
-      <button
-        className={`action-icon-btn ${isRecording ? 'enabled recording' : ''} ${isModelLoading ? 'installing' : ''}`}
-        onClick={handleVoiceInput}
-        disabled={isModelLoading}
-        tabIndex={-1}
-        title={getVoiceInputTitle()}
-      >
-        {isModelLoading ? '⏳' : isRecording ? '⏹️' : '🎤'}
-      </button>
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+        <button
+          className={`action-icon-btn ${isRecording ? 'enabled recording' : ''} ${isModelLoading ? 'installing' : ''}`}
+          onClick={handleVoiceInput}
+          disabled={isModelLoading}
+          tabIndex={-1}
+          title={getVoiceInputTitle()}
+        >
+          {isModelLoading ? '\u23F3' : isRecording ? '\u23F9\uFE0F' : '\uD83C\uDFA4'}
+        </button>
+
+        {showLevelMeter && (
+          <div className="voice-level-meter" title={`Level: ${audioLevel}% | Threshold: ${silenceThreshold}%`}>
+            <div className="voice-level-bar-bg">
+              <div
+                className="voice-level-bar-fill"
+                style={{
+                  height: `${audioLevel}%`,
+                  backgroundColor: audioLevel > silenceThreshold ? 'var(--accent, #58a6ff)' : 'var(--text-muted, #666)'
+                }}
+              />
+              <div
+                className="voice-level-threshold"
+                style={{ bottom: `${silenceThreshold}%` }}
+              />
+            </div>
+            <input
+              type="range"
+              className="voice-threshold-slider"
+              min="0"
+              max="50"
+              value={silenceThreshold}
+              onChange={(e) => setSilenceThreshold(Number(e.target.value))}
+              title={`Silence threshold: ${silenceThreshold}%`}
+            />
+          </div>
+        )}
+      </div>
 
       <button
         className={`action-icon-btn ${voiceOutputEnabled ? 'enabled' : ''} ${installingTTS ? 'installing' : ''}`}
@@ -139,7 +181,7 @@ export function VoiceControls({
         tabIndex={-1}
         title={installingTTS ? 'Installing Piper...' : ttsInstalled ? (voiceOutputEnabled ? 'Disable voice output' : 'Enable voice output') : 'Click to install Piper'}
       >
-        {installingTTS ? '⏳' : '🔊'}
+        {installingTTS ? '\u23F3' : '\uD83D\uDD0A'}
       </button>
     </>
   )
