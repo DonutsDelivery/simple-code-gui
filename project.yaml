@@ -6,3 +6,4 @@ project:
 includes:
   - modules/main.yaml
   - modules/terminal.yaml
+  - modules/layout.yaml

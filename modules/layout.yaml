@@ -1,0 +1,17 @@
+_ulid: 01KK67BC64PX1P0T8AQG7P1Y1A
+slugs:
+  - layout
+title: Layout & Navigation
+type: module
+status:
+  maturity: draft
+  implementation: not_started
+description: Tiled and tabbed terminal layout, sidebar navigation, project management UI
+tags:
+  - ui
+depends_on: []
+implements: []
+relates_to: []
+tests: []
+traits: []
+notes: []
