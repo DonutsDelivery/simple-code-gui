@@ -61,6 +61,8 @@ features:
         given: a PTY session exists
         when: POST /sessions/{id}/input is called with text
         then: the text followed by carriage return is written to the PTY, simulating user keyboard input
+    status:
+      implementation: implemented
   - _ulid: 01KK67DFJH7RN2ATAG7E69AZVN
     slugs:
       - mobile-server
