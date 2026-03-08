@@ -46,3 +46,18 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:00:46.934Z
+  - _ulid: 01KK67D43YDQQSPB0N6QEN22Q4
+    slugs:
+      - task-adapter
+    title: Unified Task Adapter
+    type: feature
+    tags: []
+    description: Adapter pattern abstracting Beads and Kspec backends behind a unified TaskAdapter
+      interface. Auto-detection of initialized backend, transparent routing, migration support.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-03-08T08:00:48.254Z
