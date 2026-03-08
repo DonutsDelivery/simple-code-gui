@@ -143,6 +143,8 @@ constraints:
     traits: []
     notes: []
     created: 2026-03-08T08:01:50.912Z
+    status:
+      implementation: implemented
   - _ulid: 01KK67F39FMSKW6S55K009Q60A
     slugs:
       - no-shell-injection
