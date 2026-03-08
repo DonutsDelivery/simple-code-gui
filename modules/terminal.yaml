@@ -42,6 +42,10 @@ features:
         when: terminal output is produced
         then: output is captured in a 200-line ring buffer with ANSI codes stripped and relayed to renderer
           via IPC
+      - id: ac-3
+        given: a PTY session is running
+        when: the user closes the tab or app exits
+        then: the PTY process is terminated and all listeners are cleaned up
   - _ulid: 01KK67BRJR4864JXD28BE8HNK2
     slugs:
       - multi-backend
