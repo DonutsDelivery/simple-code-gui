@@ -31,6 +31,8 @@ features:
     traits: []
     notes: []
     created: 2026-03-08T08:01:06.126Z
+    status:
+      implementation: implemented
   - _ulid: 01KK67DQ85HYPGA16RS2R2WB1K
     slugs:
       - settings
