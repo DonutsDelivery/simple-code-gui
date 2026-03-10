@@ -171,16 +171,16 @@ tasks:
     spec_ref: "@task-adapter"
     meta_ref: null
     plan_ref: null
-    status: needs_work
+    status: in_progress
     blocked_by: []
     depends_on: []
     context: []
     priority: 3
     tags: []
     vcs_refs: []
-    session_id: null
+    session_id: 01KKB0HJ8S9QF7ESBZFQ4ZE43P
     created_at: 2026-03-10T03:28:30.561Z
-    started_at: 2026-03-10T04:24:58.226Z
+    started_at: 2026-03-10T04:40:13.308Z
     submitted_at: 2026-03-10T04:28:26.347Z
     notes:
       - _ulid: 01KKAZXH27QYNSGW6SKVJF3PJZ
