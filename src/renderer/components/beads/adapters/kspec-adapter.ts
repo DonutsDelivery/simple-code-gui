@@ -26,6 +26,8 @@ function headers(cwd: string): HeadersInit {
 
 // Shared flag so API failures can signal the adapter to re-check daemon
 let _daemonEnsuredFlag = true
+// Last project dir we ensured daemon for — reset flag on project switch
+let _daemonEnsuredForCwd: string | null = null
 
 async function api<T>(method: string, path: string, cwd: string, body?: unknown): Promise<T> {
   const opts: RequestInit = {
@@ -90,15 +92,20 @@ export class KspecAdapter implements TaskAdapter {
   readonly kind = 'kspec' as const
 
   private async ensureDaemon(cwd: string): Promise<boolean> {
+    // Reset flag when switching projects so we re-verify daemon for new cwd
+    if (_daemonEnsuredForCwd !== null && _daemonEnsuredForCwd !== cwd) {
+      _daemonEnsuredFlag = false
+    }
+
     // Quick health check first
     try {
       const res = await fetch(`${API_BASE}/api/health`)
-      if (res.ok) { _daemonEnsuredFlag = true; return true }
+      if (res.ok) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
     } catch { /* daemon not running */ }
 
     // Start daemon via IPC (always attempt if health check failed)
     const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
-    if (result?.success) { _daemonEnsuredFlag = true; return true }
+    if (result?.success) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
     return false
   }
 
@@ -221,6 +228,7 @@ export class KspecAdapter implements TaskAdapter {
   private wsCallbacks: Set<(data: { cwd: string }) => void> = new Set()
   private watchedCwd: string | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectDelay = 1000
   private watching = false
 
   watch(cwd: string): void {
@@ -231,6 +239,7 @@ export class KspecAdapter implements TaskAdapter {
     }
     this.watching = true
     this.watchedCwd = cwd
+    this.reconnectDelay = 1000
     this.connectWs(cwd)
   }
 
@@ -246,11 +255,15 @@ export class KspecAdapter implements TaskAdapter {
           }
         } catch { /* ignore parse errors */ }
       }
+      this.ws.onopen = () => {
+        this.reconnectDelay = 1000 // Reset backoff on successful connection
+      }
       this.ws.onclose = () => {
         this.ws = null
-        // Auto-reconnect if still watching this project
+        // Auto-reconnect with exponential backoff (cap at 30s)
         if (this.watching && this.watchedCwd === cwd) {
-          this.reconnectTimer = setTimeout(() => this.connectWs(cwd), 3000)
+          this.reconnectTimer = setTimeout(() => this.connectWs(cwd), this.reconnectDelay)
+          this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
         }
       }
       this.ws.onerror = () => {
