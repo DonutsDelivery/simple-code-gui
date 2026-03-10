@@ -1,0 +1,446 @@
+```
+     1→import React from 'react'
+     2→import { Project, useWorkspaceStore } from '../../stores/workspace.js'
+     3→import { BeadsPanel } from '../BeadsPanel.js'
+     4→import { GSDStatus } from '../GSDStatus.js'
+     5→import { ExtensionBrowser } from '../ExtensionBrowser.js'
+     6→import { ClaudeMdEditor } from '../ClaudeMdEditor.js'
+     7→import {
+     8→  getCategoryGradient,
+     9→  ProjectItem,
+    10→  ProjectContextMenu,
+    11→  ProjectSettingsModal,
+    12→  CategoryContextMenu,
+    13→  DeleteConfirmModal,
+    14→  VirtualizedProjectList,
+    15→  CategoryHeader,
+    16→  VoiceOptionsPanel,
+    17→  SidebarActions,
+    18→} from './index.js'
+    19→import { SidebarState } from './useSidebarState.js'
+    20→import { SidebarHandlers } from './useSidebarHandlers.js'
+    21→import { SidebarProps, OpenTab } from './types.js'
+    22→
+    23→export interface SidebarContentProps {
+    24→  state: SidebarState
+    25→  handlers: SidebarHandlers
+    26→  projects: Project[]
+    27→  openTabs: OpenTab[]
+    28→  activeTabId: string | null
+    29→  focusedTabId: string | null
+    30→  onOpenSession: SidebarProps['onOpenSession']
+    31→  onRemoveProject: SidebarProps['onRemoveProject']
+    32→  onUpdateProject: SidebarProps['onUpdateProject']
+    33→  onAddProject: SidebarProps['onAddProject']
+    34→  onAddProjectsFromParent: SidebarProps['onAddProjectsFromParent']
+    35→  onOpenSettings: SidebarProps['onOpenSettings']
+    36→  onOpenMakeProject: SidebarProps['onOpenMakeProject']
+    37→  onOpenMobileConnect: SidebarProps['onOpenMobileConnect']
+    38→  renderProjectItem: (project: Project) => React.ReactElement
+    39→}
+    40→
+    41→export function SidebarContent(props: SidebarContentProps): React.ReactElement {
+    42→  const {
+    43→    state,
+    44→    handlers,
+    45→    projects,
+    46→    activeTabId,
+    47→    focusedTabId,
+    48→    onOpenSession,
+    49→    onRemoveProject,
+    50→    onUpdateProject,
+    51→    onAddProject,
+    52→    onAddProjectsFromParent,
+    53→    onOpenSettings,
+    54→    onOpenMakeProject,
+    55→    onOpenMobileConnect,
+    56→    renderProjectItem,
+    57→  } = props
+    58→
+    59→  const {
+    60→    // Voice options
+    61→    volume,
+    62→    setVolume,
+    63→    speed,
+    64→    setSpeed,
+    65→    skipOnNew,
+    66→    setSkipOnNew,
+    67→    voiceOutputEnabled,
+    68→
+    69→    // State
+    70→    sortedCategories,
+    71→    projectsByCategory,
+    72→    expandedProject,
+    73→    sessions,
+    74→    dropTarget,
+    75→    draggedCategory,
+    76→    draggedProject,
+    77→    editingCategory,
+    78→    categoryEditInputRef,
+    79→    contextMenu,
+    80→    setContextMenu,
+    81→    categoryContextMenu,
+    82→    setCategoryContextMenu,
+    83→    deleteConfirmModal,
+    84→    setDeleteConfirmModal,
+    85→    projectSettingsModal,
+    86→    setProjectSettingsModal,
+    87→    extensionBrowserModal,
+    88→    setExtensionBrowserModal,
+    89→    claudeMdEditorModal,
+    90→    setClaudeMdEditorModal,
+    91→    beadsExpanded,
+    92→    setBeadsExpanded,
+    93→    beadsProjectPath,
+    94→    focusedTabPtyId,
+    95→    focusedProject,
+    96→    focusedProjectPath,
+    97→    apiStatus,
+    98→    isDebugMode,
+    99→    categories,
+   100→    addCategory,
+   101→    moveProjectToCategory,
+   102→    removeCategory,
+   103→    globalPermissions,
+   104→    globalVoiceSettings,
+   105→    installedVoices,
+   106→    handleOpenProjectSettings,
+   107→    handleSaveProjectSettings,
+   108→    handleProjectSettingsChange,
+   109→    handleToggleTool,
+   110→    handleAllowAll,
+   111→    handleClearAll,
+   112→    handleToggleApi,
+   113→    handleCategoryDragStart,
+   114→    handleCategoryDragEnd,
+   115→    handleCategoryHeaderDragOver,
+   116→    handleCategoryDragOver,
+   117→    handleCategoryHeaderDrop,
+   118→    handleCategoryDrop,
+   119→    setEditingCategory,
+   120→  } = state
+   121→
+   122→  const {
+   123→    handleAddCategory,
+   124→    handleOpenAllProjects,
+   125→    handleOpenCategoryAsProject,
+   126→    handleStartCategoryRename,
+   127→    handleCategoryRenameSubmit,
+   128→    handleCategoryRenameKeyDown,
+   129→    toggleCategoryCollapse,
+   130→    handleRunExecutable,
+   131→    handleSelectExecutable,
+   132→    handleClearExecutable,
+   133→  } = handlers
+   134→
+   135→  return (
+   136→    <>
+   137→      <div className="sidebar-header">
+   138→        Projects
+   139→        <button
+   140→          className="add-category-btn"
+   141→          onClick={handleAddCategory}
+   142→          title="Add category"
+   143→          aria-label="Add category"
+   144→        >
+   145→          +
+   146→        </button>
+   147→      </div>
+   148→      <div className="projects-list">
+   149→        {/* All Projects meta-entry at top */}
+   150→        <div
+   151→          className="meta-project-header"
+   152→          role="button"
+   153→          tabIndex={0}
+   154→          onClick={handleOpenAllProjects}
+   155→          onKeyDown={(e) => {
+   156→            if (e.key === 'Enter' || e.key === ' ') {
+   157→              e.preventDefault()
+   158→              handleOpenAllProjects()
+   159→            }
+   160→          }}
+   161→        >
+   162→          <span className="meta-project-icon">⚡</span>
+   163→          <span className="meta-project-name">All Projects</span>
+   164→        </div>
+   165→
+   166→        {sortedCategories.map((category) => {
+   167→          const categoryProjects = projectsByCategory[category.id] || []
+   168→          const { background: gradient, textDark } = getCategoryGradient(categoryProjects)
+   169→
+   170→          return (
+   171→            <div
+   172→              key={category.id}
+   173→              className={`category-container ${dropTarget?.type === 'category' && dropTarget.id === category.id && !dropTarget.position ? 'drop-target' : ''}`}
+   174→            >
+   175→              {dropTarget?.type === 'category' &&
+   176→                dropTarget.id === category.id &&
+   177→                dropTarget.position === 'before' && <div className="drop-indicator" />}
+   178→
+   179→              <CategoryHeader
+   180→                category={category}
+   181→                projectCount={categoryProjects.length}
+   182→                gradient={gradient}
+   183→                textDark={textDark}
+   184→                isCollapsed={category.collapsed || false}
+   185→                isDragging={draggedCategory === category.id}
+   186→                isEditing={editingCategory?.id === category.id}
+   187→                editingName={editingCategory?.id === category.id ? editingCategory.name : ''}
+   188→                editInputRef={categoryEditInputRef}
+   189→                draggedCategory={draggedCategory}
+   190→                draggedProject={draggedProject}
+   191→                onToggleCollapse={() => toggleCategoryCollapse(category.id)}
+   192→                onOpenAsProject={() => handleOpenCategoryAsProject(category.name)}
+   193→                onContextMenu={(e) => {
+   194→                  e.preventDefault()
+   195→                  e.stopPropagation()
+   196→                  setCategoryContextMenu({ x: e.clientX, y: e.clientY, category })
+   197→                }}
+   198→                onDragStart={(e) => handleCategoryDragStart(e, category.id)}
+   199→                onDragEnd={handleCategoryDragEnd}
+   200→                onCategoryHeaderDragOver={(e, position) =>
+   201→                  handleCategoryHeaderDragOver(e, category.id, position)
+   202→                }
+   203→                onCategoryDragOver={(e) => handleCategoryDragOver(e, category.id)}
+   204→                onCategoryHeaderDrop={(e) => handleCategoryHeaderDrop(e, category.id)}
+   205→                onCategoryDrop={(e) => handleCategoryDrop(e, category.id)}
+   206→                onStartRename={() => handleStartCategoryRename(category)}
+   207→                onEditingChange={(name) => setEditingCategory({ id: category.id, name })}
+   208→                onRenameSubmit={handleCategoryRenameSubmit}
+   209→                onRenameKeyDown={handleCategoryRenameKeyDown}
+   210→              />
+   211→
+   212→              {dropTarget?.type === 'category' &&
+   213→                dropTarget.id === category.id &&
+   214→                dropTarget.position === 'after' && <div className="drop-indicator" />}
+   215→
+   216→              {!category.collapsed && (
+   217→                <div className="category-projects">
+   218→                  <VirtualizedProjectList
+   219→                    projects={categoryProjects}
+   220→                    expandedProject={expandedProject}
+   221→                    sessions={sessions}
+   222→                    renderItem={renderProjectItem}
+   223→                  />
+   224→                </div>
+   225→              )}
+   226→            </div>
+   227→          )
+   228→        })}
+   229→
+   230→        {(projectsByCategory['uncategorized']?.length > 0 || sortedCategories.length > 0) && (
+   231→          <div
+   232→            className={`uncategorized-section ${dropTarget?.type === 'uncategorized' ? 'drop-target' : ''}`}
+   233→            onDragOver={(e) => handleCategoryDragOver(e, null)}
+   234→            onDrop={(e) => handleCategoryDrop(e, null)}
+   235→          >
+   236→            {sortedCategories.length > 0 && projectsByCategory['uncategorized']?.length > 0 && (
+   237→              <div className="uncategorized-header">Uncategorized</div>
+   238→            )}
+   239→            {projectsByCategory['uncategorized'] && (
+   240→              <VirtualizedProjectList
+   241→                projects={projectsByCategory['uncategorized']}
+   242→                expandedProject={expandedProject}
+   243→                sessions={sessions}
+   244→                renderItem={renderProjectItem}
+   245→              />
+   246→            )}
+   247→          </div>
+   248→        )}
+   249→
+   250→        {projects.length === 0 && (
+   251→          <div className="empty-projects">
+   252→            No projects yet.
+   253→            <br />
+   254→            Click + to add one.
+   255→          </div>
+   256→        )}
+   257→        <div className="project-add-buttons">
+   258→          <button
+   259→            className="add-project-btn"
+   260→            onClick={onOpenMakeProject}
+   261→            title="Create new project from scratch"
+   262→          >
+   263→            + make
+   264→          </button>
+   265→          <button
+   266→            className="add-project-btn"
+   267→            onClick={onAddProject}
+   268→            title="Add existing project folder"
+   269→          >
+   270→            + add
+   271→          </button>
+   272→          <button
+   273→            className="add-project-btn"
+   274→            onClick={onAddProjectsFromParent}
+   275→            title="Add all projects from a parent folder"
+   276→          >
+   277→            + folder
+   278→          </button>
+   279→        </div>
+   280→      </div>
+   281→
+   282→      <BeadsPanel
+   283→        projectPath={beadsProjectPath}
+   284→        isExpanded={beadsExpanded}
+   285→        onToggle={() => setBeadsExpanded(!beadsExpanded)}
+   286→        onStartTaskInNewTab={(prompt) => {
+   287→          if (beadsProjectPath) onOpenSession(beadsProjectPath, undefined, undefined, prompt, true)
+   288→        }}
+   289→        onSendToCurrentTab={(prompt) => {
+   290→          if (focusedTabPtyId) {
+   291→            window.electronAPI?.writePty(focusedTabPtyId, prompt)
+   292→            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
+   293→          }
+   294→        }}
+   295→        currentTabPtyId={focusedTabPtyId}
+   296→      />
+   297→
+   298→      <GSDStatus
+   299→        projectPath={beadsProjectPath}
+   300→        onCommand={(cmd) => {
+   301→          if (focusedTabPtyId) {
+   302→            window.electronAPI?.writePty(focusedTabPtyId, cmd)
+   303→            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
+   304→          }
+   305→        }}
+   306→      />
+   307→
+   308→      {voiceOutputEnabled && (
+   309→        <VoiceOptionsPanel
+   310→          volume={volume}
+   311→          speed={speed}
+   312→          skipOnNew={skipOnNew}
+   313→          onVolumeChange={setVolume}
+   314→          onSpeedChange={setSpeed}
+   315→          onSkipOnNewChange={setSkipOnNew}
+   316→        />
+   317→      )}
+   318→
+   319→      <SidebarActions
+   320→        activeTabId={activeTabId}
+   321→        focusedTabId={focusedTabId}
+   322→        focusedProject={focusedProject}
+   323→        apiStatus={focusedProjectPath ? apiStatus[focusedProjectPath] : undefined}
+   324→        isDebugMode={isDebugMode}
+   325→        onOpenSettings={onOpenSettings}
+   326→        onOpenProjectSettings={async (project) => {
+   327→          await handleOpenProjectSettings(project)
+   328→          setContextMenu(null)
+   329→        }}
+   330→        onToggleApi={async (project) => {
+   331→          await handleToggleApi(project)
+   332→          setContextMenu(null)
+   333→        }}
+   334→        onOpenMobileConnect={onOpenMobileConnect}
+   335→      />
+   336→
+   337→      {/* Context Menu */}
+   338→      {contextMenu && (
+   339→        <ProjectContextMenu
+   340→          x={contextMenu.x}
+   341→          y={contextMenu.y}
+   342→          project={contextMenu.project}
+   343→          categories={categories}
+   344→          onClose={() => setContextMenu(null)}
+   345→          onRunExecutable={() => handleRunExecutable(contextMenu.project)}
+   346→          onSelectExecutable={() => handleSelectExecutable(contextMenu.project)}
+   347→          onClearExecutable={() => handleClearExecutable(contextMenu.project)}
+   348→          onOpenSettings={async () => {
+   349→            await handleOpenProjectSettings(contextMenu.project)
+   350→            setContextMenu(null)
+   351→          }}
+   352→          onOpenExtensions={() => {
+   353→            setExtensionBrowserModal({ project: contextMenu.project })
+   354→            setContextMenu(null)
+   355→          }}
+   356→          onEditClaudeMd={() => {
+   357→            setClaudeMdEditorModal({ project: contextMenu.project })
+   358→            setContextMenu(null)
+   359→          }}
+   360→          onUpdateColor={(color) => onUpdateProject(contextMenu.project.path, { color })}
+   361→          onMoveToCategory={(categoryId) =>
+   362→            moveProjectToCategory(contextMenu.project.path, categoryId)
+   363→          }
+   364→          onCreateCategory={() => {
+   365→            const newId = addCategory('New Category')
+   366→            moveProjectToCategory(contextMenu.project.path, newId)
+   367→            setContextMenu(null)
+   368→            setEditingCategory({ id: newId, name: 'New Category' })
+   369→            setTimeout(() => categoryEditInputRef.current?.select(), 0)
+   370→          }}
+   371→          onDelete={() => {
+   372→            setDeleteConfirmModal({ project: contextMenu.project })
+   373→            setContextMenu(null)
+   374→          }}
+   375→        />
+   376→      )}
+   377→
+   378→      {/* Delete Confirmation Modal */}
+   379→      {deleteConfirmModal && (
+   380→        <DeleteConfirmModal
+   381→          project={deleteConfirmModal.project}
+   382→          onClose={() => setDeleteConfirmModal(null)}
+   383→          onConfirm={() => {
+   384→            onRemoveProject(deleteConfirmModal.project.path)
+   385→            setDeleteConfirmModal(null)
+   386→          }}
+   387→        />
+   388→      )}
+   389→
+   390→      {/* Project Settings Modal */}
+   391→      {projectSettingsModal && (
+   392→        <ProjectSettingsModal
+   393→          state={projectSettingsModal}
+   394→          globalPermissions={globalPermissions}
+   395→          globalVoiceSettings={globalVoiceSettings}
+   396→          installedVoices={installedVoices}
+   397→          onClose={() => setProjectSettingsModal(null)}
+   398→          onSave={handleSaveProjectSettings}
+   399→          onChange={handleProjectSettingsChange}
+   400→          onToggleTool={handleToggleTool}
+   401→          onAllowAll={handleAllowAll}
+   402→          onClearAll={handleClearAll}
+   403→        />
+   404→      )}
+   405→
+   406→      {/* Extension Browser Modal */}
+   407→      {extensionBrowserModal && (
+   408→        <ExtensionBrowser
+   409→          projectPath={extensionBrowserModal.project.path}
+   410→          projectName={extensionBrowserModal.project.name}
+   411→          onClose={() => setExtensionBrowserModal(null)}
+   412→        />
+   413→      )}
+   414→
+   415→      {/* CLAUDE.md Editor Modal */}
+   416→      {claudeMdEditorModal && (
+   417→        <ClaudeMdEditor
+   418→          isOpen={true}
+   419→          projectPath={claudeMdEditorModal.project.path}
+   420→          projectName={claudeMdEditorModal.project.name}
+   421→          onClose={() => setClaudeMdEditorModal(null)}
+   422→        />
+   423→      )}
+   424→
+   425→      {/* Category Context Menu */}
+   426→      {categoryContextMenu && (
+   427→        <CategoryContextMenu
+   428→          x={categoryContextMenu.x}
+   429→          y={categoryContextMenu.y}
+   430→          category={categoryContextMenu.category}
+   431→          onRename={() => {
+   432→            handleStartCategoryRename(categoryContextMenu.category)
+   433→            setCategoryContextMenu(null)
+   434→          }}
+   435→          onDelete={() => {
+   436→            removeCategory(categoryContextMenu.category.id)
+   437→            setCategoryContextMenu(null)
+   438→          }}
+   439→        />
+   440→      )}
+   441→    </>
+   442→  )
+   443→}
+   444→
+```
