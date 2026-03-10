@@ -13,6 +13,7 @@ import { getAnyVoicePath, getInstalledPiperVoices, getInstalledVoices } from './
 import { PIPER_VOICES, type PiperVoiceName, type ProgressCallback, type TTSStatus } from './types.js'
 
 let speakingProcess: ChildProcess | null = null
+let speakQueue: Promise<{ success: boolean; audioData?: string; error?: string }> = Promise.resolve({ success: true })
 
 export function getPiperBinaryPath(): string | null {
   const binaryName = isWindows ? 'piper.exe' : 'piper'
@@ -123,7 +124,20 @@ export async function downloadPiperVoice(
   }
 }
 
-export async function speak(
+export function speak(
+  text: string,
+  currentVoice: string,
+  ttsSpeed: number
+): Promise<{ success: boolean; audioData?: string; error?: string }> {
+  // Serialize speak calls to prevent concurrent Piper processes from
+  // clobbering the global speakingProcess reference
+  const result = speakQueue.then(() => speakInternal(text, currentVoice, ttsSpeed),
+    () => speakInternal(text, currentVoice, ttsSpeed))
+  speakQueue = result
+  return result
+}
+
+async function speakInternal(
   text: string,
   currentVoice: string,
   ttsSpeed: number

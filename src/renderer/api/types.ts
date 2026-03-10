@@ -145,7 +145,7 @@ export interface Session {
  */
 export interface VoiceSettings {
   whisperModel?: string
-  ttsEngine?: 'piper' | 'xtts' | 'openvoice'
+  ttsEngine?: 'piper' | 'xtts'
   ttsVoice?: string
 }
 

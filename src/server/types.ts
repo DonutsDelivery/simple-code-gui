@@ -203,7 +203,7 @@ export interface Settings {
 
 export interface VoiceSettings {
   whisperModel?: string
-  ttsEngine?: 'piper' | 'xtts' | 'openvoice'
+  ttsEngine?: 'piper' | 'xtts'
   ttsVoice?: string
   ttsSpeed?: number
   microphoneId?: string | null

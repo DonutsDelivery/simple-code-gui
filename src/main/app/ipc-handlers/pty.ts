@@ -101,14 +101,33 @@ export function registerPtyHandlers(
   })
 
   ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => {
-    const process = ptyManager.getProcess(oldId)
-    if (!process) return
+    const proc = ptyManager.getProcess(oldId)
+    if (!proc) return
 
-    const { cwd, sessionId, backend: oldBackend } = process
+    const { cwd, sessionId, backend: oldBackend } = proc
     const effectiveSessionId = oldBackend !== newBackend ? undefined : sessionId
 
+    // Look up project settings so the new PTY inherits permissions and model
+    const workspace = sessionStore.getWorkspace()
+    const project = workspace.projects.find(p => p.path === cwd)
+    const globalSettings = sessionStore.getSettings()
+    const autoAcceptTools = project?.autoAcceptTools ?? globalSettings.autoAcceptTools
+    const permissionMode = project?.permissionMode ?? globalSettings.permissionMode
+
+    // Kill old PTY first, then spawn new one with error recovery
     ptyManager.kill(oldId)
-    const newId = ptyManager.spawn(cwd, effectiveSessionId, undefined, undefined, undefined, newBackend)
+
+    let newId: string
+    try {
+      newId = ptyManager.spawn(cwd, effectiveSessionId, autoAcceptTools, permissionMode, undefined, newBackend)
+    } catch (error: any) {
+      console.error('Failed to spawn new PTY during backend switch:', error)
+      // Clean up stale map entries from the killed PTY
+      ptyToProject.delete(oldId)
+      ptyToBackend.delete(oldId)
+      autoCloseSessions.delete(oldId)
+      throw new Error(`Failed to switch backend to ${newBackend}: ${error.message}`)
+    }
 
     const projectPath = ptyToProject.get(oldId)
     if (projectPath) {
@@ -118,17 +137,31 @@ export function registerPtyHandlers(
     ptyToBackend.set(newId, newBackend)
     ptyToBackend.delete(oldId)
 
+    // Transfer autoClose flag if the old session had it
+    if (autoCloseSessions.delete(oldId)) {
+      autoCloseSessions.add(newId)
+    }
+
     const mainWindow = getMainWindow()
 
     ptyManager.onData(newId, (data) => {
       maybeRespondToCursorPositionRequest(ptyManager, ptyToBackend, newId, data)
-      mainWindow?.webContents.send(`pty:data:${newId}`, data)
+      try {
+        mainWindow?.webContents.send(`pty:data:${newId}`, data)
+      } catch (e) {
+        console.error('IPC send failed', e)
+      }
     })
 
     ptyManager.onExit(newId, (code) => {
-      mainWindow?.webContents.send(`pty:exit:${newId}`, code)
+      try {
+        mainWindow?.webContents.send(`pty:exit:${newId}`, code)
+      } catch (e) {
+        console.error('IPC send failed', e)
+      }
       ptyToProject.delete(newId)
       ptyToBackend.delete(newId)
+      autoCloseSessions.delete(newId)
     })
 
     mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend })

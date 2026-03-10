@@ -107,6 +107,11 @@ export class XTTSServer {
           handlers.reject(new Error(`Server exited with code ${code}`))
         }
         this.pendingRequests.clear()
+        for (const queued of this.requestQueue) {
+          queued.reject(new Error(`Server exited with code ${code}`))
+        }
+        this.requestQueue = []
+        this.processingRequest = false
 
         if (!this.serverReady) {
           resolve(false)
@@ -147,6 +152,9 @@ export class XTTSServer {
     this.serverReady = false
   }
 
+  private requestQueue: Array<{ command: object; resolve: (v: unknown) => void; reject: (e: Error) => void }> = []
+  private processingRequest = false
+
   async sendCommand(command: object): Promise<unknown> {
     if (!this.serverProcess || !this.serverReady) {
       const started = await this.start()
@@ -155,24 +163,51 @@ export class XTTSServer {
       }
     }
 
+    // Serialize requests: XTTS Python server processes one at a time and
+    // responses have no request ID, so we must send sequentially to match
+    // responses to the correct caller.
     return new Promise((resolve, reject) => {
-      const requestId = `${Date.now()}-${Math.random()}`
-      this.pendingRequests.set(requestId, { resolve, reject })
-
-      try {
-        this.serverProcess!.stdin?.write(JSON.stringify(command) + '\n')
-      } catch (err) {
-        this.pendingRequests.delete(requestId)
-        reject(err)
-      }
-
-      setTimeout(() => {
-        if (this.pendingRequests.has(requestId)) {
-          this.pendingRequests.delete(requestId)
-          reject(new Error('Request timeout'))
-        }
-      }, 300000)
+      this.requestQueue.push({ command, resolve, reject })
+      this.processNextRequest()
     })
+  }
+
+  private processNextRequest(): void {
+    if (this.processingRequest || this.requestQueue.length === 0) return
+    this.processingRequest = true
+
+    const { command, resolve, reject } = this.requestQueue.shift()!
+    const requestId = `${Date.now()}-${Math.random()}`
+    this.pendingRequests.set(requestId, {
+      resolve: (result) => {
+        this.processingRequest = false
+        resolve(result)
+        this.processNextRequest()
+      },
+      reject: (err) => {
+        this.processingRequest = false
+        reject(err)
+        this.processNextRequest()
+      }
+    })
+
+    try {
+      this.serverProcess!.stdin?.write(JSON.stringify(command) + '\n')
+    } catch (err) {
+      this.pendingRequests.delete(requestId)
+      this.processingRequest = false
+      reject(err as Error)
+      this.processNextRequest()
+    }
+
+    setTimeout(() => {
+      if (this.pendingRequests.has(requestId)) {
+        this.pendingRequests.delete(requestId)
+        this.processingRequest = false
+        reject(new Error('Request timeout'))
+        this.processNextRequest()
+      }
+    }, 300000)
   }
 
   private ensureHelperScript(): void {

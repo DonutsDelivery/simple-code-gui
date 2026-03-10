@@ -262,6 +262,10 @@ export function useTTSHandlers({ settingsLoaded }: UseTTSHandlersOptions): UseTT
         audioRef.current.pause()
         audioRef.current = null
       }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
       isProcessingRef.current = false
     }
 
@@ -279,6 +283,10 @@ export function useTTSHandlers({ settingsLoaded }: UseTTSHandlersOptions): UseTT
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current = null
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
     }
     window.electronAPI?.voiceStopSpeaking?.()
     setIsSpeaking(false)
