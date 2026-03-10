@@ -44,7 +44,7 @@ features:
           getting half the space
     status:
       maturity: draft
-      implementation: in_progress
+      implementation: implemented
   - _ulid: 01KK67C43QN01EYHYHABV8BBVE
     slugs:
       - tile-drag-drop
