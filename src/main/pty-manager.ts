@@ -26,7 +26,13 @@ class OutputBuffer {
     this.partial = parts.pop() || ''
     for (const line of parts) {
       // Strip ANSI escape sequences for readability
-      const clean = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim()
+      // Strip all CSI sequences (including private modes like ?25h, ?1049h),
+      // OSC sequences, and single-character escape sequences (e.g. \x1b(B)
+      const clean = line
+        .replace(/\x1b\[[\x20-\x3f]*[\x40-\x7e]/g, '')  // CSI: covers standard + private mode sequences
+        .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')  // OSC: terminated by BEL or ST
+        .replace(/\x1b[()][A-Z0-9]/g, '')  // Character set selection (e.g. \x1b(B)
+        .trim()
       if (clean) {
         this.lines.push(clean)
         if (this.lines.length > OUTPUT_BUFFER_MAX_LINES) {
