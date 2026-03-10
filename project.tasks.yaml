@@ -1,23 +1,45 @@
 tasks:
-  - title: "Bug audit: PTY lifecycle and backend switching"
+  - _ulid: 01KKAWKTJVBTXZDAF2293N8875
+    slugs:
+      - bug-pty
+    title: "Bug audit: PTY lifecycle and backend switching"
+    type: bug
     description: "Investigate and fix bugs in PTY session management. Check: PTY spawn error handling,
       resize debounce edge cases, output buffer overflow, backend switching race conditions, session
       ID preservation across switches, cleanup on unexpected PTY exit, enhanced PATH construction."
-    type: bug
     spec_ref: "@pty-lifecycle"
+    meta_ref: null
+    plan_ref: null
+    status: pending
+    blocked_by: []
+    depends_on: []
+    context: []
+    priority: 2
+    tags: []
+    vcs_refs: []
+    created_at: 2026-03-10T03:28:25.690Z
+    notes: []
+    todos: []
+    automation: eligible
+  - title: "Bug audit: tiled layout and drag-drop"
+    description: "Investigate and fix bugs in tiled terminal layout. Check: tile coordinate calculation,
+      drag-drop zone detection, resize handle collision, canvas panning bounds, tile removal
+      orphaning layout entries, split producing zero-size tiles, effective layout reconciliation."
+    type: bug
+    spec_ref: "@tiled-layout"
     meta_ref: null
     plan_ref: null
     priority: 2
     slugs:
-      - bug-pty
+      - bug-layout
     tags: []
     depends_on: []
     automation: eligible
-    _ulid: 01KKAWKTJVBTXZDAF2293N8875
+    _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
     status: pending
     blocked_by: []
     context: []
     vcs_refs: []
-    created_at: 2026-03-10T03:28:25.690Z
+    created_at: 2026-03-10T03:28:27.465Z
     notes: []
     todos: []
