@@ -3,5 +3,7 @@ task_id: "@01KKAWKZB1X95YBRM2P9PFRFE7"
 agent_type: claude-agent-acp
 agent_id: pr-reviewer
 trigger: task.pending_review
-status: active
+status: completed
 started_at: 2026-03-10T04:28:45.290Z
+ended_at: 2026-03-10T04:31:27.884Z
+close_reason: Invocation completed normally
