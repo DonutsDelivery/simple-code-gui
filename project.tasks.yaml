@@ -382,12 +382,31 @@ tasks:
     priority: 2
     tags: []
     vcs_refs: []
+    session_id: 01KKB13TWMGAE60MBB63S9YJ46
     created_at: 2026-03-10T03:28:34.077Z
-    notes: []
+    started_at: 2026-03-10T04:51:22.344Z
+    notes:
+      - _ulid: 01KKB1HQ8W31J52E75Q6RAZ2ZR
+        created_at: 2026-03-10T04:54:39.644Z
+        author: "@claude"
+        content: >-
+          4 bugs fixed:
+
+          1. session-store.ts: temp file not cleaned up on verification failure in save() — added
+          try/finally with unlinkSync
+
+          2. session-store.ts: backup write and restore used non-atomic writeFileSync — changed to
+          temp+rename pattern
+
+          3. mobile-server/routes/workspace.ts: POST route checked wrong property paths
+          (current.workspace.projects instead of current.projects) and passed wrapped body to
+          saveWorkspace — fixed to unwrap and check correctly
+
+          4. meta-project-sync.ts: stale symlinks pointing to deleted directories not cleaned up —
+          added existsSync check during sync
+        supersedes: null
     todos: []
     automation: eligible
-    started_at: 2026-03-10T04:51:22.344Z
-    session_id: 01KKB13TWMGAE60MBB63S9YJ46
   - _ulid: 01KKAWM3WS24742Z491YVVGYV4
     slugs:
       - bug-discovery

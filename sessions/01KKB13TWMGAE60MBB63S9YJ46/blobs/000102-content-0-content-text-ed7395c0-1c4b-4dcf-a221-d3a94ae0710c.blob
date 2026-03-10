@@ -1,0 +1,356 @@
+```
+     1→/**
+     2→ * Electron Backend Implementation
+     3→ *
+     4→ * This module provides the Electron IPC implementation of the Api interface.
+     5→ * It delegates all calls to window.electronAPI which communicates with the
+     6→ * Electron main process via IPC.
+     7→ */
+     8→
+     9→import {
+    10→  Api,
+    11→  ExtendedApi,
+    12→  Settings,
+    13→  Workspace,
+    14→  Session,
+    15→  PtyDataCallback,
+    16→  PtyExitCallback,
+    17→  PtyRecreatedCallback,
+    18→  ApiOpenSessionCallback,
+    19→  Unsubscribe
+    20→} from './types'
+    21→import type { BackendId } from './types'
+    22→
+    23→/**
+    24→ * Type declaration for the global electronAPI
+    25→ */
+    26→declare global {
+    27→  interface Window {
+    28→    electronAPI?: {
+    29→      // PTY Management
+    30→      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
+    31→      killPty: (id: string) => void
+    32→      writePty: (id: string, data: string) => void
+    33→      resizePty: (id: string, cols: number, rows: number) => void
+    34→      onPtyData: (id: string, callback: (data: string) => void) => () => void
+    35→      onPtyExit: (id: string, callback: (code: number) => void) => () => void
+    36→      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId }) => void) => () => void
+    37→      setPtyBackend: (id: string, backend: BackendId) => Promise<void>
+    38→
+    39→
+    40→      // Session Management
+    41→      discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]>
+    42→
+    43→      // Workspace Management
+    44→      getWorkspace: () => Promise<Workspace>
+    45→      saveWorkspace: (workspace: Workspace) => Promise<void>
+    46→
+    47→      // Settings Management
+    48→      getSettings: () => Promise<Settings>
+    49→      saveSettings: (settings: Settings) => Promise<void>
+    50→
+    51→      // Project Management
+    52→      addProject: () => Promise<string | null>
+    53→      addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
+    54→
+    55→      // TTS
+    56→      ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
+    57→      voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
+    58→      xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
+    59→      voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }>
+    60→      voiceCheckWhisper?: () => Promise<{ installed: boolean; models: string[]; currentModel: string | null }>
+    61→      voiceCheckTTS?: () => Promise<{ installed: boolean; engine: string | null; voices: string[]; currentVoice: string | null }>
+    62→      voiceInstallWhisper?: (model: string) => Promise<{ success: boolean; error?: string }>
+    63→      voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => Promise<{ success: boolean }>
+    64→      voiceSetVoice?: (voice: string | { voice: string; engine: 'piper' | 'xtts' }) => Promise<{ success: boolean }>
+    65→      ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean }>
+    66→      extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
+    67→      voiceSpeak: (text: string) => Promise<{ success: boolean; audioData?: string; error?: string }>
+    68→      voiceStopSpeaking: () => Promise<{ success: boolean }>
+    69→
+    70→      // Events
+    71→      onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
+    72→
+    73→      // API Server
+    74→      apiStart?: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
+    75→      apiStop?: (projectPath: string) => Promise<{ success: boolean }>
+    76→
+    77→      // Extended API (Desktop-only)
+    78→      selectDirectory: () => Promise<string | null>
+    79→      selectExecutable: () => Promise<string | null>
+    80→      windowMinimize: () => void
+    81→      windowMaximize: () => void
+    82→      windowClose: () => void
+    83→      windowIsMaximized: () => Promise<boolean>
+    84→      getPathForFile: (file: File) => string
+    85→      readClipboardImage: () => Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }>
+    86→      getVersion: () => Promise<string>
+    87→      isDebugMode: () => Promise<boolean>
+    88→      refresh: () => Promise<void>
+    89→      openExternal: (url: string) => Promise<void>
+    90→      debugLog: (message: string) => void
+    91→
+    92→      // Beads
+    93→      beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
+    94→      beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
+    95→      beadsInstall: () => Promise<{ success: boolean; error?: string; method?: string; needsPython?: boolean }>
+    96→      beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: unknown[]; error?: string }>
+    97→      beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: unknown[]; error?: string }>
+    98→      beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: unknown; error?: string }>
+    99→      beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: unknown; error?: string }>
+   100→      beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: unknown; error?: string }>
+   101→      beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
+   102→      beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
+   103→      beadsUpdate: (cwd: string, taskId: string, status?: string, title?: string, description?: string, priority?: number) => Promise<{ success: boolean; error?: string }>
+   104→      beadsWatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
+   105→      beadsUnwatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
+   106→      onBeadsTasksChanged: (callback: (data: { cwd: string }) => void) => () => void
+   107→
+   108→      // Kspec
+   109→      kspecCheck: (cwd: string) => Promise<{ exists: boolean }>
+   110→      kspecInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
+   111→      kspecEnsureDaemon: (cwd: string) => Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
+   112→      kspecCheckCli: () => Promise<{ installed: boolean; version?: string }>
+   113→      kspecInstallCli: () => Promise<{ success: boolean; error?: string }>
+   114→      kspecMigrateFromBeads: (cwd: string) => Promise<{ success: boolean; migrated: number; error?: string }>
+   115→      kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
+   116→      kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
+   117→      kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
+   118→
+   119→      // Install progress
+   120→      pythonInstall: () => Promise<{ success: boolean; error?: string; method?: string }>
+   121→      onInstallProgress: (callback: (data: { type: string; status: string; percent?: number }) => void) => () => void
+   122→    }
+   123→  }
+   124→}
+   125→
+   126→/**
+   127→ * Electron backend implementation that delegates to window.electronAPI
+   128→ */
+   129→export class ElectronBackend implements ExtendedApi {
+   130→  /**
+   131→   * Check if the Electron API is available
+   132→   * @throws Error if electronAPI is not available
+   133→   */
+   134→  private checkApi(): void {
+   135→    if (!window.electronAPI) {
+   136→      throw new Error('Electron API not available. Are you running in Electron?')
+   137→    }
+   138→  }
+   139→
+   140→  // ==========================================================================
+   141→  // PTY Management
+   142→  // ==========================================================================
+   143→
+   144→  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
+   145→    this.checkApi()
+   146→    return window.electronAPI!.spawnPty(cwd, sessionId, model, backend)
+   147→  }
+   148→
+   149→  killPty(id: string): void {
+   150→    this.checkApi()
+   151→    window.electronAPI!.killPty(id)
+   152→  }
+   153→
+   154→  writePty(id: string, data: string): void {
+   155→    this.checkApi()
+   156→    window.electronAPI!.writePty(id, data)
+   157→  }
+   158→
+   159→  resizePty(id: string, cols: number, rows: number): void {
+   160→    this.checkApi()
+   161→    window.electronAPI!.resizePty(id, cols, rows)
+   162→  }
+   163→
+   164→  onPtyData(id: string, callback: PtyDataCallback): Unsubscribe {
+   165→    this.checkApi()
+   166→    return window.electronAPI!.onPtyData(id, callback)
+   167→  }
+   168→
+   169→  onPtyExit(id: string, callback: PtyExitCallback): Unsubscribe {
+   170→    this.checkApi()
+   171→    return window.electronAPI!.onPtyExit(id, callback)
+   172→  }
+   173→
+   174→  onPtyRecreated(callback: PtyRecreatedCallback): Unsubscribe {
+   175→    this.checkApi()
+   176→    return window.electronAPI!.onPtyRecreated(callback)
+   177→  }
+   178→
+   179→  setPtyBackend(id: string, backend: BackendId): Promise<void> {
+   180→    this.checkApi()
+   181→    return window.electronAPI!.setPtyBackend(id, backend)
+   182→  }
+   183→
+   184→  // ==========================================================================
+   185→  // Session Management
+   186→  // ==========================================================================
+   187→
+   188→  async discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
+   189→    this.checkApi()
+   190→    return window.electronAPI!.discoverSessions(projectPath, backend)
+   191→  }
+   192→
+   193→  // ==========================================================================
+   194→  // Workspace Management
+   195→  // ==========================================================================
+   196→
+   197→  async getWorkspace(): Promise<Workspace> {
+   198→    this.checkApi()
+   199→    return window.electronAPI!.getWorkspace()
+   200→  }
+   201→
+   202→  async saveWorkspace(workspace: Workspace): Promise<void> {
+   203→    this.checkApi()
+   204→    return window.electronAPI!.saveWorkspace(workspace)
+   205→  }
+   206→
+   207→  // ==========================================================================
+   208→  // Settings Management
+   209→  // ==========================================================================
+   210→
+   211→  async getSettings(): Promise<Settings> {
+   212→    this.checkApi()
+   213→    return window.electronAPI!.getSettings()
+   214→  }
+   215→
+   216→  async saveSettings(settings: Settings): Promise<void> {
+   217→    this.checkApi()
+   218→    return window.electronAPI!.saveSettings(settings)
+   219→  }
+   220→
+   221→  // ==========================================================================
+   222→  // Project Management
+   223→  // ==========================================================================
+   224→
+   225→  async addProject(): Promise<string | null> {
+   226→    this.checkApi()
+   227→    return window.electronAPI!.addProject()
+   228→  }
+   229→
+   230→  async addProjectsFromParent(): Promise<Array<{ path: string; name: string }> | null> {
+   231→    this.checkApi()
+   232→    return window.electronAPI!.addProjectsFromParent()
+   233→  }
+   234→
+   235→  // ==========================================================================
+   236→  // TTS (Text-to-Speech)
+   237→  // ==========================================================================
+   238→
+   239→  async ttsInstallInstructions(projectPath: string): Promise<{ success: boolean }> {
+   240→    this.checkApi()
+   241→    return window.electronAPI!.ttsInstallInstructions(projectPath)
+   242→  }
+   243→
+   244→  async ttsSpeak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }> {
+   245→    this.checkApi()
+   246→    return window.electronAPI!.voiceSpeak(text)
+   247→  }
+   248→
+   249→  async ttsStop(): Promise<{ success: boolean }> {
+   250→    this.checkApi()
+   251→    return window.electronAPI!.voiceStopSpeaking()
+   252→  }
+   253→
+   254→  // ==========================================================================
+   255→  // Events
+   256→  // ==========================================================================
+   257→
+   258→  onApiOpenSession(callback: ApiOpenSessionCallback): Unsubscribe {
+   259→    this.checkApi()
+   260→    return window.electronAPI!.onApiOpenSession(callback)
+   261→  }
+   262→
+   263→  // ==========================================================================
+   264→  // Extended API (Desktop-only features)
+   265→  // ==========================================================================
+   266→
+   267→  async selectDirectory(): Promise<string | null> {
+   268→    this.checkApi()
+   269→    return window.electronAPI!.selectDirectory()
+   270→  }
+   271→
+   272→  async selectExecutable(): Promise<string | null> {
+   273→    this.checkApi()
+   274→    return window.electronAPI!.selectExecutable()
+   275→  }
+   276→
+   277→  windowMinimize(): void {
+   278→    this.checkApi()
+   279→    window.electronAPI!.windowMinimize()
+   280→  }
+   281→
+   282→  windowMaximize(): void {
+   283→    this.checkApi()
+   284→    window.electronAPI!.windowMaximize()
+   285→  }
+   286→
+   287→  windowClose(): void {
+   288→    this.checkApi()
+   289→    window.electronAPI!.windowClose()
+   290→  }
+   291→
+   292→  async windowIsMaximized(): Promise<boolean> {
+   293→    this.checkApi()
+   294→    return window.electronAPI!.windowIsMaximized()
+   295→  }
+   296→
+   297→  getPathForFile(file: File): string {
+   298→    this.checkApi()
+   299→    return window.electronAPI!.getPathForFile(file)
+   300→  }
+   301→
+   302→  async readClipboardImage(): Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }> {
+   303→    this.checkApi()
+   304→    return window.electronAPI!.readClipboardImage()
+   305→  }
+   306→
+   307→  async getVersion(): Promise<string> {
+   308→    this.checkApi()
+   309→    return window.electronAPI!.getVersion()
+   310→  }
+   311→
+   312→  async isDebugMode(): Promise<boolean> {
+   313→    this.checkApi()
+   314→    return window.electronAPI!.isDebugMode()
+   315→  }
+   316→
+   317→  async refresh(): Promise<void> {
+   318→    this.checkApi()
+   319→    return window.electronAPI!.refresh()
+   320→  }
+   321→
+   322→  async openExternal(url: string): Promise<void> {
+   323→    this.checkApi()
+   324→    return window.electronAPI!.openExternal(url)
+   325→  }
+   326→
+   327→  debugLog(message: string): void {
+   328→    this.checkApi()
+   329→    window.electronAPI!.debugLog(message)
+   330→  }
+   331→}
+   332→
+   333→/**
+   334→ * Singleton instance of the Electron backend
+   335→ */
+   336→let instance: ElectronBackend | null = null
+   337→
+   338→/**
+   339→ * Get the singleton instance of the Electron backend
+   340→ */
+   341→export function getElectronBackend(): ElectronBackend {
+   342→  if (!instance) {
+   343→    instance = new ElectronBackend()
+   344→  }
+   345→  return instance
+   346→}
+   347→
+   348→/**
+   349→ * Check if the Electron API is available
+   350→ */
+   351→export function isElectronAvailable(): boolean {
+   352→  return typeof window !== 'undefined' && !!window.electronAPI
+   353→}
+   354→
+```
