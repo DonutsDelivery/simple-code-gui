@@ -114,7 +114,7 @@ features:
     created: 2026-03-08T08:00:20.824Z
     status:
       maturity: draft
-      implementation: in_progress
+      implementation: implemented
   - _ulid: 01KK67CAKFEEA1S2W21BYEESQA
     slugs:
       - tabbed-view
