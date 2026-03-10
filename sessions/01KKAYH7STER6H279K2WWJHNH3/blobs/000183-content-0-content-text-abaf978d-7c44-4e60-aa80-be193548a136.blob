@@ -1,0 +1,475 @@
+```
+     1→/**
+     2→ * HTTP API Client
+     3→ *
+     4→ * Provides an HTTP/WebSocket-based API client that mirrors the electronAPI interface.
+     5→ * This allows the same UI code to work with either Electron IPC or HTTP transport.
+     6→ */
+     7→
+     8→import { HostConfig } from '../hostConfig.js'
+     9→import { WebSocketManager } from './websocket-manager.js'
+    10→import * as workspace from './api-workspace.js'
+    11→import * as terminal from './api-terminal.js'
+    12→import * as beads from './api-beads.js'
+    13→import * as misc from './api-misc.js'
+    14→import type {
+    15→  BackendId,
+    16→  Workspace,
+    17→  Settings,
+    18→  Session,
+    19→  BeadsTask,
+    20→  BeadsCloseResult,
+    21→  GSDProgress,
+    22→  VoiceSettings
+    23→} from './types.js'
+    24→
+    25→// Re-export all types
+    26→export * from './types.js'
+    27→
+    28→// =============================================================================
+    29→// HTTP API Client Class
+    30→// =============================================================================
+    31→
+    32→export class HttpApiClient {
+    33→  private config: HostConfig
+    34→  private wsManager: WebSocketManager
+    35→
+    36→  constructor(config: HostConfig) {
+    37→    this.config = config
+    38→    this.wsManager = new WebSocketManager(config)
+    39→  }
+    40→
+    41→  // ===========================================================================
+    42→  // Connection Management
+    43→  // ===========================================================================
+    44→
+    45→  async connect(): Promise<void> {
+    46→    await this.wsManager.connect()
+    47→  }
+    48→
+    49→  disconnect(): void {
+    50→    this.wsManager.disconnect()
+    51→  }
+    52→
+    53→  isConnected(): boolean {
+    54→    return this.wsManager.isConnected()
+    55→  }
+    56→
+    57→  onConnect(callback: () => void): () => void {
+    58→    return this.wsManager.onConnect(callback)
+    59→  }
+    60→
+    61→  onDisconnect(callback: () => void): () => void {
+    62→    return this.wsManager.onDisconnect(callback)
+    63→  }
+    64→
+    65→  // ===========================================================================
+    66→  // Workspace API
+    67→  // ===========================================================================
+    68→
+    69→  getWorkspace(): Promise<Workspace> {
+    70→    return workspace.getWorkspace(this.config)
+    71→  }
+    72→
+    73→  saveWorkspace(ws: Workspace): Promise<void> {
+    74→    return workspace.saveWorkspace(this.config, ws)
+    75→  }
+    76→
+    77→  addProject(): Promise<string | null> {
+    78→    return misc.addProject()
+    79→  }
+    80→
+    81→  // ===========================================================================
+    82→  // Sessions API
+    83→  // ===========================================================================
+    84→
+    85→  discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
+    86→    return workspace.discoverSessions(this.config, projectPath, backend)
+    87→  }
+    88→
+    89→  // ===========================================================================
+    90→  // Settings API
+    91→  // ===========================================================================
+    92→
+    93→  getSettings(): Promise<Settings> {
+    94→    return workspace.getSettings(this.config)
+    95→  }
+    96→
+    97→  saveSettings(settings: Settings): Promise<void> {
+    98→    return workspace.saveSettings(this.config, settings)
+    99→  }
+   100→
+   101→  selectDirectory(): Promise<string | null> {
+   102→    return misc.selectDirectory()
+   103→  }
+   104→
+   105→  // ===========================================================================
+   106→  // Terminal/PTY API
+   107→  // ===========================================================================
+   108→
+   109→  spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
+   110→    return terminal.spawnPty(this.config, this.wsManager, cwd, sessionId, model, backend)
+   111→  }
+   112→
+   113→  writePty(id: string, data: string): void {
+   114→    terminal.writePty(this.config, this.wsManager, id, data)
+   115→  }
+   116→
+   117→  resizePty(id: string, cols: number, rows: number): void {
+   118→    terminal.resizePty(this.config, this.wsManager, id, cols, rows)
+   119→  }
+   120→
+   121→  killPty(id: string): void {
+   122→    terminal.killPty(this.config, id)
+   123→  }
+   124→
+   125→  setPtyBackend(id: string, backend: BackendId): Promise<void> {
+   126→    return misc.setPtyBackend(id, backend)
+   127→  }
+   128→
+   129→  onPtyData(id: string, callback: (data: string) => void): () => void {
+   130→    return this.wsManager.onTerminalData(id, callback)
+   131→  }
+   132→
+   133→  onPtyExit(id: string, callback: (code: number) => void): () => void {
+   134→    return this.wsManager.onTerminalExit(id, callback)
+   135→  }
+   136→
+   137→  onPtyRecreated(callback: (data: { oldId: string; newId: string; backend: BackendId }) => void): () => void {
+   138→    return misc.onPtyRecreated(callback)
+   139→  }
+   140→
+   141→  // ===========================================================================
+   142→  // CLI Status API
+   143→  // ===========================================================================
+   144→
+   145→  claudeCheck(): Promise<{ installed: boolean; npmInstalled: boolean; gitBashInstalled: boolean }> {
+   146→    return misc.claudeCheck(this.config)
+   147→  }
+   148→
+   149→  geminiCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
+   150→    return misc.geminiCheck(this.config)
+   151→  }
+   152→
+   153→  codexCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
+   154→    return misc.codexCheck(this.config)
+   155→  }
+   156→
+   157→  opencodeCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
+   158→    return misc.opencodeCheck(this.config)
+   159→  }
+   160→
+   161→  aiderCheck(): Promise<{ installed: boolean; pipInstalled: boolean }> {
+   162→    return misc.aiderCheck(this.config)
+   163→  }
+   164→
+   165→  // ===========================================================================
+   166→  // Beads API
+   167→  // ===========================================================================
+   168→
+   169→  beadsCheck(cwd: string): Promise<{ installed: boolean; initialized: boolean }> {
+   170→    return beads.beadsCheck(this.config, cwd)
+   171→  }
+   172→
+   173→  beadsInit(cwd: string): Promise<{ success: boolean; error?: string }> {
+   174→    return beads.beadsInit(this.config, cwd)
+   175→  }
+   176→
+   177→  beadsList(cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }> {
+   178→    return beads.beadsList(this.config, cwd)
+   179→  }
+   180→
+   181→  beadsShow(cwd: string, taskId: string): Promise<{ success: boolean; task?: BeadsTask; error?: string }> {
+   182→    return beads.beadsShow(this.config, cwd, taskId)
+   183→  }
+   184→
+   185→  beadsCreate(
+   186→    cwd: string,
+   187→    title: string,
+   188→    description?: string,
+   189→    priority?: number,
+   190→    type?: string,
+   191→    labels?: string
+   192→  ): Promise<{ success: boolean; task?: BeadsTask; error?: string }> {
+   193→    return beads.beadsCreate(this.config, cwd, title, description, priority, type, labels)
+   194→  }
+   195→
+   196→  beadsComplete(cwd: string, taskId: string): Promise<{ success: boolean; result?: BeadsCloseResult; error?: string }> {
+   197→    return beads.beadsComplete(this.config, cwd, taskId)
+   198→  }
+   199→
+   200→  beadsDelete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
+   201→    return beads.beadsDelete(this.config, cwd, taskId)
+   202→  }
+   203→
+   204→  beadsStart(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
+   205→    return beads.beadsStart(this.config, cwd, taskId)
+   206→  }
+   207→
+   208→  beadsUpdate(
+   209→    cwd: string,
+   210→    taskId: string,
+   211→    status?: string,
+   212→    title?: string,
+   213→    description?: string,
+   214→    priority?: number
+   215→  ): Promise<{ success: boolean; error?: string }> {
+   216→    return beads.beadsUpdate(this.config, cwd, taskId, status, title, description, priority)
+   217→  }
+   218→
+   219→  beadsWatch(cwd: string): Promise<{ success: boolean; error?: string }> {
+   220→    return misc.beadsWatch(cwd)
+   221→  }
+   222→
+   223→  beadsUnwatch(cwd: string): Promise<{ success: boolean; error?: string }> {
+   224→    return misc.beadsUnwatch(cwd)
+   225→  }
+   226→
+   227→  onBeadsTasksChanged(callback: (data: { cwd: string }) => void): () => void {
+   228→    return misc.onBeadsTasksChanged(callback)
+   229→  }
+   230→
+   231→  // ===========================================================================
+   232→  // GSD API
+   233→  // ===========================================================================
+   234→
+   235→  gsdProjectCheck(cwd: string): Promise<{ initialized: boolean }> {
+   236→    return misc.gsdProjectCheck(this.config, cwd)
+   237→  }
+   238→
+   239→  gsdGetProgress(cwd: string): Promise<{ success: boolean; data?: GSDProgress; error?: string }> {
+   240→    return misc.gsdGetProgress(this.config, cwd)
+   241→  }
+   242→
+   243→  // ===========================================================================
+   244→  // Voice API
+   245→  // ===========================================================================
+   246→
+   247→  voiceGetSettings(): Promise<VoiceSettings> {
+   248→    return misc.voiceGetSettings(this.config)
+   249→  }
+   250→
+   251→  voiceSpeak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }> {
+   252→    return misc.voiceSpeak(this.config, text)
+   253→  }
+   254→
+   255→  voiceStopSpeaking(): Promise<{ success: boolean }> {
+   256→    return misc.voiceStopSpeaking(this.config)
+   257→  }
+   258→
+   259→  // ===========================================================================
+   260→  // Utility Methods (stubs for unsupported operations)
+   261→  // ===========================================================================
+   262→
+   263→  createProject(name: string, parentDir: string): Promise<{ success: boolean; path?: string; error?: string }> {
+   264→    return misc.createProject(name, parentDir)
+   265→  }
+   266→
+   267→  selectExecutable(): Promise<string | null> {
+   268→    return misc.selectExecutable()
+   269→  }
+   270→
+   271→  runExecutable(executable: string, cwd: string): Promise<{ success: boolean; error?: string }> {
+   272→    return misc.runExecutable(executable, cwd)
+   273→  }
+   274→
+   275→  claudeInstall(): Promise<{ success: boolean; error?: string }> {
+   276→    return misc.claudeInstall()
+   277→  }
+   278→
+   279→  nodeInstall(): Promise<{ success: boolean; error?: string }> {
+   280→    return misc.nodeInstall()
+   281→  }
+   282→
+   283→  gitInstall(): Promise<{ success: boolean; error?: string }> {
+   284→    return misc.gitInstall()
+   285→  }
+   286→
+   287→  pythonInstall(): Promise<{ success: boolean; error?: string }> {
+   288→    return misc.pythonInstall()
+   289→  }
+   290→
+   291→  geminiInstall(): Promise<{ success: boolean; error?: string }> {
+   292→    return misc.geminiInstall()
+   293→  }
+   294→
+   295→  codexInstall(): Promise<{ success: boolean; error?: string }> {
+   296→    return misc.codexInstall()
+   297→  }
+   298→
+   299→  opencodeInstall(): Promise<{ success: boolean; error?: string }> {
+   300→    return misc.opencodeInstall()
+   301→  }
+   302→
+   303→  aiderInstall(): Promise<{ success: boolean; error?: string }> {
+   304→    return misc.aiderInstall()
+   305→  }
+   306→
+   307→  onInstallProgress(callback: (data: { type: string; status: string; percent?: number }) => void): () => void {
+   308→    return misc.onInstallProgress(callback)
+   309→  }
+   310→
+   311→  gsdCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
+   312→    return misc.gsdCheck()
+   313→  }
+   314→
+   315→  gsdInstall(): Promise<{ success: boolean; error?: string }> {
+   316→    return misc.gsdInstall()
+   317→  }
+   318→
+   319→  beadsInstall(): Promise<{ success: boolean; error?: string }> {
+   320→    return misc.beadsInstall()
+   321→  }
+   322→
+   323→  beadsReady(cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }> {
+   324→    return misc.beadsReady(cwd)
+   325→  }
+   326→
+   327→  windowMinimize(): void {
+   328→    misc.windowMinimize()
+   329→  }
+   330→
+   331→  windowMaximize(): void {
+   332→    misc.windowMaximize()
+   333→  }
+   334→
+   335→  windowClose(): void {
+   336→    misc.windowClose()
+   337→  }
+   338→
+   339→  windowIsMaximized(): Promise<boolean> {
+   340→    return misc.windowIsMaximized()
+   341→  }
+   342→
+   343→  readClipboardImage(): Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }> {
+   344→    return misc.readClipboardImage()
+   345→  }
+   346→
+   347→  getPathForFile(file: File): string {
+   348→    return misc.getPathForFile(file)
+   349→  }
+   350→
+   351→  debugLog(message: string): void {
+   352→    misc.debugLog(message)
+   353→  }
+   354→
+   355→  isDebugMode(): Promise<boolean> {
+   356→    return misc.isDebugMode()
+   357→  }
+   358→
+   359→  refresh(): Promise<void> {
+   360→    return misc.refresh()
+   361→  }
+   362→
+   363→  openExternal(url: string): Promise<void> {
+   364→    return misc.openExternal(url)
+   365→  }
+   366→
+   367→  getVersion(): Promise<string> {
+   368→    return misc.getVersion()
+   369→  }
+   370→
+   371→  checkForUpdate(): Promise<{ success: boolean; version?: string; error?: string }> {
+   372→    return misc.checkForUpdate()
+   373→  }
+   374→
+   375→  downloadUpdate(): Promise<{ success: boolean; error?: string }> {
+   376→    return misc.downloadUpdate()
+   377→  }
+   378→
+   379→  installUpdate(): void {
+   380→    misc.installUpdate()
+   381→  }
+   382→
+   383→  onUpdaterStatus(callback: (data: { status: string; version?: string; progress?: number; error?: string }) => void): () => void {
+   384→    return misc.onUpdaterStatus(callback)
+   385→  }
+   386→
+   387→  apiStart(projectPath: string, port: number): Promise<{ success: boolean; error?: string }> {
+   388→    return misc.apiStart(projectPath, port)
+   389→  }
+   390→
+   391→  apiStop(projectPath: string): Promise<{ success: boolean }> {
+   392→    return misc.apiStop(projectPath)
+   393→  }
+   394→
+   395→  apiStatus(projectPath: string): Promise<{ running: boolean; port?: number }> {
+   396→    return misc.apiStatus(projectPath)
+   397→  }
+   398→
+   399→  onApiOpenSession(callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void): () => void {
+   400→    return misc.onApiOpenSession(callback)
+   401→  }
+   402→}
+   403→
+   404→// =============================================================================
+   405→// Factory Functions
+   406→// =============================================================================
+   407→
+   408→/**
+   409→ * Check if running in Electron environment with electronAPI available
+   410→ */
+   411→export function isElectronEnvironment(): boolean {
+   412→  return typeof window !== 'undefined' && 'electronAPI' in window
+   413→}
+   414→
+   415→/**
+   416→ * Get the electronAPI if available
+   417→ */
+   418→export function getElectronAPI(): unknown | null {
+   419→  if (isElectronEnvironment()) {
+   420→    return (window as unknown as Record<string, unknown>).electronAPI
+   421→  }
+   422→  return null
+   423→}
+   424→
+   425→// Singleton HTTP client instance
+   426→let httpClientInstance: HttpApiClient | null = null
+   427→
+   428→/**
+   429→ * Create or get an API client
+   430→ *
+   431→ * - If running in Electron, returns electronAPI
+   432→ * - If hostConfig is provided, creates/returns HttpApiClient
+   433→ * - Returns null if neither is available
+   434→ */
+   435→export function createApiClient(hostConfig?: HostConfig): HttpApiClient | unknown | null {
+   436→  // Check for Electron first
+   437→  const electronAPI = getElectronAPI()
+   438→  if (electronAPI && !hostConfig) {
+   439→    return electronAPI
+   440→  }
+   441→
+   442→  // Create HTTP client if config provided
+   443→  if (hostConfig) {
+   444→    httpClientInstance = new HttpApiClient(hostConfig)
+   445→    return httpClientInstance
+   446→  }
+   447→
+   448→  // Return existing HTTP client if available
+   449→  if (httpClientInstance) {
+   450→    return httpClientInstance
+   451→  }
+   452→
+   453→  return null
+   454→}
+   455→
+   456→/**
+   457→ * Get the current API client instance
+   458→ */
+   459→export function getApiClient(): HttpApiClient | unknown | null {
+   460→  const electronAPI = getElectronAPI()
+   461→  if (electronAPI) {
+   462→    return electronAPI
+   463→  }
+   464→  return httpClientInstance
+   465→}
+   466→
+   467→/**
+   468→ * Set the HTTP client instance (for testing or manual configuration)
+   469→ */
+   470→export function setHttpClient(client: HttpApiClient | null): void {
+   471→  httpClientInstance = client
+   472→}
+   473→
+```
