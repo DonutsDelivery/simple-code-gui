@@ -24,13 +24,25 @@ function headers(cwd: string): HeadersInit {
   }
 }
 
+// Shared flag so API failures can signal the adapter to re-check daemon
+let _daemonEnsuredFlag = true
+// Last project dir we ensured daemon for — reset flag on project switch
+let _daemonEnsuredForCwd: string | null = null
+
 async function api<T>(method: string, path: string, cwd: string, body?: unknown): Promise<T> {
   const opts: RequestInit = {
     method,
     headers: headers(cwd)
   }
   if (body) opts.body = JSON.stringify(body)
-  const res = await fetch(`${API_BASE}${path}`, opts)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${path}`, opts)
+  } catch (e) {
+    // Network error — daemon likely crashed, reset ensured flag
+    _daemonEnsuredFlag = false
+    throw e
+  }
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || `HTTP ${res.status}`)
@@ -78,20 +90,22 @@ function toUnified(raw: Record<string, unknown>): UnifiedTask {
 
 export class KspecAdapter implements TaskAdapter {
   readonly kind = 'kspec' as const
-  private daemonEnsured = false
 
   private async ensureDaemon(cwd: string): Promise<boolean> {
+    // Reset flag when switching projects so we re-verify daemon for new cwd
+    if (_daemonEnsuredForCwd !== null && _daemonEnsuredForCwd !== cwd) {
+      _daemonEnsuredFlag = false
+    }
+
     // Quick health check first
     try {
       const res = await fetch(`${API_BASE}/api/health`)
-      if (res.ok) { this.daemonEnsured = true; return true }
+      if (res.ok) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
     } catch { /* daemon not running */ }
 
-    // Start daemon via IPC
-    if (!this.daemonEnsured) {
-      const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
-      if (result?.success) { this.daemonEnsured = true; return true }
-    }
+    // Start daemon via IPC (always attempt if health check failed)
+    const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
+    if (result?.success) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
     return false
   }
 
@@ -183,7 +197,11 @@ export class KspecAdapter implements TaskAdapter {
 
   async update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }> {
     try {
-      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, params)
+      // Map unified status names back to kspec native status names
+      const body = { ...params }
+      if (body.status === 'open') body.status = 'pending' as TaskStatus
+      if (body.status === 'closed') body.status = 'completed' as TaskStatus
+      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, body)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -194,15 +212,38 @@ export class KspecAdapter implements TaskAdapter {
     switch (currentStatus) {
       case 'open': return this.start(cwd, taskId)
       case 'in_progress': return this.complete(cwd, taskId)
-      default: return this.update(cwd, taskId, { status: 'open' })
+      default:
+        // Kspec uses 'pending' internally — 'open' is only the unified status
+        try {
+          await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, { status: 'pending' })
+          return { success: true }
+        } catch (e) {
+          return { success: false, error: String(e) }
+        }
     }
   }
 
   // Kspec uses WebSocket for live updates instead of file watching
   private ws: WebSocket | null = null
   private wsCallbacks: Set<(data: { cwd: string }) => void> = new Set()
+  private watchedCwd: string | null = null
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectDelay = 1000
+  private watching = false
 
   watch(cwd: string): void {
+    // If switching projects, close old connection first
+    if (this.ws && this.watchedCwd !== cwd) {
+      this.ws.close()
+      this.ws = null
+    }
+    this.watching = true
+    this.watchedCwd = cwd
+    this.reconnectDelay = 1000
+    this.connectWs(cwd)
+  }
+
+  private connectWs(cwd: string): void {
     if (this.ws) return
     try {
       this.ws = new WebSocket(`ws://localhost:${DAEMON_PORT}/ws?project=${encodeURIComponent(cwd)}`)
@@ -214,11 +255,30 @@ export class KspecAdapter implements TaskAdapter {
           }
         } catch { /* ignore parse errors */ }
       }
-      this.ws.onclose = () => { this.ws = null }
-    } catch { /* daemon not running */ }
+      this.ws.onopen = () => {
+        this.reconnectDelay = 1000 // Reset backoff on successful connection
+      }
+      this.ws.onclose = () => {
+        this.ws = null
+        // Auto-reconnect with exponential backoff (cap at 30s)
+        if (this.watching && this.watchedCwd === cwd) {
+          this.reconnectTimer = setTimeout(() => this.connectWs(cwd), this.reconnectDelay)
+          this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
+        }
+      }
+      this.ws.onerror = () => {
+        // onclose will fire after onerror, triggering reconnect
+      }
+    } catch { /* daemon not running — reconnect will retry */ }
   }
 
   unwatch(_cwd: string): void {
+    this.watching = false
+    this.watchedCwd = null
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.ws?.close()
     this.ws = null
   }

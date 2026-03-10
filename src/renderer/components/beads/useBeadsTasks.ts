@@ -334,7 +334,9 @@ export function useBeadsTasks({
     tasksCache.set(projectPath, updatedTasks)
 
     try {
-      const result = await adapter.update(projectPath, taskId, { status: nextStatus as UnifiedTask['status'] })
+      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
       if (!result.success) {
         setTasks(previousTasks)
         tasksCache.set(projectPath, previousTasks)

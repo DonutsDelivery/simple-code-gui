@@ -195,6 +195,13 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
           const beadsType = String(task.issue_type ?? task.type ?? 'task')
           const kspecType = beadsType === 'feature' ? 'task' : (['bug', 'task', 'epic'].includes(beadsType) ? beadsType : 'task')
 
+          // Map beads status to kspec status
+          const beadsStatus = String(task.status ?? 'open')
+          let kspecStatus: string | undefined
+          if (beadsStatus === 'in_progress') kspecStatus = 'in_progress'
+          else if (beadsStatus === 'closed') kspecStatus = 'completed'
+          // 'open' maps to 'pending' which is the default — no need to set
+
           const res = await fetch('http://localhost:3456/api/tasks', {
             method: 'POST',
             headers: {
@@ -203,9 +210,10 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
             },
             body: JSON.stringify({
               title: String(task.title ?? ''),
-              description: String(task.description ?? ''),
+              description: task.description ? String(task.description) : undefined,
               priority: kspecPriority,
               type: kspecType,
+              status: kspecStatus,
               tags: [`migrated-from:${String(task.id ?? '')}`]
             })
           })
