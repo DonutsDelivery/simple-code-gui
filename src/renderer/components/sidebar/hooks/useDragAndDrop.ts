@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Project } from '../../../stores/workspace.js'
 import { DropTarget } from '../types.js'
 
@@ -48,6 +48,9 @@ export function useDragAndDrop({
   const [draggedProject, setDraggedProject] = useState<string | null>(null)
   const [draggedCategory, setDraggedCategory] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Ref tracks the latest dropTarget so drop handlers always read fresh position
+  // (state in the closure may be stale if React hasn't re-rendered since the last dragOver)
+  const dropTargetRef = useRef<DropTarget | null>(null)
 
   const handleProjectDragStart = useCallback((e: React.DragEvent, projectPath: string) => {
     setDraggedProject(projectPath)
@@ -60,6 +63,7 @@ export function useDragAndDrop({
   const handleProjectDragEnd = useCallback(() => {
     setDraggedProject(null)
     setDropTarget(null)
+    dropTargetRef.current = null
   }, [])
 
   const handleCategoryDragOver = useCallback(
@@ -67,10 +71,12 @@ export function useDragAndDrop({
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       if (draggedProject) {
-        setDropTarget({
+        const target: DropTarget = {
           type: categoryId ? 'category' : 'uncategorized',
           id: categoryId,
-        })
+        }
+        setDropTarget(target)
+        dropTargetRef.current = target
       }
     },
     [draggedProject]
@@ -84,6 +90,7 @@ export function useDragAndDrop({
       }
       setDraggedProject(null)
       setDropTarget(null)
+      dropTargetRef.current = null
     },
     [draggedProject, moveProjectToCategory]
   )
@@ -94,7 +101,9 @@ export function useDragAndDrop({
       e.stopPropagation()
       e.dataTransfer.dropEffect = 'move'
       if (draggedProject && draggedProject !== projectPath) {
-        setDropTarget({ type: 'project', id: projectPath, position })
+        const target: DropTarget = { type: 'project', id: projectPath, position }
+        setDropTarget(target)
+        dropTargetRef.current = target
       }
     },
     [draggedProject]
@@ -120,15 +129,18 @@ export function useDragAndDrop({
 
           const newOrder = categoryProjects.filter((p) => p !== draggedProject)
           const targetIndex = newOrder.indexOf(targetPath)
-          const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+          // Read from ref to get the latest position (state may be stale)
+          const currentDropTarget = dropTargetRef.current
+          const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
           newOrder.splice(insertIndex, 0, draggedProject)
           reorderProjects(targetCategoryId ?? null, newOrder)
         }
       }
       setDraggedProject(null)
       setDropTarget(null)
+      dropTargetRef.current = null
     },
-    [draggedProject, projects, dropTarget, moveProjectToCategory, reorderProjects]
+    [draggedProject, projects, moveProjectToCategory, reorderProjects]
   )
 
   const handleCategoryDragStart = useCallback((e: React.DragEvent, categoryId: string) => {
@@ -140,6 +152,7 @@ export function useDragAndDrop({
   const handleCategoryDragEnd = useCallback(() => {
     setDraggedCategory(null)
     setDropTarget(null)
+    dropTargetRef.current = null
   }, [])
 
   const handleCategoryHeaderDragOver = useCallback(
@@ -147,7 +160,9 @@ export function useDragAndDrop({
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       if (draggedCategory && draggedCategory !== targetCategoryId) {
-        setDropTarget({ type: 'category', id: targetCategoryId, position })
+        const target: DropTarget = { type: 'category', id: targetCategoryId, position }
+        setDropTarget(target)
+        dropTargetRef.current = target
       }
     },
     [draggedCategory]
@@ -161,14 +176,17 @@ export function useDragAndDrop({
         const categoryIds = orderedCategories.map((c) => c.id)
         const newOrder = categoryIds.filter((id) => id !== draggedCategory)
         const targetIndex = newOrder.indexOf(targetCategoryId)
-        const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+        // Read from ref to get the latest position (state may be stale)
+        const currentDropTarget = dropTargetRef.current
+        const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
         newOrder.splice(insertIndex, 0, draggedCategory)
         reorderCategories(newOrder)
       }
       setDraggedCategory(null)
       setDropTarget(null)
+      dropTargetRef.current = null
     },
-    [draggedCategory, categories, dropTarget, reorderCategories]
+    [draggedCategory, categories, reorderCategories]
   )
 
   return {

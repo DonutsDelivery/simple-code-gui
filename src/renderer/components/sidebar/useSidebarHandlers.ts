@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { Project, useWorkspaceStore } from '../../stores/workspace.js'
 import { SidebarState } from './useSidebarState.js'
 import { SidebarProps } from './types.js'
@@ -95,9 +95,13 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
   )
 
   // Rename handlers
+  // Ref tracks cancel intent so blur handler can skip saving after Escape
+  const renameCancelledRef = useRef(false)
+
   const handleStartRename = useCallback(
     (e: React.MouseEvent, project: Project) => {
       e.stopPropagation()
+      renameCancelledRef.current = false
       setEditingProject({ path: project.path, name: project.name })
       setTimeout(() => editInputRef.current?.select(), 0)
     },
@@ -105,6 +109,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
   )
 
   const handleRenameSubmit = useCallback(() => {
+    if (renameCancelledRef.current) {
+      renameCancelledRef.current = false
+      return
+    }
     if (editingProject && editingProject.name.trim()) {
       onUpdateProject(editingProject.path, { name: editingProject.name.trim() })
     }
@@ -114,7 +122,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') handleRenameSubmit()
-      else if (e.key === 'Escape') setEditingProject(null)
+      else if (e.key === 'Escape') {
+        renameCancelledRef.current = true
+        setEditingProject(null)
+      }
     },
     [handleRenameSubmit, setEditingProject]
   )
@@ -139,8 +150,12 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
     if (metaPath) onOpenSession(metaPath)
   }, [onOpenSession])
 
+  // Category rename cancel ref (same pattern as project rename)
+  const categoryRenameCancelledRef = useRef(false)
+
   const handleStartCategoryRename = useCallback(
     (category: ReturnType<typeof useWorkspaceStore.getState>['categories'][0]) => {
+      categoryRenameCancelledRef.current = false
       setEditingCategory({ id: category.id, name: category.name })
       setTimeout(() => categoryEditInputRef.current?.select(), 0)
     },
@@ -148,6 +163,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
   )
 
   const handleCategoryRenameSubmit = useCallback(() => {
+    if (categoryRenameCancelledRef.current) {
+      categoryRenameCancelledRef.current = false
+      return
+    }
     if (editingCategory && editingCategory.name.trim()) {
       updateCategory(editingCategory.id, { name: editingCategory.name.trim() })
     }
@@ -157,7 +176,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
   const handleCategoryRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') handleCategoryRenameSubmit()
-      else if (e.key === 'Escape') setEditingCategory(null)
+      else if (e.key === 'Escape') {
+        categoryRenameCancelledRef.current = true
+        setEditingCategory(null)
+      }
     },
     [handleCategoryRenameSubmit, setEditingCategory]
   )

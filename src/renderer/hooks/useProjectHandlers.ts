@@ -252,10 +252,17 @@ export function useProjectHandlers({
   const handleCloseProjectTabs = useCallback((projectPath: string) => {
     const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
     tabsToClose.forEach(tab => {
+      closedTabsRef.current.push({
+        projectPath: tab.projectPath,
+        sessionId: tab.sessionId,
+        title: tab.title,
+        backend: tab.backend
+      })
       api.killPty(tab.id)
       clearTerminalBuffer(tab.id)
       removeTab(tab.id)
     })
+    setClosedTabCount(closedTabsRef.current.length)
   }, [api, openTabs, removeTab])
 
   const handleProjectCreated = useCallback((projectPath: string, projectName: string) => {
