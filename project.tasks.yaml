@@ -66,26 +66,49 @@ tasks:
     notes: []
     todos: []
     automation: eligible
-  - title: "Bug audit: task management adapters"
+  - _ulid: 01KKAWKZB1X95YBRM2P9PFRFE7
+    slugs:
+      - bug-tasks
+    title: "Bug audit: task management adapters"
+    type: bug
     description: "Investigate and fix bugs in Beads/Kspec task adapters. Check: backend detection cache
       staleness, watcher debounce missing rapid changes, status cycling edge cases, inline edit
       races, Beads-to-Kspec migration data integrity, LRU cache invalidation, panel state machine
       transitions."
-    type: bug
     spec_ref: "@task-adapter"
     meta_ref: null
     plan_ref: null
+    status: pending
+    blocked_by: []
+    depends_on: []
+    context: []
     priority: 3
+    tags: []
+    vcs_refs: []
+    created_at: 2026-03-10T03:28:30.561Z
+    notes: []
+    todos: []
+    automation: eligible
+  - title: "Bug audit: connectivity (API, orchestrator, mobile)"
+    description: "Investigate and fix bugs in connectivity layer. Check: orchestrator port fallback,
+      rate limiter window reset, API prompt 4s delay race condition, pending prompt not consumed on
+      spawn failure, mobile token regeneration during connections, WebSocket subscription leak, CORS
+      config."
+    type: bug
+    spec_ref: "@orchestrator"
+    meta_ref: null
+    plan_ref: null
+    priority: 2
     slugs:
-      - bug-tasks
+      - bug-connectivity
     tags: []
     depends_on: []
     automation: eligible
-    _ulid: 01KKAWKZB1X95YBRM2P9PFRFE7
+    _ulid: 01KKAWM15XTDNE9XPRPADT9R88
     status: pending
     blocked_by: []
     context: []
     vcs_refs: []
-    created_at: 2026-03-10T03:28:30.561Z
+    created_at: 2026-03-10T03:28:32.445Z
     notes: []
     todos: []
