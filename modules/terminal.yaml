@@ -48,7 +48,7 @@ features:
         then: the PTY process is terminated and all listeners are cleaned up
     status:
       maturity: draft
-      implementation: in_progress
+      implementation: implemented
   - _ulid: 01KK67BRJR4864JXD28BE8HNK2
     slugs:
       - multi-backend
