@@ -39,7 +39,7 @@ features:
         then: the audio is transcribed and the text is auto-submitted to the active terminal
     status:
       maturity: draft
-      implementation: in_progress
+      implementation: implemented
   - _ulid: 01KK67CQ3Q3D97KVYWK5MW5WKP
     slugs:
       - tts
