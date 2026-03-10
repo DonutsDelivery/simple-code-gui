@@ -73,7 +73,8 @@ features:
         when: saveWorkspace is called
         then: data is written atomically via temp file + rename with backup, and validated before finalizing
     status:
-      implementation: implemented
+      maturity: draft
+      implementation: in_progress
   - _ulid: 01KK67DTW3HCHEA5G8TSNDK5FX
     slugs:
       - auto-update
