@@ -32,7 +32,7 @@ tasks:
     spec_ref: "@tiled-layout"
     meta_ref: null
     plan_ref: null
-    status: in_progress
+    status: pending_review
     blocked_by: []
     depends_on: []
     context: []
@@ -64,6 +64,7 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
+    submitted_at: 2026-03-10T04:01:49.102Z
   - _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
     slugs:
       - bug-voice
