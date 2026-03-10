@@ -421,7 +421,7 @@ tasks:
     spec_ref: "@session-discovery"
     meta_ref: null
     plan_ref: null
-    status: in_progress
+    status: pending_review
     blocked_by: []
     depends_on: []
     context: []
@@ -451,6 +451,7 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
+    submitted_at: 2026-03-10T05:09:19.318Z
   - _ulid: 01KKAWM4Y4E24TFEAPSDXZS99G
     slugs:
       - bug-sidebar
