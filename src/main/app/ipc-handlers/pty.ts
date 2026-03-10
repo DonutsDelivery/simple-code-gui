@@ -80,13 +80,24 @@ export function registerPtyHandlers(
         pendingApiPrompts.delete(cwd)
         if (pending.autoClose) autoCloseSessions.add(id)
         setTimeout(() => {
-          ptyManager.write(id, pending.prompt + '\n')
-          pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
+          // Verify PTY still exists before writing (race condition guard)
+          if (ptyManager.getProcess(id)) {
+            ptyManager.write(id, pending.prompt + '\n')
+            pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
+          } else {
+            pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
+          }
         }, 4000)
       }
 
       return id
     } catch (error: any) {
+      // Resolve pending prompt immediately on spawn failure instead of waiting for 30s timeout
+      const pending = pendingApiPrompts.get(cwd)
+      if (pending) {
+        pendingApiPrompts.delete(cwd)
+        pending.resolve({ success: false, error: `Failed to start terminal: ${error.message}` })
+      }
       console.error('Failed to spawn PTY:', error)
       throw new Error(`Failed to start Claude: ${error.message}`)
     }

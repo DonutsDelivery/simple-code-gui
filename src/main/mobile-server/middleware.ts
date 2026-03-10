@@ -31,26 +31,35 @@ export function setupCorsMiddleware(app: Express): void {
         return callback(null, true)
       }
 
+      // Parse origin to extract hostname for safe validation
+      let hostname: string
+      try {
+        hostname = new URL(origin).hostname
+      } catch {
+        log('CORS blocked malformed origin', { origin })
+        return callback(new Error('CORS not allowed for this origin'))
+      }
+
       // Allow localhost variants
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return callback(null, true)
       }
 
       // Allow local network IP ranges (RFC 1918)
       // 10.x.x.x, 192.168.x.x, 172.16-31.x.x
-      const localNetworkPattern = /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?/
-      if (localNetworkPattern.test(origin)) {
+      const localNetworkPattern = /^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/
+      if (localNetworkPattern.test(hostname)) {
         return callback(null, true)
       }
 
       // Allow Tailscale CGNAT range (100.64.0.0 - 100.127.255.255)
-      const tailscaleCgnatPattern = /^https?:\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+(:\d+)?/
-      if (tailscaleCgnatPattern.test(origin)) {
+      const tailscaleCgnatPattern = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/
+      if (tailscaleCgnatPattern.test(hostname)) {
         return callback(null, true)
       }
 
       // Allow Tailscale MagicDNS hostnames (*.ts.net)
-      if (origin.includes('.ts.net')) {
+      if (hostname.endsWith('.ts.net')) {
         return callback(null, true)
       }
 
