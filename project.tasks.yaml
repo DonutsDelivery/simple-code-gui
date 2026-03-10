@@ -10,7 +10,7 @@ tasks:
     spec_ref: "@pty-lifecycle"
     meta_ref: null
     plan_ref: null
-    status: pending_review
+    status: completed
     blocked_by: []
     depends_on: []
     context: []
@@ -20,6 +20,7 @@ tasks:
     session_id: 01KKAYH7STER6H279K2WWJHNH3
     created_at: 2026-03-10T03:28:25.690Z
     started_at: 2026-03-10T04:04:18.647Z
+    submitted_at: 2026-03-10T04:08:55.443Z
     notes:
       - _ulid: 01KKAYXDC37GJG0ZKMSYGMQK1H
         created_at: 2026-03-10T04:08:36.995Z
@@ -57,7 +58,11 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
-    submitted_at: 2026-03-10T04:08:55.443Z
+    completed_at: 2026-03-10T04:13:31.959Z
+    closed_reason: "Review passed. 5 bug fixes in PTY backend switching and ANSI stripping: (1) settings
+      inheritance for autoAcceptTools/permissionMode, (2) spawn failure error handling with cleanup,
+      (3) autoClose flag transfer, (4) IPC send try-catch consistency, (5) CSI/OSC/charset ANSI
+      regex coverage. All 40 tests pass. Changes well-scoped, no regressions."
   - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
     slugs:
       - bug-layout

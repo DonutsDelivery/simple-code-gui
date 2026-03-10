@@ -1,0 +1,7 @@
+id: 01KKAYXZWW3FVYATJGHZDRDGCE
+task_id: "@01KKAWKTJVBTXZDAF2293N8875"
+agent_type: claude-agent-acp
+agent_id: pr-reviewer
+trigger: task.pending_review
+status: active
+started_at: 2026-03-10T04:09:30.178Z

@@ -1,0 +1,630 @@
+```
+     1→import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest'
+     2→
+     3→// Mock crypto for UUID generation
+     4→vi.stubGlobal('crypto', {
+     5→  randomUUID: vi.fn().mockReturnValue('test-uuid-12345'),
+     6→})
+     7→
+     8→// Mock node-pty
+     9→const mockPtyProcess = {
+    10→  onData: vi.fn(),
+    11→  onExit: vi.fn(),
+    12→  write: vi.fn(),
+    13→  resize: vi.fn(),
+    14→  kill: vi.fn(),
+    15→}
+    16→
+    17→vi.mock('node-pty', () => ({
+    18→  spawn: vi.fn().mockImplementation(() => mockPtyProcess),
+    19→}))
+    20→
+    21→// Mock fs for executable checking
+    22→vi.mock('fs', () => ({
+    23→  existsSync: vi.fn().mockReturnValue(false),
+    24→}))
+    25→
+    26→// Mock platform module
+    27→vi.mock('../platform', () => ({
+    28→  isWindows: false,
+    29→  getEnhancedPathWithPortable: vi
+    30→    .fn()
+    31→    .mockReturnValue('/usr/bin:/usr/local/bin'),
+    32→  getAdditionalPaths: vi.fn().mockReturnValue(['/usr/local/bin']),
+    33→}))
+    34→
+    35→// Mock portable-deps module
+    36→vi.mock('../portable-deps', () => ({
+    37→  getPortableBinDirs: vi.fn().mockReturnValue([]),
+    38→}))
+    39→
+    40→import { PtyManager } from '../pty-manager'
+    41→import * as pty from 'node-pty'
+    42→import * as fs from 'fs'
+    43→import * as platform from '../platform'
+    44→
+    45→describe('PtyManager', () => {
+    46→  let manager: PtyManager
+    47→  let dataCallback: ((data: string) => void) | null = null
+    48→  let exitCallback: ((result: { exitCode: number }) => void) | null = null
+    49→
+    50→  beforeEach(() => {
+    51→    vi.clearAllMocks()
+    52→
+    53→    // Reset mock implementations
+    54→    dataCallback = null
+    55→    exitCallback = null
+    56→
+    57→    mockPtyProcess.onData.mockImplementation((cb: (data: string) => void) => {
+    58→      dataCallback = cb
+    59→    })
+    60→    mockPtyProcess.onExit.mockImplementation(
+    61→      (cb: (result: { exitCode: number }) => void) => {
+    62→        exitCallback = cb
+    63→      }
+    64→    )
+    65→
+    66→    manager = new PtyManager()
+    67→  })
+    68→
+    69→  afterEach(() => {
+    70→    vi.restoreAllMocks()
+    71→  })
+    72→
+    73→  describe('spawn()', () => {
+    74→    it('should spawn a PTY process and return an ID', () => {
+    75→      const id = manager.spawn('/test/dir')
+    76→
+    77→      expect(id).toBe('test-uuid-12345')
+    78→      expect(pty.spawn).toHaveBeenCalledWith(
+    79→        'claude',
+    80→        [],
+    81→        expect.objectContaining({
+    82→          name: 'xterm-256color',
+    83→          cols: 120,
+    84→          rows: 30,
+    85→          cwd: '/test/dir',
+    86→          handleFlowControl: true,
+    87→        })
+    88→      )
+    89→    })
+    90→
+    91→    it('should spawn with resume session ID', () => {
+    92→      manager.spawn('/test/dir', 'session-123')
+    93→
+    94→      expect(pty.spawn).toHaveBeenCalledWith(
+    95→        'claude',
+    96→        ['-r', 'session-123'],
+    97→        expect.any(Object)
+    98→      )
+    99→    })
+   100→
+   101→    it('should spawn with model argument', () => {
+   102→      manager.spawn('/test/dir', undefined, undefined, undefined, 'opus')
+   103→
+   104→      expect(pty.spawn).toHaveBeenCalledWith(
+   105→        'claude',
+   106→        ['--model', 'opus'],
+   107→        expect.any(Object)
+   108→      )
+   109→    })
+   110→
+   111→    it('should not add model argument for "default" model', () => {
+   112→      manager.spawn('/test/dir', undefined, undefined, undefined, 'default')
+   113→
+   114→      expect(pty.spawn).toHaveBeenCalledWith('claude', [], expect.any(Object))
+   115→    })
+   116→
+   117→    it('should spawn with permission mode arguments', () => {
+   118→      manager.spawn('/test/dir', undefined, undefined, 'acceptEdits')
+   119→
+   120→      expect(pty.spawn).toHaveBeenCalledWith(
+   121→        'claude',
+   122→        ['--permission-mode', 'acceptEdits'],
+   123→        expect.any(Object)
+   124→      )
+   125→    })
+   126→
+   127→    it('should spawn with auto-accept tools', () => {
+   128→      manager.spawn('/test/dir', undefined, ['Read', 'Write'])
+   129→
+   130→      expect(pty.spawn).toHaveBeenCalledWith(
+   131→        'claude',
+   132→        ['--allowedTools', 'Read', '--allowedTools', 'Write'],
+   133→        expect.any(Object)
+   134→      )
+   135→    })
+   136→
+   137→    it('should spawn with all arguments combined', () => {
+   138→      manager.spawn('/test/dir', 'session-123', ['Read'], 'dontAsk', 'sonnet')
+   139→
+   140→      expect(pty.spawn).toHaveBeenCalledWith(
+   141→        'claude',
+   142→        [
+   143→          '-r',
+   144→          'session-123',
+   145→          '--model',
+   146→          'sonnet',
+   147→          '--permission-mode',
+   148→          'dontAsk',
+   149→          '--allowedTools',
+   150→          'Read',
+   151→        ],
+   152→        expect.any(Object)
+   153→      )
+   154→    })
+   155→
+   156→    describe('backend-specific spawning', () => {
+   157→      it('should spawn gemini backend with correct executable and args', () => {
+   158→        manager.spawn(
+   159→          '/test/dir',
+   160→          'session-123',
+   161→          ['tool1'],
+   162→          'dontAsk',
+   163→          undefined,
+   164→          'gemini'
+   165→        )
+   166→
+   167→        expect(pty.spawn).toHaveBeenCalledWith(
+   168→          'gemini',
+   169→          [
+   170→            '--resume',
+   171→            'session-123',
+   172→            '--approval-mode',
+   173→            'yolo',
+   174→            '--allowed-tools',
+   175→            'tool1',
+   176→          ],
+   177→          expect.any(Object)
+   178→        )
+   179→      })
+   180→
+   181→      it('should spawn codex backend with correct executable and args', () => {
+   182→        manager.spawn(
+   183→          '/test/dir',
+   184→          'session-123',
+   185→          undefined,
+   186→          'dontAsk',
+   187→          undefined,
+   188→          'codex'
+   189→        )
+   190→
+   191→        expect(pty.spawn).toHaveBeenCalledWith(
+   192→          'codex',
+   193→          ['--resume', 'session-123', '--full-auto'],
+   194→          expect.any(Object)
+   195→        )
+   196→      })
+   197→
+   198→      it('should spawn opencode backend without permission args', () => {
+   199→        manager.spawn(
+   200→          '/test/dir',
+   201→          'session-123',
+   202→          ['Read'],
+   203→          'dontAsk',
+   204→          undefined,
+   205→          'opencode'
+   206→        )
+   207→
+   208→        expect(pty.spawn).toHaveBeenCalledWith(
+   209→          'opencode',
+   210→          ['--session', 'session-123'],
+   211→          expect.any(Object)
+   212→        )
+   213→      })
+   214→
+   215→      it('should spawn aider backend with --yes for non-default permission', () => {
+   216→        manager.spawn(
+   217→          '/test/dir',
+   218→          'session-123',
+   219→          undefined,
+   220→          'acceptEdits',
+   221→          undefined,
+   222→          'aider'
+   223→        )
+   224→
+   225→        expect(pty.spawn).toHaveBeenCalledWith(
+   226→          'aider',
+   227→          ['--restore', 'session-123', '--yes'],
+   228→          expect.any(Object)
+   229→        )
+   230→      })
+   231→    })
+   232→
+   233→    describe('spawn failure handling', () => {
+   234→      it('should handle spawn throwing an error', () => {
+   235→        vi.mocked(pty.spawn).mockImplementationOnce(() => {
+   236→          throw new Error('spawn ENOENT')
+   237→        })
+   238→
+   239→        expect(() => manager.spawn('/test/dir')).toThrow('spawn ENOENT')
+   240→      })
+   241→    })
+   242→  })
+   243→
+   244→  describe('write()', () => {
+   245→    it('should write data to the PTY process', () => {
+   246→      const id = manager.spawn('/test/dir')
+   247→
+   248→      manager.write(id, 'hello world')
+   249→
+   250→      expect(mockPtyProcess.write).toHaveBeenCalledWith('hello world')
+   251→    })
+   252→
+   253→    it('should do nothing for non-existent process ID', () => {
+   254→      manager.write('non-existent-id', 'hello')
+   255→
+   256→      expect(mockPtyProcess.write).not.toHaveBeenCalled()
+   257→    })
+   258→  })
+   259→
+   260→  describe('resize()', () => {
+   261→    beforeEach(() => {
+   262→      vi.useFakeTimers()
+   263→    })
+   264→
+   265→    afterEach(() => {
+   266→      vi.useRealTimers()
+   267→    })
+   268→
+   269→    it('should resize the PTY process after debounce', () => {
+   270→      const id = manager.spawn('/test/dir')
+   271→
+   272→      manager.resize(id, 200, 50)
+   273→
+   274→      // Not called immediately (debounced)
+   275→      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+   276→
+   277→      // Advance past debounce period (50ms for non-Ink backends)
+   278→      vi.advanceTimersByTime(60)
+   279→
+   280→      expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
+   281→    })
+   282→
+   283→    it('should debounce rapid resize calls', () => {
+   284→      const id = manager.spawn('/test/dir')
+   285→
+   286→      manager.resize(id, 100, 30)
+   287→      manager.resize(id, 150, 40)
+   288→      manager.resize(id, 200, 50)
+   289→
+   290→      vi.advanceTimersByTime(60)
+   291→
+   292→      // Only the last resize should fire
+   293→      expect(mockPtyProcess.resize).toHaveBeenCalledTimes(1)
+   294→      expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
+   295→    })
+   296→
+   297→    it('should skip resize if dimensions unchanged', () => {
+   298→      const id = manager.spawn('/test/dir')
+   299→
+   300→      manager.resize(id, 200, 50)
+   301→      vi.advanceTimersByTime(60)
+   302→      mockPtyProcess.resize.mockClear()
+   303→
+   304→      // Same dimensions again
+   305→      manager.resize(id, 200, 50)
+   306→      vi.advanceTimersByTime(60)
+   307→
+   308→      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+   309→    })
+   310→
+   311→    it('should use longer debounce for Ink-based backends during startup', () => {
+   312→      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, 'gemini')
+   313→
+   314→      manager.resize(id, 200, 50)
+   315→
+   316→      // At 60ms - should NOT have fired (Ink startup debounce is 1500ms)
+   317→      vi.advanceTimersByTime(60)
+   318→      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+   319→
+   320→      // At 1600ms - should have fired
+   321→      vi.advanceTimersByTime(1500)
+   322→      expect(mockPtyProcess.resize).toHaveBeenCalledWith(200, 50)
+   323→    })
+   324→
+   325→    it('should do nothing for non-existent process ID', () => {
+   326→      manager.resize('non-existent-id', 200, 50)
+   327→      vi.advanceTimersByTime(60)
+   328→
+   329→      expect(mockPtyProcess.resize).not.toHaveBeenCalled()
+   330→    })
+   331→
+   332→    it('should handle resize errors gracefully (e.g., PTY already exited)', () => {
+   333→      const id = manager.spawn('/test/dir')
+   334→      mockPtyProcess.resize.mockImplementationOnce(() => {
+   335→        throw new Error('pty already closed')
+   336→      })
+   337→
+   338→      manager.resize(id, 200, 50)
+   339→      // Should not throw when debounce fires
+   340→      expect(() => vi.advanceTimersByTime(60)).not.toThrow()
+   341→    })
+   342→  })
+   343→
+   344→  describe('kill()', () => {
+   345→    it('should kill the PTY process on non-Windows', () => {
+   346→      const id = manager.spawn('/test/dir')
+   347→
+   348→      manager.kill(id)
+   349→
+   350→      expect(mockPtyProcess.kill).toHaveBeenCalledWith('SIGKILL')
+   351→    })
+   352→
+   353→    it('should do nothing for non-existent process ID', () => {
+   354→      manager.kill('non-existent-id')
+   355→
+   356→      expect(mockPtyProcess.kill).not.toHaveBeenCalled()
+   357→    })
+   358→
+   359→    it('should handle kill errors gracefully (process already dead)', () => {
+   360→      const id = manager.spawn('/test/dir')
+   361→      mockPtyProcess.kill.mockImplementationOnce(() => {
+   362→        throw new Error('process already terminated')
+   363→      })
+   364→
+   365→      // Should not throw
+   366→      expect(() => manager.kill(id)).not.toThrow()
+   367→    })
+   368→
+   369→    it('should remove process from internal map after kill', () => {
+   370→      const id = manager.spawn('/test/dir')
+   371→      manager.kill(id)
+   372→
+   373→      // Process should no longer exist
+   374→      expect(manager.getProcess(id)).toBeUndefined()
+   375→    })
+   376→  })
+   377→
+   378→  describe('killAll()', () => {
+   379→    it('should kill all PTY processes', () => {
+   380→      // Reset UUID mock to return different values
+   381→      let callCount = 0
+   382→      vi.mocked(crypto.randomUUID).mockImplementation(
+   383→        () => `uuid-${callCount++}`
+   384→      )
+   385→
+   386→      manager.spawn('/test/dir1')
+   387→      manager.spawn('/test/dir2')
+   388→      manager.spawn('/test/dir3')
+   389→
+   390→      manager.killAll()
+   391→
+   392→      expect(mockPtyProcess.kill).toHaveBeenCalledTimes(3)
+   393→    })
+   394→  })
+   395→
+   396→  describe('getProcess()', () => {
+   397→    it('should return process info for existing ID', () => {
+   398→      const id = manager.spawn('/test/dir')
+   399→
+   400→      const proc = manager.getProcess(id)
+   401→
+   402→      expect(proc).toBeDefined()
+   403→      expect(proc?.id).toBe(id)
+   404→      expect(proc?.cwd).toBe('/test/dir')
+   405→    })
+   406→
+   407→    it('should return undefined for non-existent ID', () => {
+   408→      expect(manager.getProcess('non-existent')).toBeUndefined()
+   409→    })
+   410→
+   411→    it('should include sessionId and backend in process info', () => {
+   412→      const id = manager.spawn(
+   413→        '/test/dir',
+   414→        'session-abc',
+   415→        undefined,
+   416→        undefined,
+   417→        undefined,
+   418→        'gemini'
+   419→      )
+   420→
+   421→      const proc = manager.getProcess(id)
+   422→
+   423→      expect(proc?.sessionId).toBe('session-abc')
+   424→      expect(proc?.backend).toBe('gemini')
+   425→    })
+   426→  })
+   427→
+   428→  describe('onData()', () => {
+   429→    it('should register data callback and receive data', () => {
+   430→      const id = manager.spawn('/test/dir')
+   431→      const callback = vi.fn()
+   432→
+   433→      manager.onData(id, callback)
+   434→
+   435→      // Simulate data from PTY
+   436→      dataCallback?.('test output')
+   437→
+   438→      expect(callback).toHaveBeenCalledWith('test output')
+   439→    })
+   440→  })
+   441→
+   442→  describe('onExit()', () => {
+   443→    it('should register exit callback and receive exit code', () => {
+   444→      const id = manager.spawn('/test/dir')
+   445→      const callback = vi.fn()
+   446→
+   447→      manager.onExit(id, callback)
+   448→
+   449→      // Simulate PTY exit
+   450→      exitCallback?.({ exitCode: 0 })
+   451→
+   452→      expect(callback).toHaveBeenCalledWith(0)
+   453→    })
+   454→
+   455→    it('should clean up process on exit', () => {
+   456→      const id = manager.spawn('/test/dir')
+   457→
+   458→      // Simulate PTY exit
+   459→      exitCallback?.({ exitCode: 0 })
+   460→
+   461→      expect(manager.getProcess(id)).toBeUndefined()
+   462→    })
+   463→  })
+   464→
+   465→  describe('Windows-specific behavior', () => {
+   466→    beforeEach(() => {
+   467→      // Set isWindows to true
+   468→      vi.mocked(platform).isWindows = true
+   469→    })
+   470→
+   471→    afterEach(() => {
+   472→      vi.mocked(platform).isWindows = false
+   473→    })
+   474→
+   475→    it('should use ConPTY on Windows', () => {
+   476→      manager.spawn('/test/dir')
+   477→
+   478→      expect(pty.spawn).toHaveBeenCalledWith(
+   479→        expect.any(String),
+   480→        expect.any(Array),
+   481→        expect.objectContaining({
+   482→          useConpty: true,
+   483→        })
+   484→      )
+   485→    })
+   486→
+   487→    it('should call kill without signal on Windows', () => {
+   488→      const id = manager.spawn('/test/dir')
+   489→      manager.kill(id)
+   490→
+   491→      // On Windows, kill() is called without arguments
+   492→      expect(mockPtyProcess.kill).toHaveBeenCalledWith()
+   493→    })
+   494→  })
+   495→})
+   496→
+   497→describe('buildPermissionArgs (via spawn)', () => {
+   498→  let manager: PtyManager
+   499→
+   500→  beforeEach(() => {
+   501→    vi.clearAllMocks()
+   502→    mockPtyProcess.onData.mockImplementation(() => {})
+   503→    mockPtyProcess.onExit.mockImplementation(() => {})
+   504→    manager = new PtyManager()
+   505→  })
+   506→
+   507→  describe('claude backend', () => {
+   508→    it('should not add permission-mode for default', () => {
+   509→      manager.spawn(
+   510→        '/test',
+   511→        undefined,
+   512→        undefined,
+   513→        'default',
+   514→        undefined,
+   515→        'claude'
+   516→      )
+   517→
+   518→      expect(pty.spawn).toHaveBeenCalledWith('claude', [], expect.any(Object))
+   519→    })
+   520→
+   521→    it('should add permission-mode for acceptEdits', () => {
+   522→      manager.spawn(
+   523→        '/test',
+   524→        undefined,
+   525→        undefined,
+   526→        'acceptEdits',
+   527→        undefined,
+   528→        'claude'
+   529→      )
+   530→
+   531→      expect(pty.spawn).toHaveBeenCalledWith(
+   532→        'claude',
+   533→        ['--permission-mode', 'acceptEdits'],
+   534→        expect.any(Object)
+   535→      )
+   536→    })
+   537→  })
+   538→
+   539→  describe('gemini backend', () => {
+   540→    it('should map acceptEdits to auto_edit', () => {
+   541→      manager.spawn(
+   542→        '/test',
+   543→        undefined,
+   544→        undefined,
+   545→        'acceptEdits',
+   546→        undefined,
+   547→        'gemini'
+   548→      )
+   549→
+   550→      expect(pty.spawn).toHaveBeenCalledWith(
+   551→        'gemini',
+   552→        ['--approval-mode', 'auto_edit'],
+   553→        expect.any(Object)
+   554→      )
+   555→    })
+   556→
+   557→    it('should map dontAsk to yolo', () => {
+   558→      manager.spawn(
+   559→        '/test',
+   560→        undefined,
+   561→        undefined,
+   562→        'dontAsk',
+   563→        undefined,
+   564→        'gemini'
+   565→      )
+   566→
+   567→      expect(pty.spawn).toHaveBeenCalledWith(
+   568→        'gemini',
+   569→        ['--approval-mode', 'yolo'],
+   570→        expect.any(Object)
+   571→      )
+   572→    })
+   573→
+   574→    it('should map bypassPermissions to yolo', () => {
+   575→      manager.spawn(
+   576→        '/test',
+   577→        undefined,
+   578→        undefined,
+   579→        'bypassPermissions',
+   580→        undefined,
+   581→        'gemini'
+   582→      )
+   583→
+   584→      expect(pty.spawn).toHaveBeenCalledWith(
+   585→        'gemini',
+   586→        ['--approval-mode', 'yolo'],
+   587→        expect.any(Object)
+   588→      )
+   589→    })
+   590→  })
+   591→
+   592→  describe('codex backend', () => {
+   593→    it('should map acceptEdits to --full-auto', () => {
+   594→      manager.spawn(
+   595→        '/test',
+   596→        undefined,
+   597→        undefined,
+   598→        'acceptEdits',
+   599→        undefined,
+   600→        'codex'
+   601→      )
+   602→
+   603→      expect(pty.spawn).toHaveBeenCalledWith(
+   604→        'codex',
+   605→        ['--full-auto'],
+   606→        expect.any(Object)
+   607→      )
+   608→    })
+   609→
+   610→    it('should map bypassPermissions to --dangerously-bypass...', () => {
+   611→      manager.spawn(
+   612→        '/test',
+   613→        undefined,
+   614→        undefined,
+   615→        'bypassPermissions',
+   616→        undefined,
+   617→        'codex'
+   618→      )
+   619→
+   620→      expect(pty.spawn).toHaveBeenCalledWith(
+   621→        'codex',
+   622→        ['--dangerously-bypass-approvals-and-sandbox'],
+   623→        expect.any(Object)
+   624→      )
+   625→    })
+   626→  })
+   627→})
+   628→
+```

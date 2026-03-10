@@ -1,0 +1,629 @@
+```
+     1→import * as pty from 'node-pty'
+     2→import * as fs from 'fs'
+     3→import * as path from 'path'
+     4→import {
+     5→  isWindows,
+     6→  getEnhancedPathWithPortable,
+     7→  getAdditionalPaths,
+     8→} from './platform'
+     9→import { getPortableBinDirs } from './portable-deps'
+    10→
+    11→// Backends that use Ink (React for CLI) and are sensitive to rapid resize during startup
+    12→const INK_BACKENDS = new Set(['gemini'])
+    13→
+    14→// Ring buffer for storing recent PTY output
+    15→const OUTPUT_BUFFER_MAX_LINES = 200
+    16→
+    17→class OutputBuffer {
+    18→  private lines: string[] = []
+    19→  private partial: string = '' // incomplete line (no newline yet)
+    20→
+    21→  append(data: string): void {
+    22→    // Split incoming data by newlines, preserving partial lines
+    23→    const text = this.partial + data
+    24→    const parts = text.split('\n')
+    25→    // Last element is either empty (if data ended with \n) or a partial line
+    26→    this.partial = parts.pop() || ''
+    27→    for (const line of parts) {
+    28→      // Strip ANSI escape sequences for readability
+    29→      // Strip all CSI sequences (including private modes like ?25h, ?1049h),
+    30→      // OSC sequences, and single-character escape sequences (e.g. \x1b(B)
+    31→      const clean = line
+    32→        .replace(/\x1b\[[\x20-\x3f]*[\x40-\x7e]/g, '')  // CSI: covers standard + private mode sequences
+    33→        .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')  // OSC: terminated by BEL or ST
+    34→        .replace(/\x1b[()][A-Z0-9]/g, '')  // Character set selection (e.g. \x1b(B)
+    35→        .trim()
+    36→      if (clean) {
+    37→        this.lines.push(clean)
+    38→        if (this.lines.length > OUTPUT_BUFFER_MAX_LINES) {
+    39→          this.lines.shift()
+    40→        }
+    41→      }
+    42→    }
+    43→  }
+    44→
+    45→  getRecent(maxLines: number = 50): string[] {
+    46→    return this.lines.slice(-maxLines)
+    47→  }
+    48→
+    49→  clear(): void {
+    50→    this.lines = []
+    51→    this.partial = ''
+    52→  }
+    53→}
+    54→
+    55→interface ClaudeProcess {
+    56→  id: string
+    57→  pty: pty.IPty
+    58→  cwd: string
+    59→  sessionId?: string
+    60→  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+    61→  disposables: { dispose: () => void }[]
+    62→  spawnedAt: number
+    63→  resizeTimeout?: ReturnType<typeof setTimeout>
+    64→  lastResizeCols?: number
+    65→  lastResizeRows?: number
+    66→  outputBuffer: OutputBuffer
+    67→}
+    68→
+    69→// Extended node-pty options - useConpty is a Windows-specific option not in @types/node-pty
+    70→interface ExtendedPtyForkOptions extends pty.IPtyForkOptions {
+    71→  useConpty?: boolean
+    72→}
+    73→
+    74→function getEnhancedEnv(): { [key: string]: string } {
+    75→  const env = { ...process.env } as { [key: string]: string }
+    76→  delete env.CLAUDECODE
+    77→  const enhancedPath = getEnhancedPathWithPortable()
+    78→
+    79→  // On Windows, environment variables are case-insensitive but we need to set the right one
+    80→  if (isWindows) {
+    81→    // Windows uses 'Path' but Node sometimes uses 'PATH' - set both to be safe
+    82→    env.PATH = enhancedPath
+    83→    env.Path = enhancedPath
+    84→
+    85→    // Claude Code on Windows requires git-bash - try to find and set it
+    86→    if (!env.CLAUDE_CODE_GIT_BASH_PATH) {
+    87→      const gitBashPaths = [
+    88→        'C:\\Program Files\\Git\\bin\\bash.exe',
+    89→        'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+    90→        path.join(
+    91→          process.env.LOCALAPPDATA || '',
+    92→          'Programs',
+    93→          'Git',
+    94→          'bin',
+    95→          'bash.exe'
+    96→        ),
+    97→        path.join(process.env.PROGRAMFILES || '', 'Git', 'bin', 'bash.exe'),
+    98→      ]
+    99→      for (const bashPath of gitBashPaths) {
+   100→        if (fs.existsSync(bashPath)) {
+   101→          env.CLAUDE_CODE_GIT_BASH_PATH = bashPath
+   102→          console.log('Found git-bash at:', bashPath)
+   103→          break
+   104→        }
+   105→      }
+   106→    }
+   107→  } else {
+   108→    env.PATH = enhancedPath
+   109→  }
+   110→
+   111→  console.log('Enhanced PATH for PTY:', enhancedPath.substring(0, 200) + '...')
+   112→  return env
+   113→}
+   114→
+   115→// Find executable for the given backend
+   116→function findExecutable(
+   117→  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude'
+   118→): string {
+   119→  if (backend === 'gemini') {
+   120→    return findGeminiExecutable()
+   121→  }
+   122→  if (backend === 'codex') {
+   123→    return findCodexExecutable()
+   124→  }
+   125→  if (backend === 'opencode') {
+   126→    return findOpenCodeExecutable()
+   127→  }
+   128→  if (backend === 'aider') {
+   129→    return findAiderExecutable()
+   130→  }
+   131→  return findClaudeExecutable()
+   132→}
+   133→
+   134→// Find gemini executable - on Windows, npm installs .cmd files
+   135→function findGeminiExecutable(): string {
+   136→  if (!isWindows) {
+   137→    return 'gemini'
+   138→  }
+   139→
+   140→  // On Windows, check for gemini.cmd in portable npm-global first
+   141→  const portableDirs = getPortableBinDirs()
+   142→  for (const dir of portableDirs) {
+   143→    const geminiCmd = path.join(dir, 'gemini.cmd')
+   144→    if (fs.existsSync(geminiCmd)) {
+   145→      console.log('Found Gemini at (portable):', geminiCmd)
+   146→      return geminiCmd
+   147→    }
+   148→  }
+   149→
+   150→  // Then check for gemini.cmd in system npm paths
+   151→  const additionalPaths = getAdditionalPaths()
+   152→  for (const dir of additionalPaths) {
+   153→    const geminiCmd = path.join(dir, 'gemini.cmd')
+   154→    if (fs.existsSync(geminiCmd)) {
+   155→      console.log('Found Gemini at:', geminiCmd)
+   156→      return geminiCmd
+   157→    }
+   158→  }
+   159→
+   160→  // Fall back to just 'gemini' and let PATH resolve it
+   161→  return 'gemini'
+   162→}
+   163→
+   164→// Find codex executable - on Windows, npm installs .cmd files
+   165→function findCodexExecutable(): string {
+   166→  if (!isWindows) {
+   167→    return 'codex'
+   168→  }
+   169→
+   170→  // On Windows, check for codex.cmd in portable npm-global first
+   171→  const portableDirs = getPortableBinDirs()
+   172→  for (const dir of portableDirs) {
+   173→    const codexCmd = path.join(dir, 'codex.cmd')
+   174→    if (fs.existsSync(codexCmd)) {
+   175→      console.log('Found Codex at (portable):', codexCmd)
+   176→      return codexCmd
+   177→    }
+   178→  }
+   179→
+   180→  // Then check for codex.cmd in system npm paths
+   181→  const additionalPaths = getAdditionalPaths()
+   182→  for (const dir of additionalPaths) {
+   183→    const codexCmd = path.join(dir, 'codex.cmd')
+   184→    if (fs.existsSync(codexCmd)) {
+   185→      console.log('Found Codex at:', codexCmd)
+   186→      return codexCmd
+   187→    }
+   188→  }
+   189→
+   190→  // Fall back to just 'codex' and let PATH resolve it
+   191→  return 'codex'
+   192→}
+   193→
+   194→// Find opencode executable - on Windows, npm installs .cmd files
+   195→function findOpenCodeExecutable(): string {
+   196→  if (!isWindows) {
+   197→    return 'opencode'
+   198→  }
+   199→
+   200→  // On Windows, check for opencode.cmd in portable npm-global first
+   201→  const portableDirs = getPortableBinDirs()
+   202→  for (const dir of portableDirs) {
+   203→    const opencodeCmd = path.join(dir, 'opencode.cmd')
+   204→    if (fs.existsSync(opencodeCmd)) {
+   205→      console.log('Found OpenCode at (portable):', opencodeCmd)
+   206→      return opencodeCmd
+   207→    }
+   208→  }
+   209→
+   210→  // Then check for opencode.cmd in system npm paths
+   211→  const additionalPaths = getAdditionalPaths()
+   212→  for (const dir of additionalPaths) {
+   213→    const opencodeCmd = path.join(dir, 'opencode.cmd')
+   214→    if (fs.existsSync(opencodeCmd)) {
+   215→      console.log('Found OpenCode at:', opencodeCmd)
+   216→      return opencodeCmd
+   217→    }
+   218→  }
+   219→
+   220→  // Fall back to just 'opencode' and let PATH resolve it
+   221→  return 'opencode'
+   222→}
+   223→
+   224→// Find claude executable - on Windows, npm installs .cmd files, native installer creates .exe
+   225→function findClaudeExecutable(): string {
+   226→  if (!isWindows) {
+   227→    return 'claude'
+   228→  }
+   229→
+   230→  // Windows: check for both .cmd (npm) and .exe (native) installations
+   231→  const extensions = ['claude.cmd', 'claude.exe']
+   232→
+   233→  // Check portable npm-global first
+   234→  const portableDirs = getPortableBinDirs()
+   235→  for (const dir of portableDirs) {
+   236→    for (const ext of extensions) {
+   237→      const claudePath = path.join(dir, ext)
+   238→      if (fs.existsSync(claudePath)) {
+   239→        console.log('Found Claude at (portable):', claudePath)
+   240→        return claudePath
+   241→      }
+   242→    }
+   243→  }
+   244→
+   245→  // Then check system paths (includes ~/.local/bin for native installs)
+   246→  const additionalPaths = getAdditionalPaths()
+   247→  for (const dir of additionalPaths) {
+   248→    for (const ext of extensions) {
+   249→      const claudePath = path.join(dir, ext)
+   250→      if (fs.existsSync(claudePath)) {
+   251→        console.log('Found Claude at:', claudePath)
+   252→        return claudePath
+   253→      }
+   254→    }
+   255→  }
+   256→
+   257→  // Fall back to just 'claude' and let PATH resolve it
+   258→  return 'claude'
+   259→}
+   260→
+   261→// Find aider executable - pip installs to Scripts on Windows, bin on Unix
+   262→function findAiderExecutable(): string {
+   263→  if (!isWindows) {
+   264→    return 'aider'
+   265→  }
+   266→
+   267→  // On Windows, check for aider.exe in portable Python Scripts first
+   268→  const portableDirs = getPortableBinDirs()
+   269→  for (const dir of portableDirs) {
+   270→    // pip installs to Scripts directory on Windows
+   271→    const aiderExe = path.join(dir, 'aider.exe')
+   272→    if (fs.existsSync(aiderExe)) {
+   273→      console.log('Found Aider at (portable):', aiderExe)
+   274→      return aiderExe
+   275→    }
+   276→    // Also check parent/Scripts (if dir is the node bin)
+   277→    const scriptsDir = path.join(path.dirname(dir), 'Scripts')
+   278→    const aiderInScripts = path.join(scriptsDir, 'aider.exe')
+   279→    if (fs.existsSync(aiderInScripts)) {
+   280→      console.log('Found Aider at (Scripts):', aiderInScripts)
+   281→      return aiderInScripts
+   282→    }
+   283→  }
+   284→
+   285→  // Check common Python Scripts locations
+   286→  const pythonPaths = [
+   287→    path.join(
+   288→      process.env.LOCALAPPDATA || '',
+   289→      'Programs',
+   290→      'Python',
+   291→      'Python312',
+   292→      'Scripts'
+   293→    ),
+   294→    path.join(
+   295→      process.env.LOCALAPPDATA || '',
+   296→      'Programs',
+   297→      'Python',
+   298→      'Python311',
+   299→      'Scripts'
+   300→    ),
+   301→    path.join(process.env.APPDATA || '', 'Python', 'Python312', 'Scripts'),
+   302→    path.join(process.env.APPDATA || '', 'Python', 'Python311', 'Scripts'),
+   303→  ]
+   304→  for (const dir of pythonPaths) {
+   305→    const aiderExe = path.join(dir, 'aider.exe')
+   306→    if (fs.existsSync(aiderExe)) {
+   307→      console.log('Found Aider at:', aiderExe)
+   308→      return aiderExe
+   309→    }
+   310→  }
+   311→
+   312→  // Fall back to just 'aider' and let PATH resolve it
+   313→  return 'aider'
+   314→}
+   315→
+   316→// Build backend-specific permission arguments
+   317→// Maps our internal permission modes to each backend's CLI flags
+   318→function buildPermissionArgs(
+   319→  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude',
+   320→  permissionMode?: string,
+   321→  autoAcceptTools?: string[]
+   322→): string[] {
+   323→  const args: string[] = []
+   324→
+   325→  switch (backend) {
+   326→    case 'claude':
+   327→      // Claude Code: --permission-mode and --allowedTools
+   328→      if (permissionMode && permissionMode !== 'default') {
+   329→        args.push('--permission-mode', permissionMode)
+   330→      }
+   331→      if (autoAcceptTools && autoAcceptTools.length > 0) {
+   332→        for (const tool of autoAcceptTools) {
+   333→          args.push('--allowedTools', tool)
+   334→        }
+   335→      }
+   336→      break
+   337→
+   338→    case 'gemini':
+   339→      // Gemini CLI: --approval-mode (default/auto_edit/yolo) and --allowed-tools
+   340→      // See: https://geminicli.com/docs/get-started/configuration/
+   341→      if (permissionMode) {
+   342→        switch (permissionMode) {
+   343→          case 'acceptEdits':
+   344→            args.push('--approval-mode', 'auto_edit')
+   345→            break
+   346→          case 'dontAsk':
+   347→          case 'bypassPermissions':
+   348→            args.push('--approval-mode', 'yolo')
+   349→            break
+   350→          // 'default' mode = no flag needed
+   351→        }
+   352→      }
+   353→      if (autoAcceptTools && autoAcceptTools.length > 0) {
+   354→        // Gemini uses comma-separated list for --allowed-tools
+   355→        args.push('--allowed-tools', autoAcceptTools.join(','))
+   356→      }
+   357→      break
+   358→
+   359→    case 'codex':
+   360→      // Codex CLI: --full-auto or --dangerously-bypass-approvals-and-sandbox
+   361→      // See: https://developers.openai.com/codex/cli/reference/
+   362→      if (permissionMode) {
+   363→        switch (permissionMode) {
+   364→          case 'acceptEdits':
+   365→          case 'dontAsk':
+   366→            args.push('--full-auto')
+   367→            break
+   368→          case 'bypassPermissions':
+   369→            args.push('--dangerously-bypass-approvals-and-sandbox')
+   370→            break
+   371→          // 'default' mode = no flag needed
+   372→        }
+   373→      }
+   374→      // Codex doesn't support per-tool auto-accept via CLI flags
+   375→      break
+   376→
+   377→    case 'opencode':
+   378→      // OpenCode doesn't accept permission flags on the CLI (use config instead).
+   379→      // Ignore auto-accept tools to avoid invalid arguments.
+   380→      break
+   381→
+   382→    case 'aider':
+   383→      // Aider doesn't have permission flags - it uses --yes for auto-confirm
+   384→      if (permissionMode && permissionMode !== 'default') {
+   385→        args.push('--yes')
+   386→      }
+   387→      break
+   388→  }
+   389→
+   390→  return args
+   391→}
+   392→
+   393→function buildResumeArgs(
+   394→  backend: string = 'claude',
+   395→  sessionId?: string
+   396→): string[] {
+   397→  if (!sessionId) {
+   398→    return []
+   399→  }
+   400→  switch (backend) {
+   401→    case 'gemini':
+   402→      return ['--resume', sessionId]
+   403→    case 'codex':
+   404→      return ['--resume', sessionId]
+   405→    case 'opencode':
+   406→      return ['--session', sessionId]
+   407→    case 'aider':
+   408→      return ['--restore', sessionId]
+   409→    case 'claude':
+   410→    default:
+   411→      return ['-r', sessionId]
+   412→  }
+   413→}
+   414→
+   415→export class PtyManager {
+   416→  private processes: Map<string, ClaudeProcess> = new Map()
+   417→  private dataCallbacks: Map<string, (data: string) => void> = new Map()
+   418→  private exitCallbacks: Map<string, (code: number) => void> = new Map()
+   419→
+   420→  spawn(
+   421→    cwd: string,
+   422→    sessionId?: string,
+   423→    autoAcceptTools?: string[],
+   424→    permissionMode?: string,
+   425→    model?: string,
+   426→    backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+   427→  ): string {
+   428→    const id = crypto.randomUUID()
+   429→
+   430→    const args: string[] = []
+   431→    args.push(...buildResumeArgs(backend || 'claude', sessionId))
+   432→
+   433→    // Add model if specified (and not default)
+   434→    if (model && model !== 'default') {
+   435→      args.push('--model', model)
+   436→    }
+   437→
+   438→    // Add backend-specific permission arguments
+   439→    const permissionArgs = buildPermissionArgs(
+   440→      backend || 'claude',
+   441→      permissionMode,
+   442→      autoAcceptTools
+   443→    )
+   444→    args.push(...permissionArgs)
+   445→
+   446→    const exe = findExecutable(backend)
+   447→    console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)
+   448→
+   449→    const ptyOptions: ExtendedPtyForkOptions = {
+   450→      name: 'xterm-256color',
+   451→      cols: 120,
+   452→      rows: 30,
+   453→      cwd,
+   454→      env: getEnhancedEnv(),
+   455→      handleFlowControl: true, // Enable XON/XOFF flow control for better backpressure handling
+   456→    }
+   457→
+   458→    // Windows: use ConPTY for better escape sequence and UTF-8 handling
+   459→    if (isWindows) {
+   460→      ptyOptions.useConpty = true
+   461→    }
+   462→
+   463→    const shell = pty.spawn(exe, args, ptyOptions)
+   464→
+   465→    const proc: ClaudeProcess = {
+   466→      id,
+   467→      pty: shell,
+   468→      cwd,
+   469→      sessionId,
+   470→      backend: backend as
+   471→        | 'claude'
+   472→        | 'gemini'
+   473→        | 'codex'
+   474→        | 'opencode'
+   475→        | 'aider'
+   476→        | undefined,
+   477→      disposables: [],
+   478→      spawnedAt: Date.now(),
+   479→      outputBuffer: new OutputBuffer(),
+   480→    }
+   481→
+   482→    this.processes.set(id, proc)
+   483→
+   484→    // Store disposables from onData/onExit for proper cleanup
+   485→    const dataDisposable = shell.onData(data => {
+   486→      proc.outputBuffer.append(data)
+   487→      const callback = this.dataCallbacks.get(id)
+   488→      if (callback) {
+   489→        callback(data)
+   490→      }
+   491→    })
+   492→    proc.disposables.push(dataDisposable)
+   493→
+   494→    const exitDisposable = shell.onExit(({ exitCode }) => {
+   495→      const callback = this.exitCallbacks.get(id)
+   496→      if (callback) {
+   497→        callback(exitCode)
+   498→      }
+   499→      this.cleanupProcess(id)
+   500→    })
+   501→    proc.disposables.push(exitDisposable)
+   502→
+   503→    return id
+   504→  }
+   505→
+   506→  write(id: string, data: string): void {
+   507→    const proc = this.processes.get(id)
+   508→    if (proc) {
+   509→      proc.pty.write(data)
+   510→    }
+   511→  }
+   512→
+   513→  resize(id: string, cols: number, rows: number): void {
+   514→    const proc = this.processes.get(id)
+   515→    if (!proc) return
+   516→
+   517→    // Skip if dimensions haven't changed
+   518→    if (proc.lastResizeCols === cols && proc.lastResizeRows === rows) return
+   519→
+   520→    // Debounce resize events - Ink-based CLIs (e.g. Gemini) crash with
+   521→    // infinite re-render loops when they receive rapid SIGWINCH during startup
+   522→    if (proc.resizeTimeout) {
+   523→      clearTimeout(proc.resizeTimeout)
+   524→    }
+   525→
+   526→    const elapsed = Date.now() - proc.spawnedAt
+   527→    const isInkBackend = INK_BACKENDS.has(proc.backend || '')
+   528→    // During first 5s of Ink-backend startup, coalesce resizes with 1.5s debounce
+   529→    // to let the CLI finish initialization before sending SIGWINCH
+   530→    const debounceMs = isInkBackend && elapsed < 5000 ? 1500 : 50
+   531→
+   532→    proc.resizeTimeout = setTimeout(() => {
+   533→      proc.resizeTimeout = undefined
+   534→      proc.lastResizeCols = cols
+   535→      proc.lastResizeRows = rows
+   536→      try {
+   537→        proc.pty.resize(cols, rows)
+   538→      } catch (e) {
+   539→        // PTY may have already exited, ignore resize errors
+   540→        console.log('PTY resize ignored (may have exited):', id)
+   541→      }
+   542→    }, debounceMs)
+   543→  }
+   544→
+   545→  private cleanupProcess(id: string): void {
+   546→    const proc = this.processes.get(id)
+   547→    if (proc) {
+   548→      // Clear pending resize debounce
+   549→      if (proc.resizeTimeout) {
+   550→        clearTimeout(proc.resizeTimeout)
+   551→        proc.resizeTimeout = undefined
+   552→      }
+   553→      // Dispose all event listeners first
+   554→      for (const disposable of proc.disposables) {
+   555→        try {
+   556→          disposable.dispose()
+   557→        } catch (e) {
+   558→          // Ignore dispose errors
+   559→        }
+   560→      }
+   561→      proc.disposables.length = 0
+   562→    }
+   563→    this.processes.delete(id)
+   564→    this.dataCallbacks.delete(id)
+   565→    this.exitCallbacks.delete(id)
+   566→  }
+   567→
+   568→  kill(id: string): void {
+   569→    const proc = this.processes.get(id)
+   570→    if (proc) {
+   571→      try {
+   572→        // Windows doesn't support SIGKILL, use default signal
+   573→        if (isWindows) {
+   574→          proc.pty.kill()
+   575→        } else {
+   576→          proc.pty.kill('SIGKILL')
+   577→        }
+   578→      } catch (e) {
+   579→        // Process may already be dead
+   580→      }
+   581→      this.cleanupProcess(id)
+   582→    }
+   583→  }
+   584→
+   585→  killAll(): void {
+   586→    console.log(`Killing ${this.processes.size} PTY processes`)
+   587→    for (const [id] of this.processes) {
+   588→      this.kill(id)
+   589→    }
+   590→    this.processes.clear()
+   591→  }
+   592→
+   593→  getProcess(id: string): ClaudeProcess | undefined {
+   594→    return this.processes.get(id)
+   595→  }
+   596→
+   597→  onData(id: string, callback: (data: string) => void): void {
+   598→    this.dataCallbacks.set(id, callback)
+   599→  }
+   600→
+   601→  onExit(id: string, callback: (code: number) => void): void {
+   602→    this.exitCallbacks.set(id, callback)
+   603→  }
+   604→
+   605→  // Orchestrator API: list all active sessions
+   606→  listSessions(): Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> {
+   607→    const sessions: Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> = []
+   608→    for (const [id, proc] of this.processes) {
+   609→      sessions.push({
+   610→        id,
+   611→        cwd: proc.cwd,
+   612→        backend: proc.backend || 'claude',
+   613→        sessionId: proc.sessionId,
+   614→        spawnedAt: proc.spawnedAt,
+   615→      })
+   616→    }
+   617→    return sessions
+   618→  }
+   619→
+   620→  // Orchestrator API: read recent output from a PTY
+   621→  readOutput(id: string, maxLines: number = 50): string[] | null {
+   622→    const proc = this.processes.get(id)
+   623→    if (!proc) return null
+   624→    return proc.outputBuffer.getRecent(maxLines)
+   625→  }
+   626→}
+   627→
+```
