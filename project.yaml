@@ -1,8 +1,13 @@
 kynetic: "1.0"
 project:
-  name: Project
-  version: 0.1.0
-  status: draft
+  name: Claude Terminal
+  version: 1.3.57
+  status: stable
+  description: |
+    Multi-backend AI coding assistant GUI. An Electron desktop app that manages
+    multiple terminal sessions running AI CLI tools (Claude, Gemini, Codex, OpenCode,
+    Aider), with tiled layout, voice I/O, task management, mobile connectivity,
+    and orchestration capabilities.
 includes:
   - modules/main.yaml
   - modules/terminal.yaml

@@ -1,4 +1,23 @@
-# Project - Tasks
-# Track implementation work here
-
-tasks: []
+tasks:
+  - title: "Bug audit: PTY lifecycle and backend switching"
+    description: "Investigate and fix bugs in PTY session management. Check: PTY spawn error handling,
+      resize debounce edge cases, output buffer overflow, backend switching race conditions, session
+      ID preservation across switches, cleanup on unexpected PTY exit, enhanced PATH construction."
+    type: bug
+    spec_ref: "@pty-lifecycle"
+    meta_ref: null
+    plan_ref: null
+    priority: 2
+    slugs:
+      - bug-pty
+    tags: []
+    depends_on: []
+    automation: eligible
+    _ulid: 01KKAWKTJVBTXZDAF2293N8875
+    status: pending
+    blocked_by: []
+    context: []
+    vcs_refs: []
+    created_at: 2026-03-10T03:28:25.690Z
+    notes: []
+    todos: []
