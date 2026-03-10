@@ -258,12 +258,30 @@ tasks:
     priority: 2
     tags: []
     vcs_refs: []
+    session_id: 01KKB029BXKP31G3012ZGGAZSB
     created_at: 2026-03-10T03:28:32.445Z
-    notes: []
+    started_at: 2026-03-10T04:31:37.745Z
+    notes:
+      - _ulid: 01KKB0D8VRKT2DAEEHVSSBNK5J
+        created_at: 2026-03-10T04:34:45.240Z
+        author: "@claude"
+        content: >-
+          Execution context:
+
+          - Background: Audit connectivity layer for bugs in orchestrator, rate limiter, API
+          prompts, WS subscriptions, CORS
+
+          - Scope: 6 bugs identified — orchestrator port fallback loop, auth rate limit block
+          expiry, 4s prompt race condition, pending prompt leak on spawn failure, WS subscription
+          leak on PTY exit, CORS substring bypass
+
+          - Files: orchestrator-api.ts, auth-rate-limit.ts, pty.ts (ipc-handlers),
+          websocket-manager.ts (mobile-server), middleware.ts
+
+          - Verification: TypeScript compile, existing tests
+        supersedes: null
     todos: []
     automation: eligible
-    started_at: 2026-03-10T04:31:37.745Z
-    session_id: 01KKB029BXKP31G3012ZGGAZSB
   - _ulid: 01KKAWM2RXD9TWVAHK8BMMSEC2
     slugs:
       - bug-persistence
