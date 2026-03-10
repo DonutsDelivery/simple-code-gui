@@ -237,6 +237,23 @@ tasks:
           Code quality of aeb979c itself is good — all 5 core bug fixes are correct and
           well-implemented.
         supersedes: null
+      - _ulid: 01KKB0T1S3TRVZS7XMVX75S333
+        created_at: 2026-03-10T04:41:43.971Z
+        author: "@claude"
+        content: >-
+          [FIX_CYCLE: 1] Addressed all review feedback:
+
+          - MUST-FIX: Rebased branch to remove 2 unrelated commits (voice I/O, PTY). Branch now has
+          only task commits 99f9281 + baf78e9.
+
+          - SHOULD-FIX: Added _daemonEnsuredForCwd tracking — ensureDaemon now resets flag when cwd
+          changes, fixing project-switch staleness.
+
+          - SHOULD-FIX: WebSocket reconnect now uses exponential backoff (1s initial, 2x multiplier,
+          30s cap), reset on successful connection or new watch call.
+
+          Force-pushed rebased branch.
+        supersedes: null
     todos: []
     automation: eligible
   - _ulid: 01KKAWM15XTDNE9XPRPADT9R88
