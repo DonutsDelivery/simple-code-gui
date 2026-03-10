@@ -20,16 +20,13 @@ const CONVERSATION_TYPES = ['user', 'assistant']
 const OPENCODE_CONFIG_NAME = '.opencode.json'
 
 function encodeProjectPath(projectPath: string): string {
-  // Claude encodes paths by:
-  // 1. Removing trailing slashes/backslashes
-  // 2. Replacing / and \ with -
-  // 3. Replacing _ with -
-  // 4. Replacing spaces with -
-  // 5. Replacing : with - (Windows drive letters)
-  // 6. Replacing dots with dashes (e.g. .config -> -config)
-  // /home/user/my_project/ becomes -home-user-my-project
-  // /home/user/.config/app becomes -home-user--config-app
-  // C:\Users\bob\project becomes -C-Users-bob-project
+  // Claude's current encoding scheme:
+  // 1. Remove trailing slashes/backslashes
+  // 2. Replace / and \ with -
+  // 3. Replace : with - (Windows drive letters)
+  // 4. Replace _ with -
+  // 5. Replace spaces with -
+  // 6. Replace dots with dashes (e.g. .config -> -config)
   return projectPath
     .replace(/[/\\]+$/, '')  // Remove trailing slashes/backslashes
     .replace(/[/\\]/g, '-')  // Replace / and \ with -
@@ -37,6 +34,18 @@ function encodeProjectPath(projectPath: string): string {
     .replace(/_/g, '-')      // Replace _ with -
     .replace(/ /g, '-')      // Replace spaces with -
     .replace(/\./g, '-')     // Replace dots with dashes
+}
+
+// Claude used a different encoding in older versions (no leading dash, spaces preserved)
+function encodeProjectPathLegacy(projectPath: string): string {
+  return projectPath
+    .replace(/[/\\]+$/, '')
+    .replace(/^[/\\]/, '')   // Strip leading slash (no leading dash)
+    .replace(/[/\\]/g, '-')
+    .replace(/:/g, '-')
+    .replace(/_/g, '-')
+    .replace(/\./g, '-')
+    // Spaces are NOT replaced in the legacy format
 }
 
 function expandHomePath(targetPath: string): string {
@@ -82,79 +91,99 @@ function resolveOpenCodeDataDir(projectPath: string): string {
 
 async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSession[]> {
   const claudeDir = join(homedir(), '.claude', 'projects')
-  const encodedPath = encodeProjectPath(projectPath)
-  const projectSessionsDir = join(claudeDir, encodedPath)
 
-  if (!existsSync(projectSessionsDir)) {
+  // Check both current and legacy encoding schemes to find all sessions
+  const candidateDirs = [
+    join(claudeDir, encodeProjectPath(projectPath)),
+    join(claudeDir, encodeProjectPathLegacy(projectPath))
+  ]
+  // Deduplicate (they may produce the same result for paths without spaces)
+  const uniqueDirs = [...new Set(candidateDirs)].filter(dir => existsSync(dir))
+
+  if (uniqueDirs.length === 0) {
     return []
   }
 
-  const sessions: DiscoveredSession[] = []
+  const sessions = new Map<string, DiscoveredSession>()
 
-  try {
-    const files = await readdir(projectSessionsDir)
+  for (const projectSessionsDir of uniqueDirs) {
+    try {
+      const files = await readdir(projectSessionsDir)
 
-    // Process files in parallel for better performance
-    const results = await Promise.all(
-      files
-        .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
-        .map(async (file) => {
-          const sessionId = file.replace('.jsonl', '')
-          const filePath = join(projectSessionsDir, file)
+      // Process files in parallel for better performance
+      const results = await Promise.all(
+        files
+          .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
+          .map(async (file) => {
+            const sessionId = file.replace('.jsonl', '')
+            const filePath = join(projectSessionsDir, file)
 
-          try {
-            const fileStat = await stat(filePath)
-            const content = await readFile(filePath, 'utf-8')
-            const lines = content.split('\n').filter(line => line.trim())
+            try {
+              // Read content first, then stat — ensures mtime/size reflect
+              // at least the content we read (file may grow from active writes)
+              const content = await readFile(filePath, 'utf-8')
+              const fileStat = await stat(filePath)
+              const lines = content.split('\n').filter(line => line.trim())
 
-            // Look for slug and check if session has actual conversation
-            let slug = sessionId.slice(0, 8)
-            let cwd = projectPath
-            let hasConversation = false
+              // Look for slug and check if session has actual conversation
+              let slug = sessionId.slice(0, 8)
+              let cwd = projectPath
+              let hasConversation = false
+              let parseErrors = 0
 
-            for (const line of lines) {
-              try {
-                const data = JSON.parse(line)
-                if (data.slug) slug = data.slug
-                if (data.cwd) cwd = data.cwd
-                if (data.type && CONVERSATION_TYPES.includes(data.type)) {
-                  hasConversation = true
+              for (const line of lines) {
+                try {
+                  const data = JSON.parse(line)
+                  if (data.slug) slug = data.slug
+                  if (data.cwd) cwd = data.cwd
+                  if (data.type && CONVERSATION_TYPES.includes(data.type)) {
+                    hasConversation = true
+                  }
+                } catch {
+                  parseErrors++
                 }
-              } catch {
-                // Skip non-JSON lines
               }
-            }
 
-            if (!hasConversation) {
+              // Log if many lines failed to parse (suggests file corruption,
+              // not just a single truncated line from a concurrent write)
+              if (parseErrors > 1) {
+                console.warn(`Session ${file}: ${parseErrors}/${lines.length} lines failed to parse`)
+              }
+
+              if (!hasConversation) {
+                return null
+              }
+
+              return {
+                sessionId,
+                slug,
+                lastModified: fileStat.mtimeMs,
+                cwd,
+                fileSize: fileStat.size
+              }
+            } catch (e) {
+              console.error(`Failed to parse session ${file}:`, e)
               return null
             }
+          })
+      )
 
-            return {
-              sessionId,
-              slug,
-              lastModified: fileStat.mtimeMs,
-              cwd,
-              fileSize: fileStat.size
-            }
-          } catch (e) {
-            console.error(`Failed to parse session ${file}:`, e)
-            return null
-          }
-        })
-    )
-
-    // Filter out nulls and add to sessions
-    for (const result of results) {
-      if (result) sessions.push(result)
+      // Deduplicate by sessionId (same session may appear in both dirs)
+      for (const result of results) {
+        if (result && !sessions.has(result.sessionId)) {
+          sessions.set(result.sessionId, result)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to read sessions directory:', e)
     }
-  } catch (e) {
-    console.error('Failed to read sessions directory:', e)
   }
 
   // Sort by most recent first
-  sessions.sort((a, b) => b.lastModified - a.lastModified)
+  const sorted = [...sessions.values()]
+  sorted.sort((a, b) => b.lastModified - a.lastModified)
 
-  return sessions
+  return sorted
 }
 
 function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
@@ -165,15 +194,15 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
     return []
   }
 
+  let db: InstanceType<typeof Database> | null = null
   try {
-    const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+    db = new Database(dbPath, { readonly: true, fileMustExist: true })
     const rows = db.prepare(`
       SELECT id, title, updated_at, created_at, message_count
       FROM sessions
       WHERE parent_session_id IS NULL
       ORDER BY updated_at DESC
     `).all() as Array<{ id: string; title: string | null; updated_at: number; created_at: number; message_count: number }>
-    db.close()
 
     return rows
       .filter(row => (row.message_count ?? 0) > 0)
@@ -190,6 +219,8 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
   } catch (e) {
     console.error('Failed to read OpenCode sessions:', e)
     return []
+  } finally {
+    try { db?.close() } catch { /* already errored */ }
   }
 }
 
