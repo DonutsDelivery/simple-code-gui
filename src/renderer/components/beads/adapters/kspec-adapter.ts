@@ -24,12 +24,7 @@ function headers(cwd: string): HeadersInit {
   }
 }
 
-// Shared flag so API failures can signal the adapter to re-check daemon
-let _daemonEnsuredFlag = true
-// Last project dir we ensured daemon for — reset flag on project switch
-let _daemonEnsuredForCwd: string | null = null
-
-async function api<T>(method: string, path: string, cwd: string, body?: unknown): Promise<T> {
+async function api<T>(method: string, path: string, cwd: string, body?: unknown, adapter?: KspecAdapter): Promise<T> {
   const opts: RequestInit = {
     method,
     headers: headers(cwd)
@@ -39,8 +34,8 @@ async function api<T>(method: string, path: string, cwd: string, body?: unknown)
   try {
     res = await fetch(`${API_BASE}${path}`, opts)
   } catch (e) {
-    // Network error — daemon likely crashed, reset ensured flag
-    _daemonEnsuredFlag = false
+    // Network error — daemon likely crashed, reset ensured flag on the instance
+    if (adapter) adapter._daemonEnsuredFlag = false
     throw e
   }
   if (!res.ok) {
@@ -91,21 +86,25 @@ function toUnified(raw: Record<string, unknown>): UnifiedTask {
 export class KspecAdapter implements TaskAdapter {
   readonly kind = 'kspec' as const
 
+  // Per-instance daemon state (avoids cross-instance interference from module-level globals)
+  _daemonEnsuredFlag = true
+  private _daemonEnsuredForCwd: string | null = null
+
   private async ensureDaemon(cwd: string): Promise<boolean> {
     // Reset flag when switching projects so we re-verify daemon for new cwd
-    if (_daemonEnsuredForCwd !== null && _daemonEnsuredForCwd !== cwd) {
-      _daemonEnsuredFlag = false
+    if (this._daemonEnsuredForCwd !== null && this._daemonEnsuredForCwd !== cwd) {
+      this._daemonEnsuredFlag = false
     }
 
     // Quick health check first
     try {
       const res = await fetch(`${API_BASE}/api/health`)
-      if (res.ok) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+      if (res.ok) { this._daemonEnsuredFlag = true; this._daemonEnsuredForCwd = cwd; return true }
     } catch { /* daemon not running */ }
 
     // Start daemon via IPC (always attempt if health check failed)
     const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
-    if (result?.success) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+    if (result?.success) { this._daemonEnsuredFlag = true; this._daemonEnsuredForCwd = cwd; return true }
     return false
   }
 
@@ -128,14 +127,14 @@ export class KspecAdapter implements TaskAdapter {
 
   async list(cwd: string): Promise<UnifiedTask[]> {
     try {
-      const data = await api<{ items: Record<string, unknown>[] }>('GET', '/api/tasks', cwd)
+      const data = await api<{ items: Record<string, unknown>[] }>('GET', '/api/tasks', cwd, undefined, this)
       return (data.items ?? []).map(toUnified)
     } catch {
       // Daemon might not be running — try to start it and retry once
       const started = await this.ensureDaemon(cwd)
       if (started) {
         try {
-          const data = await api<{ items: Record<string, unknown>[] }>('GET', '/api/tasks', cwd)
+          const data = await api<{ items: Record<string, unknown>[] }>('GET', '/api/tasks', cwd, undefined, this)
           return (data.items ?? []).map(toUnified)
         } catch { /* still failed */ }
       }
@@ -145,7 +144,7 @@ export class KspecAdapter implements TaskAdapter {
 
   async show(cwd: string, taskId: string): Promise<UnifiedTask | null> {
     try {
-      const data = await api<Record<string, unknown>>('GET', `/api/tasks/${encodeURIComponent(taskId)}`, cwd)
+      const data = await api<Record<string, unknown>>('GET', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, undefined, this)
       return toUnified(data)
     } catch {
       return null
@@ -161,7 +160,7 @@ export class KspecAdapter implements TaskAdapter {
         type: params.type,
         tags: params.tags?.split(',').map(t => t.trim()).filter(Boolean),
         automation: params.automation || undefined
-      })
+      }, this)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -170,7 +169,7 @@ export class KspecAdapter implements TaskAdapter {
 
   async start(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await api('POST', `/api/tasks/${encodeURIComponent(taskId)}/start`, cwd)
+      await api('POST', `/api/tasks/${encodeURIComponent(taskId)}/start`, cwd, undefined, this)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -179,7 +178,7 @@ export class KspecAdapter implements TaskAdapter {
 
   async complete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await api('POST', `/api/tasks/${encodeURIComponent(taskId)}/complete`, cwd)
+      await api('POST', `/api/tasks/${encodeURIComponent(taskId)}/complete`, cwd, undefined, this)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -188,7 +187,7 @@ export class KspecAdapter implements TaskAdapter {
 
   async delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await api('DELETE', `/api/tasks/${encodeURIComponent(taskId)}`, cwd)
+      await api('DELETE', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, undefined, this)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -201,7 +200,7 @@ export class KspecAdapter implements TaskAdapter {
       const body = { ...params }
       if (body.status === 'open') body.status = 'pending' as TaskStatus
       if (body.status === 'closed') body.status = 'completed' as TaskStatus
-      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, body)
+      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, body, this)
       return { success: true }
     } catch (e) {
       return { success: false, error: String(e) }
@@ -215,7 +214,7 @@ export class KspecAdapter implements TaskAdapter {
       default:
         // Kspec uses 'pending' internally — 'open' is only the unified status
         try {
-          await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, { status: 'pending' })
+          await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, { status: 'pending' }, this)
           return { success: true }
         } catch (e) {
           return { success: false, error: String(e) }

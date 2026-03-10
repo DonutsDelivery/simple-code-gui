@@ -73,6 +73,8 @@ export class OrchestratorApi {
         this.tryListen(port + 1)
       } else {
         console.error('[Orchestrator] API server error:', e.message)
+        this.server?.close()
+        this.server = null
       }
     })
   }

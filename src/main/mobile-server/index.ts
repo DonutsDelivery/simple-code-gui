@@ -213,7 +213,7 @@ export class MobileServer {
   }
 
   private broadcastPtyExit(ptyId: string, code: number): void {
-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions, this.ptyDataBuffer)
   }
 
   // Service handlers

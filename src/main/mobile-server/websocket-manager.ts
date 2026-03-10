@@ -319,7 +319,8 @@ export function broadcastPtyExit(
   ptyId: string,
   code: number,
   ptyStreams: Map<string, Set<WebSocket>>,
-  terminalSubscriptions?: Map<string, Set<WebSocket>>
+  terminalSubscriptions?: Map<string, Set<WebSocket>>,
+  ptyDataBuffer?: Map<string, string[]>
 ): void {
   const streams = ptyStreams.get(ptyId)
   if (streams && streams.size > 0) {
@@ -336,7 +337,8 @@ export function broadcastPtyExit(
     })
   }
 
-  // Clean up stale subscriptions for this PTY
+  // Clean up stale subscriptions and buffered data for this PTY
   ptyStreams.delete(ptyId)
   terminalSubscriptions?.delete(ptyId)
+  ptyDataBuffer?.delete(ptyId)
 }

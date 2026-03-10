@@ -45,14 +45,16 @@ function getCurrentSymlinks(categoryDir: string): Map<string, string> {
  */
 function removeSymlink(symlinkPath: string): void {
   try {
-    if (existsSync(symlinkPath)) {
-      const stat = lstatSync(symlinkPath)
-      if (stat.isSymbolicLink()) {
-        unlinkSync(symlinkPath)
-      }
+    // Use lstatSync to detect dangling symlinks
+    // (existsSync follows symlinks and returns false for dangling ones)
+    const stat = lstatSync(symlinkPath)
+    if (stat.isSymbolicLink()) {
+      unlinkSync(symlinkPath)
     }
-  } catch (e) {
-    console.warn(`Failed to remove symlink ${symlinkPath}:`, e)
+  } catch (e: any) {
+    if (e?.code !== "ENOENT") {
+      console.warn(`Failed to remove symlink ${symlinkPath}:`, e)
+    }
   }
 }
 
