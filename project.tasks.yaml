@@ -10,7 +10,7 @@ tasks:
     spec_ref: "@pty-lifecycle"
     meta_ref: null
     plan_ref: null
-    status: in_progress
+    status: pending_review
     blocked_by: []
     depends_on: []
     context: []
@@ -57,6 +57,7 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
+    submitted_at: 2026-03-10T04:08:55.443Z
   - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
     slugs:
       - bug-layout
