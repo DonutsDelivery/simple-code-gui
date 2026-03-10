@@ -281,7 +281,7 @@ tasks:
     spec_ref: "@orchestrator"
     meta_ref: null
     plan_ref: null
-    status: pending_review
+    status: completed
     blocked_by: []
     depends_on: []
     context: []
@@ -364,6 +364,8 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
+    completed_at: 2026-03-10T05:08:00.377Z
+    closed_reason: null
   - _ulid: 01KKAWM2RXD9TWVAHK8BMMSEC2
     slugs:
       - bug-persistence
@@ -426,12 +428,12 @@ tasks:
     priority: 3
     tags: []
     vcs_refs: []
+    session_id: 01KKB1KC7Z6WSZWA9EEXE76QHZ
     created_at: 2026-03-10T03:28:35.225Z
+    started_at: 2026-03-10T05:02:25.314Z
     notes: []
     todos: []
     automation: eligible
-    started_at: 2026-03-10T05:02:25.314Z
-    session_id: 01KKB1KC7Z6WSZWA9EEXE76QHZ
   - _ulid: 01KKAWM4Y4E24TFEAPSDXZS99G
     slugs:
       - bug-sidebar
