@@ -375,7 +375,7 @@ tasks:
     spec_ref: "@workspace-persist"
     meta_ref: null
     plan_ref: null
-    status: pending
+    status: in_progress
     blocked_by: []
     depends_on: []
     context: []
@@ -386,6 +386,8 @@ tasks:
     notes: []
     todos: []
     automation: eligible
+    started_at: 2026-03-10T04:51:22.344Z
+    session_id: 01KKB13TWMGAE60MBB63S9YJ46
   - _ulid: 01KKAWM3WS24742Z491YVVGYV4
     slugs:
       - bug-discovery
