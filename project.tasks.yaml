@@ -178,12 +178,32 @@ tasks:
     priority: 3
     tags: []
     vcs_refs: []
+    session_id: 01KKAZHEKWQRJVVY9Z5WR5NMYA
     created_at: 2026-03-10T03:28:30.561Z
-    notes: []
+    started_at: 2026-03-10T04:24:58.226Z
+    notes:
+      - _ulid: 01KKAZXH27QYNSGW6SKVJF3PJZ
+        created_at: 2026-03-10T04:26:09.351Z
+        author: "@claude"
+        content: >-
+          Execution context:
+
+          - Background: Audit and fix bugs in Beads/Kspec task adapters
+
+          - Scope: 6 bugs identified across adapter files
+
+          - Files: kspec-adapter.ts, beads-adapter.ts, useBeadsTasks.ts, kspec-handlers.ts
+
+          - Bugs found:
+            1. handleCycleStatus bypasses adapter.cycleStatus() — uses generic update instead of lifecycle endpoints
+            2. KspecAdapter.daemonEnsured never resets after daemon crash — API calls keep failing silently
+            3. KspecAdapter WebSocket doesn't reconnect after close — watcher goes dead after daemon restart
+            4. Migration doesn't preserve task status — all tasks become pending regardless of original status
+            5. KspecAdapter.cycleStatus for 'closed' uses update({status:'open'}) which is wrong for kspec — kspec tasks need specific status transitions
+            6. detect.ts — detectBackend doesn't reset daemonEnsured when switching projects
+        supersedes: null
     todos: []
     automation: eligible
-    started_at: 2026-03-10T04:24:58.226Z
-    session_id: 01KKAZHEKWQRJVVY9Z5WR5NMYA
   - _ulid: 01KKAWM15XTDNE9XPRPADT9R88
     slugs:
       - bug-connectivity

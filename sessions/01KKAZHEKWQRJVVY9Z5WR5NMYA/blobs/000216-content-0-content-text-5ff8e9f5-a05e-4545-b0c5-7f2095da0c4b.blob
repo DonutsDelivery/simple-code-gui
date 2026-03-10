@@ -1,0 +1,454 @@
+```
+     1→/**
+     2→ * Kspec IPC Handlers
+     3→ *
+     4→ * Minimal handlers for operations that need main process access:
+     5→ * - Filesystem checks (.kspec/ existence)
+     6→ * - Project initialization (runs kspec CLI)
+     7→ * - Daemon lifecycle (start/stop)
+     8→ *
+     9→ * Most kspec operations go directly to the daemon HTTP API from the renderer.
+    10→ * These handlers only cover what can't be done from the browser context.
+    11→ */
+    12→
+    13→import { ipcMain } from 'electron'
+    14→import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+    15→import { join } from 'path'
+    16→import { spawn } from 'child_process'
+    17→import { getEnhancedPathWithPortable } from '../platform'
+    18→
+    19→const TASK_INSTRUCTIONS_START = '<!-- TASK_MANAGEMENT_START -->'
+    20→const TASK_INSTRUCTIONS_END = '<!-- TASK_MANAGEMENT_END -->'
+    21→
+    22→function getTaskInstructions(backend: 'beads' | 'kspec'): string {
+    23→  const beadsCommands = `### CLI Commands (beads)
+    24→- \`bd list\` — List tasks (add \`--status=open\` to filter)
+    25→- \`bd show <id>\` — Show task details
+    26→- \`bd create --title="..." --type=task|bug|feature --priority=2\` — Create a task
+    27→- \`bd update <id> --status=in_progress\` — Start a task
+    28→- \`bd close <id>\` — Complete a task
+    29→- \`bd ready\` — Show tasks ready to work on
+    30→
+    31→### Workflow
+    32→1. Check the task panel in the GUI sidebar for available work
+    33→2. Click a task to start it, or use the CLI commands above
+    34→3. Mark tasks complete from the GUI or CLI when done`
+    35→
+    36→  const kspecInstructions = `@kspec-agents.md
+    37→
+    38→This project uses **kspec** for spec-driven task management and autonomous agent dispatch.
+    39→The full agent instructions are in \`kspec-agents.md\` (referenced above).
+    40→
+    41→### Quick Reference
+    42→- \`kspec task list\` — List tasks
+    43→- \`kspec task create --title "..." --type task|bug|epic|spike|infra --priority 3\` — Create a task
+    44→- \`kspec task start <ref>\` — Start a task
+    45→- \`kspec inbox add "..."\` — Add idea for later triage
+    46→- Use \`/kspec:help\` for full command reference
+    47→- Use \`/kspec:writing-specs\` to create spec items (features, requirements, AC)
+    48→- Use \`/kspec:plan\` to translate plans into specs and tasks
+    49→- Use \`/kspec:triage\` to triage inbox and assess automation eligibility`
+    50→
+    51→  return `${TASK_INSTRUCTIONS_START}
+    52→## Task Management
+    53→
+    54→${backend === 'beads' ? beadsCommands : kspecInstructions}
+    55→${TASK_INSTRUCTIONS_END}
+    56→`
+    57→}
+    58→
+    59→export function installTaskInstructions(projectPath: string, backend: 'beads' | 'kspec'): boolean {
+    60→  try {
+    61→    const claudeDir = join(projectPath, '.claude')
+    62→    const claudeMdPath = join(claudeDir, 'CLAUDE.md')
+    63→
+    64→    if (!existsSync(claudeDir)) {
+    65→      mkdirSync(claudeDir, { recursive: true })
+    66→    }
+    67→
+    68→    let content = ''
+    69→    if (existsSync(claudeMdPath)) {
+    70→      content = readFileSync(claudeMdPath, 'utf8')
+    71→      // Remove existing task section if present
+    72→      if (content.includes(TASK_INSTRUCTIONS_START)) {
+    73→        const startIdx = content.indexOf(TASK_INSTRUCTIONS_START)
+    74→        const endIdx = content.indexOf(TASK_INSTRUCTIONS_END)
+    75→        if (startIdx !== -1 && endIdx !== -1) {
+    76→          content = content.substring(0, startIdx) + content.substring(endIdx + TASK_INSTRUCTIONS_END.length)
+    77→        }
+    78→      }
+    79→    }
+    80→
+    81→    content += getTaskInstructions(backend)
+    82→    writeFileSync(claudeMdPath, content)
+    83→    return true
+    84→  } catch (e) {
+    85→    console.error('Failed to install task instructions:', e)
+    86→    return false
+    87→  }
+    88→}
+    89→
+    90→function getExecOptions() {
+    91→  return {
+    92→    env: { ...process.env, PATH: getEnhancedPathWithPortable() }
+    93→  }
+    94→}
+    95→
+    96→function spawnCommand(cmd: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string; code: number }> {
+    97→  return new Promise((resolve) => {
+    98→    const proc = spawn(cmd, args, {
+    99→      cwd,
+   100→      env: getExecOptions().env,
+   101→      shell: false
+   102→    })
+   103→
+   104→    let stdout = ''
+   105→    let stderr = ''
+   106→
+   107→    proc.stdout.on('data', (data) => { stdout += data.toString() })
+   108→    proc.stderr.on('data', (data) => { stderr += data.toString() })
+   109→
+   110→    proc.on('close', (code) => {
+   111→      resolve({ stdout, stderr, code: code ?? 1 })
+   112→    })
+   113→
+   114→    proc.on('error', (err) => {
+   115→      resolve({ stdout, stderr: err.message, code: 1 })
+   116→    })
+   117→  })
+   118→}
+   119→
+   120→async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; migrated: number; error?: string }> {
+   121→  try {
+   122→    // 1. Read all beads tasks via bd list --json
+   123→    const listResult = await spawnCommand('bd', ['list', '--json'], cwd)
+   124→    if (listResult.code !== 0) {
+   125→      return { success: false, migrated: 0, error: `Failed to read beads tasks: ${listResult.stderr}` }
+   126→    }
+   127→
+   128→    let beadsTasks: Array<Record<string, unknown>> = []
+   129→    try {
+   130→      const parsed = JSON.parse(listResult.stdout)
+   131→      beadsTasks = Array.isArray(parsed) ? parsed : (parsed.issues ?? parsed.tasks ?? [])
+   132→    } catch {
+   133→      // No tasks to migrate, or empty output — that's fine
+   134→      beadsTasks = []
+   135→    }
+   136→
+   137→    // 2. Initialize kspec
+   138→    const gitDir = join(cwd, '.git')
+   139→    if (!existsSync(gitDir)) {
+   140→      const gitResult = await spawnCommand('git', ['init'], cwd)
+   141→      if (gitResult.code !== 0) {
+   142→        return { success: false, migrated: 0, error: `Failed to init git: ${gitResult.stderr}` }
+   143→      }
+   144→      await spawnCommand('git', ['config', 'user.name', 'kspec'], cwd)
+   145→      await spawnCommand('git', ['config', 'user.email', 'kspec@local'], cwd)
+   146→      await spawnCommand('git', ['commit', '--allow-empty', '-m', 'init'], cwd)
+   147→    }
+   148→
+   149→    const initResult = await spawnCommand('kspec', ['init', '.', '--name', 'Project'], cwd)
+   150→    if (initResult.code !== 0) {
+   151→      return { success: false, migrated: 0, error: `kspec init failed: ${initResult.stderr}` }
+   152→    }
+   153→
+   154→    // Run setup + generate agents instructions
+   155→    await spawnCommand('kspec', ['setup'], cwd)
+   156→    await spawnCommand('kspec', ['agents', 'generate'], cwd)
+   157→
+   158→    // 3. Ensure daemon is running for task creation
+   159→    let daemonReady = false
+   160→    const healthCheck = await fetch('http://localhost:3456/api/health').catch(() => null)
+   161→    if (healthCheck?.ok) {
+   162→      daemonReady = true
+   163→    } else {
+   164→      const proc = spawn('kspec', ['serve', 'start', '--daemon'], {
+   165→        cwd,
+   166→        env: getExecOptions().env,
+   167→        detached: true,
+   168→        stdio: 'ignore'
+   169→      })
+   170→      proc.unref()
+   171→      for (let i = 0; i < 10; i++) {
+   172→        await new Promise(r => setTimeout(r, 500))
+   173→        const check = await fetch('http://localhost:3456/api/health').catch(() => null)
+   174→        if (check?.ok) { daemonReady = true; break }
+   175→      }
+   176→    }
+   177→
+   178→    // 4. Migrate each task to kspec
+   179→    let migrated = 0
+   180→    if (daemonReady && beadsTasks.length > 0) {
+   181→      // Register project with daemon
+   182→      await fetch('http://localhost:3456/api/projects', {
+   183→        method: 'POST',
+   184→        headers: { 'Content-Type': 'application/json' },
+   185→        body: JSON.stringify({ path: cwd })
+   186→      }).catch(() => {})
+   187→
+   188→      for (const task of beadsTasks) {
+   189→        try {
+   190→          // Map beads priority (0-4, 0=critical) to kspec priority (1-5, 1=highest)
+   191→          const beadsPriority = typeof task.priority === 'number' ? task.priority : 2
+   192→          const kspecPriority = Math.min(5, Math.max(1, beadsPriority + 1))
+   193→
+   194→          // Map beads type to kspec type
+   195→          const beadsType = String(task.issue_type ?? task.type ?? 'task')
+   196→          const kspecType = beadsType === 'feature' ? 'task' : (['bug', 'task', 'epic'].includes(beadsType) ? beadsType : 'task')
+   197→
+   198→          const res = await fetch('http://localhost:3456/api/tasks', {
+   199→            method: 'POST',
+   200→            headers: {
+   201→              'Content-Type': 'application/json',
+   202→              'X-Kspec-Dir': cwd
+   203→            },
+   204→            body: JSON.stringify({
+   205→              title: String(task.title ?? ''),
+   206→              description: String(task.description ?? ''),
+   207→              priority: kspecPriority,
+   208→              type: kspecType,
+   209→              tags: [`migrated-from:${String(task.id ?? '')}`]
+   210→            })
+   211→          })
+   212→          if (res.ok) migrated++
+   213→        } catch {
+   214→          // Skip individual task failures
+   215→        }
+   216→      }
+   217→    }
+   218→
+   219→    // 5. Stop beads daemon and remove .beads/ directory
+   220→    const beadsDir = join(cwd, '.beads')
+   221→    if (existsSync(beadsDir)) {
+   222→      // Stop beads daemon first (releases lock files)
+   223→      await spawnCommand('bd', ['daemon', '--stop'], cwd).catch(() => {})
+   224→      // Small delay for daemon to release files
+   225→      await new Promise(r => setTimeout(r, 500))
+   226→      const { rmSync } = await import('fs')
+   227→      rmSync(beadsDir, { recursive: true, force: true })
+   228→    }
+   229→
+   230→    // 6. Update CLAUDE.md to kspec instructions
+   231→    installTaskInstructions(cwd, 'kspec')
+   232→
+   233→    return { success: true, migrated }
+   234→  } catch (e) {
+   235→    return { success: false, migrated: 0, error: String(e) }
+   236→  }
+   237→}
+   238→
+   239→async function checkAndUpdateKspec(): Promise<void> {
+   240→  try {
+   241→    const localResult = await spawnCommand('kspec', ['--version'], process.cwd())
+   242→    if (localResult.code !== 0) return
+   243→    const localVersion = localResult.stdout.trim().replace(/^v/, '')
+   244→
+   245→    const npmResult = await spawnCommand('npm', ['view', '@kynetic-ai/spec', 'version'], process.cwd())
+   246→    if (npmResult.code !== 0) return
+   247→    const latestVersion = npmResult.stdout.trim()
+   248→
+   249→    if (localVersion !== latestVersion) {
+   250→      console.log(`[kspec] Updating from ${localVersion} to ${latestVersion}...`)
+   251→      await spawnCommand('npm', ['install', '-g', '@kynetic-ai/spec@latest'], process.cwd())
+   252→      console.log(`[kspec] Updated to ${latestVersion}`)
+   253→    }
+   254→  } catch { /* silent */ }
+   255→}
+   256→
+   257→export function registerKspecHandlers() {
+   258→  // Check if .kspec/ directory exists in a project
+   259→  ipcMain.handle('kspec:check', async (_event, cwd: string) => {
+   260→    const kspecPath = join(cwd, '.kspec')
+   261→    const exists = existsSync(kspecPath)
+   262→    return { exists }
+   263→  })
+   264→
+   265→  // Initialize kspec in a project directory
+   266→  // Requires: git repo, kspec CLI available
+   267→  ipcMain.handle('kspec:init', async (_event, cwd: string) => {
+   268→    try {
+   269→      // Check if it's a git repo first
+   270→      const gitDir = join(cwd, '.git')
+   271→      if (!existsSync(gitDir)) {
+   272→        // Init git first
+   273→        const gitResult = await spawnCommand('git', ['init'], cwd)
+   274→        if (gitResult.code !== 0) {
+   275→          return { success: false, error: `Failed to init git: ${gitResult.stderr}` }
+   276→        }
+   277→        // Set default git config for the repo
+   278→        await spawnCommand('git', ['config', 'user.name', 'kspec'], cwd)
+   279→        await spawnCommand('git', ['config', 'user.email', 'kspec@local'], cwd)
+   280→        await spawnCommand('git', ['commit', '--allow-empty', '-m', 'init'], cwd)
+   281→      }
+   282→
+   283→      // Run kspec init
+   284→      const result = await spawnCommand('kspec', ['init', '.', '--name', 'Project'], cwd)
+   285→      if (result.code !== 0) {
+   286→        return { success: false, error: result.stderr || 'kspec init failed' }
+   287→      }
+   288→
+   289→      // Run kspec setup — sets up agent definitions, skills, .agents/ directory
+   290→      await spawnCommand('kspec', ['setup'], cwd)
+   291→
+   292→      // Generate kspec-agents.md — full agent instructions with workflows, conventions, skills
+   293→      await spawnCommand('kspec', ['agents', 'generate'], cwd)
+   294→
+   295→      // Add task instructions to CLAUDE.md pointing at kspec-agents.md
+   296→      installTaskInstructions(cwd, 'kspec')
+   297→
+   298→      return { success: true }
+   299→    } catch (e) {
+   300→      return { success: false, error: String(e) }
+   301→    }
+   302→  })
+   303→
+   304→  // Start kspec daemon if not running
+   305→  let updateCheckDone = false
+   306→  ipcMain.handle('kspec:ensure-daemon', async (_event, cwd: string) => {
+   307→    try {
+   308→      // Check if daemon is already running
+   309→      const res = await fetch('http://localhost:3456/api/health').catch(() => null)
+   310→      if (res?.ok) {
+   311→        // Register this project with the running daemon
+   312→        await fetch('http://localhost:3456/api/projects', {
+   313→          method: 'POST',
+   314→          headers: { 'Content-Type': 'application/json' },
+   315→          body: JSON.stringify({ path: cwd })
+   316→        }).catch(() => {})
+   317→
+   318→        // Background update check (once per app session, non-blocking)
+   319→        if (!updateCheckDone) {
+   320→          updateCheckDone = true
+   321→          checkAndUpdateKspec().catch(() => {})
+   322→        }
+   323→
+   324→        return { success: true, alreadyRunning: true }
+   325→      }
+   326→
+   327→      // Start daemon in background
+   328→      const proc = spawn('kspec', ['serve', 'start', '--daemon'], {
+   329→        cwd,
+   330→        env: getExecOptions().env,
+   331→        detached: true,
+   332→        stdio: 'ignore'
+   333→      })
+   334→      proc.unref()
+   335→
+   336→      // Wait for daemon to be ready (up to 5 seconds)
+   337→      for (let i = 0; i < 10; i++) {
+   338→        await new Promise(r => setTimeout(r, 500))
+   339→        const check = await fetch('http://localhost:3456/api/health').catch(() => null)
+   340→        if (check?.ok) {
+   341→          return { success: true, alreadyRunning: false }
+   342→        }
+   343→      }
+   344→
+   345→      return { success: false, error: 'Daemon did not start in time' }
+   346→    } catch (e) {
+   347→      return { success: false, error: String(e) }
+   348→    }
+   349→  })
+   350→
+   351→  // Check if kspec CLI is installed
+   352→  ipcMain.handle('kspec:check-cli', async () => {
+   353→    try {
+   354→      const result = await spawnCommand('kspec', ['--version'], process.cwd())
+   355→      return { installed: result.code === 0, version: result.stdout.trim() }
+   356→    } catch {
+   357→      return { installed: false }
+   358→    }
+   359→  })
+   360→
+   361→  // Install kspec CLI via npm
+   362→  ipcMain.handle('kspec:install-cli', async () => {
+   363→    try {
+   364→      const result = await spawnCommand('npm', ['install', '-g', '@kynetic-ai/spec'], process.cwd())
+   365→      if (result.code !== 0) {
+   366→        return { success: false, error: result.stderr || 'npm install failed' }
+   367→      }
+   368→      return { success: true }
+   369→    } catch (e) {
+   370→      return { success: false, error: String(e) }
+   371→    }
+   372→  })
+   373→
+   374→  // Migrate beads tasks to kspec (upgrade path)
+   375→  ipcMain.handle('kspec:migrate-from-beads', async (_event, cwd: string) => {
+   376→    return migrateBeadsToKspec(cwd)
+   377→  })
+   378→
+   379→  // Check for kspec updates and install if available
+   380→  ipcMain.handle('kspec:update', async () => {
+   381→    try {
+   382→      // Get installed version
+   383→      const localResult = await spawnCommand('kspec', ['--version'], process.cwd())
+   384→      if (localResult.code !== 0) return { updated: false, error: 'kspec not installed' }
+   385→      const localVersion = localResult.stdout.trim().replace(/^v/, '')
+   386→
+   387→      // Get latest version from npm
+   388→      const npmResult = await spawnCommand('npm', ['view', '@kynetic-ai/spec', 'version'], process.cwd())
+   389→      if (npmResult.code !== 0) return { updated: false, error: 'Could not check npm' }
+   390→      const latestVersion = npmResult.stdout.trim()
+   391→
+   392→      if (localVersion === latestVersion) {
+   393→        return { updated: false, current: localVersion, latest: latestVersion }
+   394→      }
+   395→
+   396→      // Update
+   397→      const updateResult = await spawnCommand('npm', ['install', '-g', '@kynetic-ai/spec@latest'], process.cwd())
+   398→      if (updateResult.code !== 0) {
+   399→        return { updated: false, error: updateResult.stderr || 'Update failed', current: localVersion, latest: latestVersion }
+   400→      }
+   401→
+   402→      return { updated: true, previous: localVersion, current: latestVersion }
+   403→    } catch (e) {
+   404→      return { updated: false, error: String(e) }
+   405→    }
+   406→  })
+   407→
+   408→  // Start agent dispatch
+   409→  ipcMain.handle('kspec:dispatch-start', async (_event, cwd: string) => {
+   410→    try {
+   411→      const result = await spawnCommand('kspec', ['agent', 'dispatch', 'start'], cwd)
+   412→      if (result.code !== 0) {
+   413→        return { success: false, error: result.stderr || 'Failed to start dispatch' }
+   414→      }
+   415→      return { success: true }
+   416→    } catch (e) {
+   417→      return { success: false, error: String(e) }
+   418→    }
+   419→  })
+   420→
+   421→  // Stop agent dispatch
+   422→  ipcMain.handle('kspec:dispatch-stop', async (_event, cwd: string) => {
+   423→    try {
+   424→      const result = await spawnCommand('kspec', ['agent', 'dispatch', 'stop'], cwd)
+   425→      if (result.code !== 0) {
+   426→        return { success: false, error: result.stderr || 'Failed to stop dispatch' }
+   427→      }
+   428→      return { success: true }
+   429→    } catch (e) {
+   430→      return { success: false, error: String(e) }
+   431→    }
+   432→  })
+   433→
+   434→  // Check agent dispatch status
+   435→  ipcMain.handle('kspec:dispatch-status', async (_event, cwd: string) => {
+   436→    try {
+   437→      const result = await spawnCommand('kspec', ['agent', 'dispatch', 'status', '--json'], cwd)
+   438→      if (result.code !== 0) {
+   439→        return { running: false }
+   440→      }
+   441→      try {
+   442→        const data = JSON.parse(result.stdout)
+   443→        return { running: true, ...data }
+   444→      } catch {
+   445→        return { running: result.stdout.toLowerCase().includes('running') }
+   446→      }
+   447→    } catch {
+   448→      return { running: false }
+   449→    }
+   450→  })
+   451→}
+   452→
+```
