@@ -1,0 +1,461 @@
+```
+     1→import { ipcMain, BrowserWindow, dialog } from 'electron'
+     2→import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
+     3→import { join } from 'path'
+     4→import { voiceManager, WHISPER_MODELS, PIPER_VOICES, WhisperModelName, PiperVoiceName } from '../voice-manager'
+     5→import { xttsManager, XTTS_LANGUAGES, XTTS_SAMPLE_VOICES } from '../xtts-manager'
+     6→
+     7→const TTS_INSTRUCTIONS_START = '\n\n<!-- TTS_VOICE_OUTPUT_START -->'
+     8→const TTS_INSTRUCTIONS_END = '<!-- TTS_VOICE_OUTPUT_END -->\n'
+     9→const TTS_INSTRUCTIONS = `${TTS_INSTRUCTIONS_START}
+    10→## Voice Output (TTS)
+    11→
+    12→When responding, wrap your natural language prose in \`«tts»...«/tts»\` markers for text-to-speech.
+    13→
+    14→Rules:
+    15→- ONLY wrap conversational prose meant to be spoken aloud
+    16→- Do NOT wrap: code, file paths, commands, tool output, URLs, lists, errors
+    17→- Keep markers on same line as text (no line breaks inside)
+    18→
+    19→Examples:
+    20→✓ «tts»I'll help you fix that bug.«/tts»
+    21→✓ «tts»The tests are passing.«/tts» Here's what changed:
+    22→✗ «tts»src/Header.tsx«/tts»  (file path - don't wrap)
+    23→✗ «tts»npm install«/tts»  (command - don't wrap)
+    24→${TTS_INSTRUCTIONS_END}`
+    25→
+    26→function installTTSInstructions(projectPath: string): boolean {
+    27→  try {
+    28→    const claudeDir = join(projectPath, '.claude')
+    29→    const claudeMdPath = join(claudeDir, 'CLAUDE.md')
+    30→
+    31→    if (!existsSync(claudeDir)) {
+    32→      mkdirSync(claudeDir, { recursive: true })
+    33→    }
+    34→
+    35→    let content = ''
+    36→    if (existsSync(claudeMdPath)) {
+    37→      content = readFileSync(claudeMdPath, 'utf8')
+    38→      if (content.includes(TTS_INSTRUCTIONS_START)) {
+    39→        const startIdx = content.indexOf(TTS_INSTRUCTIONS_START)
+    40→        const endIdx = content.indexOf(TTS_INSTRUCTIONS_END)
+    41→        if (startIdx !== -1 && endIdx !== -1) {
+    42→          content = content.substring(0, startIdx) + content.substring(endIdx + TTS_INSTRUCTIONS_END.length)
+    43→          content += TTS_INSTRUCTIONS
+    44→          writeFileSync(claudeMdPath, content)
+    45→          return true
+    46→        }
+    47→      }
+    48→    }
+    49→
+    50→    content += TTS_INSTRUCTIONS
+    51→    writeFileSync(claudeMdPath, content)
+    52→    return true
+    53→  } catch (e) {
+    54→    console.error('Failed to install TTS instructions:', e)
+    55→    return false
+    56→  }
+    57→}
+    58→
+    59→function removeTTSInstructions(projectPath: string): boolean {
+    60→  try {
+    61→    const claudeMdPath = join(projectPath, '.claude', 'CLAUDE.md')
+    62→    if (!existsSync(claudeMdPath)) return true
+    63→
+    64→    let content = readFileSync(claudeMdPath, 'utf8')
+    65→    const startIdx = content.indexOf(TTS_INSTRUCTIONS_START)
+    66→    const endIdx = content.indexOf(TTS_INSTRUCTIONS_END)
+    67→
+    68→    if (startIdx !== -1 && endIdx !== -1) {
+    69→      content = content.slice(0, startIdx) + content.slice(endIdx + TTS_INSTRUCTIONS_END.length)
+    70→      content = content.trimEnd() + '\n'
+    71→      writeFileSync(claudeMdPath, content)
+    72→    }
+    73→    return true
+    74→  } catch (e) {
+    75→    console.error('Failed to remove TTS instructions:', e)
+    76→    return false
+    77→  }
+    78→}
+    79→
+    80→export function registerVoiceHandlers(getMainWindow: () => BrowserWindow | null) {
+    81→  // TTS Instructions
+    82→  ipcMain.handle('tts:installInstructions', (_, projectPath: string) => {
+    83→    return { success: installTTSInstructions(projectPath) }
+    84→  })
+    85→
+    86→  ipcMain.handle('tts:removeInstructions', (_, projectPath: string) => {
+    87→    return { success: removeTTSInstructions(projectPath) }
+    88→  })
+    89→
+    90→  // Whisper (STT)
+    91→  ipcMain.handle('voice:checkWhisper', async () => {
+    92→    try {
+    93→      return await voiceManager.checkWhisper()
+    94→    } catch (e) {
+    95→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    96→    }
+    97→  })
+    98→
+    99→  ipcMain.handle('voice:installWhisper', async (_, model: WhisperModelName) => {
+   100→    try {
+   101→      return await voiceManager.downloadWhisperModel(model, (status, percent) => {
+   102→        getMainWindow()?.webContents.send('install:progress', { type: 'whisper', status, percent })
+   103→      })
+   104→    } catch (e) {
+   105→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   106→    }
+   107→  })
+   108→
+   109→  ipcMain.handle('voice:transcribe', async (_, pcmData: Float32Array) => {
+   110→    try {
+   111→      return await voiceManager.transcribe(pcmData)
+   112→    } catch (e) {
+   113→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   114→    }
+   115→  })
+   116→
+   117→  ipcMain.handle('voice:setWhisperModel', async (_, model: WhisperModelName) => {
+   118→    try {
+   119→      voiceManager.setWhisperModel(model)
+   120→      return { success: true }
+   121→    } catch (e) {
+   122→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   123→    }
+   124→  })
+   125→
+   126→  // TTS
+   127→  ipcMain.handle('voice:checkTTS', async () => {
+   128→    try {
+   129→      return await voiceManager.checkTTS()
+   130→    } catch (e) {
+   131→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   132→    }
+   133→  })
+   134→
+   135→  // Combined status check for Whisper and TTS in a single IPC call
+   136→  ipcMain.handle('voice:getFullStatus', async () => {
+   137→    try {
+   138→      return await voiceManager.getFullVoiceStatus()
+   139→    } catch (e) {
+   140→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   141→    }
+   142→  })
+   143→
+   144→  ipcMain.handle('voice:installPiper', async () => {
+   145→    try {
+   146→      return await voiceManager.installPiper((status, percent) => {
+   147→        getMainWindow()?.webContents.send('install:progress', { type: 'piper', status, percent })
+   148→      })
+   149→    } catch (e) {
+   150→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   151→    }
+   152→  })
+   153→
+   154→  ipcMain.handle('voice:installVoice', async (_, voice: PiperVoiceName) => {
+   155→    try {
+   156→      return await voiceManager.downloadPiperVoice(voice, (status, percent) => {
+   157→        getMainWindow()?.webContents.send('install:progress', { type: 'piper-voice', status, percent })
+   158→      })
+   159→    } catch (e) {
+   160→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   161→    }
+   162→  })
+   163→
+   164→  ipcMain.handle('voice:speak', async (_, text: string) => {
+   165→    try {
+   166→      return await voiceManager.speak(text)
+   167→    } catch (e) {
+   168→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   169→    }
+   170→  })
+   171→
+   172→  ipcMain.handle('voice:stopSpeaking', async () => {
+   173→    try {
+   174→      voiceManager.stopSpeaking()
+   175→      return { success: true }
+   176→    } catch (e) {
+   177→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   178→    }
+   179→  })
+   180→
+   181→  ipcMain.handle('voice:getVoices', async () => {
+   182→    try {
+   183→      const installed = voiceManager.getInstalledPiperVoices()
+   184→      const all = Object.entries(PIPER_VOICES).map(([id, info]) => ({
+   185→        id,
+   186→        description: info.description,
+   187→        license: info.license,
+   188→        installed: installed.includes(id)
+   189→      }))
+   190→      return { installed, all }
+   191→    } catch (e) {
+   192→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   193→    }
+   194→  })
+   195→
+   196→  ipcMain.handle('voice:getWhisperModels', async () => {
+   197→    try {
+   198→      const installedModels = voiceManager.getInstalledWhisperModels()
+   199→      // Cast keys to WhisperModelName - safe since we're iterating over WHISPER_MODELS keys
+   200→      const modelIds = Object.keys(WHISPER_MODELS) as WhisperModelName[]
+   201→      const all = modelIds.map(id => ({
+   202→        id,
+   203→        size: WHISPER_MODELS[id].size,
+   204→        installed: installedModels.includes(id)
+   205→      }))
+   206→      return { installed: installedModels, all }
+   207→    } catch (e) {
+   208→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   209→    }
+   210→  })
+   211→
+   212→  ipcMain.handle('voice:setVoice', async (_, voice: string | { voice: string; engine: 'piper' | 'xtts' }) => {
+   213→    try {
+   214→      if (typeof voice === 'string') {
+   215→        voiceManager.setTTSVoice(voice)
+   216→      } else {
+   217→        voiceManager.setTTSVoice(voice.voice, voice.engine)
+   218→      }
+   219→      return { success: true }
+   220→    } catch (e) {
+   221→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   222→    }
+   223→  })
+   224→
+   225→  ipcMain.handle('voice:getSettings', async () => {
+   226→    try {
+   227→      return voiceManager.getSettings()
+   228→    } catch (e) {
+   229→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   230→    }
+   231→  })
+   232→
+   233→  ipcMain.handle('voice:applySettings', async (_, settings: any) => {
+   234→    try {
+   235→      voiceManager.applySettings(settings)
+   236→      return { success: true }
+   237→    } catch (e) {
+   238→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   239→    }
+   240→  })
+   241→
+   242→  ipcMain.handle('voice:fetchCatalog', async (_, forceRefresh?: boolean) => {
+   243→    try {
+   244→      return await voiceManager.fetchVoicesCatalog(forceRefresh ?? false)
+   245→    } catch (e) {
+   246→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   247→    }
+   248→  })
+   249→
+   250→  ipcMain.handle('voice:downloadFromCatalog', async (_, voiceKey: string) => {
+   251→    try {
+   252→      return await voiceManager.downloadVoiceFromCatalog(voiceKey)
+   253→    } catch (e) {
+   254→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   255→    }
+   256→  })
+   257→
+   258→  ipcMain.handle('voice:getInstalled', async () => {
+   259→    try {
+   260→      return voiceManager.getInstalledVoices()
+   261→    } catch (e) {
+   262→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   263→    }
+   264→  })
+   265→
+   266→  ipcMain.handle('voice:importCustom', async () => {
+   267→    try {
+   268→      const win = getMainWindow()
+   269→      if (!win) {
+   270→        return { success: false, error: 'No window available' }
+   271→      }
+   272→
+   273→      const result = await dialog.showOpenDialog(win, {
+   274→        title: 'Select Piper Voice Model',
+   275→        filters: [{ name: 'ONNX Model', extensions: ['onnx'] }],
+   276→        properties: ['openFile']
+   277→      })
+   278→
+   279→      if (result.canceled || !result.filePaths[0]) {
+   280→        return { success: false, error: 'No file selected' }
+   281→      }
+   282→
+   283→      const onnxPath = result.filePaths[0]
+   284→      const configPath = onnxPath + '.json'
+   285→      if (!existsSync(configPath)) {
+   286→        return { success: false, error: 'Config file (.onnx.json) not found next to model file' }
+   287→      }
+   288→
+   289→      return await voiceManager.importCustomVoiceFiles(onnxPath, configPath)
+   290→    } catch (e) {
+   291→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   292→    }
+   293→  })
+   294→
+   295→  ipcMain.handle('voice:removeCustom', async (_, voiceKey: string) => {
+   296→    try {
+   297→      return voiceManager.removeCustomVoice(voiceKey)
+   298→    } catch (e) {
+   299→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   300→    }
+   301→  })
+   302→
+   303→  ipcMain.handle('voice:openCustomFolder', async () => {
+   304→    try {
+   305→      const { shell } = require('electron')
+   306→      const customDir = voiceManager.getCustomVoicesDir()
+   307→      if (!existsSync(customDir)) {
+   308→        mkdirSync(customDir, { recursive: true })
+   309→      }
+   310→      shell.openPath(customDir)
+   311→    } catch (e) {
+   312→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   313→    }
+   314→  })
+   315→
+   316→  // XTTS (voice cloning)
+   317→  ipcMain.handle('xtts:check', async () => {
+   318→    try {
+   319→      return await xttsManager.checkInstallation()
+   320→    } catch (e) {
+   321→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   322→    }
+   323→  })
+   324→
+   325→  ipcMain.handle('xtts:install', async () => {
+   326→    try {
+   327→      return await xttsManager.install()
+   328→    } catch (e) {
+   329→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   330→    }
+   331→  })
+   332→
+   333→  ipcMain.handle('xtts:createVoice', async (_, { audioPath, name, language }) => {
+   334→    try {
+   335→      return await xttsManager.createVoice(audioPath, name, language)
+   336→    } catch (e) {
+   337→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   338→    }
+   339→  })
+   340→
+   341→  ipcMain.handle('xtts:getVoices', async () => {
+   342→    try {
+   343→      return xttsManager.getVoices()
+   344→    } catch (e) {
+   345→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   346→    }
+   347→  })
+   348→
+   349→  ipcMain.handle('xtts:deleteVoice', async (_, voiceId: string) => {
+   350→    try {
+   351→      return xttsManager.deleteVoice(voiceId)
+   352→    } catch (e) {
+   353→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   354→    }
+   355→  })
+   356→
+   357→  ipcMain.handle('xtts:speak', async (_, { text, voiceId, language }) => {
+   358→    try {
+   359→      return await xttsManager.speak(text, voiceId, language)
+   360→    } catch (e) {
+   361→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   362→    }
+   363→  })
+   364→
+   365→  ipcMain.handle('xtts:selectAudio', async () => {
+   366→    try {
+   367→      const win = getMainWindow()
+   368→      if (!win) {
+   369→        return { success: false, error: 'No window available' }
+   370→      }
+   371→
+   372→      const result = await dialog.showOpenDialog(win, {
+   373→        title: 'Select Voice Sample Audio',
+   374→        filters: [{ name: 'Audio Files', extensions: ['wav', 'mp3', 'ogg', 'flac', 'm4a'] }],
+   375→        properties: ['openFile']
+   376→      })
+   377→
+   378→      if (result.canceled || !result.filePaths[0]) {
+   379→        return { success: false, error: 'No file selected' }
+   380→      }
+   381→
+   382→      return { success: true, path: result.filePaths[0] }
+   383→    } catch (e) {
+   384→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   385→    }
+   386→  })
+   387→
+   388→  ipcMain.handle('xtts:getLanguages', async () => {
+   389→    try {
+   390→      return XTTS_LANGUAGES
+   391→    } catch (e) {
+   392→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   393→    }
+   394→  })
+   395→
+   396→  ipcMain.handle('xtts:getSampleVoices', async () => {
+   397→    try {
+   398→      return XTTS_SAMPLE_VOICES.map(s => ({
+   399→        ...s,
+   400→        installed: xttsManager.isSampleVoiceInstalled(s.id)
+   401→      }))
+   402→    } catch (e) {
+   403→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   404→    }
+   405→  })
+   406→
+   407→  ipcMain.handle('xtts:downloadSampleVoice', async (_, sampleId: string) => {
+   408→    try {
+   409→      return await xttsManager.downloadSampleVoice(sampleId)
+   410→    } catch (e) {
+   411→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   412→    }
+   413→  })
+   414→
+   415→  ipcMain.handle('xtts:getMediaDuration', async (_, filePath: string) => {
+   416→    try {
+   417→      return await xttsManager.getMediaDuration(filePath)
+   418→    } catch (e) {
+   419→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   420→    }
+   421→  })
+   422→
+   423→  ipcMain.handle('xtts:extractAudioClip', async (_, { inputPath, startTime, endTime }) => {
+   424→    try {
+   425→      return await xttsManager.extractAudioClip(inputPath, startTime, endTime)
+   426→    } catch (e) {
+   427→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   428→    }
+   429→  })
+   430→
+   431→  ipcMain.handle('xtts:selectMediaFile', async () => {
+   432→    try {
+   433→      const result = await dialog.showOpenDialog({
+   434→        properties: ['openFile'],
+   435→        filters: [
+   436→          { name: 'Media Files', extensions: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'mp3', 'wav', 'ogg', 'flac', 'm4a'] },
+   437→          { name: 'All Files', extensions: ['*'] }
+   438→        ]
+   439→      })
+   440→
+   441→      if (result.canceled || result.filePaths.length === 0) {
+   442→        return { success: false }
+   443→      }
+   444→
+   445→      const filePath = result.filePaths[0]
+   446→      const duration = await xttsManager.getMediaDuration(filePath)
+   447→
+   448→      return {
+   449→        success: true,
+   450→        path: filePath,
+   451→        duration: duration.success ? duration.duration : undefined,
+   452→        error: duration.error
+   453→      }
+   454→    } catch (e) {
+   455→      return { success: false, error: e instanceof Error ? e.message : String(e) }
+   456→    }
+   457→  })
+   458→}
+   459→
+```
