@@ -33,8 +33,8 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: num
     }
   }
 
-  // Check if window has expired - reset if so
-  if (now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+  // Block expired or window expired — reset so user gets fresh attempts
+  if ((entry.blockedUntil && entry.blockedUntil <= now) || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
     rateLimitStore.delete(ip)
     return { allowed: true }
   }

@@ -2,11 +2,13 @@ import * as http from 'http'
 import type { PtyManager } from './pty-manager.js'
 
 const ORCHESTRATOR_PORT = 19836
+const MAX_PORT_RETRIES = 5
 
 export class OrchestratorApi {
   private server: http.Server | null = null
   private ptyManager: PtyManager
   private ptyToProject: Map<string, string>
+  private activePort: number = ORCHESTRATOR_PORT
 
   constructor(ptyManager: PtyManager, ptyToProject: Map<string, string>) {
     this.ptyManager = ptyManager
@@ -15,6 +17,8 @@ export class OrchestratorApi {
 
   start(): void {
     if (this.server) return
+
+    this.activePort = ORCHESTRATOR_PORT
 
     this.server = http.createServer((req, res) => {
       res.setHeader('Content-Type', 'application/json')
@@ -27,7 +31,7 @@ export class OrchestratorApi {
         return
       }
 
-      const url = new URL(req.url || '/', `http://localhost:${ORCHESTRATOR_PORT}`)
+      const url = new URL(req.url || '/', `http://localhost:${this.activePort}`)
       const path = url.pathname
 
       // Match: /sessions/:id/output or /sessions/:id/input
@@ -46,14 +50,27 @@ export class OrchestratorApi {
       }
     })
 
-    this.server.listen(ORCHESTRATOR_PORT, '127.0.0.1', () => {
-      console.log(`[Orchestrator] API server started on port ${ORCHESTRATOR_PORT}`)
+    this.tryListen(this.activePort)
+  }
+
+  private tryListen(port: number): void {
+    const retryCount = port - ORCHESTRATOR_PORT
+    if (retryCount >= MAX_PORT_RETRIES) {
+      console.error(`[Orchestrator] Failed to bind after ${MAX_PORT_RETRIES} attempts (ports ${ORCHESTRATOR_PORT}-${port - 1})`)
+      this.server?.close()
+      this.server = null
+      return
+    }
+
+    this.server!.listen(port, '127.0.0.1', () => {
+      this.activePort = port
+      console.log(`[Orchestrator] API server started on port ${port}`)
     })
 
-    this.server.on('error', (e: NodeJS.ErrnoException) => {
+    this.server!.once('error', (e: NodeJS.ErrnoException) => {
       if (e.code === 'EADDRINUSE') {
-        console.warn(`[Orchestrator] Port ${ORCHESTRATOR_PORT} in use, trying ${ORCHESTRATOR_PORT + 1}`)
-        this.server?.listen(ORCHESTRATOR_PORT + 1, '127.0.0.1')
+        console.warn(`[Orchestrator] Port ${port} in use, trying ${port + 1}`)
+        this.tryListen(port + 1)
       } else {
         console.error('[Orchestrator] API server error:', e.message)
       }

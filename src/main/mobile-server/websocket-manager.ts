@@ -318,20 +318,25 @@ export function broadcastPtyData(
 export function broadcastPtyExit(
   ptyId: string,
   code: number,
-  ptyStreams: Map<string, Set<WebSocket>>
+  ptyStreams: Map<string, Set<WebSocket>>,
+  terminalSubscriptions?: Map<string, Set<WebSocket>>
 ): void {
   const streams = ptyStreams.get(ptyId)
-  if (!streams || streams.size === 0) return
+  if (streams && streams.size > 0) {
+    const message = JSON.stringify({
+      type: 'exit',
+      code
+    })
 
-  const message = JSON.stringify({
-    type: 'exit',
-    code
-  })
+    streams.forEach(ws => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message)
+        ws.close(1000, 'PTY exited')
+      }
+    })
+  }
 
-  streams.forEach(ws => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(message)
-      ws.close(1000, 'PTY exited')
-    }
-  })
+  // Clean up stale subscriptions for this PTY
+  ptyStreams.delete(ptyId)
+  terminalSubscriptions?.delete(ptyId)
 }
