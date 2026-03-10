@@ -251,16 +251,17 @@ tasks:
     spec_ref: "@orchestrator"
     meta_ref: null
     plan_ref: null
-    status: pending_review
+    status: needs_work
     blocked_by: []
     depends_on: []
     context: []
     priority: 2
     tags: []
     vcs_refs: []
-    session_id: 01KKB029BXKP31G3012ZGGAZSB
+    session_id: null
     created_at: 2026-03-10T03:28:32.445Z
     started_at: 2026-03-10T04:31:37.745Z
+    submitted_at: 2026-03-10T04:36:42.304Z
     notes:
       - _ulid: 01KKB0D8VRKT2DAEEHVSSBNK5J
         created_at: 2026-03-10T04:34:45.240Z
@@ -280,9 +281,52 @@ tasks:
 
           - Verification: TypeScript compile, existing tests
         supersedes: null
+      - _ulid: 01KKB0NX50Z39E0S1JF4NQ67PA
+        created_at: 2026-03-10T04:39:28.161Z
+        author: "@claude"
+        content: >-
+          Review findings:
+
+
+          Code quality of f326f9f is GOOD — all 6 bug fixes are correct and well-implemented:
+
+          1. Orchestrator port fallback: tryListen() with MAX_PORT_RETRIES=5, correct EADDRINUSE
+          handling
+
+          2. Auth rate limit block expiry: checkRateLimit() properly resets on block/window expiry
+
+          3. 4s prompt race condition: setTimeout guard verifies PTY exists before writing
+
+          4. Pending prompt leak on spawn failure: catch block resolves pending promise immediately
+
+          5. WS subscription leak on PTY exit: broadcastPtyExit() cleans both ptyStreams and
+          terminalSubscriptions
+
+          6. CORS substring bypass: Origin parsed as URL, hostname validated against exact patterns
+
+
+          MUST-FIX:
+
+          - Branch contamination: fix/bug-connectivity has 3 unrelated commits (5511669 PTY, ae3ac15
+          voice, aeb979c tasks) before f326f9f. A PR would include all unrelated changes.
+          Cherry-pick f326f9f onto a clean branch from main.
+
+
+          SHOULD-FIX:
+
+          - No test coverage for connectivity files (pre-existing gap, not blocking for bug fix)
+
+          - No AC test annotations for @orchestrator (pre-existing gap)
+        supersedes: null
+      - _ulid: 01KKB0NX75K95XHZ20P583XN77
+        created_at: 2026-03-10T04:39:28.229Z
+        author: "@claude"
+        content: "[FIX_CYCLE: 1] Review findings: Branch contamination: fix/bug-connectivity has 3 unrelated
+          commits from other tasks. Cherry-pick f326f9f onto a clean branch from main. Code fixes
+          themselves are correct."
+        supersedes: null
     todos: []
     automation: eligible
-    submitted_at: 2026-03-10T04:36:42.304Z
   - _ulid: 01KKAWM2RXD9TWVAHK8BMMSEC2
     slugs:
       - bug-persistence

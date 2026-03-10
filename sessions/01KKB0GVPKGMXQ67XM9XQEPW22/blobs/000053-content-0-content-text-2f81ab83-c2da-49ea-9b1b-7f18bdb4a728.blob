@@ -1,0 +1,354 @@
+```
+     1→tasks:
+     2→  - _ulid: 01KKAWKTJVBTXZDAF2293N8875
+     3→    slugs:
+     4→      - bug-pty
+     5→    title: "Bug audit: PTY lifecycle and backend switching"
+     6→    type: bug
+     7→    description: "Investigate and fix bugs in PTY session management. Check: PTY spawn error handling,
+     8→      resize debounce edge cases, output buffer overflow, backend switching race conditions, session
+     9→      ID preservation across switches, cleanup on unexpected PTY exit, enhanced PATH construction."
+    10→    spec_ref: "@pty-lifecycle"
+    11→    meta_ref: null
+    12→    plan_ref: null
+    13→    status: completed
+    14→    blocked_by: []
+    15→    closed_reason: "Review passed. 5 bug fixes in PTY backend switching and ANSI stripping: (1) settings
+    16→      inheritance for autoAcceptTools/permissionMode, (2) spawn failure error handling with cleanup,
+    17→      (3) autoClose flag transfer, (4) IPC send try-catch consistency, (5) CSI/OSC/charset ANSI
+    18→      regex coverage. All 40 tests pass. Changes well-scoped, no regressions."
+    19→    depends_on: []
+    20→    context: []
+    21→    priority: 2
+    22→    tags: []
+    23→    vcs_refs: []
+    24→    session_id: 01KKAYH7STER6H279K2WWJHNH3
+    25→    created_at: 2026-03-10T03:28:25.690Z
+    26→    started_at: 2026-03-10T04:04:18.647Z
+    27→    submitted_at: 2026-03-10T04:08:55.443Z
+    28→    completed_at: 2026-03-10T04:13:31.959Z
+    29→    notes:
+    30→      - _ulid: 01KKAYXDC37GJG0ZKMSYGMQK1H
+    31→        created_at: 2026-03-10T04:08:36.995Z
+    32→        author: "@claude"
+    33→        content: >-
+    34→          Execution context:
+    35→
+    36→          - Background: PTY lifecycle has several bugs in backend switching and output buffer
+    37→          handling
+    38→
+    39→          - Scope: Fix backend switch (error handling, settings inheritance, autoClose transfer),
+    40→          fix ANSI regex
+    41→
+    42→          - Files: src/main/app/ipc-handlers/pty.ts, src/main/pty-manager.ts
+    43→
+    44→          - Verification: TypeScript compiles clean, npm run build succeeds
+    45→
+    46→
+    47→          Bugs fixed:
+    48→
+    49→          1. pty:set-backend lost project settings (autoAcceptTools, permissionMode) — now looks up
+    50→          workspace/project settings
+    51→
+    52→          2. pty:set-backend had no error handling — spawn failure after kill left user with no PTY;
+    53→          now throws to renderer
+    54→
+    55→          3. pty:set-backend didn't transfer autoCloseSessions — flag leaked for old ID; now
+    56→          transferred
+    57→
+    58→          4. pty:set-backend onData/onExit lacked try-catch on IPC send — inconsistent with
+    59→          pty:spawn handler
+    60→
+    61→          5. OutputBuffer ANSI regex missed private mode sequences (\x1b[?25h etc.), character set
+    62→          escapes (\x1b(B), and OSC with ST terminator — all now stripped
+    63→        supersedes: null
+    64→    todos: []
+    65→    automation: eligible
+    66→  - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
+    67→    slugs:
+    68→      - bug-layout
+    69→    title: "Bug audit: tiled layout and drag-drop"
+    70→    type: bug
+    71→    description: "Investigate and fix bugs in tiled terminal layout. Check: tile coordinate calculation,
+    72→      drag-drop zone detection, resize handle collision, canvas panning bounds, tile removal
+    73→      orphaning layout entries, split producing zero-size tiles, effective layout reconciliation."
+    74→    spec_ref: "@tiled-layout"
+    75→    meta_ref: null
+    76→    plan_ref: null
+    77→    status: completed
+    78→    blocked_by: []
+    79→    closed_reason: "Review passed. 4 bug fixes in tiled layout: MIN_SIZE threshold consistency, overlap
+    80→      detection reset, split guard, drag-split gap reclamation. All correct and well-scoped."
+    81→    depends_on: []
+    82→    context: []
+    83→    priority: 2
+    84→    tags: []
+    85→    vcs_refs: []
+    86→    created_at: 2026-03-10T03:28:27.465Z
+    87→    started_at: 2026-03-10T03:54:12.373Z
+    88→    submitted_at: 2026-03-10T04:01:49.102Z
+    89→    completed_at: 2026-03-10T04:03:48.180Z
+    90→    notes:
+    91→      - _ulid: 01KKAYDYAHYHNHEHJ9Y7HF65J5
+    92→        created_at: 2026-03-10T04:00:10.065Z
+    93→        author: "@claude"
+    94→        content: >-
+    95→          Execution context:
+    96→
+    97→          - Background: Bug audit of tiled layout and drag-drop system
+    98→
+    99→          - Scope: Fix bugs in splitTile, drag-split gaps, validateLayout thresholds and overlap
+   100→          handling
+   101→
+   102→          - Files: src/renderer/components/tiled-layout-utils.ts,
+   103→          src/renderer/components/tiled/useTileDragDrop.ts
+   104→
+   105→          - Bugs found:
+   106→            1. splitTile doesn't enforce MIN_SIZE - can produce tiles < 10% that pass validation (threshold is 5%)
+   107→            2. Drag-split leaves orphaned gaps - source tile space not reclaimed when split-dropping
+   108→            3. validateLayout size threshold (5) inconsistent with MIN_SIZE (10)
+   109→            4. validateLayout overlap detection is warn-only, doesn't attempt correction
+   110→        supersedes: null
+   111→    todos: []
+   112→    automation: eligible
+   113→  - _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
+   114→    slugs:
+   115→      - bug-voice
+   116→    title: "Bug audit: voice I/O (STT and TTS)"
+   117→    type: bug
+   118→    description: "Investigate and fix bugs in voice system. Check: Whisper model loading failures,
+   119→      microphone permissions, silence detection thresholds, TTS audio queue overlap, per-project
+   120→      voice not applying on tab switch, XTTS error handling, voice catalog downloads, audio resource
+   121→      cleanup."
+   122→    spec_ref: "@stt"
+   123→    meta_ref: null
+   124→    plan_ref: null
+   125→    status: completed
+   126→    blocked_by: []
+   127→    closed_reason: "Review passed. 4 bug fixes: (1) Piper speak() race condition — serialized via
+   128→      promise chain queue, (2) XTTS request ordering — serial queue prevents response/caller
+   129→      mismatch, (3) Blob URL memory leak in ttsHandlers — revokeObjectURL on interrupt paths, (4)
+   130→      dead openvoice type removed from 4 files. Build clean (pre-existing errors unrelated), 46
+   131→      tests pass (2 pre-existing failures unrelated). Changes well-scoped, no regressions."
+   132→    depends_on: []
+   133→    context: []
+   134→    priority: 3
+   135→    tags: []
+   136→    vcs_refs: []
+   137→    session_id: 01KKAYZ1ASZ8V3ZJBRG7XV7MV5
+   138→    created_at: 2026-03-10T03:28:28.851Z
+   139→    started_at: 2026-03-10T04:13:56.597Z
+   140→    submitted_at: 2026-03-10T04:19:13.584Z
+   141→    completed_at: 2026-03-10T04:23:25.826Z
+   142→    notes:
+   143→      - _ulid: 01KKAZAHB2X10317RRMKZXB5R7
+   144→        created_at: 2026-03-10T04:15:47.042Z
+   145→        author: "@claude"
+   146→        content: >-
+   147→          Execution context:
+   148→
+   149→          - Background: Voice I/O bug audit covering STT, TTS, Whisper, silence detection, audio
+   150→          queue
+   151→
+   152→          - Scope: Fix bugs in voice system - race conditions, resource leaks, state management,
+   153→          error handling
+   154→
+   155→          - Files: sttHandlers.ts, ttsHandlers.ts, piper-tts.ts, xtts-server.ts, useTTS.ts,
+   156→          voice-manager.ts, whisper-stt.ts
+   157→
+   158→          - Bugs found: 10 issues identified via code audit
+   159→        supersedes: null
+   160→    todos: []
+   161→    automation: eligible
+   162→  - _ulid: 01KKAWKZB1X95YBRM2P9PFRFE7
+   163→    slugs:
+   164→      - bug-tasks
+   165→    title: "Bug audit: task management adapters"
+   166→    type: bug
+   167→    description: "Investigate and fix bugs in Beads/Kspec task adapters. Check: backend detection cache
+   168→      staleness, watcher debounce missing rapid changes, status cycling edge cases, inline edit
+   169→      races, Beads-to-Kspec migration data integrity, LRU cache invalidation, panel state machine
+   170→      transitions."
+   171→    spec_ref: "@task-adapter"
+   172→    meta_ref: null
+   173→    plan_ref: null
+   174→    status: needs_work
+   175→    blocked_by: []
+   176→    depends_on: []
+   177→    context: []
+   178→    priority: 3
+   179→    tags: []
+   180→    vcs_refs: []
+   181→    session_id: null
+   182→    created_at: 2026-03-10T03:28:30.561Z
+   183→    started_at: 2026-03-10T04:24:58.226Z
+   184→    submitted_at: 2026-03-10T04:28:26.347Z
+   185→    notes:
+   186→      - _ulid: 01KKAZXH27QYNSGW6SKVJF3PJZ
+   187→        created_at: 2026-03-10T04:26:09.351Z
+   188→        author: "@claude"
+   189→        content: >-
+   190→          Execution context:
+   191→
+   192→          - Background: Audit and fix bugs in Beads/Kspec task adapters
+   193→
+   194→          - Scope: 6 bugs identified across adapter files
+   195→
+   196→          - Files: kspec-adapter.ts, beads-adapter.ts, useBeadsTasks.ts, kspec-handlers.ts
+   197→
+   198→          - Bugs found:
+   199→            1. handleCycleStatus bypasses adapter.cycleStatus() — uses generic update instead of lifecycle endpoints
+   200→            2. KspecAdapter.daemonEnsured never resets after daemon crash — API calls keep failing silently
+   201→            3. KspecAdapter WebSocket doesn't reconnect after close — watcher goes dead after daemon restart
+   202→            4. Migration doesn't preserve task status — all tasks become pending regardless of original status
+   203→            5. KspecAdapter.cycleStatus for 'closed' uses update({status:'open'}) which is wrong for kspec — kspec tasks need specific status transitions
+   204→            6. detect.ts — detectBackend doesn't reset daemonEnsured when switching projects
+   205→        supersedes: null
+   206→      - _ulid: 01KKB06HY9RCQ8QC9CC81DJ37K
+   207→        created_at: 2026-03-10T04:31:05.162Z
+   208→        author: "@claude"
+   209→        content: "[FIX_CYCLE: 1] Review findings: Branch contamination: 2 unrelated commits (voice I/O, PTY
+   210→          fixes) on same branch. Task commit aeb979c is clean — rebase onto dedicated branch with
+   211→          only that commit. Also: bug 6 (detect.ts daemonEnsured reset on project switch) only
+   212→          partially addressed."
+   213→        supersedes: null
+   214→      - _ulid: 01KKB06TYX89YTYZBAGM16BPXH
+   215→        created_at: 2026-03-10T04:31:14.398Z
+   216→        author: "@claude"
+   217→        content: >-
+   218→          Review findings:
+   219→
+   220→          MUST-FIX:
+   221→
+   222→          - Branch has 2 unrelated commits (ae3ac15 voice, 5511669 PTY). Rebase so only aeb979c is
+   223→          on this branch.
+   224→
+   225→          - No AC test annotations exist for @task-adapter (pre-existing gap, not blocking for this
+   226→          bug fix)
+   227→
+   228→
+   229→          SHOULD-FIX:
+   230→
+   231→          - Bug 6 (detect.ts daemonEnsured reset) only partially fixed — module-level flag resets on
+   232→          network error but not explicitly on project switch in detectBackend()
+   233→
+   234→          - WebSocket reconnect uses fixed 3s interval with no backoff cap
+   235→
+   236→
+   237→          Code quality of aeb979c itself is good — all 5 core bug fixes are correct and
+   238→          well-implemented.
+   239→        supersedes: null
+   240→    todos: []
+   241→    automation: eligible
+   242→  - _ulid: 01KKAWM15XTDNE9XPRPADT9R88
+   243→    slugs:
+   244→      - bug-connectivity
+   245→    title: "Bug audit: connectivity (API, orchestrator, mobile)"
+   246→    type: bug
+   247→    description: "Investigate and fix bugs in connectivity layer. Check: orchestrator port fallback,
+   248→      rate limiter window reset, API prompt 4s delay race condition, pending prompt not consumed on
+   249→      spawn failure, mobile token regeneration during connections, WebSocket subscription leak, CORS
+   250→      config."
+   251→    spec_ref: "@orchestrator"
+   252→    meta_ref: null
+   253→    plan_ref: null
+   254→    status: pending_review
+   255→    blocked_by: []
+   256→    depends_on: []
+   257→    context: []
+   258→    priority: 2
+   259→    tags: []
+   260→    vcs_refs: []
+   261→    session_id: 01KKB029BXKP31G3012ZGGAZSB
+   262→    created_at: 2026-03-10T03:28:32.445Z
+   263→    started_at: 2026-03-10T04:31:37.745Z
+   264→    notes:
+   265→      - _ulid: 01KKB0D8VRKT2DAEEHVSSBNK5J
+   266→        created_at: 2026-03-10T04:34:45.240Z
+   267→        author: "@claude"
+   268→        content: >-
+   269→          Execution context:
+   270→
+   271→          - Background: Audit connectivity layer for bugs in orchestrator, rate limiter, API
+   272→          prompts, WS subscriptions, CORS
+   273→
+   274→          - Scope: 6 bugs identified — orchestrator port fallback loop, auth rate limit block
+   275→          expiry, 4s prompt race condition, pending prompt leak on spawn failure, WS subscription
+   276→          leak on PTY exit, CORS substring bypass
+   277→
+   278→          - Files: orchestrator-api.ts, auth-rate-limit.ts, pty.ts (ipc-handlers),
+   279→          websocket-manager.ts (mobile-server), middleware.ts
+   280→
+   281→          - Verification: TypeScript compile, existing tests
+   282→        supersedes: null
+   283→    todos: []
+   284→    automation: eligible
+   285→    submitted_at: 2026-03-10T04:36:42.304Z
+   286→  - _ulid: 01KKAWM2RXD9TWVAHK8BMMSEC2
+   287→    slugs:
+   288→      - bug-persistence
+   289→    title: "Bug audit: workspace persistence and settings"
+   290→    type: bug
+   291→    description: "Investigate and fix bugs in data persistence. Check: atomic write race conditions,
+   292→      backup restore staleness, workspace.json corruption recovery, settings migration, empty
+   293→      workspace overwrite protection, meta-project sync, category name sanitization."
+   294→    spec_ref: "@workspace-persist"
+   295→    meta_ref: null
+   296→    plan_ref: null
+   297→    status: pending
+   298→    blocked_by: []
+   299→    depends_on: []
+   300→    context: []
+   301→    priority: 2
+   302→    tags: []
+   303→    vcs_refs: []
+   304→    created_at: 2026-03-10T03:28:34.077Z
+   305→    notes: []
+   306→    todos: []
+   307→    automation: eligible
+   308→  - _ulid: 01KKAWM3WS24742Z491YVVGYV4
+   309→    slugs:
+   310→      - bug-discovery
+   311→    title: "Bug audit: session discovery"
+   312→    type: bug
+   313→    description: "Investigate and fix bugs in session discovery. Check: encoded path handling for
+   314→      special chars, OpenCode SQLite connection leaks, JSONL parsing for corrupted files, empty
+   315→      session filtering, race between discovery and active writes."
+   316→    spec_ref: "@session-discovery"
+   317→    meta_ref: null
+   318→    plan_ref: null
+   319→    status: pending
+   320→    blocked_by: []
+   321→    depends_on: []
+   322→    context: []
+   323→    priority: 3
+   324→    tags: []
+   325→    vcs_refs: []
+   326→    created_at: 2026-03-10T03:28:35.225Z
+   327→    notes: []
+   328→    todos: []
+   329→    automation: eligible
+   330→  - _ulid: 01KKAWM4Y4E24TFEAPSDXZS99G
+   331→    slugs:
+   332→      - bug-sidebar
+   333→    title: "Bug audit: sidebar and project management"
+   334→    type: bug
+   335→    description: "Investigate and fix bugs in sidebar UI. Check: drag-to-reorder losing position, inline
+   336→      rename not saving on blur, context menu positioning at screen edges, category collapse state,
+   337→      project color picker, close-all-tabs not cleaning tile layout, session count badge."
+   338→    spec_ref: "@sidebar"
+   339→    meta_ref: null
+   340→    plan_ref: null
+   341→    status: pending
+   342→    blocked_by: []
+   343→    depends_on: []
+   344→    context: []
+   345→    priority: 3
+   346→    tags: []
+   347→    vcs_refs: []
+   348→    created_at: 2026-03-10T03:28:36.292Z
+   349→    notes: []
+   350→    todos: []
+   351→    automation: eligible
+   352→
+```
