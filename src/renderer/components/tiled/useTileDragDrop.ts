@@ -141,9 +141,9 @@ export function useApplyDropZone(
     }
 
     const direction = zone.type.replace('split-', '') as 'top' | 'bottom' | 'left' | 'right'
-    // For drag operations, just remove the tile without expanding neighbors.
-    // The tile is being moved, not deleted — expansion would distort the layout.
-    const withoutDragged = layout.filter(t => t.id !== draggedId)
+    // Remove the dragged tile and reclaim its space before splitting.
+    // Without reclamation, the source tile's area becomes an orphaned gap.
+    const withoutDragged = removeTilePreservingStructure(layout, draggedId, tabs, width, height)
     return splitTile(withoutDragged, zone.targetTileId, draggedId, direction)
   }, [tabs, containerSizeRef])
 }
