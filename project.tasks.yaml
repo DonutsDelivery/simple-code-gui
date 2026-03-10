@@ -21,25 +21,48 @@ tasks:
     notes: []
     todos: []
     automation: eligible
-  - title: "Bug audit: tiled layout and drag-drop"
+  - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
+    slugs:
+      - bug-layout
+    title: "Bug audit: tiled layout and drag-drop"
+    type: bug
     description: "Investigate and fix bugs in tiled terminal layout. Check: tile coordinate calculation,
       drag-drop zone detection, resize handle collision, canvas panning bounds, tile removal
       orphaning layout entries, split producing zero-size tiles, effective layout reconciliation."
-    type: bug
     spec_ref: "@tiled-layout"
     meta_ref: null
     plan_ref: null
+    status: pending
+    blocked_by: []
+    depends_on: []
+    context: []
     priority: 2
+    tags: []
+    vcs_refs: []
+    created_at: 2026-03-10T03:28:27.465Z
+    notes: []
+    todos: []
+    automation: eligible
+  - title: "Bug audit: voice I/O (STT and TTS)"
+    description: "Investigate and fix bugs in voice system. Check: Whisper model loading failures,
+      microphone permissions, silence detection thresholds, TTS audio queue overlap, per-project
+      voice not applying on tab switch, XTTS error handling, voice catalog downloads, audio resource
+      cleanup."
+    type: bug
+    spec_ref: "@stt"
+    meta_ref: null
+    plan_ref: null
+    priority: 3
     slugs:
-      - bug-layout
+      - bug-voice
     tags: []
     depends_on: []
     automation: eligible
-    _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
+    _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
     status: pending
     blocked_by: []
     context: []
     vcs_refs: []
-    created_at: 2026-03-10T03:28:27.465Z
+    created_at: 2026-03-10T03:28:28.851Z
     notes: []
     todos: []
