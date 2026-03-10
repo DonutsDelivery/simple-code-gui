@@ -171,16 +171,17 @@ tasks:
     spec_ref: "@task-adapter"
     meta_ref: null
     plan_ref: null
-    status: pending_review
+    status: needs_work
     blocked_by: []
     depends_on: []
     context: []
     priority: 3
     tags: []
     vcs_refs: []
-    session_id: 01KKAZHEKWQRJVVY9Z5WR5NMYA
+    session_id: null
     created_at: 2026-03-10T03:28:30.561Z
     started_at: 2026-03-10T04:24:58.226Z
+    submitted_at: 2026-03-10T04:28:26.347Z
     notes:
       - _ulid: 01KKAZXH27QYNSGW6SKVJF3PJZ
         created_at: 2026-03-10T04:26:09.351Z
@@ -202,9 +203,16 @@ tasks:
             5. KspecAdapter.cycleStatus for 'closed' uses update({status:'open'}) which is wrong for kspec — kspec tasks need specific status transitions
             6. detect.ts — detectBackend doesn't reset daemonEnsured when switching projects
         supersedes: null
+      - _ulid: 01KKB06HY9RCQ8QC9CC81DJ37K
+        created_at: 2026-03-10T04:31:05.162Z
+        author: "@claude"
+        content: "[FIX_CYCLE: 1] Review findings: Branch contamination: 2 unrelated commits (voice I/O, PTY
+          fixes) on same branch. Task commit aeb979c is clean — rebase onto dedicated branch with
+          only that commit. Also: bug 6 (detect.ts daemonEnsured reset on project switch) only
+          partially addressed."
+        supersedes: null
     todos: []
     automation: eligible
-    submitted_at: 2026-03-10T04:28:26.347Z
   - _ulid: 01KKAWM15XTDNE9XPRPADT9R88
     slugs:
       - bug-connectivity
