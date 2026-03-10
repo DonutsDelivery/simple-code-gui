@@ -43,26 +43,49 @@ tasks:
     notes: []
     todos: []
     automation: eligible
-  - title: "Bug audit: voice I/O (STT and TTS)"
+  - _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
+    slugs:
+      - bug-voice
+    title: "Bug audit: voice I/O (STT and TTS)"
+    type: bug
     description: "Investigate and fix bugs in voice system. Check: Whisper model loading failures,
       microphone permissions, silence detection thresholds, TTS audio queue overlap, per-project
       voice not applying on tab switch, XTTS error handling, voice catalog downloads, audio resource
       cleanup."
-    type: bug
     spec_ref: "@stt"
+    meta_ref: null
+    plan_ref: null
+    status: pending
+    blocked_by: []
+    depends_on: []
+    context: []
+    priority: 3
+    tags: []
+    vcs_refs: []
+    created_at: 2026-03-10T03:28:28.851Z
+    notes: []
+    todos: []
+    automation: eligible
+  - title: "Bug audit: task management adapters"
+    description: "Investigate and fix bugs in Beads/Kspec task adapters. Check: backend detection cache
+      staleness, watcher debounce missing rapid changes, status cycling edge cases, inline edit
+      races, Beads-to-Kspec migration data integrity, LRU cache invalidation, panel state machine
+      transitions."
+    type: bug
+    spec_ref: "@task-adapter"
     meta_ref: null
     plan_ref: null
     priority: 3
     slugs:
-      - bug-voice
+      - bug-tasks
     tags: []
     depends_on: []
     automation: eligible
-    _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
+    _ulid: 01KKAWKZB1X95YBRM2P9PFRFE7
     status: pending
     blocked_by: []
     context: []
     vcs_refs: []
-    created_at: 2026-03-10T03:28:28.851Z
+    created_at: 2026-03-10T03:28:30.561Z
     notes: []
     todos: []
