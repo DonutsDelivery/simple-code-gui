@@ -1,0 +1,470 @@
+```console
+diff --git a/.beads/sync_base.jsonl b/.beads/sync_base.jsonl
+index 881d1a4..d52670c 100644
+--- a/.beads/sync_base.jsonl
++++ b/.beads/sync_base.jsonl
+@@ -1,4 +1,4 @@
+-{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":1,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":2,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
++{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":7,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":8,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
+ {"id":"Claude-Terminal-7r8","title":"Extend mobile-server with session/workspace APIs","description":"Extend src/main/mobile-server.ts to expose: GET /api/sessions?path=X&backend=Y (discover sessions), GET /api/workspace (get workspace), POST /api/workspace (save workspace), GET /api/settings (get settings), POST /api/settings (save settings), POST /api/project/add (add project dialog). These mirror the Electron IPC methods.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:11.423992701+01:00","updated_at":"2026-01-19T21:21:59.655091013+01:00","closed_at":"2026-01-19T21:21:59.655091013+01:00"}
+ {"id":"Claude-Terminal-c5c","title":"visual highlight for the currently selected tile/tab","status":"closed","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-02-06T13:47:55.409487594+01:00","created_by":"DonutsDelivery","updated_at":"2026-02-07T09:17:38.692999949+01:00","closed_at":"2026-02-07T09:17:38.692999949+01:00","close_reason":"Closed"}
+ {"id":"Claude-Terminal-dck","title":"Extend mobile-server with full PTY/terminal APIs","description":"Extend src/main/mobile-server.ts to expose: POST /api/pty/spawn (spawn PTY, return ptyId), POST /api/pty/:id/write (write to PTY), DELETE /api/pty/:id (kill PTY), WebSocket /api/pty/:id/stream (stream PTY data bidirectionally). Must handle authentication, track active PTYs, and clean up on disconnect.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:06.133838933+01:00","updated_at":"2026-01-19T21:23:27.032252712+01:00","closed_at":"2026-01-19T21:23:27.032252712+01:00"}
+diff --git a/src/main/session-discovery.ts b/src/main/session-discovery.ts
+index 05828f5..5724924 100644
+--- a/src/main/session-discovery.ts
++++ b/src/main/session-discovery.ts
+@@ -20,13 +20,16 @@ const CONVERSATION_TYPES = ['user', 'assistant']
+ const OPENCODE_CONFIG_NAME = '.opencode.json'
+ 
+ function encodeProjectPath(projectPath: string): string {
+-  // Claude's current encoding scheme:
+-  // 1. Remove trailing slashes/backslashes
+-  // 2. Replace / and \ with -
+-  // 3. Replace : with - (Windows drive letters)
+-  // 4. Replace _ with -
+-  // 5. Replace spaces with -
+-  // 6. Replace dots with dashes (e.g. .config -> -config)
++  // Claude encodes paths by:
++  // 1. Removing trailing slashes/backslashes
++  // 2. Replacing / and \ with -
++  // 3. Replacing _ with -
++  // 4. Replacing spaces with -
++  // 5. Replacing : with - (Windows drive letters)
++  // 6. Replacing dots with dashes (e.g. .config -> -config)
++  // /home/user/my_project/ becomes -home-user-my-project
++  // /home/user/.config/app becomes -home-user--config-app
++  // C:\Users\bob\project becomes -C-Users-bob-project
+   return projectPath
+     .replace(/[/\\]+$/, '')  // Remove trailing slashes/backslashes
+     .replace(/[/\\]/g, '-')  // Replace / and \ with -
+@@ -36,18 +39,6 @@ function encodeProjectPath(projectPath: string): string {
+     .replace(/\./g, '-')     // Replace dots with dashes
+ }
+ 
+-// Claude used a different encoding in older versions (no leading dash, spaces preserved)
+-function encodeProjectPathLegacy(projectPath: string): string {
+-  return projectPath
+-    .replace(/[/\\]+$/, '')
+-    .replace(/^[/\\]/, '')   // Strip leading slash (no leading dash)
+-    .replace(/[/\\]/g, '-')
+-    .replace(/:/g, '-')
+-    .replace(/_/g, '-')
+-    .replace(/\./g, '-')
+-    // Spaces are NOT replaced in the legacy format
+-}
+-
+ function expandHomePath(targetPath: string): string {
+   if (targetPath === '~') {
+     return homedir()
+@@ -91,99 +82,79 @@ function resolveOpenCodeDataDir(projectPath: string): string {
+ 
+ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSession[]> {
+   const claudeDir = join(homedir(), '.claude', 'projects')
++  const encodedPath = encodeProjectPath(projectPath)
++  const projectSessionsDir = join(claudeDir, encodedPath)
+ 
+-  // Check both current and legacy encoding schemes to find all sessions
+-  const candidateDirs = [
+-    join(claudeDir, encodeProjectPath(projectPath)),
+-    join(claudeDir, encodeProjectPathLegacy(projectPath))
+-  ]
+-  // Deduplicate (they may produce the same result for paths without spaces)
+-  const uniqueDirs = [...new Set(candidateDirs)].filter(dir => existsSync(dir))
+-
+-  if (uniqueDirs.length === 0) {
++  if (!existsSync(projectSessionsDir)) {
+     return []
+   }
+ 
+-  const sessions = new Map<string, DiscoveredSession>()
++  const sessions: DiscoveredSession[] = []
+ 
+-  for (const projectSessionsDir of uniqueDirs) {
+-    try {
+-      const files = await readdir(projectSessionsDir)
+-
+-      // Process files in parallel for better performance
+-      const results = await Promise.all(
+-        files
+-          .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
+-          .map(async (file) => {
+-            const sessionId = file.replace('.jsonl', '')
+-            const filePath = join(projectSessionsDir, file)
+-
+-            try {
+-              // Read content first, then stat — ensures mtime/size reflect
+-              // at least the content we read (file may grow from active writes)
+-              const content = await readFile(filePath, 'utf-8')
+-              const fileStat = await stat(filePath)
+-              const lines = content.split('\n').filter(line => line.trim())
+-
+-              // Look for slug and check if session has actual conversation
+-              let slug = sessionId.slice(0, 8)
+-              let cwd = projectPath
+-              let hasConversation = false
+-              let parseErrors = 0
+-
+-              for (const line of lines) {
+-                try {
+-                  const data = JSON.parse(line)
+-                  if (data.slug) slug = data.slug
+-                  if (data.cwd) cwd = data.cwd
+-                  if (data.type && CONVERSATION_TYPES.includes(data.type)) {
+-                    hasConversation = true
+-                  }
+-                } catch {
+-                  parseErrors++
++  try {
++    const files = await readdir(projectSessionsDir)
++
++    // Process files in parallel for better performance
++    const results = await Promise.all(
++      files
++        .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
++        .map(async (file) => {
++          const sessionId = file.replace('.jsonl', '')
++          const filePath = join(projectSessionsDir, file)
++
++          try {
++            const fileStat = await stat(filePath)
++            const content = await readFile(filePath, 'utf-8')
++            const lines = content.split('\n').filter(line => line.trim())
++
++            // Look for slug and check if session has actual conversation
++            let slug = sessionId.slice(0, 8)
++            let cwd = projectPath
++            let hasConversation = false
++
++            for (const line of lines) {
++              try {
++                const data = JSON.parse(line)
++                if (data.slug) slug = data.slug
++                if (data.cwd) cwd = data.cwd
++                if (data.type && CONVERSATION_TYPES.includes(data.type)) {
++                  hasConversation = true
+                 }
++              } catch {
++                // Skip non-JSON lines
+               }
++            }
+ 
+-              // Log if many lines failed to parse (suggests file corruption,
+-              // not just a single truncated line from a concurrent write)
+-              if (parseErrors > 1) {
+-                console.warn(`Session ${file}: ${parseErrors}/${lines.length} lines failed to parse`)
+-              }
+-
+-              if (!hasConversation) {
+-                return null
+-              }
+-
+-              return {
+-                sessionId,
+-                slug,
+-                lastModified: fileStat.mtimeMs,
+-                cwd,
+-                fileSize: fileStat.size
+-              }
+-            } catch (e) {
+-              console.error(`Failed to parse session ${file}:`, e)
++            if (!hasConversation) {
+               return null
+             }
+-          })
+-      )
+ 
+-      // Deduplicate by sessionId (same session may appear in both dirs)
+-      for (const result of results) {
+-        if (result && !sessions.has(result.sessionId)) {
+-          sessions.set(result.sessionId, result)
+-        }
+-      }
+-    } catch (e) {
+-      console.error('Failed to read sessions directory:', e)
++            return {
++              sessionId,
++              slug,
++              lastModified: fileStat.mtimeMs,
++              cwd,
++              fileSize: fileStat.size
++            }
++          } catch (e) {
++            console.error(`Failed to parse session ${file}:`, e)
++            return null
++          }
++        })
++    )
++
++    // Filter out nulls and add to sessions
++    for (const result of results) {
++      if (result) sessions.push(result)
+     }
++  } catch (e) {
++    console.error('Failed to read sessions directory:', e)
+   }
+ 
+   // Sort by most recent first
+-  const sorted = [...sessions.values()]
+-  sorted.sort((a, b) => b.lastModified - a.lastModified)
++  sessions.sort((a, b) => b.lastModified - a.lastModified)
+ 
+-  return sorted
++  return sessions
+ }
+ 
+ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+@@ -194,15 +165,15 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+     return []
+   }
+ 
+-  let db: InstanceType<typeof Database> | null = null
+   try {
+-    db = new Database(dbPath, { readonly: true, fileMustExist: true })
++    const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+     const rows = db.prepare(`
+       SELECT id, title, updated_at, created_at, message_count
+       FROM sessions
+       WHERE parent_session_id IS NULL
+       ORDER BY updated_at DESC
+     `).all() as Array<{ id: string; title: string | null; updated_at: number; created_at: number; message_count: number }>
++    db.close()
+ 
+     return rows
+       .filter(row => (row.message_count ?? 0) > 0)
+@@ -219,8 +190,6 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+   } catch (e) {
+     console.error('Failed to read OpenCode sessions:', e)
+     return []
+-  } finally {
+-    try { db?.close() } catch { /* already errored */ }
+   }
+ }
+ 
+diff --git a/src/renderer/components/sidebar/hooks/useDragAndDrop.ts b/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
+index 6308645..c20348c 100644
+--- a/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
++++ b/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
+@@ -1,4 +1,4 @@
+-import { useState, useCallback, useRef } from 'react'
++import { useState, useCallback } from 'react'
+ import { Project } from '../../../stores/workspace.js'
+ import { DropTarget } from '../types.js'
+ 
+@@ -48,9 +48,6 @@ export function useDragAndDrop({
+   const [draggedProject, setDraggedProject] = useState<string | null>(null)
+   const [draggedCategory, setDraggedCategory] = useState<string | null>(null)
+   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+-  // Ref tracks the latest dropTarget so drop handlers always read fresh position
+-  // (state in the closure may be stale if React hasn't re-rendered since the last dragOver)
+-  const dropTargetRef = useRef<DropTarget | null>(null)
+ 
+   const handleProjectDragStart = useCallback((e: React.DragEvent, projectPath: string) => {
+     setDraggedProject(projectPath)
+@@ -63,7 +60,6 @@ export function useDragAndDrop({
+   const handleProjectDragEnd = useCallback(() => {
+     setDraggedProject(null)
+     setDropTarget(null)
+-    dropTargetRef.current = null
+   }, [])
+ 
+   const handleCategoryDragOver = useCallback(
+@@ -71,12 +67,10 @@ export function useDragAndDrop({
+       e.preventDefault()
+       e.dataTransfer.dropEffect = 'move'
+       if (draggedProject) {
+-        const target: DropTarget = {
++        setDropTarget({
+           type: categoryId ? 'category' : 'uncategorized',
+           id: categoryId,
+-        }
+-        setDropTarget(target)
+-        dropTargetRef.current = target
++        })
+       }
+     },
+     [draggedProject]
+@@ -90,7 +84,6 @@ export function useDragAndDrop({
+       }
+       setDraggedProject(null)
+       setDropTarget(null)
+-      dropTargetRef.current = null
+     },
+     [draggedProject, moveProjectToCategory]
+   )
+@@ -101,9 +94,7 @@ export function useDragAndDrop({
+       e.stopPropagation()
+       e.dataTransfer.dropEffect = 'move'
+       if (draggedProject && draggedProject !== projectPath) {
+-        const target: DropTarget = { type: 'project', id: projectPath, position }
+-        setDropTarget(target)
+-        dropTargetRef.current = target
++        setDropTarget({ type: 'project', id: projectPath, position })
+       }
+     },
+     [draggedProject]
+@@ -129,18 +120,15 @@ export function useDragAndDrop({
+ 
+           const newOrder = categoryProjects.filter((p) => p !== draggedProject)
+           const targetIndex = newOrder.indexOf(targetPath)
+-          // Read from ref to get the latest position (state may be stale)
+-          const currentDropTarget = dropTargetRef.current
+-          const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
++          const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+           newOrder.splice(insertIndex, 0, draggedProject)
+           reorderProjects(targetCategoryId ?? null, newOrder)
+         }
+       }
+       setDraggedProject(null)
+       setDropTarget(null)
+-      dropTargetRef.current = null
+     },
+-    [draggedProject, projects, moveProjectToCategory, reorderProjects]
++    [draggedProject, projects, dropTarget, moveProjectToCategory, reorderProjects]
+   )
+ 
+   const handleCategoryDragStart = useCallback((e: React.DragEvent, categoryId: string) => {
+@@ -152,7 +140,6 @@ export function useDragAndDrop({
+   const handleCategoryDragEnd = useCallback(() => {
+     setDraggedCategory(null)
+     setDropTarget(null)
+-    dropTargetRef.current = null
+   }, [])
+ 
+   const handleCategoryHeaderDragOver = useCallback(
+@@ -160,9 +147,7 @@ export function useDragAndDrop({
+       e.preventDefault()
+       e.dataTransfer.dropEffect = 'move'
+       if (draggedCategory && draggedCategory !== targetCategoryId) {
+-        const target: DropTarget = { type: 'category', id: targetCategoryId, position }
+-        setDropTarget(target)
+-        dropTargetRef.current = target
++        setDropTarget({ type: 'category', id: targetCategoryId, position })
+       }
+     },
+     [draggedCategory]
+@@ -176,17 +161,14 @@ export function useDragAndDrop({
+         const categoryIds = orderedCategories.map((c) => c.id)
+         const newOrder = categoryIds.filter((id) => id !== draggedCategory)
+         const targetIndex = newOrder.indexOf(targetCategoryId)
+-        // Read from ref to get the latest position (state may be stale)
+-        const currentDropTarget = dropTargetRef.current
+-        const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
++        const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+         newOrder.splice(insertIndex, 0, draggedCategory)
+         reorderCategories(newOrder)
+       }
+       setDraggedCategory(null)
+       setDropTarget(null)
+-      dropTargetRef.current = null
+     },
+-    [draggedCategory, categories, reorderCategories]
++    [draggedCategory, categories, dropTarget, reorderCategories]
+   )
+ 
+   return {
+diff --git a/src/renderer/components/sidebar/useSidebarHandlers.ts b/src/renderer/components/sidebar/useSidebarHandlers.ts
+index 38f8a6b..2cf90b0 100644
+--- a/src/renderer/components/sidebar/useSidebarHandlers.ts
++++ b/src/renderer/components/sidebar/useSidebarHandlers.ts
+@@ -1,4 +1,4 @@
+-import { useCallback, useRef } from 'react'
++import { useCallback } from 'react'
+ import { Project, useWorkspaceStore } from '../../stores/workspace.js'
+ import { SidebarState } from './useSidebarState.js'
+ import { SidebarProps } from './types.js'
+@@ -95,13 +95,9 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   )
+ 
+   // Rename handlers
+-  // Ref tracks cancel intent so blur handler can skip saving after Escape
+-  const renameCancelledRef = useRef(false)
+-
+   const handleStartRename = useCallback(
+     (e: React.MouseEvent, project: Project) => {
+       e.stopPropagation()
+-      renameCancelledRef.current = false
+       setEditingProject({ path: project.path, name: project.name })
+       setTimeout(() => editInputRef.current?.select(), 0)
+     },
+@@ -109,10 +105,6 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   )
+ 
+   const handleRenameSubmit = useCallback(() => {
+-    if (renameCancelledRef.current) {
+-      renameCancelledRef.current = false
+-      return
+-    }
+     if (editingProject && editingProject.name.trim()) {
+       onUpdateProject(editingProject.path, { name: editingProject.name.trim() })
+     }
+@@ -122,10 +114,7 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   const handleRenameKeyDown = useCallback(
+     (e: React.KeyboardEvent) => {
+       if (e.key === 'Enter') handleRenameSubmit()
+-      else if (e.key === 'Escape') {
+-        renameCancelledRef.current = true
+-        setEditingProject(null)
+-      }
++      else if (e.key === 'Escape') setEditingProject(null)
+     },
+     [handleRenameSubmit, setEditingProject]
+   )
+@@ -150,12 +139,8 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+     if (metaPath) onOpenSession(metaPath)
+   }, [onOpenSession])
+ 
+-  // Category rename cancel ref (same pattern as project rename)
+-  const categoryRenameCancelledRef = useRef(false)
+-
+   const handleStartCategoryRename = useCallback(
+     (category: ReturnType<typeof useWorkspaceStore.getState>['categories'][0]) => {
+-      categoryRenameCancelledRef.current = false
+       setEditingCategory({ id: category.id, name: category.name })
+       setTimeout(() => categoryEditInputRef.current?.select(), 0)
+     },
+@@ -163,10 +148,6 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   )
+ 
+   const handleCategoryRenameSubmit = useCallback(() => {
+-    if (categoryRenameCancelledRef.current) {
+-      categoryRenameCancelledRef.current = false
+-      return
+-    }
+     if (editingCategory && editingCategory.name.trim()) {
+       updateCategory(editingCategory.id, { name: editingCategory.name.trim() })
+     }
+@@ -176,10 +157,7 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   const handleCategoryRenameKeyDown = useCallback(
+     (e: React.KeyboardEvent) => {
+       if (e.key === 'Enter') handleCategoryRenameSubmit()
+-      else if (e.key === 'Escape') {
+-        categoryRenameCancelledRef.current = true
+-        setEditingCategory(null)
+-      }
++      else if (e.key === 'Escape') setEditingCategory(null)
+     },
+     [handleCategoryRenameSubmit, setEditingCategory]
+   )
+diff --git a/src/renderer/hooks/useProjectHandlers.ts b/src/renderer/hooks/useProjectHandlers.ts
+index 8f40128..9815d2f 100644
+--- a/src/renderer/hooks/useProjectHandlers.ts
++++ b/src/renderer/hooks/useProjectHandlers.ts
+@@ -252,17 +252,10 @@ export function useProjectHandlers({
+   const handleCloseProjectTabs = useCallback((projectPath: string) => {
+     const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
+     tabsToClose.forEach(tab => {
+-      closedTabsRef.current.push({
+-        projectPath: tab.projectPath,
+-        sessionId: tab.sessionId,
+-        title: tab.title,
+-        backend: tab.backend
+-      })
+       api.killPty(tab.id)
+       clearTerminalBuffer(tab.id)
+       removeTab(tab.id)
+     })
+-    setClosedTabCount(closedTabsRef.current.length)
+   }, [api, openTabs, removeTab])
+ 
+   const handleProjectCreated = useCallback((projectPath: string, projectName: string) => {
+```

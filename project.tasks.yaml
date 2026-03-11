@@ -1,68 +1,4 @@
 tasks:
-  - _ulid: 01KKAWKTJVBTXZDAF2293N8875
-    slugs:
-      - bug-pty
-    title: "Bug audit: PTY lifecycle and backend switching"
-    type: bug
-    description: "Investigate and fix bugs in PTY session management. Check: PTY spawn error handling,
-      resize debounce edge cases, output buffer overflow, backend switching race conditions, session
-      ID preservation across switches, cleanup on unexpected PTY exit, enhanced PATH construction."
-    spec_ref: "@pty-lifecycle"
-    meta_ref: null
-    plan_ref: null
-    status: completed
-    blocked_by: []
-    closed_reason: "Review passed. 5 bug fixes in PTY backend switching and ANSI stripping: (1) settings
-      inheritance for autoAcceptTools/permissionMode, (2) spawn failure error handling with cleanup,
-      (3) autoClose flag transfer, (4) IPC send try-catch consistency, (5) CSI/OSC/charset ANSI
-      regex coverage. All 40 tests pass. Changes well-scoped, no regressions."
-    depends_on: []
-    context: []
-    priority: 2
-    tags: []
-    vcs_refs: []
-    session_id: 01KKAYH7STER6H279K2WWJHNH3
-    created_at: 2026-03-10T03:28:25.690Z
-    started_at: 2026-03-10T04:04:18.647Z
-    submitted_at: 2026-03-10T04:08:55.443Z
-    completed_at: 2026-03-10T04:13:31.959Z
-    notes:
-      - _ulid: 01KKAYXDC37GJG0ZKMSYGMQK1H
-        created_at: 2026-03-10T04:08:36.995Z
-        author: "@claude"
-        content: >-
-          Execution context:
-
-          - Background: PTY lifecycle has several bugs in backend switching and output buffer
-          handling
-
-          - Scope: Fix backend switch (error handling, settings inheritance, autoClose transfer),
-          fix ANSI regex
-
-          - Files: src/main/app/ipc-handlers/pty.ts, src/main/pty-manager.ts
-
-          - Verification: TypeScript compiles clean, npm run build succeeds
-
-
-          Bugs fixed:
-
-          1. pty:set-backend lost project settings (autoAcceptTools, permissionMode) — now looks up
-          workspace/project settings
-
-          2. pty:set-backend had no error handling — spawn failure after kill left user with no PTY;
-          now throws to renderer
-
-          3. pty:set-backend didn't transfer autoCloseSessions — flag leaked for old ID; now
-          transferred
-
-          4. pty:set-backend onData/onExit lacked try-catch on IPC send — inconsistent with
-          pty:spawn handler
-
-          5. OutputBuffer ANSI regex missed private mode sequences (\x1b[?25h etc.), character set
-          escapes (\x1b(B), and OSC with ST terminator — all now stripped
-        supersedes: null
-    todos: []
-    automation: eligible
   - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
     slugs:
       - bug-layout
@@ -465,6 +401,7 @@ tasks:
     plan_ref: null
     status: completed
     blocked_by: []
+    closed_reason: Review passed. PR 16 merged. All 4 fixes correct.
     depends_on: []
     context: []
     priority: 3
@@ -474,6 +411,7 @@ tasks:
     created_at: 2026-03-10T03:28:36.292Z
     started_at: 2026-03-10T05:14:09.647Z
     submitted_at: 2026-03-10T05:25:12.830Z
+    completed_at: 2026-03-10T06:27:05.868Z
     notes:
       - _ulid: 01KKB391FJ67DSH2HVC2TK06SN
         created_at: 2026-03-10T05:24:52.338Z
@@ -501,5 +439,3 @@ tasks:
         supersedes: null
     todos: []
     automation: eligible
-    completed_at: 2026-03-10T06:27:05.868Z
-    closed_reason: Review passed. PR 16 merged. All 4 fixes correct.

@@ -1,0 +1,807 @@
+```
+   100→index 0ca555b..57a7944 100644
+   101→--- a/src/main/mobile-security/auth-rate-limit.ts
+   102→+++ b/src/main/mobile-security/auth-rate-limit.ts
+   103→@@ -33,8 +33,8 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: num
+   104→     }
+   105→   }
+   106→ 
+   107→-  // Check if window has expired - reset if so
+   108→-  if (now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+   109→+  // Block expired or window expired — reset so user gets fresh attempts
+   110→+  if ((entry.blockedUntil && entry.blockedUntil <= now) || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+   111→     rateLimitStore.delete(ip)
+   112→     return { allowed: true }
+   113→   }
+   114→diff --git a/src/main/mobile-server/index.ts b/src/main/mobile-server/index.ts
+   115→index 822c7df..afefb60 100644
+   116→--- a/src/main/mobile-server/index.ts
+   117→+++ b/src/main/mobile-server/index.ts
+   118→@@ -213,7 +213,7 @@ export class MobileServer {
+   119→   }
+   120→ 
+   121→   private broadcastPtyExit(ptyId: string, code: number): void {
+   122→-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams)
+   123→+    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+   124→   }
+   125→ 
+   126→   // Service handlers
+   127→diff --git a/src/main/mobile-server/middleware.ts b/src/main/mobile-server/middleware.ts
+   128→index b6baee0..d537585 100644
+   129→--- a/src/main/mobile-server/middleware.ts
+   130→+++ b/src/main/mobile-server/middleware.ts
+   131→@@ -31,26 +31,35 @@ export function setupCorsMiddleware(app: Express): void {
+   132→         return callback(null, true)
+   133→       }
+   134→ 
+   135→+      // Parse origin to extract hostname for safe validation
+   136→+      let hostname: string
+   137→+      try {
+   138→+        hostname = new URL(origin).hostname
+   139→+      } catch {
+   140→+        log('CORS blocked malformed origin', { origin })
+   141→+        return callback(new Error('CORS not allowed for this origin'))
+   142→+      }
+   143→+
+   144→       // Allow localhost variants
+   145→-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+   146→+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+   147→         return callback(null, true)
+   148→       }
+   149→ 
+   150→       // Allow local network IP ranges (RFC 1918)
+   151→       // 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+   152→-      const localNetworkPattern = /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?/
+   153→-      if (localNetworkPattern.test(origin)) {
+   154→+      const localNetworkPattern = /^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/
+   155→+      if (localNetworkPattern.test(hostname)) {
+   156→         return callback(null, true)
+   157→       }
+   158→ 
+   159→       // Allow Tailscale CGNAT range (100.64.0.0 - 100.127.255.255)
+   160→-      const tailscaleCgnatPattern = /^https?:\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+(:\d+)?/
+   161→-      if (tailscaleCgnatPattern.test(origin)) {
+   162→+      const tailscaleCgnatPattern = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/
+   163→+      if (tailscaleCgnatPattern.test(hostname)) {
+   164→         return callback(null, true)
+   165→       }
+   166→ 
+   167→       // Allow Tailscale MagicDNS hostnames (*.ts.net)
+   168→-      if (origin.includes('.ts.net')) {
+   169→+      if (hostname.endsWith('.ts.net')) {
+   170→         return callback(null, true)
+   171→       }
+   172→ 
+   173→diff --git a/src/main/mobile-server/websocket-manager.ts b/src/main/mobile-server/websocket-manager.ts
+   174→index 3c4383d..0e18187 100644
+   175→--- a/src/main/mobile-server/websocket-manager.ts
+   176→+++ b/src/main/mobile-server/websocket-manager.ts
+   177→@@ -318,20 +318,25 @@ export function broadcastPtyData(
+   178→ export function broadcastPtyExit(
+   179→   ptyId: string,
+   180→   code: number,
+   181→-  ptyStreams: Map<string, Set<WebSocket>>
+   182→+  ptyStreams: Map<string, Set<WebSocket>>,
+   183→+  terminalSubscriptions?: Map<string, Set<WebSocket>>
+   184→ ): void {
+   185→   const streams = ptyStreams.get(ptyId)
+   186→-  if (!streams || streams.size === 0) return
+   187→+  if (streams && streams.size > 0) {
+   188→+    const message = JSON.stringify({
+   189→+      type: 'exit',
+   190→+      code
+   191→+    })
+   192→ 
+   193→-  const message = JSON.stringify({
+   194→-    type: 'exit',
+   195→-    code
+   196→-  })
+   197→+    streams.forEach(ws => {
+   198→+      if (ws.readyState === WebSocket.OPEN) {
+   199→+        ws.send(message)
+   200→+        ws.close(1000, 'PTY exited')
+   201→+      }
+   202→+    })
+   203→+  }
+   204→ 
+   205→-  streams.forEach(ws => {
+   206→-    if (ws.readyState === WebSocket.OPEN) {
+   207→-      ws.send(message)
+   208→-      ws.close(1000, 'PTY exited')
+   209→-    }
+   210→-  })
+   211→+  // Clean up stale subscriptions for this PTY
+   212→+  ptyStreams.delete(ptyId)
+   213→+  terminalSubscriptions?.delete(ptyId)
+   214→ }
+   215→diff --git a/src/main/orchestrator-api.ts b/src/main/orchestrator-api.ts
+   216→index 353a455..56bc92b 100644
+   217→--- a/src/main/orchestrator-api.ts
+   218→+++ b/src/main/orchestrator-api.ts
+   219→@@ -2,11 +2,13 @@ import * as http from 'http'
+   220→ import type { PtyManager } from './pty-manager.js'
+   221→ 
+   222→ const ORCHESTRATOR_PORT = 19836
+   223→+const MAX_PORT_RETRIES = 5
+   224→ 
+   225→ export class OrchestratorApi {
+   226→   private server: http.Server | null = null
+   227→   private ptyManager: PtyManager
+   228→   private ptyToProject: Map<string, string>
+   229→+  private activePort: number = ORCHESTRATOR_PORT
+   230→ 
+   231→   constructor(ptyManager: PtyManager, ptyToProject: Map<string, string>) {
+   232→     this.ptyManager = ptyManager
+   233→@@ -16,6 +18,8 @@ export class OrchestratorApi {
+   234→   start(): void {
+   235→     if (this.server) return
+   236→ 
+   237→+    this.activePort = ORCHESTRATOR_PORT
+   238→+
+   239→     this.server = http.createServer((req, res) => {
+   240→       res.setHeader('Content-Type', 'application/json')
+   241→ 
+   242→@@ -27,7 +31,7 @@ export class OrchestratorApi {
+   243→         return
+   244→       }
+   245→ 
+   246→-      const url = new URL(req.url || '/', `http://localhost:${ORCHESTRATOR_PORT}`)
+   247→+      const url = new URL(req.url || '/', `http://localhost:${this.activePort}`)
+   248→       const path = url.pathname
+   249→ 
+   250→       // Match: /sessions/:id/output or /sessions/:id/input
+   251→@@ -46,14 +50,27 @@ export class OrchestratorApi {
+   252→       }
+   253→     })
+   254→ 
+   255→-    this.server.listen(ORCHESTRATOR_PORT, '127.0.0.1', () => {
+   256→-      console.log(`[Orchestrator] API server started on port ${ORCHESTRATOR_PORT}`)
+   257→+    this.tryListen(this.activePort)
+   258→+  }
+   259→+
+   260→+  private tryListen(port: number): void {
+   261→+    const retryCount = port - ORCHESTRATOR_PORT
+   262→+    if (retryCount >= MAX_PORT_RETRIES) {
+   263→+      console.error(`[Orchestrator] Failed to bind after ${MAX_PORT_RETRIES} attempts (ports ${ORCHESTRATOR_PORT}-${port - 1})`)
+   264→+      this.server?.close()
+   265→+      this.server = null
+   266→+      return
+   267→+    }
+   268→+
+   269→+    this.server!.listen(port, '127.0.0.1', () => {
+   270→+      this.activePort = port
+   271→+      console.log(`[Orchestrator] API server started on port ${port}`)
+   272→     })
+   273→ 
+   274→-    this.server.on('error', (e: NodeJS.ErrnoException) => {
+   275→+    this.server!.once('error', (e: NodeJS.ErrnoException) => {
+   276→       if (e.code === 'EADDRINUSE') {
+   277→-        console.warn(`[Orchestrator] Port ${ORCHESTRATOR_PORT} in use, trying ${ORCHESTRATOR_PORT + 1}`)
+   278→-        this.server?.listen(ORCHESTRATOR_PORT + 1, '127.0.0.1')
+   279→+        console.warn(`[Orchestrator] Port ${port} in use, trying ${port + 1}`)
+   280→+        this.tryListen(port + 1)
+   281→       } else {
+   282→         console.error('[Orchestrator] API server error:', e.message)
+   283→       }
+   284→diff --git a/src/main/session-discovery.ts b/src/main/session-discovery.ts
+   285→index 5724924..05828f5 100644
+   286→--- a/src/main/session-discovery.ts
+   287→+++ b/src/main/session-discovery.ts
+   288→@@ -20,16 +20,13 @@ const CONVERSATION_TYPES = ['user', 'assistant']
+   289→ const OPENCODE_CONFIG_NAME = '.opencode.json'
+   290→ 
+   291→ function encodeProjectPath(projectPath: string): string {
+   292→-  // Claude encodes paths by:
+   293→-  // 1. Removing trailing slashes/backslashes
+   294→-  // 2. Replacing / and \ with -
+   295→-  // 3. Replacing _ with -
+   296→-  // 4. Replacing spaces with -
+   297→-  // 5. Replacing : with - (Windows drive letters)
+   298→-  // 6. Replacing dots with dashes (e.g. .config -> -config)
+   299→-  // /home/user/my_project/ becomes -home-user-my-project
+   300→-  // /home/user/.config/app becomes -home-user--config-app
+   301→-  // C:\Users\bob\project becomes -C-Users-bob-project
+   302→+  // Claude's current encoding scheme:
+   303→+  // 1. Remove trailing slashes/backslashes
+   304→+  // 2. Replace / and \ with -
+   305→+  // 3. Replace : with - (Windows drive letters)
+   306→+  // 4. Replace _ with -
+   307→+  // 5. Replace spaces with -
+   308→+  // 6. Replace dots with dashes (e.g. .config -> -config)
+   309→   return projectPath
+   310→     .replace(/[/\\]+$/, '')  // Remove trailing slashes/backslashes
+   311→     .replace(/[/\\]/g, '-')  // Replace / and \ with -
+   312→@@ -39,6 +36,18 @@ function encodeProjectPath(projectPath: string): string {
+   313→     .replace(/\./g, '-')     // Replace dots with dashes
+   314→ }
+   315→ 
+   316→+// Claude used a different encoding in older versions (no leading dash, spaces preserved)
+   317→+function encodeProjectPathLegacy(projectPath: string): string {
+   318→+  return projectPath
+   319→+    .replace(/[/\\]+$/, '')
+   320→+    .replace(/^[/\\]/, '')   // Strip leading slash (no leading dash)
+   321→+    .replace(/[/\\]/g, '-')
+   322→+    .replace(/:/g, '-')
+   323→+    .replace(/_/g, '-')
+   324→+    .replace(/\./g, '-')
+   325→+    // Spaces are NOT replaced in the legacy format
+   326→+}
+   327→+
+   328→ function expandHomePath(targetPath: string): string {
+   329→   if (targetPath === '~') {
+   330→     return homedir()
+   331→@@ -82,79 +91,99 @@ function resolveOpenCodeDataDir(projectPath: string): string {
+   332→ 
+   333→ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSession[]> {
+   334→   const claudeDir = join(homedir(), '.claude', 'projects')
+   335→-  const encodedPath = encodeProjectPath(projectPath)
+   336→-  const projectSessionsDir = join(claudeDir, encodedPath)
+   337→ 
+   338→-  if (!existsSync(projectSessionsDir)) {
+   339→+  // Check both current and legacy encoding schemes to find all sessions
+   340→+  const candidateDirs = [
+   341→+    join(claudeDir, encodeProjectPath(projectPath)),
+   342→+    join(claudeDir, encodeProjectPathLegacy(projectPath))
+   343→+  ]
+   344→+  // Deduplicate (they may produce the same result for paths without spaces)
+   345→+  const uniqueDirs = [...new Set(candidateDirs)].filter(dir => existsSync(dir))
+   346→+
+   347→+  if (uniqueDirs.length === 0) {
+   348→     return []
+   349→   }
+   350→ 
+   351→-  const sessions: DiscoveredSession[] = []
+   352→+  const sessions = new Map<string, DiscoveredSession>()
+   353→ 
+   354→-  try {
+   355→-    const files = await readdir(projectSessionsDir)
+   356→-
+   357→-    // Process files in parallel for better performance
+   358→-    const results = await Promise.all(
+   359→-      files
+   360→-        .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
+   361→-        .map(async (file) => {
+   362→-          const sessionId = file.replace('.jsonl', '')
+   363→-          const filePath = join(projectSessionsDir, file)
+   364→-
+   365→-          try {
+   366→-            const fileStat = await stat(filePath)
+   367→-            const content = await readFile(filePath, 'utf-8')
+   368→-            const lines = content.split('\n').filter(line => line.trim())
+   369→-
+   370→-            // Look for slug and check if session has actual conversation
+   371→-            let slug = sessionId.slice(0, 8)
+   372→-            let cwd = projectPath
+   373→-            let hasConversation = false
+   374→-
+   375→-            for (const line of lines) {
+   376→-              try {
+   377→-                const data = JSON.parse(line)
+   378→-                if (data.slug) slug = data.slug
+   379→-                if (data.cwd) cwd = data.cwd
+   380→-                if (data.type && CONVERSATION_TYPES.includes(data.type)) {
+   381→-                  hasConversation = true
+   382→+  for (const projectSessionsDir of uniqueDirs) {
+   383→+    try {
+   384→+      const files = await readdir(projectSessionsDir)
+   385→+
+   386→+      // Process files in parallel for better performance
+   387→+      const results = await Promise.all(
+   388→+        files
+   389→+          .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'))
+   390→+          .map(async (file) => {
+   391→+            const sessionId = file.replace('.jsonl', '')
+   392→+            const filePath = join(projectSessionsDir, file)
+   393→+
+   394→+            try {
+   395→+              // Read content first, then stat — ensures mtime/size reflect
+   396→+              // at least the content we read (file may grow from active writes)
+   397→+              const content = await readFile(filePath, 'utf-8')
+   398→+              const fileStat = await stat(filePath)
+   399→+              const lines = content.split('\n').filter(line => line.trim())
+   400→+
+   401→+              // Look for slug and check if session has actual conversation
+   402→+              let slug = sessionId.slice(0, 8)
+   403→+              let cwd = projectPath
+   404→+              let hasConversation = false
+   405→+              let parseErrors = 0
+   406→+
+   407→+              for (const line of lines) {
+   408→+                try {
+   409→+                  const data = JSON.parse(line)
+   410→+                  if (data.slug) slug = data.slug
+   411→+                  if (data.cwd) cwd = data.cwd
+   412→+                  if (data.type && CONVERSATION_TYPES.includes(data.type)) {
+   413→+                    hasConversation = true
+   414→+                  }
+   415→+                } catch {
+   416→+                  parseErrors++
+   417→                 }
+   418→-              } catch {
+   419→-                // Skip non-JSON lines
+   420→               }
+   421→-            }
+   422→ 
+   423→-            if (!hasConversation) {
+   424→+              // Log if many lines failed to parse (suggests file corruption,
+   425→+              // not just a single truncated line from a concurrent write)
+   426→+              if (parseErrors > 1) {
+   427→+                console.warn(`Session ${file}: ${parseErrors}/${lines.length} lines failed to parse`)
+   428→+              }
+   429→+
+   430→+              if (!hasConversation) {
+   431→+                return null
+   432→+              }
+   433→+
+   434→+              return {
+   435→+                sessionId,
+   436→+                slug,
+   437→+                lastModified: fileStat.mtimeMs,
+   438→+                cwd,
+   439→+                fileSize: fileStat.size
+   440→+              }
+   441→+            } catch (e) {
+   442→+              console.error(`Failed to parse session ${file}:`, e)
+   443→               return null
+   444→             }
+   445→+          })
+   446→+      )
+   447→ 
+   448→-            return {
+   449→-              sessionId,
+   450→-              slug,
+   451→-              lastModified: fileStat.mtimeMs,
+   452→-              cwd,
+   453→-              fileSize: fileStat.size
+   454→-            }
+   455→-          } catch (e) {
+   456→-            console.error(`Failed to parse session ${file}:`, e)
+   457→-            return null
+   458→-          }
+   459→-        })
+   460→-    )
+   461→-
+   462→-    // Filter out nulls and add to sessions
+   463→-    for (const result of results) {
+   464→-      if (result) sessions.push(result)
+   465→+      // Deduplicate by sessionId (same session may appear in both dirs)
+   466→+      for (const result of results) {
+   467→+        if (result && !sessions.has(result.sessionId)) {
+   468→+          sessions.set(result.sessionId, result)
+   469→+        }
+   470→+      }
+   471→+    } catch (e) {
+   472→+      console.error('Failed to read sessions directory:', e)
+   473→     }
+   474→-  } catch (e) {
+   475→-    console.error('Failed to read sessions directory:', e)
+   476→   }
+   477→ 
+   478→   // Sort by most recent first
+   479→-  sessions.sort((a, b) => b.lastModified - a.lastModified)
+   480→+  const sorted = [...sessions.values()]
+   481→+  sorted.sort((a, b) => b.lastModified - a.lastModified)
+   482→ 
+   483→-  return sessions
+   484→+  return sorted
+   485→ }
+   486→ 
+   487→ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+   488→@@ -165,15 +194,15 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+   489→     return []
+   490→   }
+   491→ 
+   492→+  let db: InstanceType<typeof Database> | null = null
+   493→   try {
+   494→-    const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+   495→+    db = new Database(dbPath, { readonly: true, fileMustExist: true })
+   496→     const rows = db.prepare(`
+   497→       SELECT id, title, updated_at, created_at, message_count
+   498→       FROM sessions
+   499→       WHERE parent_session_id IS NULL
+   500→       ORDER BY updated_at DESC
+   501→     `).all() as Array<{ id: string; title: string | null; updated_at: number; created_at: number; message_count: number }>
+   502→-    db.close()
+   503→ 
+   504→     return rows
+   505→       .filter(row => (row.message_count ?? 0) > 0)
+   506→@@ -190,6 +219,8 @@ function discoverOpenCodeSessions(projectPath: string): DiscoveredSession[] {
+   507→   } catch (e) {
+   508→     console.error('Failed to read OpenCode sessions:', e)
+   509→     return []
+   510→+  } finally {
+   511→+    try { db?.close() } catch { /* already errored */ }
+   512→   }
+   513→ }
+   514→ 
+   515→diff --git a/src/renderer/components/beads/adapters/kspec-adapter.ts b/src/renderer/components/beads/adapters/kspec-adapter.ts
+   516→index ea300f9..35135db 100644
+   517→--- a/src/renderer/components/beads/adapters/kspec-adapter.ts
+   518→+++ b/src/renderer/components/beads/adapters/kspec-adapter.ts
+   519→@@ -24,13 +24,25 @@ function headers(cwd: string): HeadersInit {
+   520→   }
+   521→ }
+   522→ 
+   523→+// Shared flag so API failures can signal the adapter to re-check daemon
+   524→+let _daemonEnsuredFlag = true
+   525→+// Last project dir we ensured daemon for — reset flag on project switch
+   526→+let _daemonEnsuredForCwd: string | null = null
+   527→+
+   528→ async function api<T>(method: string, path: string, cwd: string, body?: unknown): Promise<T> {
+   529→   const opts: RequestInit = {
+   530→     method,
+   531→     headers: headers(cwd)
+   532→   }
+   533→   if (body) opts.body = JSON.stringify(body)
+   534→-  const res = await fetch(`${API_BASE}${path}`, opts)
+   535→+  let res: Response
+   536→+  try {
+   537→+    res = await fetch(`${API_BASE}${path}`, opts)
+   538→+  } catch (e) {
+   539→+    // Network error — daemon likely crashed, reset ensured flag
+   540→+    _daemonEnsuredFlag = false
+   541→+    throw e
+   542→+  }
+   543→   if (!res.ok) {
+   544→     const text = await res.text()
+   545→     throw new Error(text || `HTTP ${res.status}`)
+   546→@@ -78,20 +90,22 @@ function toUnified(raw: Record<string, unknown>): UnifiedTask {
+   547→ 
+   548→ export class KspecAdapter implements TaskAdapter {
+   549→   readonly kind = 'kspec' as const
+   550→-  private daemonEnsured = false
+   551→ 
+   552→   private async ensureDaemon(cwd: string): Promise<boolean> {
+   553→+    // Reset flag when switching projects so we re-verify daemon for new cwd
+   554→+    if (_daemonEnsuredForCwd !== null && _daemonEnsuredForCwd !== cwd) {
+   555→+      _daemonEnsuredFlag = false
+   556→+    }
+   557→+
+   558→     // Quick health check first
+   559→     try {
+   560→       const res = await fetch(`${API_BASE}/api/health`)
+   561→-      if (res.ok) { this.daemonEnsured = true; return true }
+   562→+      if (res.ok) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+   563→     } catch { /* daemon not running */ }
+   564→ 
+   565→-    // Start daemon via IPC
+   566→-    if (!this.daemonEnsured) {
+   567→-      const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
+   568→-      if (result?.success) { this.daemonEnsured = true; return true }
+   569→-    }
+   570→+    // Start daemon via IPC (always attempt if health check failed)
+   571→+    const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
+   572→+    if (result?.success) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+   573→     return false
+   574→   }
+   575→ 
+   576→@@ -183,7 +197,11 @@ export class KspecAdapter implements TaskAdapter {
+   577→ 
+   578→   async update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }> {
+   579→     try {
+   580→-      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, params)
+   581→+      // Map unified status names back to kspec native status names
+   582→+      const body = { ...params }
+   583→+      if (body.status === 'open') body.status = 'pending' as TaskStatus
+   584→+      if (body.status === 'closed') body.status = 'completed' as TaskStatus
+   585→+      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, body)
+   586→       return { success: true }
+   587→     } catch (e) {
+   588→       return { success: false, error: String(e) }
+   589→@@ -194,15 +212,38 @@ export class KspecAdapter implements TaskAdapter {
+   590→     switch (currentStatus) {
+   591→       case 'open': return this.start(cwd, taskId)
+   592→       case 'in_progress': return this.complete(cwd, taskId)
+   593→-      default: return this.update(cwd, taskId, { status: 'open' })
+   594→+      default:
+   595→+        // Kspec uses 'pending' internally — 'open' is only the unified status
+   596→+        try {
+   597→+          await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, { status: 'pending' })
+   598→+          return { success: true }
+   599→+        } catch (e) {
+   600→+          return { success: false, error: String(e) }
+   601→+        }
+   602→     }
+   603→   }
+   604→ 
+   605→   // Kspec uses WebSocket for live updates instead of file watching
+   606→   private ws: WebSocket | null = null
+   607→   private wsCallbacks: Set<(data: { cwd: string }) => void> = new Set()
+   608→+  private watchedCwd: string | null = null
+   609→+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+   610→+  private reconnectDelay = 1000
+   611→+  private watching = false
+   612→ 
+   613→   watch(cwd: string): void {
+   614→+    // If switching projects, close old connection first
+   615→+    if (this.ws && this.watchedCwd !== cwd) {
+   616→+      this.ws.close()
+   617→+      this.ws = null
+   618→+    }
+   619→+    this.watching = true
+   620→+    this.watchedCwd = cwd
+   621→+    this.reconnectDelay = 1000
+   622→+    this.connectWs(cwd)
+   623→+  }
+   624→+
+   625→+  private connectWs(cwd: string): void {
+   626→     if (this.ws) return
+   627→     try {
+   628→       this.ws = new WebSocket(`ws://localhost:${DAEMON_PORT}/ws?project=${encodeURIComponent(cwd)}`)
+   629→@@ -214,11 +255,30 @@ export class KspecAdapter implements TaskAdapter {
+   630→           }
+   631→         } catch { /* ignore parse errors */ }
+   632→       }
+   633→-      this.ws.onclose = () => { this.ws = null }
+   634→-    } catch { /* daemon not running */ }
+   635→+      this.ws.onopen = () => {
+   636→+        this.reconnectDelay = 1000 // Reset backoff on successful connection
+   637→+      }
+   638→+      this.ws.onclose = () => {
+   639→+        this.ws = null
+   640→+        // Auto-reconnect with exponential backoff (cap at 30s)
+   641→+        if (this.watching && this.watchedCwd === cwd) {
+   642→+          this.reconnectTimer = setTimeout(() => this.connectWs(cwd), this.reconnectDelay)
+   643→+          this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
+   644→+        }
+   645→+      }
+   646→+      this.ws.onerror = () => {
+   647→+        // onclose will fire after onerror, triggering reconnect
+   648→+      }
+   649→+    } catch { /* daemon not running — reconnect will retry */ }
+   650→   }
+   651→ 
+   652→   unwatch(_cwd: string): void {
+   653→+    this.watching = false
+   654→+    this.watchedCwd = null
+   655→+    if (this.reconnectTimer) {
+   656→+      clearTimeout(this.reconnectTimer)
+   657→+      this.reconnectTimer = null
+   658→+    }
+   659→     this.ws?.close()
+   660→     this.ws = null
+   661→   }
+   662→diff --git a/src/renderer/components/beads/useBeadsTasks.ts b/src/renderer/components/beads/useBeadsTasks.ts
+   663→index 1c97531..f969aea 100644
+   664→--- a/src/renderer/components/beads/useBeadsTasks.ts
+   665→+++ b/src/renderer/components/beads/useBeadsTasks.ts
+   666→@@ -334,7 +334,9 @@ export function useBeadsTasks({
+   667→     tasksCache.set(projectPath, updatedTasks)
+   668→ 
+   669→     try {
+   670→-      const result = await adapter.update(projectPath, taskId, { status: nextStatus as UnifiedTask['status'] })
+   671→+      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+   672→+      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+   673→+      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+   674→       if (!result.success) {
+   675→         setTasks(previousTasks)
+   676→         tasksCache.set(projectPath, previousTasks)
+   677→diff --git a/src/renderer/components/sidebar/hooks/useDragAndDrop.ts b/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
+   678→index c20348c..6308645 100644
+   679→--- a/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
+   680→+++ b/src/renderer/components/sidebar/hooks/useDragAndDrop.ts
+   681→@@ -1,4 +1,4 @@
+   682→-import { useState, useCallback } from 'react'
+   683→+import { useState, useCallback, useRef } from 'react'
+   684→ import { Project } from '../../../stores/workspace.js'
+   685→ import { DropTarget } from '../types.js'
+   686→ 
+   687→@@ -48,6 +48,9 @@ export function useDragAndDrop({
+   688→   const [draggedProject, setDraggedProject] = useState<string | null>(null)
+   689→   const [draggedCategory, setDraggedCategory] = useState<string | null>(null)
+   690→   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+   691→+  // Ref tracks the latest dropTarget so drop handlers always read fresh position
+   692→+  // (state in the closure may be stale if React hasn't re-rendered since the last dragOver)
+   693→+  const dropTargetRef = useRef<DropTarget | null>(null)
+   694→ 
+   695→   const handleProjectDragStart = useCallback((e: React.DragEvent, projectPath: string) => {
+   696→     setDraggedProject(projectPath)
+   697→@@ -60,6 +63,7 @@ export function useDragAndDrop({
+   698→   const handleProjectDragEnd = useCallback(() => {
+   699→     setDraggedProject(null)
+   700→     setDropTarget(null)
+   701→+    dropTargetRef.current = null
+   702→   }, [])
+   703→ 
+   704→   const handleCategoryDragOver = useCallback(
+   705→@@ -67,10 +71,12 @@ export function useDragAndDrop({
+   706→       e.preventDefault()
+   707→       e.dataTransfer.dropEffect = 'move'
+   708→       if (draggedProject) {
+   709→-        setDropTarget({
+   710→+        const target: DropTarget = {
+   711→           type: categoryId ? 'category' : 'uncategorized',
+   712→           id: categoryId,
+   713→-        })
+   714→+        }
+   715→+        setDropTarget(target)
+   716→+        dropTargetRef.current = target
+   717→       }
+   718→     },
+   719→     [draggedProject]
+   720→@@ -84,6 +90,7 @@ export function useDragAndDrop({
+   721→       }
+   722→       setDraggedProject(null)
+   723→       setDropTarget(null)
+   724→+      dropTargetRef.current = null
+   725→     },
+   726→     [draggedProject, moveProjectToCategory]
+   727→   )
+   728→@@ -94,7 +101,9 @@ export function useDragAndDrop({
+   729→       e.stopPropagation()
+   730→       e.dataTransfer.dropEffect = 'move'
+   731→       if (draggedProject && draggedProject !== projectPath) {
+   732→-        setDropTarget({ type: 'project', id: projectPath, position })
+   733→+        const target: DropTarget = { type: 'project', id: projectPath, position }
+   734→+        setDropTarget(target)
+   735→+        dropTargetRef.current = target
+   736→       }
+   737→     },
+   738→     [draggedProject]
+   739→@@ -120,15 +129,18 @@ export function useDragAndDrop({
+   740→ 
+   741→           const newOrder = categoryProjects.filter((p) => p !== draggedProject)
+   742→           const targetIndex = newOrder.indexOf(targetPath)
+   743→-          const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+   744→+          // Read from ref to get the latest position (state may be stale)
+   745→+          const currentDropTarget = dropTargetRef.current
+   746→+          const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+   747→           newOrder.splice(insertIndex, 0, draggedProject)
+   748→           reorderProjects(targetCategoryId ?? null, newOrder)
+   749→         }
+   750→       }
+   751→       setDraggedProject(null)
+   752→       setDropTarget(null)
+   753→+      dropTargetRef.current = null
+   754→     },
+   755→-    [draggedProject, projects, dropTarget, moveProjectToCategory, reorderProjects]
+   756→+    [draggedProject, projects, moveProjectToCategory, reorderProjects]
+   757→   )
+   758→ 
+   759→   const handleCategoryDragStart = useCallback((e: React.DragEvent, categoryId: string) => {
+   760→@@ -140,6 +152,7 @@ export function useDragAndDrop({
+   761→   const handleCategoryDragEnd = useCallback(() => {
+   762→     setDraggedCategory(null)
+   763→     setDropTarget(null)
+   764→+    dropTargetRef.current = null
+   765→   }, [])
+   766→ 
+   767→   const handleCategoryHeaderDragOver = useCallback(
+   768→@@ -147,7 +160,9 @@ export function useDragAndDrop({
+   769→       e.preventDefault()
+   770→       e.dataTransfer.dropEffect = 'move'
+   771→       if (draggedCategory && draggedCategory !== targetCategoryId) {
+   772→-        setDropTarget({ type: 'category', id: targetCategoryId, position })
+   773→+        const target: DropTarget = { type: 'category', id: targetCategoryId, position }
+   774→+        setDropTarget(target)
+   775→+        dropTargetRef.current = target
+   776→       }
+   777→     },
+   778→     [draggedCategory]
+   779→@@ -161,14 +176,17 @@ export function useDragAndDrop({
+   780→         const categoryIds = orderedCategories.map((c) => c.id)
+   781→         const newOrder = categoryIds.filter((id) => id !== draggedCategory)
+   782→         const targetIndex = newOrder.indexOf(targetCategoryId)
+   783→-        const insertIndex = dropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+   784→+        // Read from ref to get the latest position (state may be stale)
+   785→+        const currentDropTarget = dropTargetRef.current
+   786→+        const insertIndex = currentDropTarget?.position === 'after' ? targetIndex + 1 : targetIndex
+   787→         newOrder.splice(insertIndex, 0, draggedCategory)
+   788→         reorderCategories(newOrder)
+   789→       }
+   790→       setDraggedCategory(null)
+   791→       setDropTarget(null)
+   792→+      dropTargetRef.current = null
+   793→     },
+   794→-    [draggedCategory, categories, dropTarget, reorderCategories]
+   795→+    [draggedCategory, categories, reorderCategories]
+   796→   )
+   797→ 
+   798→   return {
+   799→diff --git a/src/renderer/components/sidebar/useSidebarHandlers.ts b/src/renderer/components/sidebar/useSidebarHandlers.ts
+   800→index 2cf90b0..38f8a6b 100644
+   801→--- a/src/renderer/components/sidebar/useSidebarHandlers.ts
+   802→+++ b/src/renderer/components/sidebar/useSidebarHandlers.ts
+   803→@@ -1,4 +1,4 @@
+   804→-import { useCallback } from 'react'
+   805→+import { useCallback, useRef } from 'react'
+   806→ import { Project, useWorkspaceStore } from '../../stores/workspace.js'
+   807→ import { SidebarState } from './useSidebarState.js'
+   808→ import { SidebarProps } from './types.js'
+   809→@@ -95,9 +95,13 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   810→   )
+   811→ 
+   812→   // Rename handlers
+   813→+  // Ref tracks cancel intent so blur handler can skip saving after Escape
+   814→+  const renameCancelledRef = useRef(false)
+   815→+
+   816→   const handleStartRename = useCallback(
+   817→     (e: React.MouseEvent, project: Project) => {
+   818→       e.stopPropagation()
+   819→+      renameCancelledRef.current = false
+   820→       setEditingProject({ path: project.path, name: project.name })
+   821→       setTimeout(() => editInputRef.current?.select(), 0)
+   822→     },
+   823→@@ -105,6 +109,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   824→   )
+   825→ 
+   826→   const handleRenameSubmit = useCallback(() => {
+   827→+    if (renameCancelledRef.current) {
+   828→+      renameCancelledRef.current = false
+   829→+      return
+   830→+    }
+   831→     if (editingProject && editingProject.name.trim()) {
+   832→       onUpdateProject(editingProject.path, { name: editingProject.name.trim() })
+   833→     }
+   834→@@ -114,7 +122,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   835→   const handleRenameKeyDown = useCallback(
+   836→     (e: React.KeyboardEvent) => {
+   837→       if (e.key === 'Enter') handleRenameSubmit()
+   838→-      else if (e.key === 'Escape') setEditingProject(null)
+   839→+      else if (e.key === 'Escape') {
+   840→+        renameCancelledRef.current = true
+   841→+        setEditingProject(null)
+   842→+      }
+   843→     },
+   844→     [handleRenameSubmit, setEditingProject]
+   845→   )
+   846→@@ -139,8 +150,12 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   847→     if (metaPath) onOpenSession(metaPath)
+   848→   }, [onOpenSession])
+   849→ 
+   850→+  // Category rename cancel ref (same pattern as project rename)
+   851→+  const categoryRenameCancelledRef = useRef(false)
+   852→+
+   853→   const handleStartCategoryRename = useCallback(
+   854→     (category: ReturnType<typeof useWorkspaceStore.getState>['categories'][0]) => {
+   855→+      categoryRenameCancelledRef.current = false
+   856→       setEditingCategory({ id: category.id, name: category.name })
+   857→       setTimeout(() => categoryEditInputRef.current?.select(), 0)
+   858→     },
+   859→@@ -148,6 +163,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   860→   )
+   861→ 
+   862→   const handleCategoryRenameSubmit = useCallback(() => {
+   863→+    if (categoryRenameCancelledRef.current) {
+   864→+      categoryRenameCancelledRef.current = false
+   865→+      return
+   866→+    }
+   867→     if (editingCategory && editingCategory.name.trim()) {
+   868→       updateCategory(editingCategory.id, { name: editingCategory.name.trim() })
+   869→     }
+   870→@@ -157,7 +176,10 @@ export function useSidebarHandlers(params: UseSidebarHandlersParams): SidebarHan
+   871→   const handleCategoryRenameKeyDown = useCallback(
+   872→     (e: React.KeyboardEvent) => {
+   873→       if (e.key === 'Enter') handleCategoryRenameSubmit()
+   874→-      else if (e.key === 'Escape') setEditingCategory(null)
+   875→+      else if (e.key === 'Escape') {
+   876→+        categoryRenameCancelledRef.current = true
+   877→+        setEditingCategory(null)
+   878→+      }
+   879→     },
+   880→     [handleCategoryRenameSubmit, setEditingCategory]
+   881→   )
+   882→diff --git a/src/renderer/hooks/useProjectHandlers.ts b/src/renderer/hooks/useProjectHandlers.ts
+   883→index 9815d2f..8f40128 100644
+   884→--- a/src/renderer/hooks/useProjectHandlers.ts
+   885→+++ b/src/renderer/hooks/useProjectHandlers.ts
+   886→@@ -252,10 +252,17 @@ export function useProjectHandlers({
+   887→   const handleCloseProjectTabs = useCallback((projectPath: string) => {
+   888→     const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
+   889→     tabsToClose.forEach(tab => {
+   890→+      closedTabsRef.current.push({
+   891→+        projectPath: tab.projectPath,
+   892→+        sessionId: tab.sessionId,
+   893→+        title: tab.title,
+   894→+        backend: tab.backend
+   895→+      })
+   896→       api.killPty(tab.id)
+   897→       clearTerminalBuffer(tab.id)
+   898→       removeTab(tab.id)
+   899→     })
+   900→+    setClosedTabCount(closedTabsRef.current.length)
+   901→   }, [api, openTabs, removeTab])
+   902→ 
+   903→   const handleProjectCreated = useCallback((projectPath: string, projectName: string) => {
+   904→
+```

@@ -1,0 +1,202 @@
+```
+     1→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-7-
+     2→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-8-import { randomBytes, createHash } from 'crypto'
+     3→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-9-import { app } from 'electron'
+     4→src/main/mobile-security/fingerprint.ts:10:import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+     5→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-11-import { join } from 'path'
+     6→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-12-
+     7→src/main/mobile-security/fingerprint.ts-13-let cachedFingerprint: string | null = null
+     8→--
+     9→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-58-    if (!existsSync(dir)) {
+    10→src/main/mobile-security/fingerprint.ts-59-      mkdirSync(dir, { recursive: true })
+    11→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-60-    }
+    12→src/main/mobile-security/fingerprint.ts:61:    writeFileSync(
+    13→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-62-      fingerprintPath,
+    14→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-63-      JSON.stringify({
+    15→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-64-        fingerprint,
+    16→--
+    17→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-14-
+    18→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-15-import { createHash } from 'crypto'
+    19→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-16-import { app } from 'electron'
+    20→src/main/mobile-security/certificate.ts:17:import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'fs'
+    21→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-18-import { join } from 'path'
+    22→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-19-import { generate } from 'selfsigned'
+    23→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-20-
+    24→--
+    25→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-152-  const metaFile = join(certPath, 'meta.json')
+    26→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-153-
+    27→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-154-  // Write files with secure permissions (owner-only)
+    28→src/main/mobile-security/certificate.ts:155:  writeFileSync(keyFile, data.privateKey, { encoding: 'utf-8', mode: 0o600 })
+    29→src/main/mobile-security/certificate.ts:156:  writeFileSync(certFile, data.certificate, { encoding: 'utf-8', mode: 0o644 })
+    30→src/main/mobile-security/certificate.ts:157:  writeFileSync(
+    31→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-158-    metaFile,
+    32→src/main/mobile-security/certificate.ts-159-    JSON.stringify({ createdAt: data.createdAt, fingerprint: data.fingerprint }, null, 2),
+    33→src/main/mobile-security/certificate.ts-160-    { encoding: 'utf-8', mode: 0o644 }
+    34→--
+    35→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-5- */
+    36→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-6-
+    37→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-7-import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from 'crypto'
+    38→src/main/mobile-security/encryption.ts:8:import { writeFileSync, chmodSync } from 'fs'
+    39→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-9-import { homedir, hostname, userInfo } from 'os'
+    40→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-10-
+    41→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-11-// Salt for key derivation (app-specific, not secret)
+    42→--
+    43→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-83- * On Unix, sets permissions to owner-only (0600)
+    44→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-84- */
+    45→src/main/mobile-security/encryption.ts-85-export function writeSecureFile(filePath: string, content: string): void {
+    46→src/main/mobile-security/encryption.ts:86:  writeFileSync(filePath, content, 'utf-8')
+    47→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-87-
+    48→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-88-  // Set restrictive file permissions (owner read/write only)
+    49→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-89-  try {
+    50→--
+    51→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-177-
+    52→src/main/xtts-server.ts-178-  private ensureHelperScript(): void {
+    53→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-179-    ensureDir(xttsDir)
+    54→src/main/xtts-server.ts:180:    fs.writeFileSync(xttsScriptPath, XTTS_HELPER_SCRIPT)
+    55→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-181-    if (!isWindows) {
+    56→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-182-      fs.chmodSync(xttsScriptPath, 0o755)
+    57→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-183-    }
+    58→--
+    59→src/main/extension-manager/management.ts:1:import { existsSync, rmSync, readFileSync, writeFileSync } from 'fs'
+    60→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-2-import { join } from 'path'
+    61→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-3-import type { InstalledExtension, ExtensionConfig, OperationResult } from './types.js'
+    62→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-4-import { getSkillsDir, getMcpConfigPath } from './constants.js'
+    63→--
+    64→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-126-        const mcpServers = mcpConfig.mcpServers as Record<string, unknown> | undefined
+    65→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-127-        if (mcpServers && mcpServers[extension.id]) {
+    66→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-128-          delete mcpServers[extension.id]
+    67→src/main/extension-manager/management.ts:129:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+    68→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-130-        }
+    69→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-131-      }
+    70→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-132-
+    71→--
+    72→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-185-            ...(mcpServers[extension.id] as Record<string, unknown>),
+    73→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-186-            ...newConfig
+    74→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-187-          }
+    75→src/main/extension-manager/management.ts:188:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+    76→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-189-        }
+    77→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-190-      } catch {
+    78→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-191-        // Ignore config update errors
+    79→--
+    80→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-1-import { app } from 'electron'
+    81→src/main/session-store.ts:2:import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs'
+    82→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-3-import { join } from 'path'
+    83→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-4-import { syncMetaProjects } from './meta-project-sync'
+    84→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-5-
+    85→--
+    86→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-144-        backup.workspace.projects.length + ' projects)')
+    87→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-145-      // Restore backup as main file immediately
+    88→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-146-      try {
+    89→src/main/session-store.ts:147:        writeFileSync(this.configPath, JSON.stringify(backup, null, 2))
+    90→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-148-      } catch (e) {
+    91→src/main/session-store.ts-149-        console.error('[SessionStore] Failed to restore backup to main:', e)
+    92→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-150-      }
+    93→--
+    94→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-178-            // Only update backup if existing file is valid and has projects
+    95→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-179-            const existing = this.loadFile(this.configPath)
+    96→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-180-            if (existing && (existing.workspace.projects?.length || 0) > 0) {
+    97→src/main/session-store.ts:181:              writeFileSync(this.backupPath, readFileSync(this.configPath))
+    98→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-182-            }
+    99→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-183-          }
+   100→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-184-        } catch (e) {
+   101→--
+   102→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-188-
+   103→src/main/session-store.ts-189-      / Atomic write: write to temp file, then rename
+   104→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-190-      const tmpPath = this.configPath + '.tmp'
+   105→src/main/session-store.ts:191:      writeFileSync(tmpPath, json)
+   106→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-192-
+   107→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-193-      // Verify the temp file was written completely
+   108→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-194-      const written = readFileSync(tmpPath, 'utf-8')
+   109→--
+   110→src/main/extension-manager/index.ts:1:import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
+   111→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-2-import type { Extension, InstalledExtension, ExtensionConfig, Registry, OperationResult } from './types.js'
+   112→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-3-import { getExtensionsDir, getSkillsDir, getInstalledJsonPath } from './constants.js'
+   113→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-4-import { fetchRegistry as fetchRegistryImpl, fetchFromUrl as fetchFromUrlImpl, RegistryCache } from './registry.js'
+   114→--
+   115→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-48-
+   116→src/main/extension-manager/index.ts-49-  private saveConfig(): void {
+   117→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-50-    if (!this.config) return
+   118→src/main/extension-manager/index.ts:51:    writeFileSync(getInstalledJsonPath(), JSON.stringify(this.config, null, 2))
+   119→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-52-  }
+   120→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-53-
+   121→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-54-  // Registry methods
+   122→--
+   123→src/main/__tests__/session-store.test.ts-13-  existsSync: vi.fn(),
+   124→src/main/__tests__/session-store.test.ts-14-  mkdirSync: vi.fn(),
+   125→src/main/__tests__/session-store.test.ts-15-  readFileSync: vi.fn(),
+   126→src/main/__tests__/session-store.test.ts:16:  writeFileSync: vi.fn()
+   127→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-17-}))
+   128→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-18-
+   129→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-19-import { SessionStore, Workspace, Settings, WindowBounds } from '../session-store'
+   130→--
+   131→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-162-
+   132→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-163-      store.saveWorkspace(newWorkspace)
+   133→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-164-
+   134→src/main/__tests__/session-store.test.ts:165:      expect(fs.writeFileSync).toHaveBeenCalledWith(
+   135→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-166-        mockConfigPath,
+   136→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-167-        expect.stringContaining('"projects"')
+   137→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-168-      )
+   138→--
+   139→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-173-      vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify({
+   140→src/main/__tests__/session-store.test.ts-174-        workspace: { projects: [], openTabs: [], activeTabId: null }
+   141→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-175-      }))
+   142→src/main/__tests__/session-store.test.ts:176:      vi.mocked(fs.writeFileSync).mockImplementationOnce(() => {
+   143→src/main/__tests__/session-store.test.ts-177-        throw new Error('ENOSPC: no space left on device')
+   144→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-178-      })
+   145→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-179-
+   146→--
+   147→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-216-
+   148→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-217-      store.saveWindowBounds(bounds)
+   149→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-218-
+   150→src/main/__tests__/session-store.test.ts:219:      expect(fs.writeFileSync).toHaveBeenCalled()
+   151→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-220-      expect(store.getWindowBounds()).toEqual(bounds)
+   152→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-221-    })
+   153→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-222-  })
+   154→--
+   155→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-253-
+   156→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-254-      store.saveSettings(settings)
+   157→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-255-
+   158→src/main/__tests__/session-store.test.ts:256:      expect(fs.writeFileSync).toHaveBeenCalled()
+   159→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-257-      expect(store.getSettings()).toEqual(settings)
+   160→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-258-    })
+   161→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/__tests__/session-store.test.ts-259-  })
+   162→--
+   163→src/main/extension-manager/installation.ts:1:import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs'
+   164→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-2-import { join } from 'path'
+   165→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-3-import type { Extension, InstalledExtension, ExtensionConfig, OperationResult } from './types.js'
+   166→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-4-import { getSkillsDir, getMcpConfigPath } from './constants.js'
+   167→--
+   168→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-107-      ...mcpConfig
+   169→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-108-    }
+   170→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-109-    currentMcpConfig.mcpServers = mcpServers
+   171→src/main/extension-manager/installation.ts:110:    writeFileSync(mcpConfigPath, JSON.stringify(currentMcpConfig, null, 2))
+   172→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-111-
+   173→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-112-    // Add to installed list
+   174→src/main/extension-manager/installation.ts-113-    const installed: InstalledExtension = {
+   175→--
+   176→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-304-      const pthPath = path.join(pythonDir, pthFile)
+   177→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-305-      let content = fs.readFileSync(pthPath, 'utf-8')
+   178→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-306-      content = content.replace('#import site', 'import site')
+   179→src/main/portable-deps.ts:307:      fs.writeFileSync(pthPath, content)
+   180→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-308-    }
+   181→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-309-
+   182→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-310-    // Run get-pip.py
+   183→--
+   184→src/main/extension-manager/registry.ts:1:import { existsSync, readFileSync, writeFileSync } from 'fs'
+   185→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-2-import type { Extension, Registry } from './types.js'
+   186→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-3-import {
+   187→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-4-  BUILTIN_REGISTRY,
+   188→--
+   189→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-76-
+   190→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-77-    // Cache it
+   191→src/main/extension-manager/registry.ts-78-    const cache: RegistryCache = { data, fetchedAt: Date.now() }
+   192→src/main/extension-manager/registry.ts:79:    writeFileSync(cachePath, JSON.stringify(cache, null, 2))
+   193→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-80-
+   194→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-81-    return { data, cache }
+   195→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-82-  } catch (error) {
+   196→--
+   197→src/main/voice-manager.ts-101-        xttsTopP: this.xttsTopP,
+   198→src/main/voice-manager.ts-102-        xttsRepetitionPenalty: this.xttsRepetitionPenalty
+   199→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice-manager.ts-103-      }
+   200→src/main/voice-manager.ts:104:      fs.writeFileSync(voiceSettingsPath, JSON.stringify(data, null, 2))
+```

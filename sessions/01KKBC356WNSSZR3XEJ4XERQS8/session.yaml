@@ -1,0 +1,9 @@
+id: 01KKBC356WNSSZR3XEJ4XERQS8
+task_id: "@01KKAWM2RXD9TWVAHK8BMMSEC2"
+agent_type: claude-agent-acp
+agent_id: pr-reviewer
+trigger: task.pending_review
+status: failed
+started_at: 2026-03-10T07:58:56.733Z
+ended_at: 2026-03-10T07:58:58.924Z
+close_reason: "Invocation failed: Internal error: You've hit your limit · resets 9am (Europe/Copenhagen)"

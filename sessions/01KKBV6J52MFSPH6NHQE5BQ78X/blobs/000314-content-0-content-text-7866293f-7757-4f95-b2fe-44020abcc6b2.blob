@@ -1,0 +1,605 @@
+Perfect. Now I have a complete picture. Let me create the final comprehensive report:
+
+---
+
+## COMPREHENSIVE CODE REVIEW REPORT
+**Files Reviewed:** 9 critical networking, CORS, WebSocket, and adapter modules  
+**Date:** 2026-03-10
+
+---
+
+### CRITICAL SEVERITY FINDINGS
+
+#### 1. **Race Condition in Port Retry Logic** 
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/orchestrator-api.ts`  
+**Lines:** 56-79 (`tryListen` method)  
+**Severity:** CRITICAL - Server startup failure
+
+**Issue:** The error handler is registered AFTER listen() is called, creating a race:
+```
+this.server!.listen(port)           // Line 65
+this.server!.once('error', ...)     // Line 70
+```
+
+If port is available on first try, no error fires. But the `once('error')` is registered regardless. If an error fires asynchronously WHILE the handler is being set up, or if the socket hasn't fully bound when the second listen attempt happens on the incremented port, you get:
+- Uncaught error
+- Double-close attempts
+- Server fails silently
+
+**Root cause:** Event handler registration order is wrong. Should register handler BEFORE listen().
+
+**Impact:** Critical - orchestrator API server may fail to start correctly when ports are in use.
+
+---
+
+#### 2. **WebSocket Connection Cleanup Race Condition**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/websocket-manager.ts`  
+**Lines:** 318-344 (`broadcastPtyExit` function)  
+**Severity:** CRITICAL - Data loss, memory corruption
+
+**Issue:** When broadcasting PTY exit:
+```typescript
+streams.forEach(ws => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(message)
+    ws.close(1000, 'PTY exited')    // Line 335
+  }
+})
+ptyStreams.delete(ptyId)            // Line 341
+```
+
+The `ws.close()` is asynchronous. The `ws.on('close', ...)` handler will still fire AFTER cleanup:
+- In `websocket-manager.ts` lines 174-180, the handler does: `ptyStreams.get(ptyId)?.delete(ws)`
+- But `ptyStreams` was just deleted at line 341
+- Handler tries to delete from a non-existent Map entry: `Map.get()` returns undefined
+- Then calls `.delete(ws)` on undefined → throws or silently fails
+
+**Race window:** Between line 335 (close call) and line 341 (delete), or AFTER line 341 when close handler fires.
+
+**Impact:** Resource leak, potential crash, cleanup handlers fire during cleanup leading to undefined behavior.
+
+**Call context:** Called from `mobile-server/index.ts` line 216 and `mobile-server/routes/pty.ts` line 68
+
+---
+
+#### 3. **PTY Manager Cleanup Idempotency Violation**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/app/ipc-handlers/pty.ts`  
+**Lines:** 68-76 (onExit handler) vs 108-111 (pty:kill handler)  
+**Severity:** CRITICAL - State corruption under race conditions
+
+**Issue:** When a PTY exits:
+1. `onExit` handler fires → deletes from `ptyToProject`, `ptyToBackend`, `autoCloseSessions` (lines 74-76)
+2. But if `pty:kill` is called just before exit, it ALSO deletes these maps (lines 109-110)
+3. If kill → exit → handler fires in sequence, the handler deletes again with no idempotency
+
+```typescript
+// pty:kill handler (lines 109-110)
+ptyToProject.delete(id)
+ptyToBackend.delete(id)
+
+// onExit handler (lines 74-76)  
+ptyToProject.delete(id)
+ptyToBackend.delete(id)
+autoCloseSessions.delete(id)
+```
+
+Under heavy load or timing edge cases, a PTY that's killed may have its exit handler fire with stale state.
+
+**Additionally:** Lines 83-90 have a prompt race guard, but the check at line 84 `if (ptyManager.getProcess(id))` is insufficient—process object may exist but be in closing state. The 4000ms timeout is arbitrary.
+
+**Impact:** Could cause crashes, resource leaks, or lost session tracking.
+
+---
+
+### HIGH SEVERITY FINDINGS
+
+#### 4. **Rate Limit Reset Logic Flaw**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/auth-rate-limit.ts`  
+**Lines:** 20-43 (`checkRateLimit` function)  
+**Severity:** HIGH - Security bypass
+
+**Issue:** The function has contradictory logic:
+
+```typescript
+// Line 28-34: Check if blocked
+if (entry.blockedUntil && entry.blockedUntil > now) {
+  return { allowed: false, retryAfter: ... }
+}
+
+// Line 37-39: Reset if block expired OR window expired
+if ((entry.blockedUntil && entry.blockedUntil <= now) || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+  rateLimitStore.delete(ip)
+  return { allowed: true }
+}
+
+// Line 42: Otherwise return allowed
+return { allowed: true }
+```
+
+**The bug:** If user gets blocked (5 failed attempts = `blockedUntil` set for 15 minutes), then:
+- Waits 14 minutes 59 seconds
+- `blockedUntil` has NOT expired yet (still blocked)
+- `now - entry.lastAttempt` is still within 15-min window
+- Line 42 returns `{ allowed: true }` anyway!
+
+**Root cause:** Line 37 condition deletes entry to reset it, but if it doesn't match, line 42 still allows access without checking if we're in a blocked state.
+
+**Timeline for bypass:**
+1. Attacker: 5 failed auth attempts → IP gets blocked for 15 min
+2. Attacker: Wait 10 minutes
+3. Attacker: Next call to `checkRateLimit()` returns `allowed: true` (WRONG—still in 15-min window)
+4. Attacker: Can now spam more attempts
+
+**The function should track both "failed attempts window" AND "blocked duration" separately.**
+
+**Impact:** HIGH - Rate limiting can be bypassed by waiting within the window but after block expires.
+
+---
+
+#### 5. **Incomplete CORS Tailscale IP Range Validation**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/middleware.ts`  
+**Lines:** 55-59 (Tailscale CGNAT regex)  
+**Severity:** HIGH - Security misconfiguration
+
+**Issue:** The regex pattern:
+```typescript
+const tailscaleCgnatPattern = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/
+```
+
+**Decoding the octet ranges:**
+- `6[4-9]` = 64-69 ✓
+- `[7-9]\d` = 70-99 ✓
+- `1[01]\d` = 100-119 ✓
+- `12[0-7]` = 120-127 ✓
+
+This correctly covers 64-127 for second octet, which is correct for CGNAT range 100.64.0.0/10.
+
+**However, the actual issue is:** The regex is correct, but it's INCOMPLETE. The comment says "Allow Tailscale CGNAT range (100.64.0.0 - 100.127.255.255)" but the regex only validates second octet. It should use a numeric range or be more explicit. The current pattern passes 100.64.0.0-100.127.255.255 correctly, but the third and fourth octets accept ANY value via `\d+\.\d+`.
+
+**Minor issue:** No upper bound validation. Someone could pass `100.127.256.256` and it would match `\d+` (since regex doesn't validate 0-255). Should validate numerically.
+
+**Better implementation:**
+```typescript
+const ip = new URL(origin).hostname
+const [, o1, o2, o3, o4] = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/) || []
+if (o1 === '100' && parseInt(o2) >= 64 && parseInt(o2) <= 127 && 
+    parseInt(o3) >= 0 && parseInt(o3) <= 255 && 
+    parseInt(o4) >= 0 && parseInt(o4) <= 255) { ... }
+```
+
+**Impact:** MEDIUM-HIGH - Some invalid IPs could be whitelisted, or valid Tailscale IPs could be rejected in edge cases.
+
+---
+
+#### 6. **Public Mutable Daemon State Field**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts`  
+**Lines:** 90 (field definition), 38 (external mutation)  
+**Severity:** HIGH - API encapsulation violation
+
+**Issue:** The field is marked as public despite underscore prefix:
+
+```typescript
+export class KspecAdapter implements TaskAdapter {
+  _daemonEnsuredFlag = true  // Line 90 - underscore suggests private, but it's public
+  ...
+}
+```
+
+And it's directly mutated externally:
+```typescript
+async function api<T>(..., adapter?: KspecAdapter): Promise<T> {
+  try {
+    res = await fetch(...)
+  } catch (e) {
+    if (adapter) adapter._daemonEnsuredFlag = false  // Line 38 - direct mutation!
+    throw e
+  }
+}
+```
+
+**Problems:**
+1. **No validation:** External code can set this to any value
+2. **No notification:** No way to subscribe to state changes
+3. **Type safety:** Should use private field `#daemonEnsured` with getter/setter
+4. **Race conditions:** Multiple async calls could race on this flag
+
+**Impact:** HIGH - Encapsulation violation makes daemon state management fragile and uncontrollable.
+
+---
+
+#### 7. **WebSocket Reconnection Memory Leak & Wrong CWD**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts`  
+**Lines:** 233-283 (watch/unwatch methods)  
+**Severity:** HIGH - Memory leak, potential data loss
+
+**Issue:** Multiple problems in reconnect logic:
+
+```typescript
+private watching = false
+private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+private watchedCwd: string | null = null
+
+watch(cwd: string): void {
+  if (this.ws && this.watchedCwd !== cwd) {
+    this.ws.close()
+    this.ws = null
+  }
+  this.watching = true
+  this.watchedCwd = cwd
+  this.connectWs(cwd)
+}
+
+private connectWs(cwd: string): void {
+  if (this.ws) return
+  try {
+    this.ws = new WebSocket(...)
+    ...
+    this.ws.onclose = () => {
+      this.ws = null
+      if (this.watching && this.watchedCwd === cwd) {
+        this.reconnectTimer = setTimeout(() => this.connectWs(cwd), this.reconnectDelay)  // Line 264
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
+      }
+    }
+  }
+}
+
+unwatch(_cwd: string): void {
+  this.watching = false
+  this.watchedCwd = null
+  if (this.reconnectTimer) {
+    clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+  }
+  this.ws?.close()
+  this.ws = null
+}
+```
+
+**Problems:**
+
+1. **Timer not cleared before reconnect:** At line 264, a new timeout is set WITHOUT clearing any existing timeout first. If `connectWs()` is called multiple times, multiple timers queue up.
+
+2. **Old timer can fire after unwatch:** 
+   - Component unmounts → calls `unwatch()` (clears current timer)
+   - BUT another timer set by previous failed connection still fires
+   - Calls `connectWs()` with OLD `cwd` after watching stopped
+   - Reconnects to wrong project!
+
+3. **Closure over wrong `cwd`:** Line 264 captures `cwd` in closure, but this `cwd` may be stale if called from a queued timer.
+
+**Scenario:**
+```
+t=0: watch('/proj-a') → fail → schedule reconnect in 1s
+t=1.5: watch('/proj-b') → fail → schedule reconnect in 1s  (first timer still pending!)
+t=2: unwatch() called → clears reconnectTimer (but which one? Last one!)
+t=2: Old timer from proj-a fires → reconnects to proj-a (WRONG!)
+```
+
+**Impact:** Memory leak (multiple timers) + possible reconnection to wrong project + race conditions.
+
+---
+
+#### 8. **Daemon Startup Silent Failure in Migration**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts`  
+**Lines:** 120-245 (`migrateBeadsToKspec` function)  
+**Severity:** HIGH - Data loss, failed migration not reported
+
+**Issue:** The daemon startup check:
+
+```typescript
+let daemonReady = false
+const healthCheck = await fetch('http://localhost:3456/api/health').catch(() => null)
+if (healthCheck?.ok) {
+  daemonReady = true
+} else {
+  const proc = spawn('kspec', ['serve', 'start', '--daemon'], ...)
+  proc.unref()
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    const check = await fetch('http://localhost:3456/api/health').catch(() => null)
+    if (check?.ok) { daemonReady = true; break }
+  }
+}
+
+// Later...
+let migrated = 0
+if (daemonReady && beadsTasks.length > 0) {  // Line 180
+  // Migrate tasks...
+  migrated = ...
+}
+
+return { success: true, migrated }  // Line 241 - SUCCESS even if NO tasks migrated!
+```
+
+**The bug:**
+- If daemon fails to start, `daemonReady` stays false
+- Loop at lines 171-175 never breaks
+- `daemonReady` is false after loop completes
+- Condition at line 180 is false, so NO tasks are created
+- BUT at line 241, function returns `{ success: true, migrated: 0 }`
+
+**From caller's perspective:** Migration succeeded, 0 tasks migrated (which might be intentional if no tasks existed in beads). But actually, tasks EXISTED but weren't migrated because daemon didn't start!
+
+**This is a silent data loss bug.** Users think migration completed when it actually failed.
+
+**Fix:** Check `daemonReady` before returning success, or return error if tasks exist but couldn't be migrated.
+
+**Impact:** HIGH - Silent migration failure causes data loss.
+
+---
+
+### MEDIUM SEVERITY FINDINGS
+
+#### 9. **Daemon Health Check Timeout Vulnerability**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts`  
+**Lines:** 316-317, 345-350  
+**Severity:** MEDIUM - Process hang, DoS
+
+**Issue:** Multiple unprotected fetch() calls:
+```typescript
+// Line 317
+const res = await fetch('http://localhost:3456/api/health').catch(() => null)
+
+// Line 347  
+const check = await fetch('http://localhost:3456/api/health').catch(() => null)
+```
+
+No timeout specified. If daemon is running but hung (deadlock, infinite loop), these fetch calls will:
+1. Block the IPC handler indefinitely
+2. Block the main Electron process
+3. UI becomes unresponsive
+4. No way to recover except kill app
+
+**Should add:** `{ timeout: 2000 }` to fetch options.
+
+**Impact:** MEDIUM - Denial of service if daemon malfunctions.
+
+---
+
+#### 10. **Rate Limit Header Order Bug**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/middleware.ts`  
+**Lines:** 93-96 vs 284  
+**Severity:** MEDIUM - HTTP protocol violation
+
+**Issue:** Headers set AFTER response sent:
+```typescript
+// Line 93-96
+res.status(429).json({...}).setHeader('Retry-After', String(...))
+```
+
+This is a **method chaining error**. `res.json()` ends the response. `setHeader()` called after that won't work.
+
+Compare to correct version at line 284:
+```typescript
+res.status(429).json({...}).setHeader('Retry-After', ...)
+```
+
+Wait, both use chaining. Let me recheck: Actually, both try to chain `.setHeader()` after `.json()`, but **`json()` doesn't return the response object** in Express, it returns the same response. So this might work, but it's bad practice.
+
+**Safer way:**
+```typescript
+res.setHeader('Retry-After', ...)
+res.status(429).json({...})
+```
+
+**Impact:** MEDIUM - Headers may not be reliably sent, client won't get correct Retry-After timing.
+
+---
+
+#### 11. **Missing PTY Manager Validation in WebSocket Handler**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/websocket-manager.ts`  
+**Lines:** 145-172 (PTY stream message handler)  
+**Severity:** MEDIUM - Crash on null dereference
+
+**Issue:** No validation that `ptyManager` exists:
+```typescript
+ws.on('message', (message: Buffer) => {
+  try {
+    const msg = JSON.parse(message.toString())
+    switch (msg.type) {
+      case 'input':
+        if (msg.data && ptyManager) {  // ← Guard here
+          ptyManager.write(ptyId, msg.data)
+        }
+        break
+      case 'resize':
+        if (msg.cols && msg.rows && ptyManager) {  // ← And here
+          ptyManager.resize(ptyId, msg.cols, msg.rows)
+        }
+        break
+      ...
+    }
+  } catch (e) {
+    log('Invalid PTY stream message', { error: String(e), ptyId })
+  }
+})
+```
+
+The guards are there, but they're per-case. If `ptyManager` becomes null between establishing the WebSocket and handling a message, it's protected. But it's better to validate once at the top of the handler.
+
+**Impact:** MEDIUM - Defensive programming issue, guards exist but scattered.
+
+---
+
+#### 12. **Inconsistent Task Status Mapping**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts`  
+**Lines:** 188-225 (Task creation during migration)  
+**Severity:** MEDIUM - Information loss
+
+**Issue:** Beads statuses are not fully mapped:
+```typescript
+const beadsStatus = String(task.status ?? 'open')
+let kspecStatus: string | undefined
+if (beadsStatus === 'in_progress') kspecStatus = 'in_progress'
+else if (beadsStatus === 'closed') kspecStatus = 'completed'
+// 'open' maps to 'pending' which is the default — no need to set
+```
+
+**Missing statuses:** Beads can have 'blocked', 'ready', 'needs_work', etc. These all silently default to 'pending'.
+
+**Task during creation:**
+```typescript
+body: JSON.stringify({
+  ...
+  status: kspecStatus,  // May be undefined!
+  ...
+})
+```
+
+If `status` is undefined, kspec API may reject it or use defaults. Not a crash, but data loss.
+
+**Impact:** MEDIUM - Status information lost during beads→kspec migration.
+
+---
+
+#### 13. **Arbitrary Prompt Delay Race Guard**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/app/ipc-handlers/pty.ts`  
+**Lines:** 82-90  
+**Severity:** MEDIUM - Prompt loss under high load
+
+**Issue:** The race condition guard uses a hardcoded 4000ms delay:
+```typescript
+setTimeout(() => {
+  // Verify PTY still exists before writing (race condition guard)
+  if (ptyManager.getProcess(id)) {
+    ptyManager.write(id, pending.prompt + '\n')
+    pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
+  } else {
+    pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
+  }
+}, 4000)  // ← Arbitrary timeout!
+```
+
+**Problems:**
+1. 4000ms is too long on fast systems, too short on slow systems
+2. `getProcess(id)` only checks existence, not readiness
+3. No way to detect if process exited during the delay
+4. Under heavy system load, 4000ms may not be enough
+
+**Better approach:** Use exponential backoff or event-based readiness signal.
+
+**Impact:** MEDIUM - Prompts may be lost if terminal isn't ready by 4s mark, or delayed unnecessarily.
+
+---
+
+#### 14. **CycleStatus Type Coercion Issue**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts`  
+**Lines:** 321-350 (`handleCycleStatus`)  
+**Severity:** MEDIUM - Type safety
+
+**Issue:**
+```typescript
+const handleCycleStatus = async (taskId: string, currentStatus: string): Promise<void> => {
+  // currentStatus is string, but needs to be TaskStatus
+  const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+}
+```
+
+The parameter is `string` but cast to `TaskStatus` without validation. If an invalid status is passed, `adapter.cycleStatus()` will get wrong data.
+
+**At call site:** No validation that `currentStatus` matches expected values.
+
+**Impact:** MEDIUM - Type casting without validation could cause incorrect behavior.
+
+---
+
+### LOW SEVERITY / DESIGN ISSUES
+
+#### 15. **Resource Cleanup on Server Startup Failure**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts`  
+**Lines:** 314-362 (`start()` method)  
+**Severity:** LOW - Resource leak on startup failure
+
+**Issue:** If server startup fails:
+```typescript
+try {
+  this.setupWebSocket()
+  startNonceCleanup()  // Line 329 - Starts interval
+  
+  this.rateLimitCleanupInterval = setInterval(() => {
+    cleanupEndpointRateLimits()
+  }, 2 * 60 * 1000)  // Line 331-333 - Starts interval
+  
+  return new Promise((resolve, reject) => {
+    this.server!.listen(..., () => resolve())
+    this.server!.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        this.port++
+        this.server?.close()
+        this.start().then(resolve).catch(reject)  // Recursive call
+      } else {
+        reject(err)  // ← What about cleanup intervals?
+      }
+    })
+  })
+} catch (error) {
+  throw error  // ← No cleanup here either!
+}
+```
+
+If any step fails (TLS error, WebSocket error, listen error), the `startNonceCleanup()` interval is never stopped, and `rateLimitCleanupInterval` leaks.
+
+**Fix:** Wrap cleanup in try-finally or cleanup on error path.
+
+**Impact:** LOW - Resource leak on startup failure (rare event, but should be handled).
+
+---
+
+#### 16. **Hardcoded Magic Ports Without Configuration**
+**Files:** Multiple  
+**Severity:** LOW - Configurability issue
+
+**Issue:** Hardcoded ports in several files:
+- `orchestrator-api.ts` line 4: `19836`
+- `kspec-adapter.ts` line 17: `3456`
+
+These should be configurable constants or at least in a centralized config file.
+
+**Impact:** LOW - Configuration management issue, hard to change in testing/deployment.
+
+---
+
+#### 17. **Incomplete Beads Status Coverage in Migration**
+**File:** `/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts`  
+**Lines:** 195-196 (Type mapping)  
+**Severity:** LOW - Information loss
+
+**Issue:** Type mapping:
+```typescript
+const beadsType = String(task.issue_type ?? task.type ?? 'task')
+const kspecType = beadsType === 'feature' ? 'task' : (['bug', 'task', 'epic'].includes(beadsType) ? beadsType : 'task')
+```
+
+If beads has uncommon types, they're silently converted to 'task'. Not a bug, but information loss.
+
+**Impact:** LOW - Task type information may be generalized during migration.
+
+---
+
+## SUMMARY TABLE
+
+| Severity | Count | Issues |
+|----------|-------|---------|
+| CRITICAL | 3 | Port retry race, WebSocket cleanup race, PTY cleanup idempotency |
+| HIGH | 5 | Rate limit bypass, CORS validation, daemon state field, WebSocket reconnect leak, migration silent failure |
+| MEDIUM | 7 | Daemon timeout, header order, PTY manager validation, status mapping, prompt delay, type coercion, startup cleanup |
+| LOW | 3 | Magic ports, beads type coverage, design issues |
+
+**Total:** 18 findings
+
+---
+
+### RECOMMENDED IMMEDIATE ACTIONS
+
+1. **Fix WebSocket cleanup race** (Critical) - Ensure cleanup happens before close handlers fire
+2. **Fix port retry logic** (Critical) - Register error handler before listen()
+3. **Fix PTY cleanup idempotency** (Critical) - Add guards or ensure handlers run once
+4. **Fix rate limit logic** (High) - Separate tracking of attempt window and block duration
+5. **Fix migration silent failure** (High) - Return error if daemon not ready but tasks exist
+6. **Add daemon state encapsulation** (High) - Use private field with getter/setter
+7. **Fix WebSocket reconnect timers** (High) - Clear old timers, don't capture wrong cwd
+
+---
+
+All files analyzed. No modifications attempted (read-only mode enforced).

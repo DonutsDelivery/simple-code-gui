@@ -1,0 +1,430 @@
+```
+     1→import React, { useEffect, useState, useCallback, useRef, RefObject } from 'react'
+     2→import { TitleBar } from '../components/TitleBar'
+     3→import { Sidebar } from '../components/Sidebar'
+     4→import { TerminalTabs } from '../components/TerminalTabs'
+     5→import { Terminal } from '../components/terminal/Terminal'
+     6→import { TiledTerminalView } from '../components/TiledTerminalView'
+     7→import { SettingsModal } from '../components/SettingsModal'
+     8→import { MakeProjectModal } from '../components/MakeProjectModal'
+     9→import { ErrorBoundary } from '../components/ErrorBoundary'
+    10→import { FileBrowser } from '../components/mobile/FileBrowser'
+    11→import type { HostConfig } from '../hooks/useHostConnection'
+    12→import { useWorkspaceStore } from '../stores/workspace'
+    13→import { useVoice } from '../contexts/VoiceContext'
+    14→import { useModals } from '../contexts/ModalContext'
+    15→import {
+    16→  useInstallation,
+    17→  useUpdater,
+    18→  useViewState,
+    19→  useWorkspaceLoader,
+    20→  useSessionPolling,
+    21→  useApiListeners,
+    22→  useProjectHandlers
+    23→} from '../hooks'
+    24→import type { Api } from '../api'
+    25→import { InstallationPrompt } from './InstallationPrompt'
+    26→import { MobileConnectModal } from './MobileConnectModal'
+    27→
+    28→export interface MainAppProps {
+    29→  api: Api
+    30→  isElectron: boolean
+    31→  onDisconnect?: () => void
+    32→}
+    33→
+    34→export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.ReactElement {
+    35→  const {
+    36→    projects,
+    37→    openTabs,
+    38→    activeTabId,
+    39→    categories,
+    40→    addProject,
+    41→    removeProject,
+    42→    updateProject,
+    43→    addTab,
+    44→    removeTab,
+    45→    updateTab,
+    46→    setActiveTab
+    47→  } = useWorkspaceStore()
+    48→
+    49→  const { voiceOutputEnabled, setProjectVoice } = useVoice()
+    50→  const voiceOutputEnabledRef = useRef(voiceOutputEnabled)
+    51→
+    52→  // Modal state from context
+    53→  const { settingsOpen, makeProjectOpen, openSettings, closeSettings, openMakeProject, closeMakeProject } = useModals()
+    54→
+    55→  // Installation state from hook
+    56→  const {
+    57→    claudeInstalled,
+    58→    npmInstalled,
+    59→    gitBashInstalled,
+    60→    installing,
+    61→    installError,
+    62→    installMessage,
+    63→    checkInstallation,
+    64→    handleInstallNode,
+    65→    handleInstallGit,
+    66→    handleInstallClaude
+    67→  } = useInstallation()
+    68→
+    69→  // Updater state from hook
+    70→  const { appVersion, updateStatus, downloadUpdate, installUpdate } = useUpdater()
+    71→
+    72→  // View state from hook
+    73→  const {
+    74→    viewMode,
+    75→    tileLayout,
+    76→    lastFocusedTabId,
+    77→    sidebarWidth,
+    78→    sidebarCollapsed,
+    79→    setViewMode,
+    80→    setTileLayout,
+    81→    setLastFocusedTabId,
+    82→    setSidebarWidth,
+    83→    setSidebarCollapsed,
+    84→    toggleViewMode
+    85→  } = useViewState()
+    86→
+    87→  // Workspace loader hook
+    88→  const {
+    89→    loading,
+    90→    currentTheme,
+    91→    settings,
+    92→    setCurrentTheme,
+    93→    setSettings
+    94→  } = useWorkspaceLoader({
+    95→    api,
+    96→    checkInstallation,
+    97→    setViewMode,
+    98→    setTileLayout
+    99→  })
+   100→
+   101→  // Session polling hook
+   102→  useSessionPolling({ api, openTabs, updateTab })
+   103→
+   104→  // API listeners hook
+   105→  useApiListeners({
+   106→    api,
+   107→    projects,
+   108→    settings,
+   109→    addTab,
+   110→    updateTab,
+   111→    setActiveTab
+   112→  })
+   113→
+   114→  // Project handlers hook
+   115→  const {
+   116→    handleAddProject,
+   117→    handleAddProjectsFromParent,
+   118→    handleOpenSession,
+   119→    handleOpenSessionAtPosition,
+   120→    handleCloseTab,
+   121→    handleCloseProjectTabs,
+   122→    handleProjectCreated,
+   123→    handleUndoCloseTab,
+   124→    canUndoCloseTab
+   125→  } = useProjectHandlers({
+   126→    api,
+   127→    projects,
+   128→    openTabs,
+   129→    settings,
+   130→    tileLayout,
+   131→    addProject,
+   132→    removeTab,
+   133→    addTab,
+   134→    setActiveTab,
+   135→    setTileLayout
+   136→  })
+   137→
+   138→  // App-specific state
+   139→  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+   140→  const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
+   141→  const [showFileBrowser, setShowFileBrowser] = useState(false)
+   142→  const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
+   143→  const hadProjectsRef = useRef(false)
+   144→  const terminalContainerRef = useRef<HTMLDivElement>(null)
+   145→
+   146→  // Keep ref in sync for callbacks
+   147→  useEffect(() => {
+   148→    voiceOutputEnabledRef.current = voiceOutputEnabled
+   149→  }, [voiceOutputEnabled])
+   150→
+   151→  // Apply per-project voice settings when active tab changes
+   152→  useEffect(() => {
+   153→    if (!activeTabId) {
+   154→      setProjectVoice(null)
+   155→      return
+   156→    }
+   157→    const activeTab = openTabs.find(t => t.id === activeTabId)
+   158→    if (!activeTab) {
+   159→      setProjectVoice(null)
+   160→      return
+   161→    }
+   162→    const project = projects.find(p => p.path === activeTab.projectPath)
+   163→    if (project?.ttsVoice && project?.ttsEngine) {
+   164→      setProjectVoice({ ttsVoice: project.ttsVoice, ttsEngine: project.ttsEngine })
+   165→    } else {
+   166→      setProjectVoice(null)
+   167→    }
+   168→  }, [activeTabId, openTabs, projects, setProjectVoice])
+   169→
+   170→  // Save workspace when it changes
+   171→  useEffect(() => {
+   172→    if (!loading) {
+   173→      const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
+   174→
+   175→      if (projects.length === 0 && hadProjects) {
+   176→        console.warn('Skipping save: projects empty but previously had projects (likely hot reload)')
+   177→        return
+   178→      }
+   179→
+   180→      if (projects.length > 0) {
+   181→        hadProjectsRef.current = true
+   182→        sessionStorage.setItem('hadProjects', 'true')
+   183→      }
+   184→
+   185→      api.saveWorkspace({
+   186→        projects,
+   187→        openTabs: openTabs.map(t => ({
+   188→          id: t.id,
+   189→          projectPath: t.projectPath,
+   190→          sessionId: t.sessionId,
+   191→          title: t.title,
+   192→          ptyId: t.ptyId,
+   193→          backend: t.backend
+   194→        })),
+   195→        activeTabId,
+   196→        viewMode,
+   197→        tileLayout,
+   198→        categories
+   199→      })
+   200→    }
+   201→  }, [api, projects, openTabs, activeTabId, loading, viewMode, tileLayout, categories])
+   202→
+   203→  // Mobile drawer handlers
+   204→  const openMobileDrawer = useCallback(() => {
+   205→    setMobileDrawerOpen(true)
+   206→  }, [])
+   207→
+   208→  const closeMobileDrawer = useCallback(() => {
+   209→    setMobileDrawerOpen(false)
+   210→  }, [])
+   211→
+   212→  // Open file browser (mobile only)
+   213→  const handleOpenFileBrowser = useCallback((projectPath?: string) => {
+   214→    setFileBrowserPath(projectPath || null)
+   215→    setShowFileBrowser(true)
+   216→  }, [])
+   217→
+   218→  if (loading) {
+   219→    return (
+   220→      <div className="app">
+   221→        <div className="empty-state" role="status" aria-live="polite">
+   222→          <p>Loading...</p>
+   223→        </div>
+   224→      </div>
+   225→    )
+   226→  }
+   227→
+   228→  const isMobile = !isElectron
+   229→
+   230→  return (
+   231→    <div className="app">
+   232→      <TitleBar />
+   233→      <div className="app-content">
+   234→        <Sidebar
+   235→          projects={projects}
+   236→          openTabs={openTabs}
+   237→          activeTabId={activeTabId}
+   238→          lastFocusedTabId={lastFocusedTabId}
+   239→          onAddProject={handleAddProject}
+   240→          onAddProjectsFromParent={handleAddProjectsFromParent}
+   241→          onRemoveProject={removeProject}
+   242→          onOpenSession={handleOpenSession}
+   243→          onSwitchToTab={setActiveTab}
+   244→          onOpenSettings={openSettings}
+   245→          onOpenMakeProject={openMakeProject}
+   246→          onUpdateProject={updateProject}
+   247→          onCloseProjectTabs={handleCloseProjectTabs}
+   248→          width={sidebarWidth}
+   249→          collapsed={sidebarCollapsed}
+   250→          onWidthChange={setSidebarWidth}
+   251→          onCollapsedChange={setSidebarCollapsed}
+   252→          isMobileOpen={mobileDrawerOpen}
+   253→          onMobileClose={closeMobileDrawer}
+   254→          onOpenMobileConnect={() => setMobileConnectOpen(true)}
+   255→          onDisconnect={onDisconnect}
+   256→        />
+   257→
+   258→        {/* Mobile: render each terminal as its own slide */}
+   259→        {isMobile && openTabs.map((tab) => (
+   260→          <div key={tab.id} className="mobile-terminal-slide">
+   261→            <div className="mobile-slide-header">
+   262→              <span className="mobile-slide-title">{tab.title}</span>
+   263→              <button className="mobile-slide-close" onClick={() => handleCloseTab(tab.id)}>×</button>
+   264→            </div>
+   265→            <div className="mobile-slide-content">
+   266→              <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
+   267→                <Terminal
+   268→                  ptyId={tab.id}
+   269→                  isActive={true}
+   270→                  theme={currentTheme}
+   271→                  onFocus={() => setLastFocusedTabId(tab.id)}
+   272→                  projectPath={tab.projectPath}
+   273→                  backend={tab.backend}
+   274→                  api={api}
+   275→                  isMobile={true}
+   276→                  onOpenFileBrowser={() => handleOpenFileBrowser(tab.projectPath || undefined)}
+   277→                />
+   278→              </ErrorBoundary>
+   279→            </div>
+   280→          </div>
+   281→        ))}
+   282→
+   283→        {/* Desktop: wrap terminals in main-content */}
+   284→        {!isMobile && (
+   285→          <div className="main-content">
+   286→            {claudeInstalled === false || gitBashInstalled === false ? (
+   287→              <InstallationPrompt
+   288→                claudeInstalled={claudeInstalled}
+   289→                npmInstalled={npmInstalled}
+   290→                gitBashInstalled={gitBashInstalled}
+   291→                installing={installing}
+   292→                installError={installError}
+   293→                installMessage={installMessage}
+   294→                onInstallNode={handleInstallNode}
+   295→                onInstallGit={handleInstallGit}
+   296→                onInstallClaude={handleInstallClaude}
+   297→              />
+   298→            ) : openTabs.length > 0 ? (
+   299→              <>
+   300→                <div className="terminal-header">
+   301→                  {viewMode === 'tabs' && (
+   302→                    <TerminalTabs
+   303→                      tabs={openTabs}
+   304→                      activeTabId={activeTabId}
+   305→                      onSelectTab={setActiveTab}
+   306→                      onCloseTab={handleCloseTab}
+   307→                      onNewSession={(projectPath) => handleOpenSession(projectPath, undefined, undefined, undefined, true)}
+   308→                      swipeContainerRef={terminalContainerRef as RefObject<HTMLElement>}
+   309→                      onOpenSidebar={openMobileDrawer}
+   310→                    />
+   311→                  )}
+   312→                  <button
+   313→                    className="view-toggle-btn"
+   314→                    onClick={toggleViewMode}
+   315→                    title={viewMode === 'tabs' ? 'Switch to tiled view' : 'Switch to tabs view'}
+   316→                  >
+   317→                    {viewMode === 'tabs' ? '\u229E' : '\u25AD'}
+   318→                  </button>
+   319→                </div>
+   320→                {viewMode === 'tabs' ? (
+   321→                  <div className="terminal-container" ref={terminalContainerRef}>
+   322→                    {openTabs.map((tab) => (
+   323→                      <div
+   324→                        key={tab.id}
+   325→                        className={`terminal-wrapper ${tab.id === activeTabId ? 'active' : ''}`}
+   326→                      >
+   327→                        <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
+   328→                          <Terminal
+   329→                            ptyId={tab.id}
+   330→                            isActive={tab.id === activeTabId}
+   331→                            theme={currentTheme}
+   332→                            onFocus={() => setLastFocusedTabId(tab.id)}
+   333→                            projectPath={tab.projectPath}
+   334→                            backend={tab.backend}
+   335→                            api={api}
+   336→                          />
+   337→                        </ErrorBoundary>
+   338→                      </div>
+   339→                    ))}
+   340→                  </div>
+   341→                ) : (
+   342→                  <ErrorBoundary componentName="TiledTerminalView">
+   343→                    <TiledTerminalView
+   344→                      tabs={openTabs}
+   345→                      projects={projects}
+   346→                      theme={currentTheme}
+   347→                      focusedTabId={lastFocusedTabId}
+   348→                      onCloseTab={handleCloseTab}
+   349→                      onFocusTab={setLastFocusedTabId}
+   350→                      layout={tileLayout}
+   351→                      onLayoutChange={setTileLayout}
+   352→                      onOpenSessionAtPosition={handleOpenSessionAtPosition}
+   353→                      onAddTab={(projectPath) => handleOpenSession(projectPath, undefined, undefined, undefined, true)}
+   354→                      onUndoCloseTab={canUndoCloseTab ? handleUndoCloseTab : undefined}
+   355→                      api={api}
+   356→                    />
+   357→                  </ErrorBoundary>
+   358→                )}
+   359→              </>
+   360→            ) : (
+   361→              <div className="empty-state">
+   362→                <h2>Simple Code GUI</h2>
+   363→                <p>Add a project from the sidebar, then click a session to open it</p>
+   364→              </div>
+   365→            )}
+   366→          </div>
+   367→        )}
+   368→
+   369→        <SettingsModal
+   370→          isOpen={settingsOpen}
+   371→          onClose={closeSettings}
+   372→          onThemeChange={setCurrentTheme}
+   373→          onSaved={(newSettings) => setSettings(newSettings)}
+   374→          appVersion={appVersion}
+   375→          updateStatus={updateStatus}
+   376→          onDownloadUpdate={downloadUpdate}
+   377→          onInstallUpdate={installUpdate}
+   378→        />
+   379→
+   380→        <MakeProjectModal
+   381→          isOpen={makeProjectOpen}
+   382→          onClose={closeMakeProject}
+   383→          onProjectCreated={handleProjectCreated}
+   384→        />
+   385→
+   386→        {/* Mobile Connect Modal (QR Code) - only show in Electron */}
+   387→        {isElectron && (
+   388→          <MobileConnectModal
+   389→            isOpen={mobileConnectOpen}
+   390→            onClose={() => setMobileConnectOpen(false)}
+   391→            port={38470}
+   392→          />
+   393→        )}
+   394→
+   395→        {/* File Browser Modal (mobile only) */}
+   396→        {isMobile && showFileBrowser && fileBrowserPath && (() => {
+   397→          const connInfo = api.getConnectionInfo?.()
+   398→          if (!connInfo) return null
+   399→
+   400→          const hostConfig: HostConfig = {
+   401→            id: 'current',
+   402→            name: 'Desktop',
+   403→            host: connInfo.host,
+   404→            port: connInfo.port,
+   405→            token: connInfo.token
+   406→          }
+   407→          return (
+   408→            <div style={{
+   409→              position: 'fixed',
+   410→              top: 0,
+   411→              left: 0,
+   412→              right: 0,
+   413→              bottom: 0,
+   414→              zIndex: 100
+   415→            }}>
+   416→              <FileBrowser
+   417→                host={hostConfig}
+   418→                basePath={fileBrowserPath}
+   419→                onClose={() => setShowFileBrowser(false)}
+   420→              />
+   421→            </div>
+   422→          )
+   423→        })()}
+   424→      </div>
+   425→    </div>
+   426→  )
+   427→}
+   428→
+```

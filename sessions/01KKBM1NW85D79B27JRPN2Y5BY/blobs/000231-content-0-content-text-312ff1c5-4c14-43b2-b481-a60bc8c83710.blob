@@ -1,0 +1,248 @@
+```console
+758a5a9 2026-03-10 fix: workspace persistence bugs — atomic writes, temp cleanup, mobile route, stale symlinks
+f390731 2026-03-10 fix: connectivity bug audit — port fallback, rate limit, prompt race, CORS, WS cleanup
+a3fb53c 2026-03-10 fix: task adapter bugs — status mapping, daemon recovery, migration (#11)
+4fb9d89 2026-03-08 feat: kspec adapter, orchestrator MCP, voice/TTS improvements, tiled layout fixes
+e1e2fa3 2026-02-26 Bump version to 1.3.57
+9b7f7fd 2026-02-26 Stop auto-tabbing: each session gets its own tile
+b4db800 2026-02-24 Bump version to 1.3.56
+c2b3c02 2026-02-24 Fix beads init destroying externally-created tasks
+b57371f 2026-02-22 Bump version to 1.3.55
+0c4c04e 2026-02-22 Fix path validation and handshake verification security issues
+0c9e808 2026-02-21 Bump PKGBUILD version to 1.3.54
+9f07c32 2026-02-21 bd sync: 2026-02-21 11:40:33
+951fd91 2026-02-21 Fix compact/clear failing with multiline input
+db2db1b 2026-02-17 Fix Claude Code nested session detection in PTY spawning
+595aa3f 2026-02-09 Bump version to 1.3.52
+be950ae 2026-02-07 Major refactor: sub-tabs, tile improvements, code splitting, and UX enhancements
+f3beb1f 2026-02-07 bd daemon sync: 2026-02-07 12:57:29
+c7018df 2026-02-07 bd daemon sync: 2026-02-07 09:22:25
+ff0dcf3 2026-02-07 bd daemon sync: 2026-02-07 09:17:39
+230238d 2026-02-07 bd daemon sync: 2026-02-07 09:13:13
+98a5774 2026-02-06 Fix Compact/Clear buttons injecting command text into user input
+335bb29 2026-02-06 bd daemon sync: 2026-02-06 13:47:55
+38f21dd 2026-02-06 bd daemon sync: 2026-02-06 13:40:33
+528fe1f 2026-02-04 Move download links to top of README
+efad17c 2026-02-04 Add direct download links to README
+b0d5b40 2026-02-04 Update README.md
+b8712b0 2026-02-04 Update README.md
+aa17090 2026-02-04 Add website link and update main screenshot in README
+7d33270 2026-02-03 Merge pull request #5 from dragonheartcra/fix-windows-rendering
+96e76a6 2026-02-03 Fix category sessions losing working directory on workspace sync
+b823239 2026-02-03 Add TLS infrastructure and update Android app icon
+4e59865 2026-02-03 Bump version to 1.3.49
+f43debd 2026-02-03 Fix mobile app connection and misc improvements
+810ff4b 2026-01-31 Refactor 18 large files into 177 smaller modules for better AI readability
+65fd3c6 2026-01-31 fix(windows): enable ConPTY for better terminal rendering and UTF-8 handling
+5ac0c46 2026-01-31 Update README.md
+813db46 2026-01-29 Bump version to 1.3.48
+f3a6ca8 2026-01-29 Fix GitHub issues #1, #2, #3: GSD detection, Windows claude.exe, terminal UX
+3f9e6b5 2026-01-26 Add theme builder with color pickers, Custom theme, and terminal theme sync
+193f923 2026-01-24 Add aider backend support, terminal bar improvements, and clear/compact buttons
+5f66f36 2026-01-24 Add port validation to prevent requests to invalid ports (e.g., localhost:1)
+63c9e10 2026-01-24 bd daemon sync: 2026-01-24 05:01:22
+fc6ee37 2026-01-23 bd daemon sync: 2026-01-23 16:00:15
+6e315f8 2026-01-23 bd daemon sync: 2026-01-23 15:58:32
+512d9ad 2026-01-23 bd daemon sync: 2026-01-23 11:38:21
+5a6f3d7 2026-01-23 bd daemon sync: 2026-01-23 11:38:08
+e6ede51 2026-01-23 bd daemon sync: 2026-01-23 11:36:36
+998d572 2026-01-22 fix: Session restoration and mobile terminal improvements
+b56f0a8 2026-01-21 chore: bump version to 1.3.46
+4cb0164 2026-01-20 bd daemon sync: 2026-01-20 15:26:37
+f2c8eb7 2026-01-20 feat: Mobile app improvements and UI enhancements
+98d7d41 2026-01-20 feat: Add 3 fatigue-reducing themes (Solarized Dark, Warm Earth, Soft Gray)
+0fa8a6d 2026-01-20 fix: Mobile APK can now load projects from desktop
+3105b05 2026-01-19 feat: Drag projects from sidebar to tile layout + improve hitbox detection
+7b17ef3 2026-01-19 fix: Add electronAPI guards for mobile app compatibility
+4ae9c42 2026-01-19 feat: Add TTS streaming endpoints to mobile server
+e476763 2026-01-19 feat: Integrate mobile server into Electron app
+17feba3 2026-01-19 feat: Add clickable categories as meta-projects with All Projects entry
+309fe7a 2026-01-19 feat: Add meta-project symlink sync for cross-project Claude Code access
+648a10b 2026-01-19 chore: Install Capacitor platforms and dependencies
+fa16f1c 2026-01-19 feat: Add mobile app support with Capacitor and backend API
+ca44e7f 2026-01-19 refactor: Split 7 large files into smaller modules
+644635c 2026-01-19 fix: Simplify batch delete - no revert, let file watcher sync
+8c00c1e 2026-01-19 fix: Batch delete completed tasks with Promise.all
+a00c76b 2026-01-18 fix: Preserve spaces in TTS by replacing ANSI codes with space
+755b1dc 2026-01-18 debug: Add TTS logging for troubleshooting
+0fee7ec 2026-01-18 fix: Hide scrollbar in tabs bar
+66d9bc3 2026-01-18 fix: BeadsPanel follows focused tab instead of expanded project
+081c4a7 2026-01-18 fix: Add button reset styles for dark mode compatibility
+c02c592 2026-01-18 fix: Add media-src blob: to CSP for TTS audio playback
+1f2a67f 2026-01-18 chore: close Claude-Terminal-l1z task (TitleBar throttle implemented)
+60b3826 2026-01-18 fix: Complete 64 code quality improvements from parallel subagents
+a1a6113 2026-01-18 feat: Add React Error Boundary component for crash protection
+9746903 2026-01-18 fix: adjust resize handle positions to reduce scrollbar overlap
+c92952c 2026-01-17 fix: Update better-sqlite3 to 11.10.0
+d4471d7 2026-01-17 chore: Bump version to 1.3.44
+06d43f1 2026-01-17 fix: Improve terminal rendering when switching to tiled view
+4a75895 2026-01-17 chore: Bump version to 1.3.43
+1b47190 2026-01-17 feat: Add scroll wheel tab navigation in tabbed mode
+cd704ef 2026-01-17 feat: Match terminal backgrounds with app theme + Ko-fi support link
+96f5107 2026-01-16 chore: Bump version to 1.3.41
+01833c6 2026-01-16 feat: Add GSD status panel and API auto-start option
+f270bb5 2026-01-16 ci: Add Python 3.11 setup for Windows build
+dbb0130 2026-01-16 fix: TTS volume not applied on startup and in previews
+f48e5d9 2026-01-16 chore: Update beads
+35b96e9 2026-01-16 style: Code simplification and ES module compliance
+668bf32 2026-01-16 refactor: Extract large files into smaller modules
+50699e9 2026-01-12 feat: Flexible tile layouts with drag-and-drop rearrangement
+07445d9 2026-01-11 Update README.md
+689c33d 2026-01-10 chore: Bump version to 1.3.38
+9d57097 2026-01-10 feat: Multi-backend permission args, session restore, and task UI improvements
+5d16217 2026-01-10 chore: Bump version to 1.3.37
+eeb769b 2026-01-10 fix: TTS fallback now checks all voice types (builtin, downloaded, custom)
+0dc0bd2 2026-01-10 chore: Bump version to 1.3.36
+adfd42f 2026-01-10 fix: Suppress Vite dev server reconnection error spam
+4c6f878 2026-01-10 chore: Bump version to 1.3.35
+ab1b2f7 2026-01-10 fix: TTS fallback to available voice when selected voice missing
+8bfc0b3 2026-01-10 chore: Bump version to 1.3.34
+f2a78a9 2026-01-10 chore: Bump version to 1.3.33
+bb8ca66 2026-01-10 feat: Add built-in default extensions to registry
+9bcba5e 2026-01-10 refactor: Move /plugin list to existing Commands menu
+a38725d 2026-01-10 feat: Add /plugin list to Quick Actions menu
+ef6e2fb 2026-01-10 feat: Add extension system for skills, MCPs, and agents
+8c119a6 2026-01-10 fix: Improve Beads task responsiveness and modal opacity
+36360ba 2026-01-10 feat: Add Beads task browser modal with filtering and sorting
+1e99d8a 2026-01-09 chore: Update repository URL to new name
+ec026f1 2026-01-09 feat: Rebrand to simple-code-gui with new icon and screenshots
+1af8db6 2026-01-09 feat: Add option to remove TTS instructions from all projects
+435ce02 2026-01-09 fix: Prevent WebGL addon disposal crash when switching layout modes
+6b4ec8f 2026-01-09 fix: Guard async callbacks and suppress xterm WebGL race condition error
+d3132d0 2026-01-09 style: Fix category count readability with inherited colors
+77c61d5 2026-01-09 style: Add dynamic text color and blend modes for category headers
+50975d9 2026-01-09 style: Increase category gradient opacity to 50%
+2c56c45 2026-01-09 style: Increase category gradient opacity for better visibility
+8b5a85a 2026-01-09 feat: Add project categories to sidebar
+009440d 2026-01-09 feat: add GPU acceleration for UI rendering
+00cca04 2026-01-09 fix: Add OpenCode to per-project backend override options
+e7bdb61 2026-01-09 fix: Add opencode to workspace store Project backend type
+1f6f1a0 2026-01-09 feat: Add OpenCode CLI support and installation integration for all CLIs
+ed4dd01 2026-01-08 fix: Use guillemet TTS markers and remove debug logging
+0c10ba1 2026-01-08 fix: Improve beads task text color readability in sidebar
+9c62158 2026-01-08 fix: Make terminal dropdown menus open upwards with correct positioning
+1e232db 2026-01-08 fix: Add missing dropdownRef to TerminalMenu causing crash
+a24973d 2026-01-07 feat: Open beads task detail modal in edit mode by default
+1cbe987 2026-01-07 chore: Bump version to 1.3.31
+d548e90 2026-01-07 feat: Add clickable beads tasks with detail modal and per-project backend settings
+114ddcd 2026-01-07 feat: Integrate Gemini CLI as an optional backend with per-session switching and fix UI issues
+55154d8 2026-01-05 Update beads tracking
+303bb89 2026-01-05 Add autowork active state API to preload interface
+63e05b7 2026-01-05 Add beads task creation for discovered dependencies
+4ac55f8 2026-01-05 Add beads task creation modal with proper fields
+0a8f83a 2026-01-05 Auto Work analyzes tasks to pick optimal order
+e912210 2026-01-05 Update beads: close Claude-Terminal-2sr
+93a9b96 2026-01-05 Fix multi-session restore: preserve stored sessions instead of always using most recent
+fbe4dea 2026-01-05 Always git commit/push when all tasks complete
+9a480d0 2026-01-05 Add custom slash commands feature
+e6f8f30 2026-01-05 Add Final Evaluation toggle for Auto Work
+6bed5ec 2026-01-05 Close Claude-Terminal-115: TTS voice previews in settings
+21c0608 2026-01-05 Add voice preview buttons to installed voices in settings
+313fba1 2026-01-05 Close Claude-Terminal-835: beads task editing
+8981f58 2026-01-05 Add inline editing for beads tasks in panel
+5c0230a 2026-01-05 Add configurable Auto Work options with toggles
+1389887 2026-01-05 Add adaptive tile layout based on window aspect ratio
+92fe264 2026-01-05 Add bead status cycling in BeadsPanel
+8e0bc47 2026-01-05 Add Auto Work with Context feature
+749a00a 2026-01-05 Auto Work Loop clears session before starting
+c1410ed 2026-01-05 Sync beads
+b09046a 2026-01-05 Reorganize menu into Automation and Session categories
+4425a7c 2026-01-05 Add Stop After Task command for Auto Work Loop
+eb39521 2026-01-05 Add Auto Work Loop feature
+dcd3bf2 2026-01-05 Add TerminalMenu and Summarize Context feature
+0f17f93 2026-01-05 v1.3.30
+eff7530 2026-01-05 Add voice input (STT) using whisper-web-transcriber
+a499677 2026-01-05 Auto-download Python 3.12 for XTTS if system Python incompatible
+f42c476 2026-01-05 Use virtual environment for XTTS dependencies
+e77c579 2026-01-05 Add close button to XTTS dialog and make errors selectable
+a68e5c5 2026-01-05 Fix false error on audio preview stop
+c2261c8 2026-01-05 Add voice preview and XTTS sample voices
+21f01c2 2026-01-05 Fix TTS startup behavior and disable HMR
+9d3d5d7 2026-01-04 Add XTTS-v2 voice cloning support
+f4d9694 2026-01-04 Add voice browser with 100+ downloadable voices
+fd8deda 2026-01-04 Persist voice settings across app restarts
+8a29665 2026-01-04 Add debug mode refresh button for development
+a21bd6c 2026-01-04 Add TTS options: volume, speed, skip-to-latest, more voices
+7f90823 2026-01-04 Add TTS voice output feature with skill-based approach
+f36ec21 2026-01-04 Add Discord link and improve 5-tile layout
+15f9263 2026-01-02 Bump version to 1.3.29
+df2deea 2026-01-02 Improve BeadsPanel UX and scrollbar sizing
+f01ca08 2026-01-02 Bump version to 1.3.28
+7829932 2026-01-02 Add smart grid layout and focused project indicator
+8668d8d 2026-01-02 Bump version to 1.3.27
+7e5bd71 2026-01-02 Add API session model selection and unified project settings
+7e2dc4b 2026-01-01 Fix API prompt auto-send by using carriage return
+12c42c8 2026-01-01 Add visual indicators for global permissions in per-project modal
+6ada344 2026-01-01 Rename permission labels for clarity
+2c87779 2026-01-01 Improve tiled terminal layout with masonry-style resizing
+9262e38 2025-12-31 Move permissions to per-project settings in context menu
+031ddb4 2025-12-31 Add expanded permission settings with mode selector
+e4bb619 2025-12-31 Fix tile resizing with grid divider approach
+4dd2aca 2025-12-31 Fix Linux taskbar pinning - set WM_CLASS for window grouping
+8210fe4 2025-12-31 Fix app icon in taskbar and window manager
+7202e2f 2025-12-31 Improve API server UI with port validation and success indicator
+5b2f5c8 2025-12-31 Add HTTP API server for sending prompts to terminals
+bfd2ab4 2025-12-31 Add right-click context menu for project items
+af8bc4b 2025-12-31 Add tiled view, auto-accept permissions, and bug fixes
+455a012 2025-12-29 Try winpty instead of ConPTY on Windows
+65f35d3 2025-12-29 Fix Windows spinner animation with ConPTY options
+2d69b8e 2025-12-29 Add single instance lock
+ca5dc39 2025-12-29 Fix terminal scroll behavior with persistent user scroll tracking
+d9fbb48 2025-12-29 Add custom title bar, new icon, and scroll debugging
+b3a4eff 2025-12-28 Fix terminal scroll behavior - stay at bottom unless user scrolls up
+0267b41 2025-12-28 Update license references to PolyForm Noncommercial
+f85f1dd 2025-12-28 Change license to PolyForm Noncommercial 1.0.0
+77b5fc2 2025-12-28 Add introduction to README
+dc5278e 2025-12-28 Update main screenshot
+c8bf08d 2025-12-28 Add screenshots and comprehensive README
+a90b3a1 2025-12-28 Update README with new features
+bf833f2 2025-12-28 v1.3.20 - Clean release with Windows/Linux clipboard paste support
+b7a684f 2025-12-28 Fix Windows clipboard file paste with proper FileNameW reading
+c9e3951 2025-12-28 Add clipboard format debugging for Windows paste issue
+e65c122 2025-12-28 Add debug logging for Windows Ctrl+V paste issue
+a834844 2025-12-28 Add Windows file paste support (v1.3.16)
+109d406 2025-12-28 Update PKGBUILD to v1.3.15
+b3d0418 2025-12-28 Add file paste and drag-drop support, Ctrl+C/V shortcuts
+42d4dc9 2025-12-27 Add image paste support for terminal
+7521719 2025-12-27 Fix beads binary download - match actual release naming
+138ce0f 2025-12-27 Fix auto-update 404 error - consistent artifact names
+1402050 2025-12-27 Show install screen before terminal tabs
+0eeb5ba 2025-12-27 Improve auto-update error handling and feedback
+b83fc1a 2025-12-27 Fix git-bash detection ReferenceError on Windows
+1e4ed42 2025-12-27 Fix terminal scroll position jumping
+4b2e22e 2025-12-27 Bump version to 1.3.7
+9ac3d78 2025-12-27 Fix auto-update by including latest.yml in releases
+0967f69 2025-12-27 Add Git auto-installation for Windows
+19db6ef 2025-12-27 Auto-detect git-bash for Claude Code on Windows
+3c43ee0 2025-12-27 Add publish config for auto-updates
+3706c39 2025-12-27 Fix Windows PATH, duplicate paste, and beads installation
+c870009 2025-12-27 Add auto-update functionality with version display
+35cefe8 2025-12-27 Bump version to 1.3.1
+4000a56 2025-12-27 Fix PATH not updating after portable deps install
+6f60a78 2025-12-27 Remove migration code (no longer needed)
+42d060d 2025-12-27 Fix migration to use config subdirectory
+ef6ef11 2025-12-27 Add user data migration from old app name
+9255e54 2025-12-27 Fix PTY resize error and improve copy/paste
+c470be2 2025-12-27 Rename app to Simple Claude GUI
+182ffe6 2025-12-27 Add portable Node.js and Python auto-download support
+8ca1c85 2025-12-27 Fix Windows session spawn issues
+0e37e08 2025-12-27 Add Beads CLI auto-installation support
+2ad35cc 2025-12-27 Add Claude Code installation check and auto-installer
+8d44ef5 2025-12-27 Add Windows Store (AppX/MSIX) package support
+3ecf017 2025-12-27 Fix arrow keys scrolling viewport during Claude prompts
+193ead5 2025-12-27 Add native Windows support
+ab038d5 2025-12-27 Fix release workflow: add contents:write permission to build jobs
+a1986a9 2025-12-27 Fix macOS build: use Python 3.11 for node-gyp distutils
+637f09f 2025-12-27 Bump to 1.1.4 for release retry
+36b685d 2025-12-27 Fix package build: add author email for deb maintainer
+799e596 2025-12-27 Add macOS support to release workflow
+160c53c 2025-12-27 Add GitHub Actions release workflow for multi-distro builds
+aaf7c60 2025-12-27 Add tooltips for truncated text, open project indicators, and Run App button
+9dd60ba 2025-12-26 Add tiled view, last-focused beads tracking, and UI improvements
+3841c4f 2025-12-26 Bump version to 1.1.0
+e11eb11 2025-12-26 Add themes, settings, beads integration, and UI improvements
+87a44a8 2025-12-26 Hide DevTools by default, toggle with F12
+e3e5a16 2025-12-26 Fix terminal resize timing for correct column width
+3c267c4 2025-12-26 Add README
+22f3b9f 2025-12-26 Initial commit: Claude Terminal Manager
+```

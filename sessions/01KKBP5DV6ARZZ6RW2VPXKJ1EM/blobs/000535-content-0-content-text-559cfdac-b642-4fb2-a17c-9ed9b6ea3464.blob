@@ -1,0 +1,302 @@
+```
+     1→src/main/mobile-security/fingerprint.ts-59-      mkdirSync(dir, { recursive: true })
+     2→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-60-    }
+     3→src/main/mobile-security/fingerprint.ts:61:    writeFileSync(
+     4→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-62-      fingerprintPath,
+     5→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/fingerprint.ts-63-      JSON.stringify({
+     6→--
+     7→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-153-
+     8→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-154-  // Write files with secure permissions (owner-only)
+     9→src/main/mobile-security/certificate.ts:155:  writeFileSync(keyFile, data.privateKey, { encoding: 'utf-8', mode: 0o600 })
+    10→src/main/mobile-security/certificate.ts:156:  writeFileSync(certFile, data.certificate, { encoding: 'utf-8', mode: 0o644 })
+    11→src/main/mobile-security/certificate.ts:157:  writeFileSync(
+    12→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/certificate.ts-158-    metaFile,
+    13→src/main/mobile-security/certificate.ts-159-    JSON.stringify({ createdAt: data.createdAt, fingerprint: data.fingerprint }, null, 2),
+    14→--
+    15→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-84- */
+    16→src/main/mobile-security/encryption.ts-85-export function writeSecureFile(filePath: string, content: string): void {
+    17→src/main/mobile-security/encryption.ts:86:  writeFileSync(filePath, content, 'utf-8')
+    18→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-87-
+    19→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-security/encryption.ts-88-  // Set restrictive file permissions (owner read/write only)
+    20→--
+    21→src/main/xtts-server.ts-178-  private ensureHelperScript(): void {
+    22→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-179-    ensureDir(xttsDir)
+    23→src/main/xtts-server.ts:180:    fs.writeFileSync(xttsScriptPath, XTTS_HELPER_SCRIPT)
+    24→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-181-    if (!isWindows) {
+    25→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-server.ts-182-      fs.chmodSync(xttsScriptPath, 0o755)
+    26→--
+    27→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-145-      // Restore backup as main file immediately
+    28→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-146-      try {
+    29→src/main/session-store.ts:147:        writeFileSync(this.configPath, JSON.stringify(backup, null, 2))
+    30→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-148-      } catch (e) {
+    31→src/main/session-store.ts-149-        console.error('[SessionStore] Failed to restore backup to main:', e)
+    32→--
+    33→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-179-            const existing = this.loadFile(this.configPath)
+    34→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-180-            if (existing && (existing.workspace.projects?.length || 0) > 0) {
+    35→src/main/session-store.ts:181:              writeFileSync(this.backupPath, readFileSync(this.configPath))
+    36→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-182-            }
+    37→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-183-          }
+    38→--
+    39→src/main/session-store.ts-189-      / Atomic write: write to temp file, then rename
+    40→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-190-      const tmpPath = this.configPath + '.tmp'
+    41→src/main/session-store.ts:191:      writeFileSync(tmpPath, json)
+    42→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-192-
+    43→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/session-store.ts-193-      // Verify the temp file was written completely
+    44→--
+    45→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-305-      let content = fs.readFileSync(pthPath, 'utf-8')
+    46→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-306-      content = content.replace('#import site', 'import site')
+    47→src/main/portable-deps.ts:307:      fs.writeFileSync(pthPath, content)
+    48→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-308-    }
+    49→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/portable-deps.ts-309-
+    50→--
+    51→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-117-      const filepath = join(tmpdir(), filename)
+    52→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-118-      const pngBuffer = image.toPNG()
+    53→src/main/ipc/window-handlers.ts:119:      writeFileSync(filepath, pngBuffer)
+    54→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-120-
+    55→src/main/ipc/window-handlers.ts-121-      return { success: true, hasImage: true, path: filepath }
+    56→--
+    57→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-155-      }
+    58→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-156-
+    59→src/main/ipc/window-handlers.ts:157:      writeFileSync(filePath, content, 'utf8')
+    60→src/main/ipc/window-handlers.ts-158-      return { success: true, path: filePath }
+    61→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-159-    } catch (error) {
+    62→--
+    63→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-203-      }
+    64→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-204-
+    65→src/main/ipc/window-handlers.ts:205:      writeFileSync(resolvedClaudeMdPath, content, 'utf8')
+    66→src/main/ipc/window-handlers.ts-206-      return { success: true }
+    67→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/window-handlers.ts-207-    } catch (error) {
+    68→--
+    69→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-42-          content = content.substring(0, startIdx) + content.substring(endIdx + TTS_INSTRUCTIONS_END.length)
+    70→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-43-          content += TTS_INSTRUCTIONS
+    71→src/main/ipc/voice-handlers.ts:44:          writeFileSync(claudeMdPath, content)
+    72→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-45-          return true
+    73→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-46-        }
+    74→--
+    75→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-49-
+    76→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-50-    content += TTS_INSTRUCTIONS
+    77→src/main/ipc/voice-handlers.ts:51:    writeFileSync(claudeMdPath, content)
+    78→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-52-    return true
+    79→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-53-  } catch (e) {
+    80→--
+    81→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-69-      content = content.slice(0, startIdx) + content.slice(endIdx + TTS_INSTRUCTIONS_END.length)
+    82→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-70-      content = content.trimEnd() + '\n'
+    83→src/main/ipc/voice-handlers.ts:71:      writeFileSync(claudeMdPath, content)
+    84→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-72-    }
+    85→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/voice-handlers.ts-73-    return true
+    86→--
+    87→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts-80-
+    88→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts-81-    content += getTaskInstructions(backend)
+    89→src/main/ipc/kspec-handlers.ts:82:    writeFileSync(claudeMdPath, content)
+    90→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts-83-    return true
+    91→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/ipc/kspec-handlers.ts-84-  } catch (e) {
+    92→--
+    93→.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-49-      createdAt: Date.now()
+    94→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-50-    }
+    95→.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts:51:    fs.writeFileSync(
+    96→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-52-      path.join(voiceDir, 'metadata.json'),
+    97→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-53-      JSON.stringify(metadata, null, 2)
+    98→--
+    99→.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-153-      createdAt: Date.now()
+   100→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-154-    }
+   101→.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts:155:    fs.writeFileSync(
+   102→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-156-      path.join(voiceDir, 'metadata.json'),
+   103→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-speakers.ts-157-      JSON.stringify(metadata, null, 2)
+   104→--
+   105→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/fingerprint.ts-59-      mkdirSync(dir, { recursive: true })
+   106→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/fingerprint.ts-60-    }
+   107→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/fingerprint.ts:61:    writeFileSync(
+   108→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/fingerprint.ts-62-      fingerprintPath,
+   109→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/fingerprint.ts-63-      JSON.stringify({
+   110→--
+   111→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-127-        if (mcpServers && mcpServers[extension.id]) {
+   112→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-128-          delete mcpServers[extension.id]
+   113→src/main/extension-manager/management.ts:129:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+   114→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-130-        }
+   115→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-131-      }
+   116→--
+   117→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-186-            ...newConfig
+   118→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-187-          }
+   119→src/main/extension-manager/management.ts:188:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+   120→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-189-        }
+   121→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/management.ts-190-      } catch {
+   122→--
+   123→src/main/extension-manager/index.ts-49-  private saveConfig(): void {
+   124→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-50-    if (!this.config) return
+   125→src/main/extension-manager/index.ts:51:    writeFileSync(getInstalledJsonPath(), JSON.stringify(this.config, null, 2))
+   126→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-52-  }
+   127→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/index.ts-53-
+   128→--
+   129→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts-153-
+   130→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts-154-  // Write files with secure permissions (owner-only)
+   131→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts:155:  writeFileSync(keyFile, data.privateKey, { encoding: 'utf-8', mode: 0o600 })
+   132→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts:156:  writeFileSync(certFile, data.certificate, { encoding: 'utf-8', mode: 0o644 })
+   133→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts:157:  writeFileSync(
+   134→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts-158-    metaFile,
+   135→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/certificate.ts-159-    JSON.stringify({ createdAt: data.createdAt, fingerprint: data.fingerprint }, null, 2),
+   136→--
+   137→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-108-    }
+   138→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-109-    currentMcpConfig.mcpServers = mcpServers
+   139→src/main/extension-manager/installation.ts:110:    writeFileSync(mcpConfigPath, JSON.stringify(currentMcpConfig, null, 2))
+   140→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-111-
+   141→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/installation.ts-112-    // Add to installed list
+   142→--
+   143→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-77-    // Cache it
+   144→src/main/extension-manager/registry.ts-78-    const cache: RegistryCache = { data, fetchedAt: Date.now() }
+   145→src/main/extension-manager/registry.ts:79:    writeFileSync(cachePath, JSON.stringify(cache, null, 2))
+   146→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-80-
+   147→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/extension-manager/registry.ts-81-    return { data, cache }
+   148→--
+   149→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/encryption.ts-84- */
+   150→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/encryption.ts-85-export function writeSecureFile(filePath: string, content: string): void {
+   151→.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/encryption.ts:86:  writeFileSync(filePath, content, 'utf-8')
+   152→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/encryption.ts-87-
+   153→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-security/encryption.ts-88-  // Set restrictive file permissions (owner read/write only)
+   154→--
+   155→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-171-    }
+   156→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-172-
+   157→.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts:173:    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+   158→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-174-
+   159→.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-175-    return { success: true, voiceKey: `custom:${baseName}` }
+   160→--
+   161→.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-198-        const metadata: CustomVoiceMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
+   162→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-199-        delete metadata.voices[baseName]
+   163→.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts:200:        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+   164→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-201-      } catch { /* ignore */ }
+   165→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice/voice-discovery.ts-202-    }
+   166→--
+   167→.claude/worktrees/agent-ad7c48c7/src/main/xtts-server.ts-178-  private ensureHelperScript(): void {
+   168→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-server.ts-179-    ensureDir(xttsDir)
+   169→.claude/worktrees/agent-ad7c48c7/src/main/xtts-server.ts:180:    fs.writeFileSync(xttsScriptPath, XTTS_HELPER_SCRIPT)
+   170→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-server.ts-181-    if (!isWindows) {
+   171→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-server.ts-182-      fs.chmodSync(xttsScriptPath, 0o755)
+   172→--
+   173→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-146-      try {
+   174→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-147-        const tmpPath = this.configPath + '.tmp'
+   175→.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts:148:        writeFileSync(tmpPath, JSON.stringify(backup, null, 2))
+   176→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-149-        renameSync(tmpPath, this.configPath)
+   177→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-150-      } catch (e) {
+   178→--
+   179→.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-183-              / Atomic backup: write to temp file, then rename
+   180→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-184-              const tmpBackup = this.backupPath + '.tmp'
+   181→.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts:185:              writeFileSync(tmpBackup, readFileSync(this.configPath))
+   182→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-186-              renameSync(tmpBackup, this.backupPath)
+   183→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-187-            }
+   184→--
+   185→.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-194-      / Atomic write: write to temp file, then rename
+   186→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-195-      const tmpPath = this.configPath + '.tmp'
+   187→.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts:196:      writeFileSync(tmpPath, json)
+   188→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-197-
+   189→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/session-store.ts-198-      try {
+   190→--
+   191→src/main/voice-manager.ts-102-        xttsRepetitionPenalty: this.xttsRepetitionPenalty
+   192→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice-manager.ts-103-      }
+   193→src/main/voice-manager.ts:104:      fs.writeFileSync(voiceSettingsPath, JSON.stringify(data, null, 2))
+   194→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice-manager.ts-105-    } catch (e) {
+   195→src/main/voice-manager.ts-106-      console.error('Failed to save voice settings:', e)
+   196→--
+   197→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-manager.ts-156-    ensureDir(xttsDir)
+   198→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-manager.ts-157-    const { XTTS_HELPER_SCRIPT } = require('./xtts-paths.js')
+   199→src/main/xtts-manager.ts:158:    fs.writeFileSync(xttsScriptPath, XTTS_HELPER_SCRIPT)
+   200→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-manager.ts-159-    if (!isWindows) {
+   201→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-manager.ts-160-      fs.chmodSync(xttsScriptPath, 0o755)
+   202→--
+   203→src/main/xtts-speakers.ts-49-      createdAt: Date.now()
+   204→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-50-    }
+   205→src/main/xtts-speakers.ts:51:    fs.writeFileSync(
+   206→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-52-      path.join(voiceDir, 'metadata.json'),
+   207→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-53-      JSON.stringify(metadata, null, 2)
+   208→--
+   209→src/main/xtts-speakers.ts-153-      createdAt: Date.now()
+   210→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-154-    }
+   211→src/main/xtts-speakers.ts:155:    fs.writeFileSync(
+   212→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-156-      path.join(voiceDir, 'metadata.json'),
+   213→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/xtts-speakers.ts-157-      JSON.stringify(metadata, null, 2)
+   214→--
+   215→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/portable-deps.ts-305-      let content = fs.readFileSync(pthPath, 'utf-8')
+   216→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/portable-deps.ts-306-      content = content.replace('#import site', 'import site')
+   217→.claude/worktrees/agent-ad7c48c7/src/main/portable-deps.ts:307:      fs.writeFileSync(pthPath, content)
+   218→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/portable-deps.ts-308-    }
+   219→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/portable-deps.ts-309-
+   220→--
+   221→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-171-    }
+   222→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-172-
+   223→src/main/voice/voice-discovery.ts:173:    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+   224→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-174-
+   225→src/main/voice/voice-discovery.ts-175-    return { success: true, voiceKey: `custom:${baseName}` }
+   226→--
+   227→src/main/voice/voice-discovery.ts-198-        const metadata: CustomVoiceMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'))
+   228→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-199-        delete metadata.voices[baseName]
+   229→src/main/voice/voice-discovery.ts:200:        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+   230→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-201-      } catch { /* ignore */ }
+   231→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/voice/voice-discovery.ts-202-    }
+   232→--
+   233→.claude/worktrees/agent-ad7c48c7/src/main/voice-manager.ts-102-        xttsRepetitionPenalty: this.xttsRepetitionPenalty
+   234→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice-manager.ts-103-      }
+   235→.claude/worktrees/agent-ad7c48c7/src/main/voice-manager.ts:104:      fs.writeFileSync(voiceSettingsPath, JSON.stringify(data, null, 2))
+   236→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/voice-manager.ts-105-    } catch (e) {
+   237→.claude/worktrees/agent-ad7c48c7/src/main/voice-manager.ts-106-      console.error('Failed to save voice settings:', e)
+   238→--
+   239→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-manager.ts-156-    ensureDir(xttsDir)
+   240→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-manager.ts-157-    const { XTTS_HELPER_SCRIPT } = require('./xtts-paths.js')
+   241→.claude/worktrees/agent-ad7c48c7/src/main/xtts-manager.ts:158:    fs.writeFileSync(xttsScriptPath, XTTS_HELPER_SCRIPT)
+   242→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-manager.ts-159-    if (!isWindows) {
+   243→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/xtts-manager.ts-160-      fs.chmodSync(xttsScriptPath, 0o755)
+   244→--
+   245→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-117-      const filepath = join(tmpdir(), filename)
+   246→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-118-      const pngBuffer = image.toPNG()
+   247→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts:119:      writeFileSync(filepath, pngBuffer)
+   248→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-120-
+   249→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-121-      return { success: true, hasImage: true, path: filepath }
+   250→--
+   251→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-155-      }
+   252→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-156-
+   253→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts:157:      writeFileSync(filePath, content, 'utf8')
+   254→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-158-      return { success: true, path: filePath }
+   255→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-159-    } catch (error) {
+   256→--
+   257→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-203-      }
+   258→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-204-
+   259→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts:205:      writeFileSync(resolvedClaudeMdPath, content, 'utf8')
+   260→.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-206-      return { success: true }
+   261→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/window-handlers.ts-207-    } catch (error) {
+   262→--
+   263→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/kspec-handlers.ts-80-
+   264→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/kspec-handlers.ts-81-    content += getTaskInstructions(backend)
+   265→.claude/worktrees/agent-ad7c48c7/src/main/ipc/kspec-handlers.ts:82:    writeFileSync(claudeMdPath, content)
+   266→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/kspec-handlers.ts-83-    return true
+   267→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/kspec-handlers.ts-84-  } catch (e) {
+   268→--
+   269→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-42-          content = content.substring(0, startIdx) + content.substring(endIdx + TTS_INSTRUCTIONS_END.length)
+   270→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-43-          content += TTS_INSTRUCTIONS
+   271→.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts:44:          writeFileSync(claudeMdPath, content)
+   272→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-45-          return true
+   273→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-46-        }
+   274→--
+   275→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-49-
+   276→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-50-    content += TTS_INSTRUCTIONS
+   277→.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts:51:    writeFileSync(claudeMdPath, content)
+   278→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-52-    return true
+   279→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-53-  } catch (e) {
+   280→--
+   281→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-69-      content = content.slice(0, startIdx) + content.slice(endIdx + TTS_INSTRUCTIONS_END.length)
+   282→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-70-      content = content.trimEnd() + '\n'
+   283→.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts:71:      writeFileSync(claudeMdPath, content)
+   284→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-72-    }
+   285→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/ipc/voice-handlers.ts-73-    return true
+   286→--
+   287→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-127-        if (mcpServers && mcpServers[extension.id]) {
+   288→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-128-          delete mcpServers[extension.id]
+   289→.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts:129:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+   290→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-130-        }
+   291→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-131-      }
+   292→--
+   293→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-186-            ...newConfig
+   294→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-187-          }
+   295→.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts:188:          writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+   296→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-189-        }
+   297→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/management.ts-190-      } catch {
+   298→--
+   299→.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/index.ts-49-  private saveConfig(): void {
+   300→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/extension-manager/index.ts-50-    if (!this.config) return
+```

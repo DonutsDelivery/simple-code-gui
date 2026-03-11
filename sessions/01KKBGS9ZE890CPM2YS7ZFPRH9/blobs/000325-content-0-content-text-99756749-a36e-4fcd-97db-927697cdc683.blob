@@ -1,0 +1,102 @@
+```
+    50→a8348445332d067789407c5ef4cc79048bd2d970 e65c122407938ffbaab329fea659b49c1343525b DonutsDelivery <megusta52@proton.me> 1766880770 +0100	commit: Add debug logging for Windows Ctrl+V paste issue
+    51→e65c122407938ffbaab329fea659b49c1343525b c9e3951edccfb62f7d1b44852a45af75c90dd466 DonutsDelivery <megusta52@proton.me> 1766881669 +0100	commit: Add clipboard format debugging for Windows paste issue
+    52→c9e3951edccfb62f7d1b44852a45af75c90dd466 b7a684fca9db8a64df5bbd20fb29345471025a92 DonutsDelivery <megusta52@proton.me> 1766881879 +0100	commit: Fix Windows clipboard file paste with proper FileNameW reading
+    53→b7a684fca9db8a64df5bbd20fb29345471025a92 bf833f2bddfe498d6329fcbf17ca9cbc09339a2f DonutsDelivery <megusta52@proton.me> 1766883452 +0100	commit: v1.3.20 - Clean release with Windows/Linux clipboard paste support
+    54→bf833f2bddfe498d6329fcbf17ca9cbc09339a2f a90b3a10d42bcb26e5b6f8b797175d806dedf2e3 DonutsDelivery <megusta52@proton.me> 1766883733 +0100	commit: Update README with new features
+    55→a90b3a10d42bcb26e5b6f8b797175d806dedf2e3 c8bf08dd6e35103d87c3c6dba307bd8c4e5c9dad DonutsDelivery <megusta52@proton.me> 1766884563 +0100	commit: Add screenshots and comprehensive README
+    56→c8bf08dd6e35103d87c3c6dba307bd8c4e5c9dad dc5278e486d2d452c67ecf563f78304c5ad01e25 DonutsDelivery <megusta52@proton.me> 1766884888 +0100	commit: Update main screenshot
+    57→dc5278e486d2d452c67ecf563f78304c5ad01e25 77b5fc259f8b61ce82989f9c8df9826818e76405 DonutsDelivery <megusta52@proton.me> 1766884988 +0100	commit: Add introduction to README
+    58→77b5fc259f8b61ce82989f9c8df9826818e76405 f85f1dd5eef5d5517297a71e4b727072f8ee9a4f DonutsDelivery <megusta52@proton.me> 1766887571 +0100	commit: Change license to PolyForm Noncommercial 1.0.0
+    59→f85f1dd5eef5d5517297a71e4b727072f8ee9a4f 0267b412f3599ce8a10ad3f5180e7c5b6050faf8 DonutsDelivery <megusta52@proton.me> 1766887701 +0100	commit: Update license references to PolyForm Noncommercial
+    60→0267b412f3599ce8a10ad3f5180e7c5b6050faf8 9dfd40c47cafd49bb4c40fa6f233299450c7f9f9 DonutsDelivery <megusta52@proton.me> 1766940977 +0100	commit: Fix terminal scroll behavior - stay at bottom unless user scrolls up
+    61→9dfd40c47cafd49bb4c40fa6f233299450c7f9f9 b3a4eff0b18c9d3ee8718d7a2d161e57665c419c DonutsDelivery <megusta52@proton.me> 1766941016 +0100	commit (amend): Fix terminal scroll behavior - stay at bottom unless user scrolls up
+    62→b3a4eff0b18c9d3ee8718d7a2d161e57665c419c d9fbb486330a25761ab4bb67480319e84c4fa792 DonutsDelivery <megusta52@proton.me> 1766965710 +0100	commit: Add custom title bar, new icon, and scroll debugging
+    63→d9fbb486330a25761ab4bb67480319e84c4fa792 ca5dc390dc3259dbd464d48960c2c3a211c627c8 DonutsDelivery <megusta52@proton.me> 1766977261 +0100	commit: Fix terminal scroll behavior with persistent user scroll tracking
+    64→ca5dc390dc3259dbd464d48960c2c3a211c627c8 2d69b8eca70c2c38c6fde233ad7a46036fff0dc0 DonutsDelivery <megusta52@proton.me> 1766985026 +0100	commit: Add single instance lock
+    65→2d69b8eca70c2c38c6fde233ad7a46036fff0dc0 65f35d34aff62f7b23868e6edb6687146c869380 DonutsDelivery <megusta52@proton.me> 1766998279 +0100	commit: Fix Windows spinner animation with ConPTY options
+    66→65f35d34aff62f7b23868e6edb6687146c869380 455a012ab808999e81d849c40f4de950633db428 DonutsDelivery <megusta52@proton.me> 1766999440 +0100	commit: Try winpty instead of ConPTY on Windows
+    67→455a012ab808999e81d849c40f4de950633db428 af8bc4bb7f19256fb6dfc025980837567f81f880 DonutsDelivery <megusta52@proton.me> 1767184150 +0100	commit: Add tiled view, auto-accept permissions, and bug fixes
+    68→af8bc4bb7f19256fb6dfc025980837567f81f880 bfd2ab44ae1f5eab16c69bec3f993a9a59fa7087 DonutsDelivery <megusta52@proton.me> 1767189275 +0100	commit: Add right-click context menu for project items
+    69→bfd2ab44ae1f5eab16c69bec3f993a9a59fa7087 5b2f5c8c7067efdcdf084ed1c6d6fec05456cdf9 DonutsDelivery <megusta52@proton.me> 1767193648 +0100	commit: Add HTTP API server for sending prompts to terminals
+    70→5b2f5c8c7067efdcdf084ed1c6d6fec05456cdf9 7202e2fedd175e214509fb776bd902bc89e6e9a6 DonutsDelivery <megusta52@proton.me> 1767194088 +0100	commit: Improve API server UI with port validation and success indicator
+    71→7202e2fedd175e214509fb776bd902bc89e6e9a6 8210fe49d907f1e909a216a7bcc6add71bf08ee9 DonutsDelivery <megusta52@proton.me> 1767194482 +0100	commit: Fix app icon in taskbar and window manager
+    72→8210fe49d907f1e909a216a7bcc6add71bf08ee9 4dd2acae89870e91b8aaa863cf6a722f947b1935 DonutsDelivery <megusta52@proton.me> 1767194724 +0100	commit: Fix Linux taskbar pinning - set WM_CLASS for window grouping
+    73→4dd2acae89870e91b8aaa863cf6a722f947b1935 e4bb6195b422066092bf43f49e4c06368c68a558 DonutsDelivery <megusta52@proton.me> 1767195660 +0100	commit: Fix tile resizing with grid divider approach
+    74→e4bb6195b422066092bf43f49e4c06368c68a558 031ddb42d9fecd2a513993d8e9f20cd3af554840 DonutsDelivery <megusta52@proton.me> 1767196302 +0100	commit: Add expanded permission settings with mode selector
+    75→031ddb42d9fecd2a513993d8e9f20cd3af554840 9262e38cdf4b4aad469b26f9d9fc7c59c08aa665 DonutsDelivery <megusta52@proton.me> 1767197442 +0100	commit: Move permissions to per-project settings in context menu
+    76→9262e38cdf4b4aad469b26f9d9fc7c59c08aa665 2c877790d00aac11491d1b4684a37a0f1ec366e2 DonutsDelivery <megusta52@proton.me> 1767230978 +0100	commit: Improve tiled terminal layout with masonry-style resizing
+    77→2c877790d00aac11491d1b4684a37a0f1ec366e2 6ada344b7df03c276f98ac389ec517ad071bf8a1 DonutsDelivery <megusta52@proton.me> 1767231162 +0100	commit: Rename permission labels for clarity
+    78→6ada344b7df03c276f98ac389ec517ad071bf8a1 12c42c837cd34340eb7365a0b3ae8bbc66bf28e5 DonutsDelivery <megusta52@proton.me> 1767231259 +0100	commit: Add visual indicators for global permissions in per-project modal
+    79→12c42c837cd34340eb7365a0b3ae8bbc66bf28e5 7e2dc4b23369e4ad9bb224eb256d940c509c478b DonutsDelivery <megusta52@proton.me> 1767271458 +0100	commit: Fix API prompt auto-send by using carriage return
+    80→7e2dc4b23369e4ad9bb224eb256d940c509c478b 7e5bd710ef045a56e043bd4a01790a2476150a1b DonutsDelivery <megusta52@proton.me> 1767308950 +0100	commit: Add API session model selection and unified project settings
+    81→7e5bd710ef045a56e043bd4a01790a2476150a1b 8668d8daf0bbda628878aaa599e661d5c84ebb01 DonutsDelivery <megusta52@proton.me> 1767309203 +0100	commit: Bump version to 1.3.27
+    82→8668d8daf0bbda628878aaa599e661d5c84ebb01 78299325729ea1809bd4db0f2c1963d48486f0fc DonutsDelivery <megusta52@proton.me> 1767376934 +0100	commit: Add smart grid layout and focused project indicator
+    83→78299325729ea1809bd4db0f2c1963d48486f0fc f01ca0871d90d53baf44fc003c5885eaaca6dff2 DonutsDelivery <megusta52@proton.me> 1767377139 +0100	commit: Bump version to 1.3.28
+    84→f01ca0871d90d53baf44fc003c5885eaaca6dff2 df2deeafa4ca569368430c0ce01fce9e93d127d5 DonutsDelivery <megusta52@proton.me> 1767380717 +0100	commit: Improve BeadsPanel UX and scrollbar sizing
+    85→df2deeafa4ca569368430c0ce01fce9e93d127d5 15f9263679a80819db3ad8ec6b5c449dca1e4150 DonutsDelivery <megusta52@proton.me> 1767380738 +0100	commit: Bump version to 1.3.29
+    86→15f9263679a80819db3ad8ec6b5c449dca1e4150 f36ec216bf25383294f71e531b97ec25a92eafa3 DonutsDelivery <megusta52@proton.me> 1767522381 +0100	commit: Add Discord link and improve 5-tile layout
+    87→f36ec216bf25383294f71e531b97ec25a92eafa3 7f908231162cbb1cb967755b4a7a28efd332095b DonutsDelivery <megusta52@proton.me> 1767564104 +0100	commit: Add TTS voice output feature with skill-based approach
+    88→7f908231162cbb1cb967755b4a7a28efd332095b a21bd6c3a00919c3b015685f33838321377f4921 DonutsDelivery <megusta52@proton.me> 1767564566 +0100	commit: Add TTS options: volume, speed, skip-to-latest, more voices
+    89→a21bd6c3a00919c3b015685f33838321377f4921 8a29665813b0b76934a6e88c3572659c258bd291 DonutsDelivery <megusta52@proton.me> 1767564811 +0100	commit: Add debug mode refresh button for development
+    90→8a29665813b0b76934a6e88c3572659c258bd291 fd8dedafe2b7aa80df7cfeb71d643dd4d5d6f7af DonutsDelivery <megusta52@proton.me> 1767565008 +0100	commit: Persist voice settings across app restarts
+    91→fd8dedafe2b7aa80df7cfeb71d643dd4d5d6f7af f4d96945b2ae1bd592bef5596fdfc49f27f60cf7 DonutsDelivery <megusta52@proton.me> 1767566249 +0100	commit: Add voice browser with 100+ downloadable voices
+    92→f4d96945b2ae1bd592bef5596fdfc49f27f60cf7 9d3d5d73a2005daadda7db062e67a44ab0a78661 DonutsDelivery <megusta52@proton.me> 1767567334 +0100	commit: Add XTTS-v2 voice cloning support
+    93→9d3d5d73a2005daadda7db062e67a44ab0a78661 21f01c29f0697e34c7f574c3a886be6b884947cf DonutsDelivery <megusta52@proton.me> 1767568771 +0100	commit: Fix TTS startup behavior and disable HMR
+    94→21f01c29f0697e34c7f574c3a886be6b884947cf c2261c80d49c50f88736624feacfbf2e00da7261 DonutsDelivery <megusta52@proton.me> 1767570029 +0100	commit: Add voice preview and XTTS sample voices
+    95→c2261c80d49c50f88736624feacfbf2e00da7261 a68e5c5afb180f53bd1ed7ddf53f0f12f45683be DonutsDelivery <megusta52@proton.me> 1767570242 +0100	commit: Fix false error on audio preview stop
+    96→a68e5c5afb180f53bd1ed7ddf53f0f12f45683be e77c57981ae21f8cdc63f670fce4251c71ed708e DonutsDelivery <megusta52@proton.me> 1767570889 +0100	commit: Add close button to XTTS dialog and make errors selectable
+    97→e77c57981ae21f8cdc63f670fce4251c71ed708e f42c476e15da0bbbf3815a40f11e299971d0e13a DonutsDelivery <megusta52@proton.me> 1767571063 +0100	commit: Use virtual environment for XTTS dependencies
+    98→f42c476e15da0bbbf3815a40f11e299971d0e13a a4996770d9aae8edad5e1f7e5697e1cd32cf12f7 DonutsDelivery <megusta52@proton.me> 1767571805 +0100	commit: Auto-download Python 3.12 for XTTS if system Python incompatible
+    99→a4996770d9aae8edad5e1f7e5697e1cd32cf12f7 eff7530a2ce6a8486f378545e7dbdd4e8dc45018 DonutsDelivery <megusta52@proton.me> 1767592310 +0100	commit: Add voice input (STT) using whisper-web-transcriber
+   100→eff7530a2ce6a8486f378545e7dbdd4e8dc45018 0f17f93ab1caeb56384ff7b822480483793541c3 DonutsDelivery <megusta52@proton.me> 1767592330 +0100	commit: v1.3.30
+   101→0f17f93ab1caeb56384ff7b822480483793541c3 dcd3bf2583f7afc4629135b62312d2aad95191ce DonutsDelivery <megusta52@proton.me> 1767638961 +0100	commit: Add TerminalMenu and Summarize Context feature
+   102→dcd3bf2583f7afc4629135b62312d2aad95191ce eb39521c7801de9b9ab4d37fa384a6582ff010ca DonutsDelivery <megusta52@proton.me> 1767639448 +0100	commit: Add Auto Work Loop feature
+   103→eb39521c7801de9b9ab4d37fa384a6582ff010ca 4425a7cffe987cd988f98f545edd77a1dbce972b DonutsDelivery <megusta52@proton.me> 1767639612 +0100	commit: Add Stop After Task command for Auto Work Loop
+   104→4425a7cffe987cd988f98f545edd77a1dbce972b b09046acb31f30e56cea4599927ae0bad2fc585d DonutsDelivery <megusta52@proton.me> 1767639724 +0100	commit: Reorganize menu into Automation and Session categories
+   105→b09046acb31f30e56cea4599927ae0bad2fc585d c1410edab2feb7c69cf85ae0ecf91b3c3921f632 DonutsDelivery <megusta52@proton.me> 1767639884 +0100	commit: Sync beads
+   106→c1410edab2feb7c69cf85ae0ecf91b3c3921f632 749a00ac638012bc6af4d101f287759dedd804e5 DonutsDelivery <megusta52@proton.me> 1767639995 +0100	commit: Auto Work Loop clears session before starting
+   107→749a00ac638012bc6af4d101f287759dedd804e5 8e0bc47e190510fa283a900a957d6016abb59d89 DonutsDelivery <megusta52@proton.me> 1767640212 +0100	commit: Add Auto Work with Context feature
+   108→8e0bc47e190510fa283a900a957d6016abb59d89 92fe2643484211540d01a52048b58df9a534a85d DonutsDelivery <megusta52@proton.me> 1767641011 +0100	commit: Add bead status cycling in BeadsPanel
+   109→92fe2643484211540d01a52048b58df9a534a85d 1389887dc87357153ad5c7b5b4a4f7cd7c7394b0 DonutsDelivery <megusta52@proton.me> 1767641226 +0100	commit: Add adaptive tile layout based on window aspect ratio
+   110→1389887dc87357153ad5c7b5b4a4f7cd7c7394b0 5c0230af2550d77fe6256487efbec4b75f2662a3 DonutsDelivery <megusta52@proton.me> 1767641263 +0100	commit: Add configurable Auto Work options with toggles
+   111→5c0230af2550d77fe6256487efbec4b75f2662a3 8981f5854128de34c1c8fdec9e3d8492efa7a8c0 DonutsDelivery <megusta52@proton.me> 1767641424 +0100	commit: Add inline editing for beads tasks in panel
+   112→8981f5854128de34c1c8fdec9e3d8492efa7a8c0 313fba1036516e676ce2b521b75137aa02c04883 DonutsDelivery <megusta52@proton.me> 1767641435 +0100	commit: Close Claude-Terminal-835: beads task editing
+   113→313fba1036516e676ce2b521b75137aa02c04883 21c06085c4818a8455456a0f7c1076657377466c DonutsDelivery <megusta52@proton.me> 1767641637 +0100	commit: Add voice preview buttons to installed voices in settings
+   114→21c06085c4818a8455456a0f7c1076657377466c 6bed5ec320e1c363d8ce77d90dac603688ec35d8 DonutsDelivery <megusta52@proton.me> 1767641652 +0100	commit: Close Claude-Terminal-115: TTS voice previews in settings
+   115→6bed5ec320e1c363d8ce77d90dac603688ec35d8 e6f8f306b3142b4411993cf92dd1b489e864b2f3 DonutsDelivery <megusta52@proton.me> 1767641822 +0100	commit: Add Final Evaluation toggle for Auto Work
+   116→e6f8f306b3142b4411993cf92dd1b489e864b2f3 9a480d0269b7caf80b5be3f99dddf3221ecd7892 DonutsDelivery <megusta52@proton.me> 1767642042 +0100	commit: Add custom slash commands feature
+   117→9a480d0269b7caf80b5be3f99dddf3221ecd7892 fbe4deab5d05dad82abc8d0c5694fa647f541662 DonutsDelivery <megusta52@proton.me> 1767642188 +0100	commit: Always git commit/push when all tasks complete
+   118→fbe4deab5d05dad82abc8d0c5694fa647f541662 93a9b963a4e89f8f08c9e22684e19b1740fe83ab DonutsDelivery <megusta52@proton.me> 1767642221 +0100	commit: Fix multi-session restore: preserve stored sessions instead of always using most recent
+   119→93a9b963a4e89f8f08c9e22684e19b1740fe83ab e9122109388ddd5e2c7a75c09a914348c3a3d773 DonutsDelivery <megusta52@proton.me> 1767642239 +0100	commit: Update beads: close Claude-Terminal-2sr
+   120→e9122109388ddd5e2c7a75c09a914348c3a3d773 0a8f83a3d9a7cd9183c86946016e9940e506cec7 DonutsDelivery <megusta52@proton.me> 1767642373 +0100	commit: Auto Work analyzes tasks to pick optimal order
+   121→0a8f83a3d9a7cd9183c86946016e9940e506cec7 4ac55f81dd662fa88c395981e387971f6952324c DonutsDelivery <megusta52@proton.me> 1767642458 +0100	commit: Add beads task creation modal with proper fields
+   122→4ac55f81dd662fa88c395981e387971f6952324c 63e05b7d47350553e9835ee4bfbae15ca10d7819 DonutsDelivery <megusta52@proton.me> 1767643003 +0100	commit: Add beads task creation for discovered dependencies
+   123→63e05b7d47350553e9835ee4bfbae15ca10d7819 303bb891f73ac7aef7d0e9182e15188316e50997 DonutsDelivery <megusta52@proton.me> 1767648051 +0100	commit: Add autowork active state API to preload interface
+   124→303bb891f73ac7aef7d0e9182e15188316e50997 55154d80fa3bbda220be888f9b676a1de8ff97f0 DonutsDelivery <megusta52@proton.me> 1767648056 +0100	commit: Update beads tracking
+   125→55154d80fa3bbda220be888f9b676a1de8ff97f0 114ddcd229e1b31fefb01f5c5909cad5ff4b82d9 DonutsDelivery <megusta52@proton.me> 1767753920 +0100	commit: feat: Integrate Gemini CLI as an optional backend with per-session switching and fix UI issues
+   126→114ddcd229e1b31fefb01f5c5909cad5ff4b82d9 663313011fdedcd593fb0071e20df12a64a850ae DonutsDelivery <megusta52@proton.me> 1767821405 +0100	commit: feat: Integrate Gemini CLI as an optional backend with per-session switching and fix UI issues
+   127→663313011fdedcd593fb0071e20df12a64a850ae d548e904b063e5e2c03329e70333977f4923433b DonutsDelivery <megusta52@proton.me> 1767821416 +0100	commit (amend): feat: Add clickable beads tasks with detail modal and per-project backend settings
+   128→d548e904b063e5e2c03329e70333977f4923433b 1cbe98759b79b8f156efc9ab39a6ebadad0ae552 DonutsDelivery <megusta52@proton.me> 1767821443 +0100	commit: chore: Bump version to 1.3.31
+   129→1cbe98759b79b8f156efc9ab39a6ebadad0ae552 a24973da96bcebf3de30e6718a954cc0414c704e DonutsDelivery <megusta52@proton.me> 1767821732 +0100	commit: feat: Open beads task detail modal in edit mode by default
+   130→a24973da96bcebf3de30e6718a954cc0414c704e 1e232db481e605b0bcd11631278bba8fb2372048 DonutsDelivery <megusta52@proton.me> 1767829545 +0100	commit: fix: Add missing dropdownRef to TerminalMenu causing crash
+   131→1e232db481e605b0bcd11631278bba8fb2372048 9c62158177037a9a83ec2b7a8ca9189a4d46d7f7 DonutsDelivery <megusta52@proton.me> 1767829894 +0100	commit: fix: Make terminal dropdown menus open upwards with correct positioning
+   132→9c62158177037a9a83ec2b7a8ca9189a4d46d7f7 0c10ba150cc2668dde0ae2e0f6938ff80e8ffbfe DonutsDelivery <megusta52@proton.me> 1767872979 +0100	commit: fix: Improve beads task text color readability in sidebar
+   133→0c10ba150cc2668dde0ae2e0f6938ff80e8ffbfe ed4dd01c228a14ac998a48ee8ae9b66330339ba9 DonutsDelivery <megusta52@proton.me> 1767876757 +0100	commit: fix: Use guillemet TTS markers and remove debug logging
+   134→ed4dd01c228a14ac998a48ee8ae9b66330339ba9 1f6f1a0142c2fad0c2d9b7fd56cc34ee3023cdb9 DonutsDelivery <megusta52@proton.me> 1767966949 +0100	commit: feat: Add OpenCode CLI support and installation integration for all CLIs
+   135→1f6f1a0142c2fad0c2d9b7fd56cc34ee3023cdb9 e7bdb61d1663fd1c5ba3075e94c2848d4825b165 DonutsDelivery <megusta52@proton.me> 1767967667 +0100	commit: fix: Add opencode to workspace store Project backend type
+   136→e7bdb61d1663fd1c5ba3075e94c2848d4825b165 00cca0414ba82533988c2c11fb31b9c52f82d218 DonutsDelivery <megusta52@proton.me> 1767967981 +0100	commit: fix: Add OpenCode to per-project backend override options
+   137→00cca0414ba82533988c2c11fb31b9c52f82d218 009440de08a0c4fecde5e69c8e627004f016218b DonutsDelivery <megusta52@proton.me> 1767970463 +0100	commit: feat: add GPU acceleration for UI rendering
+   138→009440de08a0c4fecde5e69c8e627004f016218b 8b5a85ad39c6c18ddf01052cea1b3e96bcb53776 DonutsDelivery <megusta52@proton.me> 1767971244 +0100	commit: feat: Add project categories to sidebar
+   139→8b5a85ad39c6c18ddf01052cea1b3e96bcb53776 2c56c456b7f32e59cae51b38e72b717598929634 DonutsDelivery <megusta52@proton.me> 1767971663 +0100	commit: style: Increase category gradient opacity for better visibility
+   140→2c56c456b7f32e59cae51b38e72b717598929634 50975d9fc1d79545b2d8154a681bfda43f49b268 DonutsDelivery <megusta52@proton.me> 1767971781 +0100	commit: style: Increase category gradient opacity to 50%
+   141→50975d9fc1d79545b2d8154a681bfda43f49b268 77c61d55c0d06518524acba47fd37c322993edbf DonutsDelivery <megusta52@proton.me> 1767971927 +0100	commit: style: Add dynamic text color and blend modes for category headers
+   142→77c61d55c0d06518524acba47fd37c322993edbf d3132d01ddd92ea6195345e453143079c1c594f6 DonutsDelivery <megusta52@proton.me> 1767972003 +0100	commit: style: Fix category count readability with inherited colors
+   143→d3132d01ddd92ea6195345e453143079c1c594f6 22de658b2dc84df52f9a4a66bdd5e4f1628a1283 DonutsDelivery <megusta52@proton.me> 1767972250 +0100	commit: fix: Guard async callbacks to prevent accessing disposed terminal
+   144→22de658b2dc84df52f9a4a66bdd5e4f1628a1283 2dce5f8a1e05c52537b3d1aaa134ad8ce0663f35 DonutsDelivery <megusta52@proton.me> 1767972761 +0100	commit (amend): fix: Guard async callbacks to prevent accessing disposed terminal
+   145→2dce5f8a1e05c52537b3d1aaa134ad8ce0663f35 6b4ec8f4bc7d39eba03c47190fcd78f5e428179d DonutsDelivery <megusta52@proton.me> 1767973104 +0100	commit (amend): fix: Guard async callbacks and suppress xterm WebGL race condition error
+   146→6b4ec8f4bc7d39eba03c47190fcd78f5e428179d 435ce0217c537628af8eef4c34478b7cd14d6e2f DonutsDelivery <megusta52@proton.me> 1767974127 +0100	commit: fix: Prevent WebGL addon disposal crash when switching layout modes
+   147→435ce0217c537628af8eef4c34478b7cd14d6e2f 1af8db641795cda5193d82a24ba46853cf37a909 DonutsDelivery <megusta52@proton.me> 1767974440 +0100	commit: feat: Add option to remove TTS instructions from all projects
+   148→1af8db641795cda5193d82a24ba46853cf37a909 ec026f1f050087166c68d564c5adc1d1e0cf99fc DonutsDelivery <megusta52@proton.me> 1767976068 +0100	commit: feat: Rebrand to simple-code-gui with new icon and screenshots
+   149→ec026f1f050087166c68d564c5adc1d1e0cf99fc 1e99d8aa857769b022fd0af203005f7833da2dc9 DonutsDelivery <megusta52@proton.me> 1767976110 +0100	commit: chore: Update repository URL to new name
+```

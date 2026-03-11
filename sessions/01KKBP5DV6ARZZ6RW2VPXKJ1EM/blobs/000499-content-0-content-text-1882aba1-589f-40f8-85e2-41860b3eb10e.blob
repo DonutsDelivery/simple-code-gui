@@ -1,0 +1,265 @@
+```
+     1→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-6-import { basename } from 'path'
+     2→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-7-import { validateProjectPath } from '../../mobile-security'
+     3→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-8-import { discoverSessions } from '../../session-discovery'
+     4→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-9-import { log } from '../utils'
+     5→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-10-
+     6→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-11-export function setupWorkspaceRoutes(
+     7→src/main/mobile-server/routes/workspace.ts-12-  app: Express,
+     8→src/main/mobile-server/routes/workspace.ts-13-  getSessionStore: () => any
+     9→src/main/mobile-server/routes/workspace.ts-14-): void {
+    10→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-15-  // Reload workspace from disk
+    11→src/main/mobile-server/routes/workspace.ts:16:  app.post('/api/workspace/reload', async (_req: Request, res: Response) => {
+    12→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-17-    try {
+    13→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-18-      const sessionStore = getSessionStore()
+    14→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-19-      if (!sessionStore) {
+    15→src/main/mobile-server/routes/workspace.ts-20-        return res.status(500).json({ error: 'Session store not available' })
+    16→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-21-      }
+    17→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-22-      sessionStore.reloadFromDisk()
+    18→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-23-      const workspace = sessionStore.getWorkspace()
+    19→src/main/mobile-server/routes/workspace.ts-24-      res.json({ success: true, projectCount: workspace.projects?.length || 0 })
+    20→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-25-    } catch (error) {
+    21→src/main/mobile-server/routes/workspace.ts-26-      res.status(500).json({ error: String(error) })
+    22→--
+    23→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-33-      if (!sessionStore) {
+    24→src/main/mobile-server/routes/workspace.ts-34-        return res.status(500).json({ error: 'Session store not available' })
+    25→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-35-      }
+    26→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-36-      const workspace = sessionStore.getWorkspace()
+    27→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-37-      res.json(workspace)
+    28→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-38-    } catch (error) {
+    29→src/main/mobile-server/routes/workspace.ts-39-      res.status(500).json({ error: String(error) })
+    30→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-40-    }
+    31→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-41-  })
+    32→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-42-
+    33→src/main/mobile-server/routes/workspace.ts:43:  app.put('/api/workspace', async (req: Request, res: Response) => {
+    34→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-44-    try {
+    35→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-45-      const sessionStore = getSessionStore()
+    36→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-46-      if (!sessionStore) {
+    37→src/main/mobile-server/routes/workspace.ts-47-        return res.status(500).json({ error: 'Session store not available' })
+    38→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-48-      }
+    39→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-49-      // Protect against overwriting populated workspace with empty one
+    40→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-50-      const incoming = req.body
+    41→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-51-      const incomingProjects = incoming?.projects?.length || 0
+    42→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-52-      if (incomingProjects === 0) {
+    43→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-53-        const current = sessionStore.getWorkspace()
+    44→--
+    45→src/main/mobile-server/routes/workspace.ts-57-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
+    46→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-58-        }
+    47→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-59-      }
+    48→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-60-      sessionStore.saveWorkspace(req.body)
+    49→src/main/mobile-server/routes/workspace.ts-61-      res.json({ success: true })
+    50→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-62-    } catch (error) {
+    51→src/main/mobile-server/routes/workspace.ts-63-      res.status(500).json({ error: String(error) })
+    52→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-64-    }
+    53→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-65-  })
+    54→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-66-
+    55→src/main/mobile-server/routes/workspace.ts:67:  app.post('/api/workspace', async (req: Request, res: Response) => {
+    56→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-68-    try {
+    57→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-69-      const sessionStore = getSessionStore()
+    58→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-70-      if (!sessionStore) {
+    59→src/main/mobile-server/routes/workspace.ts-71-        return res.status(500).json({ error: 'Session store not available' })
+    60→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-72-      }
+    61→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-73-      // Protect against overwriting populated workspace with empty one
+    62→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-74-      const incoming = req.body
+    63→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-75-      const incomingProjects = incoming?.workspace?.projects?.length || 0
+    64→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-76-      if (incomingProjects === 0) {
+    65→/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/workspace.ts-77-        const current = sessionStore.getWorkspace()
+    66→--
+    67→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-6-import { basename } from 'path'
+    68→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-7-import { validateProjectPath } from '../../mobile-security'
+    69→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-8-import { discoverSessions } from '../../session-discovery'
+    70→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-9-import { log } from '../utils'
+    71→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-10-
+    72→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-11-export function setupWorkspaceRoutes(
+    73→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-12-  app: Express,
+    74→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-13-  getSessionStore: () => any
+    75→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-14-): void {
+    76→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-15-  // Reload workspace from disk
+    77→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts:16:  app.post('/api/workspace/reload', async (_req: Request, res: Response) => {
+    78→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-17-    try {
+    79→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-18-      const sessionStore = getSessionStore()
+    80→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-19-      if (!sessionStore) {
+    81→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-20-        return res.status(500).json({ error: 'Session store not available' })
+    82→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-21-      }
+    83→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-22-      sessionStore.reloadFromDisk()
+    84→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-23-      const workspace = sessionStore.getWorkspace()
+    85→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-24-      res.json({ success: true, projectCount: workspace.projects?.length || 0 })
+    86→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-25-    } catch (error) {
+    87→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-26-      res.status(500).json({ error: String(error) })
+    88→--
+    89→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-33-      if (!sessionStore) {
+    90→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-34-        return res.status(500).json({ error: 'Session store not available' })
+    91→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-35-      }
+    92→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-36-      const workspace = sessionStore.getWorkspace()
+    93→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-37-      res.json(workspace)
+    94→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-38-    } catch (error) {
+    95→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-39-      res.status(500).json({ error: String(error) })
+    96→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-40-    }
+    97→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-41-  })
+    98→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-42-
+    99→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts:43:  app.put('/api/workspace', async (req: Request, res: Response) => {
+   100→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-44-    try {
+   101→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-45-      const sessionStore = getSessionStore()
+   102→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-46-      if (!sessionStore) {
+   103→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-47-        return res.status(500).json({ error: 'Session store not available' })
+   104→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-48-      }
+   105→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-49-      // Protect against overwriting populated workspace with empty one
+   106→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-50-      const incoming = req.body
+   107→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-51-      const incomingProjects = incoming?.projects?.length || 0
+   108→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-52-      if (incomingProjects === 0) {
+   109→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-53-        const current = sessionStore.getWorkspace()
+   110→--
+   111→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-57-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
+   112→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-58-        }
+   113→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-59-      }
+   114→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-60-      sessionStore.saveWorkspace(req.body)
+   115→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-61-      res.json({ success: true })
+   116→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-62-    } catch (error) {
+   117→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-63-      res.status(500).json({ error: String(error) })
+   118→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-64-    }
+   119→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-65-  })
+   120→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-66-
+   121→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts:67:  app.post('/api/workspace', async (req: Request, res: Response) => {
+   122→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-68-    try {
+   123→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-69-      const sessionStore = getSessionStore()
+   124→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-70-      if (!sessionStore) {
+   125→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-71-        return res.status(500).json({ error: 'Session store not available' })
+   126→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-72-      }
+   127→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-73-      / POST expects { workspace: {...} } wrapper format
+   128→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-74-      const incoming = req.body
+   129→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-75-      const workspace = incoming?.workspace
+   130→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-76-      if (!workspace) {
+   131→.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/workspace.ts-77-        return res.status(400).json({ error: 'Missing workspace field in request body' })
+   132→--
+   133→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-6-import { basename } from 'path'
+   134→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-7-import { validateProjectPath } from '../../mobile-security'
+   135→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-8-import { discoverSessions } from '../../session-discovery'
+   136→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-9-import { log } from '../utils'
+   137→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-10-
+   138→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-11-export function setupWorkspaceRoutes(
+   139→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-12-  app: Express,
+   140→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-13-  getSessionStore: () => any
+   141→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-14-): void {
+   142→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-15-  // Reload workspace from disk
+   143→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts:16:  app.post('/api/workspace/reload', async (_req: Request, res: Response) => {
+   144→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-17-    try {
+   145→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-18-      const sessionStore = getSessionStore()
+   146→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-19-      if (!sessionStore) {
+   147→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-20-        return res.status(500).json({ error: 'Session store not available' })
+   148→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-21-      }
+   149→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-22-      sessionStore.reloadFromDisk()
+   150→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-23-      const workspace = sessionStore.getWorkspace()
+   151→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-24-      res.json({ success: true, projectCount: workspace.projects?.length || 0 })
+   152→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-25-    } catch (error) {
+   153→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-26-      res.status(500).json({ error: String(error) })
+   154→--
+   155→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-33-      if (!sessionStore) {
+   156→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-34-        return res.status(500).json({ error: 'Session store not available' })
+   157→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-35-      }
+   158→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-36-      const workspace = sessionStore.getWorkspace()
+   159→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-37-      res.json(workspace)
+   160→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-38-    } catch (error) {
+   161→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-39-      res.status(500).json({ error: String(error) })
+   162→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-40-    }
+   163→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-41-  })
+   164→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-42-
+   165→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts:43:  app.put('/api/workspace', async (req: Request, res: Response) => {
+   166→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-44-    try {
+   167→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-45-      const sessionStore = getSessionStore()
+   168→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-46-      if (!sessionStore) {
+   169→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-47-        return res.status(500).json({ error: 'Session store not available' })
+   170→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-48-      }
+   171→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-49-      // Protect against overwriting populated workspace with empty one
+   172→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-50-      const incoming = req.body
+   173→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-51-      const incomingProjects = incoming?.projects?.length || 0
+   174→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-52-      if (incomingProjects === 0) {
+   175→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-53-        const current = sessionStore.getWorkspace()
+   176→--
+   177→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-57-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
+   178→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-58-        }
+   179→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-59-      }
+   180→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-60-      sessionStore.saveWorkspace(req.body)
+   181→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-61-      res.json({ success: true })
+   182→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-62-    } catch (error) {
+   183→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-63-      res.status(500).json({ error: String(error) })
+   184→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-64-    }
+   185→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-65-  })
+   186→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-66-
+   187→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts:67:  app.post('/api/workspace', async (req: Request, res: Response) => {
+   188→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-68-    try {
+   189→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-69-      const sessionStore = getSessionStore()
+   190→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-70-      if (!sessionStore) {
+   191→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-71-        return res.status(500).json({ error: 'Session store not available' })
+   192→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-72-      }
+   193→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-73-      / POST expects { workspace: {...} } wrapper format
+   194→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-74-      const incoming = req.body
+   195→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-75-      const workspace = incoming?.workspace
+   196→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-76-      if (!workspace) {
+   197→.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/workspace.ts-77-        return res.status(400).json({ error: 'Missing workspace field in request body' })
+   198→--
+   199→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-6-import { basename } from 'path'
+   200→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-7-import { validateProjectPath } from '../../mobile-security'
+   201→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-8-import { discoverSessions } from '../../session-discovery'
+   202→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-9-import { log } from '../utils'
+   203→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-10-
+   204→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-11-export function setupWorkspaceRoutes(
+   205→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-12-  app: Express,
+   206→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-13-  getSessionStore: () => any
+   207→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-14-): void {
+   208→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-15-  // Reload workspace from disk
+   209→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts:16:  app.post('/api/workspace/reload', async (_req: Request, res: Response) => {
+   210→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-17-    try {
+   211→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-18-      const sessionStore = getSessionStore()
+   212→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-19-      if (!sessionStore) {
+   213→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-20-        return res.status(500).json({ error: 'Session store not available' })
+   214→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-21-      }
+   215→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-22-      sessionStore.reloadFromDisk()
+   216→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-23-      const workspace = sessionStore.getWorkspace()
+   217→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-24-      res.json({ success: true, projectCount: workspace.projects?.length || 0 })
+   218→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-25-    } catch (error) {
+   219→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-26-      res.status(500).json({ error: String(error) })
+   220→--
+   221→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-33-      if (!sessionStore) {
+   222→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-34-        return res.status(500).json({ error: 'Session store not available' })
+   223→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-35-      }
+   224→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-36-      const workspace = sessionStore.getWorkspace()
+   225→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-37-      res.json(workspace)
+   226→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-38-    } catch (error) {
+   227→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-39-      res.status(500).json({ error: String(error) })
+   228→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-40-    }
+   229→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-41-  })
+   230→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-42-
+   231→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts:43:  app.put('/api/workspace', async (req: Request, res: Response) => {
+   232→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-44-    try {
+   233→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-45-      const sessionStore = getSessionStore()
+   234→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-46-      if (!sessionStore) {
+   235→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-47-        return res.status(500).json({ error: 'Session store not available' })
+   236→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-48-      }
+   237→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-49-      // Protect against overwriting populated workspace with empty one
+   238→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-50-      const incoming = req.body
+   239→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-51-      const incomingProjects = incoming?.projects?.length || 0
+   240→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-52-      if (incomingProjects === 0) {
+   241→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-53-        const current = sessionStore.getWorkspace()
+   242→--
+   243→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-57-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
+   244→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-58-        }
+   245→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-59-      }
+   246→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-60-      sessionStore.saveWorkspace(req.body)
+   247→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-61-      res.json({ success: true })
+   248→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-62-    } catch (error) {
+   249→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-63-      res.status(500).json({ error: String(error) })
+   250→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-64-    }
+   251→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-65-  })
+   252→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-66-
+   253→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts:67:  app.post('/api/workspace', async (req: Request, res: Response) => {
+   254→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-68-    try {
+   255→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-69-      const sessionStore = getSessionStore()
+   256→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-70-      if (!sessionStore) {
+   257→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-71-        return res.status(500).json({ error: 'Session store not available' })
+   258→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-72-      }
+   259→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-73-      / POST expects { workspace: {...} } wrapper format
+   260→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-74-      const incoming = req.body
+   261→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-75-      const workspace = incoming?.workspace
+   262→/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-76-      if (!workspace) {
+   263→.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/workspace.ts-77-        return res.status(400).json({ error: 'Missing workspace field in request body' })
+```

@@ -1,0 +1,9 @@
+id: 01KKBV6J52MFSPH6NHQE5BQ78X
+task_id: "@01KKAWM2RXD9TWVAHK8BMMSEC2"
+agent_type: claude-agent-acp
+agent_id: pr-reviewer
+trigger: task.pending_review
+status: completed
+started_at: 2026-03-10T12:22:56.930Z
+ended_at: 2026-03-10T12:27:35.743Z
+close_reason: Invocation completed normally

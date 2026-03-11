@@ -1,0 +1,179 @@
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-48-  broadcastTerminalData as wsBroadcastTerminalData,
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-49-  broadcastPtyData as wsBroadcastPtyData,
+src/main/mobile-server/index.ts:50:  broadcastPtyExit as wsBroadcastPtyExit
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-51-} from './websocket-manager'
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-52-import {
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-184-      () => this.ptyDataBuffer,
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-185-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
+src/main/mobile-server/index.ts:186:      (ptyId, code) => this.broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-187-    )
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-188-
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-213-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-214-
+src/main/mobile-server/index.ts:215:  private broadcastPtyExit(ptyId: string, code: number): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-216-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions, this.ptyDataBuffer)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/index.ts-217-  }
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/websocket-manager.ts-316-}
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/websocket-manager.ts-317-
+src/main/mobile-server/websocket-manager.ts:318:export function broadcastPtyExit(
+src/main/mobile-server/websocket-manager.ts-319-  ptyId: string,
+src/main/mobile-server/websocket-manager.ts-320-  code: number,
+--
+src/main/mobile-server/routes/pty.ts-16-  getPtyDataBuffer: () => Map<string, string[]>,
+src/main/mobile-server/routes/pty.ts-17-  broadcastPtyData: (ptyId: string, data: string) => void,
+src/main/mobile-server/routes/pty.ts:18:  broadcastPtyExit: (ptyId: string, code: number) => void
+src/main/mobile-server/routes/pty.ts-19-): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/pty.ts-20-  // Spawn a new PTY
+--
+src/main/mobile-server/routes/pty.ts-66-      ptyManager.onExit(ptyId, (code: number) => {
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/pty.ts-67-        log('PTY exited', { ptyId, code })
+src/main/mobile-server/routes/pty.ts:68:        broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/pty.ts-69-        getLocalPtys().delete(ptyId)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/main/mobile-server/routes/pty.ts-70-        getPtyStreams().delete(ptyId)
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-48-  broadcastTerminalData as wsBroadcastTerminalData,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-49-  broadcastPtyData as wsBroadcastPtyData,
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts:50:  broadcastPtyExit as wsBroadcastPtyExit
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-51-} from './websocket-manager'
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-52-import {
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-184-      () => this.ptyDataBuffer,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-185-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts:186:      (ptyId, code) => this.broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-187-    )
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-188-
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-213-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-214-
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts:215:  private broadcastPtyExit(ptyId: string, code: number): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-216-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions, this.ptyDataBuffer)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/index.ts-217-  }
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/websocket-manager.ts-316-}
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/websocket-manager.ts-317-
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/websocket-manager.ts:318:export function broadcastPtyExit(
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/websocket-manager.ts-319-  ptyId: string,
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/websocket-manager.ts-320-  code: number,
+--
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-16-  getPtyDataBuffer: () => Map<string, string[]>,
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-17-  broadcastPtyData: (ptyId: string, data: string) => void,
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts:18:  broadcastPtyExit: (ptyId: string, code: number) => void
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-19-): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-20-  // Spawn a new PTY
+--
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-66-      ptyManager.onExit(ptyId, (code: number) => {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-67-        log('PTY exited', { ptyId, code })
+.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts:68:        broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-69-        getLocalPtys().delete(ptyId)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a35122dd/src/main/mobile-server/routes/pty.ts-70-        getPtyStreams().delete(ptyId)
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-48-  broadcastTerminalData as wsBroadcastTerminalData,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-49-  broadcastPtyData as wsBroadcastPtyData,
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts:50:  broadcastPtyExit as wsBroadcastPtyExit
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-51-} from './websocket-manager'
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-52-import {
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-184-      () => this.ptyDataBuffer,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-185-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts:186:      (ptyId, code) => this.broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-187-    )
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-188-
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-213-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-214-
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts:215:  private broadcastPtyExit(ptyId: string, code: number): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-216-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/index.ts-217-  }
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/websocket-manager.ts-316-}
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/websocket-manager.ts-317-
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/websocket-manager.ts:318:export function broadcastPtyExit(
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/websocket-manager.ts-319-  ptyId: string,
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/websocket-manager.ts-320-  code: number,
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-48-  broadcastTerminalData as wsBroadcastTerminalData,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-49-  broadcastPtyData as wsBroadcastPtyData,
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts:50:  broadcastPtyExit as wsBroadcastPtyExit
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-51-} from './websocket-manager'
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-52-import {
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-184-      () => this.ptyDataBuffer,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-185-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts:186:      (ptyId, code) => this.broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-187-    )
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-188-
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-213-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-214-
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts:215:  private broadcastPtyExit(ptyId: string, code: number): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-216-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/index.ts-217-  }
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-48-  broadcastTerminalData as wsBroadcastTerminalData,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-49-  broadcastPtyData as wsBroadcastPtyData,
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts:50:  broadcastPtyExit as wsBroadcastPtyExit
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-51-} from './websocket-manager'
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-52-import {
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-184-      () => this.ptyDataBuffer,
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-185-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts:186:      (ptyId, code) => this.broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-187-    )
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-188-
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-213-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-214-
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts:215:  private broadcastPtyExit(ptyId: string, code: number): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-216-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/index.ts-217-  }
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/websocket-manager.ts-316-}
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/websocket-manager.ts-317-
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/websocket-manager.ts:318:export function broadcastPtyExit(
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/websocket-manager.ts-319-  ptyId: string,
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/websocket-manager.ts-320-  code: number,
+--
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-16-  getPtyDataBuffer: () => Map<string, string[]>,
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-17-  broadcastPtyData: (ptyId: string, data: string) => void,
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts:18:  broadcastPtyExit: (ptyId: string, code: number) => void
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-19-): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-20-  // Spawn a new PTY
+--
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-66-      ptyManager.onExit(ptyId, (code: number) => {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-67-        log('PTY exited', { ptyId, code })
+.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts:68:        broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-69-        getLocalPtys().delete(ptyId)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/main/mobile-server/routes/pty.ts-70-        getPtyStreams().delete(ptyId)
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/websocket-manager.ts-316-}
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/websocket-manager.ts-317-
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/websocket-manager.ts:318:export function broadcastPtyExit(
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/websocket-manager.ts-319-  ptyId: string,
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/websocket-manager.ts-320-  code: number,
+--
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-16-  getPtyDataBuffer: () => Map<string, string[]>,
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-17-  broadcastPtyData: (ptyId: string, data: string) => void,
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts:18:  broadcastPtyExit: (ptyId: string, code: number) => void
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-19-): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-20-  // Spawn a new PTY
+--
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-66-      ptyManager.onExit(ptyId, (code: number) => {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-67-        log('PTY exited', { ptyId, code })
+.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts:68:        broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-69-        getLocalPtys().delete(ptyId)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/main/mobile-server/routes/pty.ts-70-        getPtyStreams().delete(ptyId)
+--
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-16-  getPtyDataBuffer: () => Map<string, string[]>,
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-17-  broadcastPtyData: (ptyId: string, data: string) => void,
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts:18:  broadcastPtyExit: (ptyId: string, code: number) => void
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-19-): void {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-20-  // Spawn a new PTY
+--
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-66-      ptyManager.onExit(ptyId, (code: number) => {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-67-        log('PTY exited', { ptyId, code })
+.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts:68:        broadcastPtyExit(ptyId, code)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-69-        getLocalPtys().delete(ptyId)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/main/mobile-server/routes/pty.ts-70-        getPtyStreams().delete(ptyId)

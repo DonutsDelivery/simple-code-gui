@@ -1,0 +1,381 @@
+```
+     1→import React, { useState, useEffect } from 'react'
+     2→import type { Theme } from '../themes'
+     3→import { VoiceBrowserModal } from './VoiceBrowserModal'
+     4→import { useVoice } from '../contexts/VoiceContext'
+     5→import { useFocusTrap } from '../hooks/useFocusTrap'
+     6→import {
+     7→  ThemeSettings,
+     8→  ProjectDirectorySettings,
+     9→  PermissionsSettings,
+    10→  BackendSettings,
+    11→  ExtensionsSettings,
+    12→  VoiceInputSettings,
+    13→  VoiceOutputSettings,
+    14→  UninstallTTSSection,
+    15→  VersionSettings,
+    16→  DEFAULT_GENERAL,
+    17→  DEFAULT_VOICE,
+    18→  DEFAULT_XTTS,
+    19→  DEFAULT_UI,
+    20→  DEFAULT_THEME_CUSTOMIZATION,
+    21→} from './settings'
+    22→import type {
+    23→  GeneralSettings,
+    24→  VoiceSettings,
+    25→  XttsSettings,
+    26→  UIState,
+    27→  SettingsModalProps,
+    28→  ThemeCustomization,
+    29→} from './settings'
+    30→
+    31→// Migrate old slider-based customization to new color-based format
+    32→function migrateThemeCustomization(saved: unknown): ThemeCustomization {
+    33→  if (!saved || typeof saved !== 'object') return DEFAULT_THEME_CUSTOMIZATION
+    34→  const obj = saved as Record<string, unknown>
+    35→  // Old format had terminalSaturation/backgroundBrightness — discard and use defaults
+    36→  if ('terminalSaturation' in obj || 'backgroundBrightness' in obj) {
+    37→    return {
+    38→      accentColor: (typeof obj.accentColor === 'string' ? obj.accentColor : null),
+    39→      backgroundColor: null,
+    40→      textColor: null,
+    41→      terminalColors: null
+    42→    }
+    43→  }
+    44→  return {
+    45→    accentColor: (typeof obj.accentColor === 'string' ? obj.accentColor : null),
+    46→    backgroundColor: (typeof obj.backgroundColor === 'string' ? obj.backgroundColor : null),
+    47→    textColor: (typeof obj.textColor === 'string' ? obj.textColor : null),
+    48→    terminalColors: (obj.terminalColors && typeof obj.terminalColors === 'object' ? obj.terminalColors as ThemeCustomization['terminalColors'] : null)
+    49→  }
+    50→}
+    51→
+    52→export function SettingsModal({
+    53→  isOpen,
+    54→  onClose,
+    55→  onThemeChange,
+    56→  onSaved,
+    57→  appVersion,
+    58→  updateStatus,
+    59→  onDownloadUpdate,
+    60→  onInstallUpdate
+    61→}: SettingsModalProps): React.ReactElement | null {
+    62→  // Grouped state: general settings (theme, directory, permissions, backend)
+    63→  const [general, setGeneral] = useState<GeneralSettings>(DEFAULT_GENERAL)
+    64→
+    65→  // Focus trap for modal accessibility
+    66→  const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen)
+    67→
+    68→  // Voice context for active whisper model and volume
+    69→  const { whisperModel: activeWhisperModel, setWhisperModel: setActiveWhisperModel, volume: voiceVolume } = useVoice()
+    70→
+    71→  // Extensions state
+    72→  const [installedExtensions, setInstalledExtensions] = useState<Array<{ id: string; name: string; type: string }>>([])
+    73→
+    74→  // Grouped state: voice settings (TTS, whisper status, selected voice/engine)
+    75→  const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE)
+    76→
+    77→  // Grouped state: XTTS quality settings
+    78→  const [xtts, setXtts] = useState<XttsSettings>(DEFAULT_XTTS)
+    79→
+    80→  // Grouped state: UI/loading states
+    81→  const [ui, setUI] = useState<UIState>(DEFAULT_UI)
+    82→
+    83→  // Load installed voices (Piper and XTTS)
+    84→  async function refreshInstalledVoices(): Promise<void> {
+    85→    try {
+    86→      const [piperVoices, xttsVoices] = await Promise.all([
+    87→        window.electronAPI?.voiceGetInstalled?.(),
+    88→        window.electronAPI?.xttsGetVoices?.()
+    89→      ])
+    90→      const combined: Array<{ key: string; displayName: string; source: string }> = []
+    91→      if (piperVoices) combined.push(...piperVoices)
+    92→      if (xttsVoices) {
+    93→        combined.push(...xttsVoices.map((v: { id: string; name: string }) => ({
+    94→          key: v.id,
+    95→          displayName: v.name,
+    96→          source: 'xtts'
+    97→        })))
+    98→      }
+    99→      setVoice(prev => ({ ...prev, installedVoices: combined }))
+   100→    } catch (e) {
+   101→      console.error('Failed to refresh installed voices:', e)
+   102→      setVoice(prev => ({ ...prev, installedVoices: [] }))
+   103→    }
+   104→  }
+   105→
+   106→  useEffect(() => {
+   107→    if (isOpen) {
+   108→      window.electronAPI?.getSettings?.()?.then((settings) => {
+   109→        setGeneral(prev => ({
+   110→          ...prev,
+   111→          defaultProjectDir: settings.defaultProjectDir || '',
+   112→          selectedTheme: settings.theme || 'default',
+   113→          themeCustomization: migrateThemeCustomization(settings.themeCustomization),
+   114→          autoAcceptTools: settings.autoAcceptTools || [],
+   115→          permissionMode: settings.permissionMode || 'default',
+   116→          backend: settings.backend || 'default'
+   117→        }))
+   118→      })
+   119→
+   120→      // Load voice settings (active voice)
+   121→      window.electronAPI?.voiceGetSettings?.()?.then((voiceSettings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => {
+   122→        if (voiceSettings) {
+   123→          setVoice(prev => ({
+   124→            ...prev,
+   125→            selectedVoice: voiceSettings.ttsVoice || 'en_US-libritts_r-medium',
+   126→            selectedEngine: (voiceSettings.ttsEngine as 'piper' | 'xtts') || 'piper',
+   127→            ttsSpeed: voiceSettings.ttsSpeed || 1.0
+   128→          }))
+   129→          setXtts({
+   130→            temperature: voiceSettings.xttsTemperature ?? 0.65,
+   131→            topK: voiceSettings.xttsTopK ?? 50,
+   132→            topP: voiceSettings.xttsTopP ?? 0.85,
+   133→            repetitionPenalty: voiceSettings.xttsRepetitionPenalty ?? 2.0
+   134→          })
+   135→        }
+   136→      })?.catch(e => console.error('Failed to load voice settings:', e))
+   137→
+   138→      // Load voice status
+   139→      window.electronAPI?.voiceCheckWhisper?.()?.then((status) => {
+   140→        setVoice((prev) => ({ ...prev, whisperStatus: status }))
+   141→      })?.catch((e) => console.error('Failed to check Whisper status:', e))
+   142→
+   143→      window.electronAPI?.voiceCheckTTS?.()?.then((status) => {
+   144→        setVoice((prev) => ({ ...prev, ttsStatus: status }))
+   145→      })?.catch((e) => console.error('Failed to check TTS status:', e))
+   146→
+   147→      refreshInstalledVoices()
+   148→
+   149→      // Load installed extensions
+   150→      window.electronAPI?.extensionsGetInstalled?.()?.then((exts) => {
+   151→        setInstalledExtensions(exts || [])
+   152→      })?.catch((e) => console.error('Failed to load installed extensions:', e))
+   153→    } else {
+   154→      setUI(prev => ({ ...prev, playingPreview: null, previewLoading: null }))
+   155→    }
+   156→  }, [isOpen])
+   157→
+   158→  async function handleSave(): Promise<void> {
+   159→    const newSettings = {
+   160→      defaultProjectDir: general.defaultProjectDir,
+   161→      theme: general.selectedTheme,
+   162→      themeCustomization: general.themeCustomization,
+   163→      autoAcceptTools: general.autoAcceptTools,
+   164→      permissionMode: general.permissionMode,
+   165→      backend: general.backend
+   166→    }
+   167→    await window.electronAPI?.saveSettings(newSettings)
+   168→    // Save voice settings including XTTS quality settings
+   169→    await window.electronAPI?.voiceApplySettings?.({
+   170→      ttsVoice: voice.selectedVoice,
+   171→      ttsEngine: voice.selectedEngine,
+   172→      ttsSpeed: voice.ttsSpeed,
+   173→      xttsTemperature: xtts.temperature,
+   174→      xttsTopK: xtts.topK,
+   175→      xttsTopP: xtts.topP,
+   176→      xttsRepetitionPenalty: xtts.repetitionPenalty
+   177→    })
+   178→    onSaved?.(newSettings)
+   179→    onClose()
+   180→  }
+   181→
+   182→  function handleVoiceSelect(voiceKey: string, source: string): void {
+   183→    setVoice(prev => ({
+   184→      ...prev,
+   185→      selectedVoice: voiceKey,
+   186→      selectedEngine: source === 'xtts' ? 'xtts' : 'piper'
+   187→    }))
+   188→  }
+   189→
+   190→  function toggleTool(tool: string): void {
+   191→    setGeneral(prev => ({
+   192→      ...prev,
+   193→      autoAcceptTools: prev.autoAcceptTools.includes(tool)
+   194→        ? prev.autoAcceptTools.filter(t => t !== tool)
+   195→        : [...prev.autoAcceptTools, tool]
+   196→    }))
+   197→  }
+   198→
+   199→  function addCustomTool(): void {
+   200→    const trimmed = general.customTool.trim()
+   201→    if (trimmed && !general.autoAcceptTools.includes(trimmed)) {
+   202→      setGeneral(prev => ({
+   203→        ...prev,
+   204→        autoAcceptTools: [...prev.autoAcceptTools, trimmed],
+   205→        customTool: ''
+   206→      }))
+   207→    }
+   208→  }
+   209→
+   210→  function removeCustomTool(tool: string): void {
+   211→    setGeneral(prev => ({
+   212→      ...prev,
+   213→      autoAcceptTools: prev.autoAcceptTools.filter(t => t !== tool)
+   214→    }))
+   215→  }
+   216→
+   217→  async function handleInstallWhisperModel(model: string): Promise<void> {
+   218→    setUI(prev => ({ ...prev, installingModel: model }))
+   219→    try {
+   220→      await window.electronAPI?.voiceInstallWhisper?.(model)
+   221→      const status = await window.electronAPI?.voiceCheckWhisper?.()
+   222→      if (status) setVoice(prev => ({ ...prev, whisperStatus: status }))
+   223→    } catch (e) {
+   224→      console.error('Failed to install Whisper model:', e)
+   225→    }
+   226→    setUI(prev => ({ ...prev, installingModel: null }))
+   227→  }
+   228→
+   229→  // Remove TTS instructions from all projects (uninstall feature)
+   230→  async function handleRemoveTTSFromAllProjects(): Promise<void> {
+   231→    if (!confirm('This will remove TTS voice output instructions from CLAUDE.md files in ALL your projects. This is useful if you want to stop using Claude Terminal.\n\nContinue?')) {
+   232→      return
+   233→    }
+   234→
+   235→    setUI(prev => ({ ...prev, removingTTS: true, ttsRemovalResult: null }))
+   236→
+   237→    try {
+   238→      const workspace = await window.electronAPI?.getWorkspace()
+   239→      const projects = workspace?.projects || []
+   240→
+   241→      let success = 0
+   242→      let failed = 0
+   243→
+   244→      for (const project of projects) {
+   245→        try {
+   246→          const result = await window.electronAPI?.ttsRemoveInstructions?.(project.path)
+   247→          if (result?.success) {
+   248→            success++
+   249→          } else {
+   250→            failed++
+   251→          }
+   252→        } catch {
+   253→          failed++
+   254→        }
+   255→      }
+   256→
+   257→      setUI(prev => ({ ...prev, ttsRemovalResult: { success, failed } }))
+   258→    } catch (e) {
+   259→      console.error('Failed to remove TTS instructions:', e)
+   260→      setUI(prev => ({ ...prev, ttsRemovalResult: { success: 0, failed: 1 } }))
+   261→    }
+   262→
+   263→    setUI(prev => ({ ...prev, removingTTS: false }))
+   264→  }
+   265→
+   266→  if (!isOpen) return null
+   267→
+   268→  return (
+   269→    <div className="modal-overlay" onClick={onClose}>
+   270→      <div className="modal settings-modal" ref={focusTrapRef as React.RefObject<HTMLDivElement>} onClick={(e) => e.stopPropagation()}>
+   271→        <div className="modal-header">
+   272→          <h2>Settings</h2>
+   273→          <button className="modal-close" onClick={onClose}>×</button>
+   274→        </div>
+   275→        <div className="modal-content">
+   276→          <VersionSettings
+   277→            appVersion={appVersion}
+   278→            updateStatus={updateStatus}
+   279→            onDownloadUpdate={onDownloadUpdate}
+   280→            onInstallUpdate={onInstallUpdate}
+   281→          />
+   282→
+   283→          <ThemeSettings
+   284→            selectedTheme={general.selectedTheme}
+   285→            customization={general.themeCustomization}
+   286→            onThemeChange={onThemeChange}
+   287→            onSelect={(themeId) => setGeneral(prev => ({ ...prev, selectedTheme: themeId }))}
+   288→            onCustomizationChange={(customization) => setGeneral(prev => ({ ...prev, themeCustomization: customization }))}
+   289→          />
+   290→
+   291→          <ProjectDirectorySettings
+   292→            defaultProjectDir={general.defaultProjectDir}
+   293→            onChange={(dir) => setGeneral(prev => ({ ...prev, defaultProjectDir: dir }))}
+   294→          />
+   295→
+   296→          <PermissionsSettings
+   297→            autoAcceptTools={general.autoAcceptTools}
+   298→            permissionMode={general.permissionMode}
+   299→            customTool={general.customTool}
+   300→            onToggleTool={toggleTool}
+   301→            onPermissionModeChange={(mode) => setGeneral(prev => ({ ...prev, permissionMode: mode }))}
+   302→            onCustomToolChange={(tool) => setGeneral(prev => ({ ...prev, customTool: tool }))}
+   303→            onAddCustomTool={addCustomTool}
+   304→            onRemoveCustomTool={removeCustomTool}
+   305→          />
+   306→
+   307→          <BackendSettings
+   308→            backend={general.backend}
+   309→            onChange={(backend) => setGeneral(prev => ({ ...prev, backend }))}
+   310→          />
+   311→
+   312→          <ExtensionsSettings installedExtensions={installedExtensions} />
+   313→
+   314→          <VoiceInputSettings
+   315→            whisperStatus={voice.whisperStatus}
+   316→            activeWhisperModel={activeWhisperModel}
+   317→            installingModel={ui.installingModel}
+   318→            onSetActiveModel={setActiveWhisperModel}
+   319→            onInstallModel={handleInstallWhisperModel}
+   320→          />
+   321→
+   322→          <VoiceOutputSettings
+   323→            voice={voice}
+   324→            xtts={xtts}
+   325→            playingPreview={ui.playingPreview}
+   326→            previewLoading={ui.previewLoading}
+   327→            voiceVolume={voiceVolume}
+   328→            onVoiceSelect={handleVoiceSelect}
+   329→            onSpeedChange={(speed) => setVoice(prev => ({ ...prev, ttsSpeed: speed }))}
+   330→            onXttsChange={setXtts}
+   331→            onShowVoiceBrowser={() => setUI(prev => ({ ...prev, showVoiceBrowser: true }))}
+   332→            onPreviewStateChange={(state) => setUI(prev => ({ ...prev, ...state }))}
+   333→          />
+   334→
+   335→          <UninstallTTSSection
+   336→            removingTTS={ui.removingTTS}
+   337→            ttsRemovalResult={ui.ttsRemovalResult}
+   338→            onRemove={handleRemoveTTSFromAllProjects}
+   339→          />
+   340→        </div>
+   341→        <div className="modal-footer">
+   342→          <a
+   343→            href="https://ko-fi.com/donutsdelivery"
+   344→            target="_blank"
+   345→            rel="noopener noreferrer"
+   346→            className="kofi-link"
+   347→            onClick={(e) => {
+   348→              e.preventDefault()
+   349→              window.electronAPI?.openExternal?.('https://ko-fi.com/donutsdelivery')
+   350→            }}
+   351→          >
+   352→            ♥ Support on Ko-fi
+   353→          </a>
+   354→          <div className="modal-footer-buttons">
+   355→            <button className="btn-secondary" onClick={onClose}>Cancel</button>
+   356→            <button className="btn-primary" onClick={handleSave}>Save</button>
+   357→          </div>
+   358→        </div>
+   359→      </div>
+   360→
+   361→      <VoiceBrowserModal
+   362→        isOpen={ui.showVoiceBrowser}
+   363→        onClose={() => {
+   364→          setUI(prev => ({ ...prev, showVoiceBrowser: false }))
+   365→          refreshInstalledVoices()
+   366→        }}
+   367→        onVoiceSelect={(voiceKey, engine) => {
+   368→          setVoice(prev => ({
+   369→            ...prev,
+   370→            selectedVoice: voiceKey,
+   371→            selectedEngine: engine === 'xtts' ? 'xtts' : 'piper'
+   372→          }))
+   373→          window.electronAPI?.voiceSetVoice?.({ voice: voiceKey, engine })
+   374→        }}
+   375→      />
+   376→    </div>
+   377→  )
+   378→}
+   379→
+```

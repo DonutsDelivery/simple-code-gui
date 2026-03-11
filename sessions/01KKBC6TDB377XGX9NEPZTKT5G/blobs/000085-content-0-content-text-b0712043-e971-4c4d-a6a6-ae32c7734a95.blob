@@ -1,0 +1,523 @@
+```console
+diff --git a/src/main/app/ipc-handlers/pty.ts b/src/main/app/ipc-handlers/pty.ts
+index 3920176..0c30a92 100644
+--- a/src/main/app/ipc-handlers/pty.ts
++++ b/src/main/app/ipc-handlers/pty.ts
+@@ -80,13 +80,24 @@ export function registerPtyHandlers(
+         pendingApiPrompts.delete(cwd)
+         if (pending.autoClose) autoCloseSessions.add(id)
+         setTimeout(() => {
+-          ptyManager.write(id, pending.prompt + '\n')
+-          pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
++          // Verify PTY still exists before writing (race condition guard)
++          if (ptyManager.getProcess(id)) {
++            ptyManager.write(id, pending.prompt + '\n')
++            pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
++          } else {
++            pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
++          }
+         }, 4000)
+       }
+ 
+       return id
+     } catch (error: any) {
++      // Resolve pending prompt immediately on spawn failure instead of waiting for 30s timeout
++      const pending = pendingApiPrompts.get(cwd)
++      if (pending) {
++        pendingApiPrompts.delete(cwd)
++        pending.resolve({ success: false, error: `Failed to start terminal: ${error.message}` })
++      }
+       console.error('Failed to spawn PTY:', error)
+       throw new Error(`Failed to start Claude: ${error.message}`)
+     }
+diff --git a/src/main/ipc/kspec-handlers.ts b/src/main/ipc/kspec-handlers.ts
+index 81e4ef2..930e0cc 100644
+--- a/src/main/ipc/kspec-handlers.ts
++++ b/src/main/ipc/kspec-handlers.ts
+@@ -195,6 +195,13 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
+           const beadsType = String(task.issue_type ?? task.type ?? 'task')
+           const kspecType = beadsType === 'feature' ? 'task' : (['bug', 'task', 'epic'].includes(beadsType) ? beadsType : 'task')
+ 
++          // Map beads status to kspec status
++          const beadsStatus = String(task.status ?? 'open')
++          let kspecStatus: string | undefined
++          if (beadsStatus === 'in_progress') kspecStatus = 'in_progress'
++          else if (beadsStatus === 'closed') kspecStatus = 'completed'
++          // 'open' maps to 'pending' which is the default — no need to set
++
+           const res = await fetch('http://localhost:3456/api/tasks', {
+             method: 'POST',
+             headers: {
+@@ -203,9 +210,10 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
+             },
+             body: JSON.stringify({
+               title: String(task.title ?? ''),
+-              description: String(task.description ?? ''),
++              description: task.description ? String(task.description) : undefined,
+               priority: kspecPriority,
+               type: kspecType,
++              status: kspecStatus,
+               tags: [`migrated-from:${String(task.id ?? '')}`]
+             })
+           })
+diff --git a/src/main/meta-project-sync.ts b/src/main/meta-project-sync.ts
+index 041e976..27d0811 100644
+--- a/src/main/meta-project-sync.ts
++++ b/src/main/meta-project-sync.ts
+@@ -225,13 +225,14 @@ export function syncMetaProjects(workspace: Workspace): void {
+       desiredSymlinks.set(project.path, symlinkName)
+     }
+ 
+-    // Remove symlinks that shouldn't exist or point to wrong targets
++    // Remove symlinks that shouldn't exist, point to wrong targets, or are broken
+     for (const [name, target] of currentSymlinks) {
+-      // Check if this symlink is still needed
++      // Check if this symlink is still needed and its target exists
+       let shouldKeep = false
+       for (const [projectPath, desiredName] of desiredSymlinks) {
+         if (target === projectPath && name === desiredName) {
+-          shouldKeep = true
++          // Also verify target still exists on disk
++          shouldKeep = existsSync(target)
+           break
+         }
+       }
+diff --git a/src/main/mobile-security/auth-rate-limit.ts b/src/main/mobile-security/auth-rate-limit.ts
+index 0ca555b..57a7944 100644
+--- a/src/main/mobile-security/auth-rate-limit.ts
++++ b/src/main/mobile-security/auth-rate-limit.ts
+@@ -33,8 +33,8 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: num
+     }
+   }
+ 
+-  // Check if window has expired - reset if so
+-  if (now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
++  // Block expired or window expired — reset so user gets fresh attempts
++  if ((entry.blockedUntil && entry.blockedUntil <= now) || now - entry.lastAttempt > RATE_LIMIT_WINDOW_MS) {
+     rateLimitStore.delete(ip)
+     return { allowed: true }
+   }
+diff --git a/src/main/mobile-server/index.ts b/src/main/mobile-server/index.ts
+index 822c7df..afefb60 100644
+--- a/src/main/mobile-server/index.ts
++++ b/src/main/mobile-server/index.ts
+@@ -213,7 +213,7 @@ export class MobileServer {
+   }
+ 
+   private broadcastPtyExit(ptyId: string, code: number): void {
+-    wsBroadcastPtyExit(ptyId, code, this.ptyStreams)
++    wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions)
+   }
+ 
+   // Service handlers
+diff --git a/src/main/mobile-server/middleware.ts b/src/main/mobile-server/middleware.ts
+index b6baee0..d537585 100644
+--- a/src/main/mobile-server/middleware.ts
++++ b/src/main/mobile-server/middleware.ts
+@@ -31,26 +31,35 @@ export function setupCorsMiddleware(app: Express): void {
+         return callback(null, true)
+       }
+ 
++      // Parse origin to extract hostname for safe validation
++      let hostname: string
++      try {
++        hostname = new URL(origin).hostname
++      } catch {
++        log('CORS blocked malformed origin', { origin })
++        return callback(new Error('CORS not allowed for this origin'))
++      }
++
+       // Allow localhost variants
+-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
++      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+         return callback(null, true)
+       }
+ 
+       // Allow local network IP ranges (RFC 1918)
+       // 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+-      const localNetworkPattern = /^https?:\/\/(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?/
+-      if (localNetworkPattern.test(origin)) {
++      const localNetworkPattern = /^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/
++      if (localNetworkPattern.test(hostname)) {
+         return callback(null, true)
+       }
+ 
+       // Allow Tailscale CGNAT range (100.64.0.0 - 100.127.255.255)
+-      const tailscaleCgnatPattern = /^https?:\/\/100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+(:\d+)?/
+-      if (tailscaleCgnatPattern.test(origin)) {
++      const tailscaleCgnatPattern = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/
++      if (tailscaleCgnatPattern.test(hostname)) {
+         return callback(null, true)
+       }
+ 
+       // Allow Tailscale MagicDNS hostnames (*.ts.net)
+-      if (origin.includes('.ts.net')) {
++      if (hostname.endsWith('.ts.net')) {
+         return callback(null, true)
+       }
+ 
+diff --git a/src/main/mobile-server/routes/workspace.ts b/src/main/mobile-server/routes/workspace.ts
+index 1ac8143..57bbbd1 100644
+--- a/src/main/mobile-server/routes/workspace.ts
++++ b/src/main/mobile-server/routes/workspace.ts
+@@ -70,18 +70,23 @@ export function setupWorkspaceRoutes(
+       if (!sessionStore) {
+         return res.status(500).json({ error: 'Session store not available' })
+       }
+-      // Protect against overwriting populated workspace with empty one
++      // POST expects { workspace: {...} } wrapper format
+       const incoming = req.body
+-      const incomingProjects = incoming?.workspace?.projects?.length || 0
++      const workspace = incoming?.workspace
++      if (!workspace) {
++        return res.status(400).json({ error: 'Missing workspace field in request body' })
++      }
++      // Protect against overwriting populated workspace with empty one
++      const incomingProjects = workspace?.projects?.length || 0
+       if (incomingProjects === 0) {
+         const current = sessionStore.getWorkspace()
+-        const currentProjects = current?.workspace?.projects?.length || 0
++        const currentProjects = current?.projects?.length || 0
+         if (currentProjects > 0) {
+           log('Rejected empty workspace save - current has projects', { currentProjects })
+           return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
+         }
+       }
+-      sessionStore.saveWorkspace(req.body)
++      sessionStore.saveWorkspace(workspace)
+       res.json({ success: true })
+     } catch (error) {
+       res.status(500).json({ error: String(error) })
+diff --git a/src/main/mobile-server/websocket-manager.ts b/src/main/mobile-server/websocket-manager.ts
+index 3c4383d..0e18187 100644
+--- a/src/main/mobile-server/websocket-manager.ts
++++ b/src/main/mobile-server/websocket-manager.ts
+@@ -318,20 +318,25 @@ export function broadcastPtyData(
+ export function broadcastPtyExit(
+   ptyId: string,
+   code: number,
+-  ptyStreams: Map<string, Set<WebSocket>>
++  ptyStreams: Map<string, Set<WebSocket>>,
++  terminalSubscriptions?: Map<string, Set<WebSocket>>
+ ): void {
+   const streams = ptyStreams.get(ptyId)
+-  if (!streams || streams.size === 0) return
++  if (streams && streams.size > 0) {
++    const message = JSON.stringify({
++      type: 'exit',
++      code
++    })
+ 
+-  const message = JSON.stringify({
+-    type: 'exit',
+-    code
+-  })
++    streams.forEach(ws => {
++      if (ws.readyState === WebSocket.OPEN) {
++        ws.send(message)
++        ws.close(1000, 'PTY exited')
++      }
++    })
++  }
+ 
+-  streams.forEach(ws => {
+-    if (ws.readyState === WebSocket.OPEN) {
+-      ws.send(message)
+-      ws.close(1000, 'PTY exited')
+-    }
+-  })
++  // Clean up stale subscriptions for this PTY
++  ptyStreams.delete(ptyId)
++  terminalSubscriptions?.delete(ptyId)
+ }
+diff --git a/src/main/orchestrator-api.ts b/src/main/orchestrator-api.ts
+index 353a455..56bc92b 100644
+--- a/src/main/orchestrator-api.ts
++++ b/src/main/orchestrator-api.ts
+@@ -2,11 +2,13 @@ import * as http from 'http'
+ import type { PtyManager } from './pty-manager.js'
+ 
+ const ORCHESTRATOR_PORT = 19836
++const MAX_PORT_RETRIES = 5
+ 
+ export class OrchestratorApi {
+   private server: http.Server | null = null
+   private ptyManager: PtyManager
+   private ptyToProject: Map<string, string>
++  private activePort: number = ORCHESTRATOR_PORT
+ 
+   constructor(ptyManager: PtyManager, ptyToProject: Map<string, string>) {
+     this.ptyManager = ptyManager
+@@ -16,6 +18,8 @@ export class OrchestratorApi {
+   start(): void {
+     if (this.server) return
+ 
++    this.activePort = ORCHESTRATOR_PORT
++
+     this.server = http.createServer((req, res) => {
+       res.setHeader('Content-Type', 'application/json')
+ 
+@@ -27,7 +31,7 @@ export class OrchestratorApi {
+         return
+       }
+ 
+-      const url = new URL(req.url || '/', `http://localhost:${ORCHESTRATOR_PORT}`)
++      const url = new URL(req.url || '/', `http://localhost:${this.activePort}`)
+       const path = url.pathname
+ 
+       // Match: /sessions/:id/output or /sessions/:id/input
+@@ -46,14 +50,27 @@ export class OrchestratorApi {
+       }
+     })
+ 
+-    this.server.listen(ORCHESTRATOR_PORT, '127.0.0.1', () => {
+-      console.log(`[Orchestrator] API server started on port ${ORCHESTRATOR_PORT}`)
++    this.tryListen(this.activePort)
++  }
++
++  private tryListen(port: number): void {
++    const retryCount = port - ORCHESTRATOR_PORT
++    if (retryCount >= MAX_PORT_RETRIES) {
++      console.error(`[Orchestrator] Failed to bind after ${MAX_PORT_RETRIES} attempts (ports ${ORCHESTRATOR_PORT}-${port - 1})`)
++      this.server?.close()
++      this.server = null
++      return
++    }
++
++    this.server!.listen(port, '127.0.0.1', () => {
++      this.activePort = port
++      console.log(`[Orchestrator] API server started on port ${port}`)
+     })
+ 
+-    this.server.on('error', (e: NodeJS.ErrnoException) => {
++    this.server!.once('error', (e: NodeJS.ErrnoException) => {
+       if (e.code === 'EADDRINUSE') {
+-        console.warn(`[Orchestrator] Port ${ORCHESTRATOR_PORT} in use, trying ${ORCHESTRATOR_PORT + 1}`)
+-        this.server?.listen(ORCHESTRATOR_PORT + 1, '127.0.0.1')
++        console.warn(`[Orchestrator] Port ${port} in use, trying ${port + 1}`)
++        this.tryListen(port + 1)
+       } else {
+         console.error('[Orchestrator] API server error:', e.message)
+       }
+diff --git a/src/main/session-store.ts b/src/main/session-store.ts
+index c2a3ecc..1a6b824 100644
+--- a/src/main/session-store.ts
++++ b/src/main/session-store.ts
+@@ -1,5 +1,5 @@
+ import { app } from 'electron'
+-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs'
++import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, unlinkSync } from 'fs'
+ import { join } from 'path'
+ import { syncMetaProjects } from './meta-project-sync'
+ 
+@@ -142,9 +142,11 @@ export class SessionStore {
+     if (backup && (backup.workspace.projects?.length || 0) > 0) {
+       console.log('[SessionStore] Main config empty/corrupt, restored from backup (' +
+         backup.workspace.projects.length + ' projects)')
+-      // Restore backup as main file immediately
++      // Restore backup as main file atomically (temp + rename)
+       try {
+-        writeFileSync(this.configPath, JSON.stringify(backup, null, 2))
++        const tmpPath = this.configPath + '.tmp'
++        writeFileSync(tmpPath, JSON.stringify(backup, null, 2))
++        renameSync(tmpPath, this.configPath)
+       } catch (e) {
+         console.error('[SessionStore] Failed to restore backup to main:', e)
+       }
+@@ -178,7 +180,10 @@ export class SessionStore {
+             // Only update backup if existing file is valid and has projects
+             const existing = this.loadFile(this.configPath)
+             if (existing && (existing.workspace.projects?.length || 0) > 0) {
+-              writeFileSync(this.backupPath, readFileSync(this.configPath))
++              // Atomic backup: write to temp file, then rename
++              const tmpBackup = this.backupPath + '.tmp'
++              writeFileSync(tmpBackup, readFileSync(this.configPath))
++              renameSync(tmpBackup, this.backupPath)
+             }
+           }
+         } catch (e) {
+@@ -190,11 +195,16 @@ export class SessionStore {
+       const tmpPath = this.configPath + '.tmp'
+       writeFileSync(tmpPath, json)
+ 
+-      // Verify the temp file was written completely
+-      const written = readFileSync(tmpPath, 'utf-8')
+-      JSON.parse(written) // throws if truncated/corrupt
+-
+-      renameSync(tmpPath, this.configPath)
++      try {
++        // Verify the temp file was written completely
++        const written = readFileSync(tmpPath, 'utf-8')
++        JSON.parse(written) // throws if truncated/corrupt
++        renameSync(tmpPath, this.configPath)
++      } catch (verifyErr) {
++        // Clean up temp file on verification or rename failure
++        try { unlinkSync(tmpPath) } catch { /* ignore cleanup errors */ }
++        throw verifyErr
++      }
+     } catch (e) {
+       console.error('[SessionStore] Failed to save workspace:', e)
+     }
+diff --git a/src/renderer/components/beads/adapters/kspec-adapter.ts b/src/renderer/components/beads/adapters/kspec-adapter.ts
+index ea300f9..35135db 100644
+--- a/src/renderer/components/beads/adapters/kspec-adapter.ts
++++ b/src/renderer/components/beads/adapters/kspec-adapter.ts
+@@ -24,13 +24,25 @@ function headers(cwd: string): HeadersInit {
+   }
+ }
+ 
++// Shared flag so API failures can signal the adapter to re-check daemon
++let _daemonEnsuredFlag = true
++// Last project dir we ensured daemon for — reset flag on project switch
++let _daemonEnsuredForCwd: string | null = null
++
+ async function api<T>(method: string, path: string, cwd: string, body?: unknown): Promise<T> {
+   const opts: RequestInit = {
+     method,
+     headers: headers(cwd)
+   }
+   if (body) opts.body = JSON.stringify(body)
+-  const res = await fetch(`${API_BASE}${path}`, opts)
++  let res: Response
++  try {
++    res = await fetch(`${API_BASE}${path}`, opts)
++  } catch (e) {
++    // Network error — daemon likely crashed, reset ensured flag
++    _daemonEnsuredFlag = false
++    throw e
++  }
+   if (!res.ok) {
+     const text = await res.text()
+     throw new Error(text || `HTTP ${res.status}`)
+@@ -78,20 +90,22 @@ function toUnified(raw: Record<string, unknown>): UnifiedTask {
+ 
+ export class KspecAdapter implements TaskAdapter {
+   readonly kind = 'kspec' as const
+-  private daemonEnsured = false
+ 
+   private async ensureDaemon(cwd: string): Promise<boolean> {
++    // Reset flag when switching projects so we re-verify daemon for new cwd
++    if (_daemonEnsuredForCwd !== null && _daemonEnsuredForCwd !== cwd) {
++      _daemonEnsuredFlag = false
++    }
++
+     // Quick health check first
+     try {
+       const res = await fetch(`${API_BASE}/api/health`)
+-      if (res.ok) { this.daemonEnsured = true; return true }
++      if (res.ok) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+     } catch { /* daemon not running */ }
+ 
+-    // Start daemon via IPC
+-    if (!this.daemonEnsured) {
+-      const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
+-      if (result?.success) { this.daemonEnsured = true; return true }
+-    }
++    // Start daemon via IPC (always attempt if health check failed)
++    const result = await window.electronAPI?.kspecEnsureDaemon?.(cwd)
++    if (result?.success) { _daemonEnsuredFlag = true; _daemonEnsuredForCwd = cwd; return true }
+     return false
+   }
+ 
+@@ -183,7 +197,11 @@ export class KspecAdapter implements TaskAdapter {
+ 
+   async update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }> {
+     try {
+-      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, params)
++      // Map unified status names back to kspec native status names
++      const body = { ...params }
++      if (body.status === 'open') body.status = 'pending' as TaskStatus
++      if (body.status === 'closed') body.status = 'completed' as TaskStatus
++      await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, body)
+       return { success: true }
+     } catch (e) {
+       return { success: false, error: String(e) }
+@@ -194,15 +212,38 @@ export class KspecAdapter implements TaskAdapter {
+     switch (currentStatus) {
+       case 'open': return this.start(cwd, taskId)
+       case 'in_progress': return this.complete(cwd, taskId)
+-      default: return this.update(cwd, taskId, { status: 'open' })
++      default:
++        // Kspec uses 'pending' internally — 'open' is only the unified status
++        try {
++          await api('PATCH', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, { status: 'pending' })
++          return { success: true }
++        } catch (e) {
++          return { success: false, error: String(e) }
++        }
+     }
+   }
+ 
+   // Kspec uses WebSocket for live updates instead of file watching
+   private ws: WebSocket | null = null
+   private wsCallbacks: Set<(data: { cwd: string }) => void> = new Set()
++  private watchedCwd: string | null = null
++  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
++  private reconnectDelay = 1000
++  private watching = false
+ 
+   watch(cwd: string): void {
++    // If switching projects, close old connection first
++    if (this.ws && this.watchedCwd !== cwd) {
++      this.ws.close()
++      this.ws = null
++    }
++    this.watching = true
++    this.watchedCwd = cwd
++    this.reconnectDelay = 1000
++    this.connectWs(cwd)
++  }
++
++  private connectWs(cwd: string): void {
+     if (this.ws) return
+     try {
+       this.ws = new WebSocket(`ws://localhost:${DAEMON_PORT}/ws?project=${encodeURIComponent(cwd)}`)
+@@ -214,11 +255,30 @@ export class KspecAdapter implements TaskAdapter {
+           }
+         } catch { /* ignore parse errors */ }
+       }
+-      this.ws.onclose = () => { this.ws = null }
+-    } catch { /* daemon not running */ }
++      this.ws.onopen = () => {
++        this.reconnectDelay = 1000 // Reset backoff on successful connection
++      }
++      this.ws.onclose = () => {
++        this.ws = null
++        // Auto-reconnect with exponential backoff (cap at 30s)
++        if (this.watching && this.watchedCwd === cwd) {
++          this.reconnectTimer = setTimeout(() => this.connectWs(cwd), this.reconnectDelay)
++          this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
++        }
++      }
++      this.ws.onerror = () => {
++        // onclose will fire after onerror, triggering reconnect
++      }
++    } catch { /* daemon not running — reconnect will retry */ }
+   }
+ 
+   unwatch(_cwd: string): void {
++    this.watching = false
++    this.watchedCwd = null
++    if (this.reconnectTimer) {
++      clearTimeout(this.reconnectTimer)
++      this.reconnectTimer = null
++    }
+     this.ws?.close()
+     this.ws = null
+   }
+diff --git a/src/renderer/components/beads/useBeadsTasks.ts b/src/renderer/components/beads/useBeadsTasks.ts
+index 1c97531..f969aea 100644
+--- a/src/renderer/components/beads/useBeadsTasks.ts
++++ b/src/renderer/components/beads/useBeadsTasks.ts
+@@ -334,7 +334,9 @@ export function useBeadsTasks({
+     tasksCache.set(projectPath, updatedTasks)
+ 
+     try {
+-      const result = await adapter.update(projectPath, taskId, { status: nextStatus as UnifiedTask['status'] })
++      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
++      // (e.g., kspec uses /start and /complete instead of generic PATCH)
++      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+       if (!result.success) {
+         setTasks(previousTasks)
+         tasksCache.set(projectPath, previousTasks)
+```

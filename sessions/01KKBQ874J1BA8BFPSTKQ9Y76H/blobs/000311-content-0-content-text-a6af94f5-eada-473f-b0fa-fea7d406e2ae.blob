@@ -1,0 +1,135 @@
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-334-    tasksCache.set(projectPath, updatedTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-335-
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-336-    try {
+src/renderer/components/beads/useBeadsTasks.ts:337:      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-338-      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+src/renderer/components/beads/useBeadsTasks.ts:339:      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-340-      if (!result.success) {
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-341-        setTasks(previousTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/useBeadsTasks.ts-342-        tasksCache.set(projectPath, previousTasks)
+--
+src/renderer/components/beads/adapters/beads-adapter.ts-107-    return { success: !!result?.success, error: result?.error }
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/beads-adapter.ts-108-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/beads-adapter.ts-109-
+src/renderer/components/beads/adapters/beads-adapter.ts:110:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+src/renderer/components/beads/adapters/beads-adapter.ts-111-    let nextStatus: string
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/beads-adapter.ts-112-    switch (currentStatus) {
+src/renderer/components/beads/adapters/beads-adapter.ts-113-      case 'open': nextStatus = 'in_progress'; break
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts-208-    }
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts-209-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts-210-
+src/renderer/components/beads/adapters/kspec-adapter.ts:211:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/kspec-adapter.ts-212-    switch (currentStatus) {
+src/renderer/components/beads/adapters/kspec-adapter.ts-213-      case 'open': return this.start(cwd, taskId)
+src/renderer/components/beads/adapters/kspec-adapter.ts-214-      case 'in_progress': return this.complete(cwd, taskId)
+--
+src/renderer/components/beads/adapters/types.ts-70-  complete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+src/renderer/components/beads/adapters/types.ts-71-  delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+src/renderer/components/beads/adapters/types.ts-72-  update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }>
+src/renderer/components/beads/adapters/types.ts:73:  cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }>
+/home/user/Programs/Claude Projects/Claude-Terminal/src/renderer/components/beads/adapters/types.ts-74-
+src/renderer/components/beads/adapters/types.ts-75-  watch(cwd: string): void
+src/renderer/components/beads/adapters/types.ts-76-  unwatch(cwd: string): void
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-334-    tasksCache.set(projectPath, updatedTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-335-
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-336-    try {
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts:337:      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-338-      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts:339:      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-340-      if (!result.success) {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-341-        setTasks(previousTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/useBeadsTasks.ts-342-        tasksCache.set(projectPath, previousTasks)
+--
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-107-    return { success: !!result?.success, error: result?.error }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-108-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-109-
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts:110:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-111-    let nextStatus: string
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-112-    switch (currentStatus) {
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/beads-adapter.ts-113-      case 'open': nextStatus = 'in_progress'; break
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-213-    }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-214-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-215-
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts:216:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-217-    switch (currentStatus) {
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-218-      case 'open': return this.start(cwd, taskId)
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/kspec-adapter.ts-219-      case 'in_progress': return this.complete(cwd, taskId)
+--
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-70-  complete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-71-  delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-72-  update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts:73:  cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }>
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-74-
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-75-  watch(cwd: string): void
+.claude/worktrees/agent-ad7c48c7/src/renderer/components/beads/adapters/types.ts-76-  unwatch(cwd: string): void
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-334-    tasksCache.set(projectPath, updatedTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-335-
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-336-    try {
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts:337:      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-338-      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts:339:      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-340-      if (!result.success) {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-341-        setTasks(previousTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/useBeadsTasks.ts-342-        tasksCache.set(projectPath, previousTasks)
+--
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-107-    return { success: !!result?.success, error: result?.error }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-108-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-109-
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts:110:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-111-    let nextStatus: string
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-112-    switch (currentStatus) {
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/beads-adapter.ts-113-      case 'open': nextStatus = 'in_progress'; break
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-208-    }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-209-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-210-
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts:211:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-212-    switch (currentStatus) {
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-213-      case 'open': return this.start(cwd, taskId)
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/kspec-adapter.ts-214-      case 'in_progress': return this.complete(cwd, taskId)
+--
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-70-  complete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-71-  delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-72-  update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts:73:  cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }>
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-74-
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-75-  watch(cwd: string): void
+.claude/worktrees/agent-acf2a3c6/src/renderer/components/beads/adapters/types.ts-76-  unwatch(cwd: string): void
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-334-    tasksCache.set(projectPath, updatedTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-335-
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-336-    try {
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts:337:      // Use adapter.cycleStatus() which knows the correct lifecycle endpoints
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-338-      // (e.g., kspec uses /start and /complete instead of generic PATCH)
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts:339:      const result = await adapter.cycleStatus(projectPath, taskId, currentStatus as UnifiedTask['status'])
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-340-      if (!result.success) {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-341-        setTasks(previousTasks)
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/useBeadsTasks.ts-342-        tasksCache.set(projectPath, previousTasks)
+--
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-107-    return { success: !!result?.success, error: result?.error }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-108-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-109-
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts:110:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-111-    let nextStatus: string
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-112-    switch (currentStatus) {
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/beads-adapter.ts-113-      case 'open': nextStatus = 'in_progress'; break
+--
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-213-    }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-214-  }
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-215-
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts:216:  async cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }> {
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-217-    switch (currentStatus) {
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-218-      case 'open': return this.start(cwd, taskId)
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/kspec-adapter.ts-219-      case 'in_progress': return this.complete(cwd, taskId)
+--
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-70-  complete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-71-  delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-72-  update(cwd: string, taskId: string, params: UpdateTaskParams): Promise<{ success: boolean; error?: string }>
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts:73:  cycleStatus(cwd: string, taskId: string, currentStatus: TaskStatus): Promise<{ success: boolean; error?: string }>
+/home/user/Programs/Claude Projects/Claude-Terminal/.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-74-
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-75-  watch(cwd: string): void
+.claude/worktrees/agent-a8550de9/src/renderer/components/beads/adapters/types.ts-76-  unwatch(cwd: string): void

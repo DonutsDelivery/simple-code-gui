@@ -1,0 +1,102 @@
+```
+     1→diff --git a/.beads/issues.jsonl b/.beads/issues.jsonl
+     2→index 557cfae..572f0a9 100644
+     3→--- a/.beads/issues.jsonl
+     4→+++ b/.beads/issues.jsonl
+     5→@@ -1,4 +1,4 @@
+     6→-{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":7,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":8,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
+     7→+{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":1,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":2,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
+     8→ {"id":"Claude-Terminal-7r8","title":"Extend mobile-server with session/workspace APIs","description":"Extend src/main/mobile-server.ts to expose: GET /api/sessions?path=X\u0026backend=Y (discover sessions), GET /api/workspace (get workspace), POST /api/workspace (save workspace), GET /api/settings (get settings), POST /api/settings (save settings), POST /api/project/add (add project dialog). These mirror the Electron IPC methods.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:11.423992701+01:00","updated_at":"2026-01-19T21:21:59.655091013+01:00","closed_at":"2026-01-19T21:21:59.655091013+01:00"}
+     9→ {"id":"Claude-Terminal-c5c","title":"visual highlight for the currently selected tile/tab","status":"closed","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-02-06T13:47:55.409487594+01:00","created_by":"DonutsDelivery","updated_at":"2026-02-07T09:17:38.692999949+01:00","closed_at":"2026-02-07T09:17:38.692999949+01:00","close_reason":"Closed"}
+    10→ {"id":"Claude-Terminal-dck","title":"Extend mobile-server with full PTY/terminal APIs","description":"Extend src/main/mobile-server.ts to expose: POST /api/pty/spawn (spawn PTY, return ptyId), POST /api/pty/:id/write (write to PTY), DELETE /api/pty/:id (kill PTY), WebSocket /api/pty/:id/stream (stream PTY data bidirectionally). Must handle authentication, track active PTYs, and clean up on disconnect.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:06.133838933+01:00","updated_at":"2026-01-19T21:23:27.032252712+01:00","closed_at":"2026-01-19T21:23:27.032252712+01:00"}
+    11→@@ -7,3 +7,4 @@
+    12→ {"id":"Claude-Terminal-hjb","title":"Create Electron IPC backend for API layer","description":"Create src/renderer/api/electron-backend.ts that implements the API interface by wrapping window.electronAPI calls. This is a thin wrapper that delegates to the existing Electron IPC. Should handle cases where electronAPI is not available gracefully.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:15:55.548174895+01:00","updated_at":"2026-01-19T21:23:19.237775689+01:00","closed_at":"2026-01-19T21:23:19.237775689+01:00","dependencies":[{"issue_id":"Claude-Terminal-hjb","depends_on_id":"Claude-Terminal-enp","type":"blocks","created_at":"2026-01-19T21:16:32.546241657+01:00","created_by":"user","metadata":"{}"}]}
+    13→ {"id":"Claude-Terminal-q0o","title":"add sub-tabs for tiles/bundle tiles of the same project into the same tile with tabs.","status":"closed","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-02-06T13:40:32.854958396+01:00","created_by":"DonutsDelivery","updated_at":"2026-02-07T12:57:29.409735331+01:00","closed_at":"2026-02-07T12:57:29.409735331+01:00","close_reason":"Sub-tabs implemented: TileLayout now has tabIds/activeTabId, tabs grouped by project, sub-tab UI in TileTerminal"}
+    14→ {"id":"Claude-Terminal-t74","title":"Create HTTP/WebSocket backend for API layer","description":"Create src/renderer/api/http-backend.ts that implements the API interface using HTTP and WebSocket calls to the desktop server. PTY data streams over WebSocket. Other calls use HTTP REST endpoints. Must handle connection state, reconnection, and authentication with bearer token. Server URL comes from stored host config.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:00.807828443+01:00","updated_at":"2026-01-19T21:27:22.870716439+01:00","closed_at":"2026-01-19T21:27:22.870716439+01:00","dependencies":[{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-enp","type":"blocks","created_at":"2026-01-19T21:16:37.589856884+01:00","created_by":"user","metadata":"{}"},{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-dck","type":"blocks","created_at":"2026-01-19T21:16:52.709196028+01:00","created_by":"user","metadata":"{}"},{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-7r8","type":"blocks","created_at":"2026-01-19T21:16:57.749155558+01:00","created_by":"user","metadata":"{}"}]}
+    15→+{"id":"Claude-omp","title":"Review complete: fix/bug-persistence ready to merge","status":"closed","priority":4,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-03-10T11:12:03.374354644+01:00","created_by":"DonutsDelivery","updated_at":"2026-03-10T11:12:07.631443584+01:00","closed_at":"2026-03-10T11:12:07.631443584+01:00","close_reason":"Reviewed fix/bug-persistence (758a5a9). All 5 critical fixes verified correct: POST workspace route unwrap, atomic backup writes, tmp cleanup, atomic restore, stale symlink check. No remaining blocking issues."}
+    16→diff --git a/.beads/last-touched b/.beads/last-touched
+    17→index a51a87d..b42b1c7 100644
+    18→--- a/.beads/last-touched
+    19→+++ b/.beads/last-touched
+    20→@@ -1 +1 @@
+    21→-Claude-Terminal-q0o
+    22→+Claude-omp
+    23→diff --git a/.beads/sync_base.jsonl b/.beads/sync_base.jsonl
+    24→index d52670c..3acbbf5 100644
+    25→--- a/.beads/sync_base.jsonl
+    26→+++ b/.beads/sync_base.jsonl
+    27→@@ -1,4 +1,4 @@
+    28→-{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":7,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":8,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
+    29→+{"id":"Claude-Terminal-7f3","title":"Fix multibackend loading and terminal bottom panel menu","description":"Fix backend selection so non-Claude backends (codex, opencode, gemini) load correctly across session discovery/spawn flows, and make terminal bottom bar dropdown menus open reliably.","status":"tombstone","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-01-23T11:36:36.189131562+01:00","created_by":"DonutsDelivery","updated_at":"2026-01-24T05:01:21.796042301+01:00","comments":[{"id":1,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Moved terminal bar dropdowns to body portals with fixed positioning and restored container overflow/contain to prevent window bleed; dropdown positioning recalculated from button rects with scroll/resize handling.","created_at":"2026-01-23T14:58:32Z"},{"id":2,"issue_id":"Claude-Terminal-7f3","author":"DonutsDelivery","text":"Prevented dropdown flicker by hiding portal menus until positioned; now set menu position in state and toggle visibility once measured.","created_at":"2026-01-23T15:00:15Z"}],"deleted_at":"2026-01-24T05:01:21.796042301+01:00","deleted_by":"batch delete","delete_reason":"batch delete","original_type":"task"}
+    30→ {"id":"Claude-Terminal-7r8","title":"Extend mobile-server with session/workspace APIs","description":"Extend src/main/mobile-server.ts to expose: GET /api/sessions?path=X&backend=Y (discover sessions), GET /api/workspace (get workspace), POST /api/workspace (save workspace), GET /api/settings (get settings), POST /api/settings (save settings), POST /api/project/add (add project dialog). These mirror the Electron IPC methods.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:11.423992701+01:00","updated_at":"2026-01-19T21:21:59.655091013+01:00","closed_at":"2026-01-19T21:21:59.655091013+01:00"}
+    31→ {"id":"Claude-Terminal-c5c","title":"visual highlight for the currently selected tile/tab","status":"closed","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-02-06T13:47:55.409487594+01:00","created_by":"DonutsDelivery","updated_at":"2026-02-07T09:17:38.692999949+01:00","closed_at":"2026-02-07T09:17:38.692999949+01:00","close_reason":"Closed"}
+    32→ {"id":"Claude-Terminal-dck","title":"Extend mobile-server with full PTY/terminal APIs","description":"Extend src/main/mobile-server.ts to expose: POST /api/pty/spawn (spawn PTY, return ptyId), POST /api/pty/:id/write (write to PTY), DELETE /api/pty/:id (kill PTY), WebSocket /api/pty/:id/stream (stream PTY data bidirectionally). Must handle authentication, track active PTYs, and clean up on disconnect.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:06.133838933+01:00","updated_at":"2026-01-19T21:23:27.032252712+01:00","closed_at":"2026-01-19T21:23:27.032252712+01:00"}
+    33→@@ -7,3 +7,4 @@
+    34→ {"id":"Claude-Terminal-hjb","title":"Create Electron IPC backend for API layer","description":"Create src/renderer/api/electron-backend.ts that implements the API interface by wrapping window.electronAPI calls. This is a thin wrapper that delegates to the existing Electron IPC. Should handle cases where electronAPI is not available gracefully.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:15:55.548174895+01:00","updated_at":"2026-01-19T21:23:19.237775689+01:00","closed_at":"2026-01-19T21:23:19.237775689+01:00","dependencies":[{"issue_id":"Claude-Terminal-hjb","depends_on_id":"Claude-Terminal-enp","type":"blocks","created_at":"2026-01-19T21:16:32.546241657+01:00","created_by":"user","metadata":"{}"}]}
+    35→ {"id":"Claude-Terminal-q0o","title":"add sub-tabs for tiles/bundle tiles of the same project into the same tile with tabs.","status":"closed","priority":2,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-02-06T13:40:32.854958396+01:00","created_by":"DonutsDelivery","updated_at":"2026-02-07T12:57:29.409735331+01:00","closed_at":"2026-02-07T12:57:29.409735331+01:00","close_reason":"Sub-tabs implemented: TileLayout now has tabIds/activeTabId, tabs grouped by project, sub-tab UI in TileTerminal"}
+    36→ {"id":"Claude-Terminal-t74","title":"Create HTTP/WebSocket backend for API layer","description":"Create src/renderer/api/http-backend.ts that implements the API interface using HTTP and WebSocket calls to the desktop server. PTY data streams over WebSocket. Other calls use HTTP REST endpoints. Must handle connection state, reconnection, and authentication with bearer token. Server URL comes from stored host config.","status":"closed","priority":2,"issue_type":"task","created_at":"2026-01-19T21:16:00.807828443+01:00","updated_at":"2026-01-19T21:27:22.870716439+01:00","closed_at":"2026-01-19T21:27:22.870716439+01:00","dependencies":[{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-enp","type":"blocks","created_at":"2026-01-19T21:16:37.589856884+01:00","created_by":"user","metadata":"{}"},{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-dck","type":"blocks","created_at":"2026-01-19T21:16:52.709196028+01:00","created_by":"user","metadata":"{}"},{"issue_id":"Claude-Terminal-t74","depends_on_id":"Claude-Terminal-7r8","type":"blocks","created_at":"2026-01-19T21:16:57.749155558+01:00","created_by":"user","metadata":"{}"}]}
+    37→+{"id":"Claude-omp","title":"Review complete: fix/bug-persistence ready to merge","status":"closed","priority":4,"issue_type":"task","owner":"megusta52@proton.me","created_at":"2026-03-10T11:12:03.374354644+01:00","created_by":"DonutsDelivery","updated_at":"2026-03-10T11:12:07.631443584+01:00","closed_at":"2026-03-10T11:12:07.631443584+01:00","close_reason":"Reviewed fix/bug-persistence (758a5a9). All 5 critical fixes verified correct: POST workspace route unwrap, atomic backup writes, tmp cleanup, atomic restore, stale symlink check. No remaining blocking issues."}
+    38→diff --git a/src/main/app/ipc-handlers/pty.ts b/src/main/app/ipc-handlers/pty.ts
+    39→index 3920176..0c30a92 100644
+    40→--- a/src/main/app/ipc-handlers/pty.ts
+    41→+++ b/src/main/app/ipc-handlers/pty.ts
+    42→@@ -80,13 +80,24 @@ export function registerPtyHandlers(
+    43→         pendingApiPrompts.delete(cwd)
+    44→         if (pending.autoClose) autoCloseSessions.add(id)
+    45→         setTimeout(() => {
+    46→-          ptyManager.write(id, pending.prompt + '\n')
+    47→-          pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
+    48→+          // Verify PTY still exists before writing (race condition guard)
+    49→+          if (ptyManager.getProcess(id)) {
+    50→+            ptyManager.write(id, pending.prompt + '\n')
+    51→+            pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
+    52→+          } else {
+    53→+            pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
+    54→+          }
+    55→         }, 4000)
+    56→       }
+    57→ 
+    58→       return id
+    59→     } catch (error: any) {
+    60→+      // Resolve pending prompt immediately on spawn failure instead of waiting for 30s timeout
+    61→+      const pending = pendingApiPrompts.get(cwd)
+    62→+      if (pending) {
+    63→+        pendingApiPrompts.delete(cwd)
+    64→+        pending.resolve({ success: false, error: `Failed to start terminal: ${error.message}` })
+    65→+      }
+    66→       console.error('Failed to spawn PTY:', error)
+    67→       throw new Error(`Failed to start Claude: ${error.message}`)
+    68→     }
+    69→diff --git a/src/main/ipc/kspec-handlers.ts b/src/main/ipc/kspec-handlers.ts
+    70→index 81e4ef2..930e0cc 100644
+    71→--- a/src/main/ipc/kspec-handlers.ts
+    72→+++ b/src/main/ipc/kspec-handlers.ts
+    73→@@ -195,6 +195,13 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
+    74→           const beadsType = String(task.issue_type ?? task.type ?? 'task')
+    75→           const kspecType = beadsType === 'feature' ? 'task' : (['bug', 'task', 'epic'].includes(beadsType) ? beadsType : 'task')
+    76→ 
+    77→+          // Map beads status to kspec status
+    78→+          const beadsStatus = String(task.status ?? 'open')
+    79→+          let kspecStatus: string | undefined
+    80→+          if (beadsStatus === 'in_progress') kspecStatus = 'in_progress'
+    81→+          else if (beadsStatus === 'closed') kspecStatus = 'completed'
+    82→+          // 'open' maps to 'pending' which is the default — no need to set
+    83→+
+    84→           const res = await fetch('http://localhost:3456/api/tasks', {
+    85→             method: 'POST',
+    86→             headers: {
+    87→@@ -203,9 +210,10 @@ async function migrateBeadsToKspec(cwd: string): Promise<{ success: boolean; mig
+    88→             },
+    89→             body: JSON.stringify({
+    90→               title: String(task.title ?? ''),
+    91→-              description: String(task.description ?? ''),
+    92→+              description: task.description ? String(task.description) : undefined,
+    93→               priority: kspecPriority,
+    94→               type: kspecType,
+    95→+              status: kspecStatus,
+    96→               tags: [`migrated-from:${String(task.id ?? '')}`]
+    97→             })
+    98→           })
+    99→diff --git a/src/main/mobile-security/auth-rate-limit.ts b/src/main/mobile-security/auth-rate-limit.ts
+   100→index 0ca555b..57a7944 100644
+```

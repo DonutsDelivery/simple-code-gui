@@ -1,0 +1,508 @@
+```
+     1→tasks:
+     2→  - _ulid: 01KKAWKTJVBTXZDAF2293N8875
+     3→    slugs:
+     4→      - bug-pty
+     5→    title: "Bug audit: PTY lifecycle and backend switching"
+     6→    type: bug
+     7→    description: "Investigate and fix bugs in PTY session management. Check: PTY spawn error handling,
+     8→      resize debounce edge cases, output buffer overflow, backend switching race conditions, session
+     9→      ID preservation across switches, cleanup on unexpected PTY exit, enhanced PATH construction."
+    10→    spec_ref: "@pty-lifecycle"
+    11→    meta_ref: null
+    12→    plan_ref: null
+    13→    status: completed
+    14→    blocked_by: []
+    15→    closed_reason: "Review passed. 5 bug fixes in PTY backend switching and ANSI stripping: (1) settings
+    16→      inheritance for autoAcceptTools/permissionMode, (2) spawn failure error handling with cleanup,
+    17→      (3) autoClose flag transfer, (4) IPC send try-catch consistency, (5) CSI/OSC/charset ANSI
+    18→      regex coverage. All 40 tests pass. Changes well-scoped, no regressions."
+    19→    depends_on: []
+    20→    context: []
+    21→    priority: 2
+    22→    tags: []
+    23→    vcs_refs: []
+    24→    session_id: 01KKAYH7STER6H279K2WWJHNH3
+    25→    created_at: 2026-03-10T03:28:25.690Z
+    26→    started_at: 2026-03-10T04:04:18.647Z
+    27→    submitted_at: 2026-03-10T04:08:55.443Z
+    28→    completed_at: 2026-03-10T04:13:31.959Z
+    29→    notes:
+    30→      - _ulid: 01KKAYXDC37GJG0ZKMSYGMQK1H
+    31→        created_at: 2026-03-10T04:08:36.995Z
+    32→        author: "@claude"
+    33→        content: >-
+    34→          Execution context:
+    35→
+    36→          - Background: PTY lifecycle has several bugs in backend switching and output buffer
+    37→          handling
+    38→
+    39→          - Scope: Fix backend switch (error handling, settings inheritance, autoClose transfer),
+    40→          fix ANSI regex
+    41→
+    42→          - Files: src/main/app/ipc-handlers/pty.ts, src/main/pty-manager.ts
+    43→
+    44→          - Verification: TypeScript compiles clean, npm run build succeeds
+    45→
+    46→
+    47→          Bugs fixed:
+    48→
+    49→          1. pty:set-backend lost project settings (autoAcceptTools, permissionMode) — now looks up
+    50→          workspace/project settings
+    51→
+    52→          2. pty:set-backend had no error handling — spawn failure after kill left user with no PTY;
+    53→          now throws to renderer
+    54→
+    55→          3. pty:set-backend didn't transfer autoCloseSessions — flag leaked for old ID; now
+    56→          transferred
+    57→
+    58→          4. pty:set-backend onData/onExit lacked try-catch on IPC send — inconsistent with
+    59→          pty:spawn handler
+    60→
+    61→          5. OutputBuffer ANSI regex missed private mode sequences (\x1b[?25h etc.), character set
+    62→          escapes (\x1b(B), and OSC with ST terminator — all now stripped
+    63→        supersedes: null
+    64→    todos: []
+    65→    automation: eligible
+    66→  - _ulid: 01KKAWKWA9Z47HC5A8PF55ZXJN
+    67→    slugs:
+    68→      - bug-layout
+    69→    title: "Bug audit: tiled layout and drag-drop"
+    70→    type: bug
+    71→    description: "Investigate and fix bugs in tiled terminal layout. Check: tile coordinate calculation,
+    72→      drag-drop zone detection, resize handle collision, canvas panning bounds, tile removal
+    73→      orphaning layout entries, split producing zero-size tiles, effective layout reconciliation."
+    74→    spec_ref: "@tiled-layout"
+    75→    meta_ref: null
+    76→    plan_ref: null
+    77→    status: completed
+    78→    blocked_by: []
+    79→    closed_reason: "Review passed. 4 bug fixes in tiled layout: MIN_SIZE threshold consistency, overlap
+    80→      detection reset, split guard, drag-split gap reclamation. All correct and well-scoped."
+    81→    depends_on: []
+    82→    context: []
+    83→    priority: 2
+    84→    tags: []
+    85→    vcs_refs: []
+    86→    created_at: 2026-03-10T03:28:27.465Z
+    87→    started_at: 2026-03-10T03:54:12.373Z
+    88→    submitted_at: 2026-03-10T04:01:49.102Z
+    89→    completed_at: 2026-03-10T04:03:48.180Z
+    90→    notes:
+    91→      - _ulid: 01KKAYDYAHYHNHEHJ9Y7HF65J5
+    92→        created_at: 2026-03-10T04:00:10.065Z
+    93→        author: "@claude"
+    94→        content: >-
+    95→          Execution context:
+    96→
+    97→          - Background: Bug audit of tiled layout and drag-drop system
+    98→
+    99→          - Scope: Fix bugs in splitTile, drag-split gaps, validateLayout thresholds and overlap
+   100→          handling
+   101→
+   102→          - Files: src/renderer/components/tiled-layout-utils.ts,
+   103→          src/renderer/components/tiled/useTileDragDrop.ts
+   104→
+   105→          - Bugs found:
+   106→            1. splitTile doesn't enforce MIN_SIZE - can produce tiles < 10% that pass validation (threshold is 5%)
+   107→            2. Drag-split leaves orphaned gaps - source tile space not reclaimed when split-dropping
+   108→            3. validateLayout size threshold (5) inconsistent with MIN_SIZE (10)
+   109→            4. validateLayout overlap detection is warn-only, doesn't attempt correction
+   110→        supersedes: null
+   111→    todos: []
+   112→    automation: eligible
+   113→  - _ulid: 01KKAWKXNKT0YTJESTW3ES1B8D
+   114→    slugs:
+   115→      - bug-voice
+   116→    title: "Bug audit: voice I/O (STT and TTS)"
+   117→    type: bug
+   118→    description: "Investigate and fix bugs in voice system. Check: Whisper model loading failures,
+   119→      microphone permissions, silence detection thresholds, TTS audio queue overlap, per-project
+   120→      voice not applying on tab switch, XTTS error handling, voice catalog downloads, audio resource
+   121→      cleanup."
+   122→    spec_ref: "@stt"
+   123→    meta_ref: null
+   124→    plan_ref: null
+   125→    status: completed
+   126→    blocked_by: []
+   127→    closed_reason: "Review passed. 4 bug fixes: (1) Piper speak() race condition — serialized via
+   128→      promise chain queue, (2) XTTS request ordering — serial queue prevents response/caller
+   129→      mismatch, (3) Blob URL memory leak in ttsHandlers — revokeObjectURL on interrupt paths, (4)
+   130→      dead openvoice type removed from 4 files. Build clean (pre-existing errors unrelated), 46
+   131→      tests pass (2 pre-existing failures unrelated). Changes well-scoped, no regressions."
+   132→    depends_on: []
+   133→    context: []
+   134→    priority: 3
+   135→    tags: []
+   136→    vcs_refs: []
+   137→    session_id: 01KKAYZ1ASZ8V3ZJBRG7XV7MV5
+   138→    created_at: 2026-03-10T03:28:28.851Z
+   139→    started_at: 2026-03-10T04:13:56.597Z
+   140→    submitted_at: 2026-03-10T04:19:13.584Z
+   141→    completed_at: 2026-03-10T04:23:25.826Z
+   142→    notes:
+   143→      - _ulid: 01KKAZAHB2X10317RRMKZXB5R7
+   144→        created_at: 2026-03-10T04:15:47.042Z
+   145→        author: "@claude"
+   146→        content: >-
+   147→          Execution context:
+   148→
+   149→          - Background: Voice I/O bug audit covering STT, TTS, Whisper, silence detection, audio
+   150→          queue
+   151→
+   152→          - Scope: Fix bugs in voice system - race conditions, resource leaks, state management,
+   153→          error handling
+   154→
+   155→          - Files: sttHandlers.ts, ttsHandlers.ts, piper-tts.ts, xtts-server.ts, useTTS.ts,
+   156→          voice-manager.ts, whisper-stt.ts
+   157→
+   158→          - Bugs found: 10 issues identified via code audit
+   159→        supersedes: null
+   160→    todos: []
+   161→    automation: eligible
+   162→  - _ulid: 01KKAWKZB1X95YBRM2P9PFRFE7
+   163→    slugs:
+   164→      - bug-tasks
+   165→    title: "Bug audit: task management adapters"
+   166→    type: bug
+   167→    description: "Investigate and fix bugs in Beads/Kspec task adapters. Check: backend detection cache
+   168→      staleness, watcher debounce missing rapid changes, status cycling edge cases, inline edit
+   169→      races, Beads-to-Kspec migration data integrity, LRU cache invalidation, panel state machine
+   170→      transitions."
+   171→    spec_ref: "@task-adapter"
+   172→    meta_ref: null
+   173→    plan_ref: null
+   174→    status: completed
+   175→    blocked_by: []
+   176→    closed_reason: "Merged in PR #11. All 6 bug fixes verified: cycleStatus routing, status name
+   177→      mapping, daemon crash recovery, WS reconnect with backoff, migration status preservation,
+   178→      project-switch daemon flag reset."
+   179→    depends_on: []
+   180→    context: []
+   181→    priority: 3
+   182→    tags: []
+   183→    vcs_refs: []
+   184→    session_id: 01KKB0HJ8S9QF7ESBZFQ4ZE43P
+   185→    created_at: 2026-03-10T03:28:30.561Z
+   186→    started_at: 2026-03-10T04:40:13.308Z
+   187→    submitted_at: 2026-03-10T04:41:47.263Z
+   188→    completed_at: 2026-03-10T04:45:30.442Z
+   189→    notes:
+   190→      - _ulid: 01KKAZXH27QYNSGW6SKVJF3PJZ
+   191→        created_at: 2026-03-10T04:26:09.351Z
+   192→        author: "@claude"
+   193→        content: >-
+   194→          Execution context:
+   195→
+   196→          - Background: Audit and fix bugs in Beads/Kspec task adapters
+   197→
+   198→          - Scope: 6 bugs identified across adapter files
+   199→
+   200→          - Files: kspec-adapter.ts, beads-adapter.ts, useBeadsTasks.ts, kspec-handlers.ts
+   201→
+   202→          - Bugs found:
+   203→            1. handleCycleStatus bypasses adapter.cycleStatus() — uses generic update instead of lifecycle endpoints
+   204→            2. KspecAdapter.daemonEnsured never resets after daemon crash — API calls keep failing silently
+   205→            3. KspecAdapter WebSocket doesn't reconnect after close — watcher goes dead after daemon restart
+   206→            4. Migration doesn't preserve task status — all tasks become pending regardless of original status
+   207→            5. KspecAdapter.cycleStatus for 'closed' uses update({status:'open'}) which is wrong for kspec — kspec tasks need specific status transitions
+   208→            6. detect.ts — detectBackend doesn't reset daemonEnsured when switching projects
+   209→        supersedes: null
+   210→      - _ulid: 01KKB06HY9RCQ8QC9CC81DJ37K
+   211→        created_at: 2026-03-10T04:31:05.162Z
+   212→        author: "@claude"
+   213→        content: "[FIX_CYCLE: 1] Review findings: Branch contamination: 2 unrelated commits (voice I/O, PTY
+   214→          fixes) on same branch. Task commit aeb979c is clean — rebase onto dedicated branch with
+   215→          only that commit. Also: bug 6 (detect.ts daemonEnsured reset on project switch) only
+   216→          partially addressed."
+   217→        supersedes: null
+   218→      - _ulid: 01KKB06TYX89YTYZBAGM16BPXH
+   219→        created_at: 2026-03-10T04:31:14.398Z
+   220→        author: "@claude"
+   221→        content: >-
+   222→          Review findings:
+   223→
+   224→          MUST-FIX:
+   225→
+   226→          - Branch has 2 unrelated commits (ae3ac15 voice, 5511669 PTY). Rebase so only aeb979c is
+   227→          on this branch.
+   228→
+   229→          - No AC test annotations exist for @task-adapter (pre-existing gap, not blocking for this
+   230→          bug fix)
+   231→
+   232→
+   233→          SHOULD-FIX:
+   234→
+   235→          - Bug 6 (detect.ts daemonEnsured reset) only partially fixed — module-level flag resets on
+   236→          network error but not explicitly on project switch in detectBackend()
+   237→
+   238→          - WebSocket reconnect uses fixed 3s interval with no backoff cap
+   239→
+   240→
+   241→          Code quality of aeb979c itself is good — all 5 core bug fixes are correct and
+   242→          well-implemented.
+   243→        supersedes: null
+   244→      - _ulid: 01KKB0T1S3TRVZS7XMVX75S333
+   245→        created_at: 2026-03-10T04:41:43.971Z
+   246→        author: "@claude"
+   247→        content: >-
+   248→          [FIX_CYCLE: 1] Addressed all review feedback:
+   249→
+   250→          - MUST-FIX: Rebased branch to remove 2 unrelated commits (voice I/O, PTY). Branch now has
+   251→          only task commits 99f9281 + baf78e9.
+   252→
+   253→          - SHOULD-FIX: Added _daemonEnsuredForCwd tracking — ensureDaemon now resets flag when cwd
+   254→          changes, fixing project-switch staleness.
+   255→
+   256→          - SHOULD-FIX: WebSocket reconnect now uses exponential backoff (1s initial, 2x multiplier,
+   257→          30s cap), reset on successful connection or new watch call.
+   258→
+   259→          Force-pushed rebased branch.
+   260→        supersedes: null
+   261→      - _ulid: 01KKB0Z7ZEFPMZ45MBJGVCAHVA
+   262→        created_at: 2026-03-10T04:44:34.158Z
+   263→        author: "@claude"
+   264→        content: "[REVIEW: PASS] All 6 bug fixes verified correct. Branch clean (2 commits, no unrelated
+   265→          work). TypeScript compiles clean. No new kspec validate errors. Pre-existing AC annotation
+   266→          gap acknowledged (not blocking for bug fix). Minor non-blocking: WS reconnect timer not
+   267→          cleared on project switch in watch() but guarded by watchedCwd check in onclose.
+   268→          Approving."
+   269→        supersedes: null
+   270→    todos: []
+   271→    automation: eligible
+   272→  - _ulid: 01KKAWM15XTDNE9XPRPADT9R88
+   273→    slugs:
+   274→      - bug-connectivity
+   275→    title: "Bug audit: connectivity (API, orchestrator, mobile)"
+   276→    type: bug
+   277→    description: "Investigate and fix bugs in connectivity layer. Check: orchestrator port fallback,
+   278→      rate limiter window reset, API prompt 4s delay race condition, pending prompt not consumed on
+   279→      spawn failure, mobile token regeneration during connections, WebSocket subscription leak, CORS
+   280→      config."
+   281→    spec_ref: "@orchestrator"
+   282→    meta_ref: null
+   283→    plan_ref: null
+   284→    status: completed
+   285→    blocked_by: []
+   286→    closed_reason: null
+   287→    depends_on: []
+   288→    context: []
+   289→    priority: 2
+   290→    tags: []
+   291→    vcs_refs: []
+   292→    session_id: 01KKB0TFRTYJJT65Z8F208QW43
+   293→    created_at: 2026-03-10T03:28:32.445Z
+   294→    started_at: 2026-03-10T04:46:53.262Z
+   295→    submitted_at: 2026-03-10T04:46:53.500Z
+   296→    completed_at: 2026-03-10T05:08:00.377Z
+   297→    notes:
+   298→      - _ulid: 01KKB0D8VRKT2DAEEHVSSBNK5J
+   299→        created_at: 2026-03-10T04:34:45.240Z
+   300→        author: "@claude"
+   301→        content: >-
+   302→          Execution context:
+   303→
+   304→          - Background: Audit connectivity layer for bugs in orchestrator, rate limiter, API
+   305→          prompts, WS subscriptions, CORS
+   306→
+   307→          - Scope: 6 bugs identified — orchestrator port fallback loop, auth rate limit block
+   308→          expiry, 4s prompt race condition, pending prompt leak on spawn failure, WS subscription
+   309→          leak on PTY exit, CORS substring bypass
+   310→
+   311→          - Files: orchestrator-api.ts, auth-rate-limit.ts, pty.ts (ipc-handlers),
+   312→          websocket-manager.ts (mobile-server), middleware.ts
+   313→
+   314→          - Verification: TypeScript compile, existing tests
+   315→        supersedes: null
+   316→      - _ulid: 01KKB0NX50Z39E0S1JF4NQ67PA
+   317→        created_at: 2026-03-10T04:39:28.161Z
+   318→        author: "@claude"
+   319→        content: >-
+   320→          Review findings:
+   321→
+   322→
+   323→          Code quality of f326f9f is GOOD — all 6 bug fixes are correct and well-implemented:
+   324→
+   325→          1. Orchestrator port fallback: tryListen() with MAX_PORT_RETRIES=5, correct EADDRINUSE
+   326→          handling
+   327→
+   328→          2. Auth rate limit block expiry: checkRateLimit() properly resets on block/window expiry
+   329→
+   330→          3. 4s prompt race condition: setTimeout guard verifies PTY exists before writing
+   331→
+   332→          4. Pending prompt leak on spawn failure: catch block resolves pending promise immediately
+   333→
+   334→          5. WS subscription leak on PTY exit: broadcastPtyExit() cleans both ptyStreams and
+   335→          terminalSubscriptions
+   336→
+   337→          6. CORS substring bypass: Origin parsed as URL, hostname validated against exact patterns
+   338→
+   339→
+   340→          MUST-FIX:
+   341→
+   342→          - Branch contamination: fix/bug-connectivity has 3 unrelated commits (5511669 PTY, ae3ac15
+   343→          voice, aeb979c tasks) before f326f9f. A PR would include all unrelated changes.
+   344→          Cherry-pick f326f9f onto a clean branch from main.
+   345→
+   346→
+   347→          SHOULD-FIX:
+   348→
+   349→          - No test coverage for connectivity files (pre-existing gap, not blocking for bug fix)
+   350→
+   351→          - No AC test annotations for @orchestrator (pre-existing gap)
+   352→        supersedes: null
+   353→      - _ulid: 01KKB0NX75K95XHZ20P583XN77
+   354→        created_at: 2026-03-10T04:39:28.229Z
+   355→        author: "@claude"
+   356→        content: "[FIX_CYCLE: 1] Review findings: Branch contamination: fix/bug-connectivity has 3 unrelated
+   357→          commits from other tasks. Cherry-pick f326f9f onto a clean branch from main. Code fixes
+   358→          themselves are correct."
+   359→        supersedes: null
+   360→      - _ulid: 01KKB12Y7DH29ZD1YGZ6Z89C92
+   361→        created_at: 2026-03-10T04:46:35.245Z
+   362→        author: "@claude"
+   363→        content: "Fix cycle addressed: cherry-picked f326f9f onto clean branch from origin/main (new SHA
+   364→          1a394d2). PR #12 force-pushed with only the connectivity fix commit. No unrelated commits
+   365→          remain."
+   366→        supersedes: null
+   367→    todos: []
+   368→    automation: eligible
+   369→  - _ulid: 01KKAWM2RXD9TWVAHK8BMMSEC2
+   370→    slugs:
+   371→      - bug-persistence
+   372→    title: "Bug audit: workspace persistence and settings"
+   373→    type: bug
+   374→    description: "Investigate and fix bugs in data persistence. Check: atomic write race conditions,
+   375→      backup restore staleness, workspace.json corruption recovery, settings migration, empty
+   376→      workspace overwrite protection, meta-project sync, category name sanitization."
+   377→    spec_ref: "@workspace-persist"
+   378→    meta_ref: null
+   379→    plan_ref: null
+   380→    status: pending_review
+   381→    blocked_by: []
+   382→    depends_on: []
+   383→    context: []
+   384→    priority: 2
+   385→    tags: []
+   386→    vcs_refs: []
+   387→    session_id: 01KKB13TWMGAE60MBB63S9YJ46
+   388→    created_at: 2026-03-10T03:28:34.077Z
+   389→    started_at: 2026-03-10T04:51:22.344Z
+   390→    submitted_at: 2026-03-10T04:55:11.621Z
+   391→    notes:
+   392→      - _ulid: 01KKB1HQ8W31J52E75Q6RAZ2ZR
+   393→        created_at: 2026-03-10T04:54:39.644Z
+   394→        author: "@claude"
+   395→        content: >-
+   396→          4 bugs fixed:
+   397→
+   398→          1. session-store.ts: temp file not cleaned up on verification failure in save() — added
+   399→          try/finally with unlinkSync
+   400→
+   401→          2. session-store.ts: backup write and restore used non-atomic writeFileSync — changed to
+   402→          temp+rename pattern
+   403→
+   404→          3. mobile-server/routes/workspace.ts: POST route checked wrong property paths
+   405→          (current.workspace.projects instead of current.projects) and passed wrapped body to
+   406→          saveWorkspace — fixed to unwrap and check correctly
+   407→
+   408→          4. meta-project-sync.ts: stale symlinks pointing to deleted directories not cleaned up —
+   409→          added existsSync check during sync
+   410→        supersedes: null
+   411→    todos: []
+   412→    automation: eligible
+   413→  - _ulid: 01KKAWM3WS24742Z491YVVGYV4
+   414→    slugs:
+   415→      - bug-discovery
+   416→    title: "Bug audit: session discovery"
+   417→    type: bug
+   418→    description: "Investigate and fix bugs in session discovery. Check: encoded path handling for
+   419→      special chars, OpenCode SQLite connection leaks, JSONL parsing for corrupted files, empty
+   420→      session filtering, race between discovery and active writes."
+   421→    spec_ref: "@session-discovery"
+   422→    meta_ref: null
+   423→    plan_ref: null
+   424→    status: completed
+   425→    blocked_by: []
+   426→    depends_on: []
+   427→    context: []
+   428→    priority: 3
+   429→    tags: []
+   430→    vcs_refs: []
+   431→    session_id: 01KKB1KC7Z6WSZWA9EEXE76QHZ
+   432→    created_at: 2026-03-10T03:28:35.225Z
+   433→    started_at: 2026-03-10T05:02:25.314Z
+   434→    submitted_at: 2026-03-10T05:09:19.318Z
+   435→    notes:
+   436→      - _ulid: 01KKB2BTBQRAMGWTB0JCG78QR1
+   437→        created_at: 2026-03-10T05:08:54.776Z
+   438→        author: "@claude"
+   439→        content: >-
+   440→          3 bugs fixed in session-discovery.ts:
+   441→
+   442→          1. SQLite connection leak: db.close() was not in try-finally — if prepare/all threw,
+   443→          connection stayed open. Wrapped in try-finally with safe close.
+   444→
+   445→          2. Race condition: stat() was called before readFile(), so mtime/size could mismatch
+   446→          content. Swapped order (read first, then stat). Added parse error counting with warning
+   447→          for multi-line corruption (>1 failed line).
+   448→
+   449→          3. Legacy path encoding: Claude used two different encoding schemes (old: no leading dash,
+   450→          spaces preserved; new: leading dash, spaces→dashes). Only new scheme was checked. Added
+   451→          encodeProjectPathLegacy() and multi-dir scanning with deduplication by sessionId.
+   452→        supersedes: null
+   453→    todos: []
+   454→    automation: eligible
+   455→  - _ulid: 01KKAWM4Y4E24TFEAPSDXZS99G
+   456→    slugs:
+   457→      - bug-sidebar
+   458→    title: "Bug audit: sidebar and project management"
+   459→    type: bug
+   460→    description: "Investigate and fix bugs in sidebar UI. Check: drag-to-reorder losing position, inline
+   461→      rename not saving on blur, context menu positioning at screen edges, category collapse state,
+   462→      project color picker, close-all-tabs not cleaning tile layout, session count badge."
+   463→    spec_ref: "@sidebar"
+   464→    meta_ref: null
+   465→    plan_ref: null
+   466→    status: completed
+   467→    blocked_by: []
+   468→    depends_on: []
+   469→    context: []
+   470→    priority: 3
+   471→    tags: []
+   472→    vcs_refs: []
+   473→    session_id: 01KKB2CRQGH3D0RA639KEWWP10
+   474→    created_at: 2026-03-10T03:28:36.292Z
+   475→    started_at: 2026-03-10T05:14:09.647Z
+   476→    submitted_at: 2026-03-10T05:25:12.830Z
+   477→    notes:
+   478→      - _ulid: 01KKB391FJ67DSH2HVC2TK06SN
+   479→        created_at: 2026-03-10T05:24:52.338Z
+   480→        author: "@claude"
+   481→        content: >-
+   482→          4 bugs fixed:
+   483→
+   484→          1. useDragAndDrop.ts: stale dropTarget position — handleProjectDrop and
+   485→          handleCategoryHeaderDrop read dropTarget?.position from React state closure which could be
+   486→          stale when drop fires (React may not have re-rendered since last dragOver). Added
+   487→          dropTargetRef that's updated synchronously alongside state, so drop handlers always read
+   488→          the latest position.
+   489→
+   490→          2. useSidebarHandlers.ts: rename Escape saves via blur — pressing Escape during inline
+   491→          rename calls setEditingProject(null), React unmounts the input, browser fires blur with
+   492→          the OLD handler that still has editingProject in closure, causing an unwanted save. Added
+   493→          renameCancelledRef that gets set on Escape and checked in the blur handler.
+   494→
+   495→          3. useSidebarHandlers.ts: same Escape→blur bug for category rename — identical pattern,
+   496→          added categoryRenameCancelledRef.
+   497→
+   498→          4. useProjectHandlers.ts: handleCloseProjectTabs missing undo history — unlike
+   499→          handleCloseTab (single tab), closing all project tabs didn't save to closedTabsRef, making
+   500→          undo impossible. Added push to closedTabsRef for each closed tab.
+   501→        supersedes: null
+   502→    todos: []
+   503→    automation: eligible
+   504→    completed_at: 2026-03-10T06:27:05.868Z
+   505→    closed_reason: Review passed. PR 16 merged. All 4 fixes correct.
+   506→
+```
