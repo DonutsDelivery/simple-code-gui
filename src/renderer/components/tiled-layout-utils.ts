@@ -227,7 +227,7 @@ export function validateLayout(layout: TileLayout[], tabs: OpenTab[], containerW
   for (const tile of cleaned) {
     if (tile.x < 0 || tile.y < 0 ||
         tile.y + tile.height > 100.5 ||
-        tile.width < 5 || tile.height < 5) {
+        tile.width < MIN_SIZE || tile.height < MIN_SIZE) {
       console.warn('Detected out-of-bounds tile, resetting to default layout', tile)
       return generateDefaultLayout(tabs, containerWidth, containerHeight)
     }
@@ -241,12 +241,19 @@ export function validateLayout(layout: TileLayout[], tabs: OpenTab[], containerW
     }
   }
 
+  let hasOverlap = false
   for (let i = 0; i < cleaned.length; i++) {
     for (let j = i + 1; j < cleaned.length; j++) {
       if (tilesOverlap(cleaned[i], cleaned[j])) {
-        console.warn('Detected overlapping tiles:', cleaned[i], cleaned[j])
+        console.warn('Detected overlapping tiles, resetting to default layout:', cleaned[i], cleaned[j])
+        hasOverlap = true
+        break
       }
     }
+    if (hasOverlap) break
+  }
+  if (hasOverlap) {
+    return generateDefaultLayout(tabs, containerWidth, containerHeight)
   }
   return cleaned
 }
@@ -368,6 +375,11 @@ export function splitTile(
   if (!target) return layout
 
   const isHorizontal = direction === 'top' || direction === 'bottom'
+
+  // Guard: don't split if the resulting tiles would be below MIN_SIZE
+  const halfDimension = isHorizontal ? target.height / 2 : target.width / 2
+  if (halfDimension < MIN_SIZE) return layout
+
   const newLayout = layout.filter(t => t.id !== targetTileId)
 
   // The target tile keeps its tabIds; the new tile gets a single tab
