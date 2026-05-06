@@ -46,6 +46,13 @@ features:
         given: a PTY session is running
         when: the user closes the tab or app exits
         then: the PTY process is terminated and all listeners are cleaned up
+      - id: ac-4
+        given: PTY sessions are running an AI CLI backend that persists conversation
+          turns to a session file
+        when: the app is quit
+        then: each backend receives a graceful termination signal (SIGTERM/SIGHUP) and is given
+          a brief window to flush its session file to disk before any SIGKILL fallback,
+          so resumed sessions are not missing the most recent turn(s)
     status:
       maturity: draft
       implementation: implemented
@@ -111,6 +118,52 @@ features:
     notes: []
     created: 2026-03-08T08:00:07.658Z
     status:
+      implementation: implemented
+  - _ulid: 01KQXX0JMZ8TPYXDFF3V5DZ061
+    slugs:
+      - mobile-live-attach
+    title: Mobile Live Session Attach
+    type: feature
+    tags: []
+    description: When the mobile client opens a session that is already running on the
+      desktop, it attaches to the desktop's live PTY (subscribes to its byte stream
+      and writes back to the same process) instead of spawning a parallel
+      `--resume` process. Parallel resumes branch the conversation because each
+      fork writes turns to the backend's session file independently, so the
+      desktop sees a stale view after the phone has interacted.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    notes: []
+    created: 2026-05-06T00:00:00.000Z
+    acceptance_criteria:
+      - id: ac-1
+        given: a session is running on the desktop with sessionId X for project P
+        when: the mobile client opens that same session (P, X)
+        then: the mobile client attaches to the existing PTY (no new `--resume`
+          process is spawned) and receives a replay of recent output so its
+          terminal renders the current screen
+      - id: ac-2
+        given: the mobile client is attached to a desktop-owned PTY
+        when: the user types on the desktop
+        then: the keystrokes and output are visible on the mobile client in real
+          time, and vice versa, because both clients are subscribed to the
+          same PTY byte stream
+      - id: ac-3
+        given: the mobile client is attached to a desktop-owned PTY
+        when: the user closes the tab on the mobile client
+        then: only the mobile WebSocket subscription is torn down — the
+          underlying PTY process is NOT killed, and the desktop session
+          continues uninterrupted
+      - id: ac-4
+        given: the mobile client is attached to a desktop-owned PTY
+        when: the mobile client sends a resize message
+        then: the resize is dropped (the PTY dimensions are owned by the
+          spawning client) so the desktop's terminal is not garbled
+    status:
+      maturity: draft
       implementation: implemented
   - _ulid: 01KK67BXW9RQP8D62KHVSF3CW9
     slugs:

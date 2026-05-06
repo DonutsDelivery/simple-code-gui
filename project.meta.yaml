@@ -7,7 +7,7 @@ agents:
       - test
       - refactor
     concurrency:
-      max_concurrent: 3
+      max_concurrent: 1
     conventions: []
     dispatch:
       - filter:
@@ -33,7 +33,7 @@ agents:
     capabilities:
       - review
     concurrency:
-      max_concurrent: 3
+      max_concurrent: 1
     conventions: []
     dispatch:
       - on: task.pending_review
