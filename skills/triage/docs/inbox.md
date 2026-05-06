@@ -14,6 +14,7 @@ kspec inbox list
 ### 2. Categorize Items
 
 Group inbox items by type:
+
 - **Bugs** - implementation issues, errors
 - **Spec gaps** - missing or incomplete specs
 - **Quick wins** - small, well-defined improvements
@@ -124,15 +125,15 @@ Use `--dry-run` to preview. See `{skill:help}` for full batch documentation.
 
 ## Common Patterns
 
-| Pattern | Action |
-|---------|--------|
-| Already implemented | Verify impl exists → check spec gaps → record delete |
-| Duplicate of existing | Verify original covers scope → record duplicate |
-| Small flag/option | Update spec + AC → record promote |
-| New command | Plan mode → design spec → record promote with evidence |
-| Bug report | Check spec coverage → update spec → record promote |
-| Vague idea | Record defer, or leave untriaged for later |
-| Missing spec | Record spec-gap → creates observation for follow-up |
+| Pattern               | Action                                                 |
+| --------------------- | ------------------------------------------------------ |
+| Already implemented   | Verify impl exists → check spec gaps → record delete   |
+| Duplicate of existing | Verify original covers scope → record duplicate        |
+| Small flag/option     | Update spec + AC → record promote                      |
+| New command           | Plan mode → design spec → record promote with evidence |
+| Bug report            | Check spec coverage → update spec → record promote     |
+| Vague idea            | Record defer, or leave untriaged for later             |
+| Missing spec          | Record spec-gap → creates observation for follow-up    |
 
 ## Key Principles
 

@@ -6,11 +6,11 @@ Systematically process items: inbox, observations, or automation eligibility.
 
 Use `/triage <mode>` to focus on a specific area:
 
-| Mode | Purpose | Documentation |
-|------|---------|---------------|
-| `inbox` | Process inbox items → specs/tasks | [docs/inbox.md](docs/inbox.md) |
-| `observations` | Process pending observations | [docs/observations.md](docs/observations.md) |
-| `automation` | Assess task automation eligibility | [docs/automation.md](docs/automation.md) |
+| Mode           | Purpose                            | Documentation                                |
+| -------------- | ---------------------------------- | -------------------------------------------- |
+| `inbox`        | Process inbox items → specs/tasks  | [docs/inbox.md](docs/inbox.md)               |
+| `observations` | Process pending observations       | [docs/observations.md](docs/observations.md) |
+| `automation`   | Assess task automation eligibility | [docs/automation.md](docs/automation.md)     |
 
 Without a mode, follow the full triage session pattern below.
 
@@ -33,13 +33,13 @@ kspec triage act @triage-ref
 
 ### Actions
 
-| Action | What `act` does |
-|--------|-----------------|
-| `promote` | Creates task from inbox item snapshot |
-| `delete` | Deletes the inbox item |
-| `defer` | Records deferral, no side effect |
-| `spec-gap` | Creates observation tagged spec-gap |
-| `duplicate` | Deletes the inbox item |
+| Action      | What `act` does                       |
+| ----------- | ------------------------------------- |
+| `promote`   | Creates task from inbox item snapshot |
+| `delete`    | Deletes the inbox item                |
+| `defer`     | Records deferral, no side effect      |
+| `spec-gap`  | Creates observation tagged spec-gap   |
+| `duplicate` | Deletes the inbox item                |
 
 ### Lifecycle
 
@@ -51,6 +51,7 @@ record (with action)     override (optional)     act
 ## Full Session Pattern
 
 1. **Get context**
+
    ```bash
    kspec session start --full
    kspec inbox list
@@ -192,6 +193,7 @@ Use `--dry-run` to preview. See `{skill:help}` for full batch documentation.
 ## Progress Tracking
 
 At session end, provide summary:
+
 - Items triaged (recorded decisions)
 - Actions executed (promoted, deleted, deferred, spec-gap, duplicate)
 - Tasks created/updated

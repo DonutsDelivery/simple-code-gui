@@ -1,24 +1,12 @@
 # Review
 
-How to review work and use kspec review records. Covers both the reviewer perspective (creating reviews, structuring findings) and the worker perspective (reading feedback, addressing issues). Bakes in review principles, AC coverage verification, and the full review record interface.
+How to review work and use kspec review records. Covers creating reviews, structuring findings, AC coverage verification, and the full review record interface.
 
 ## When to Use
 
-- Reviewing submitted work (as reviewer)
-- Reading and addressing review feedback (as worker)
+- Reviewing submitted work
 - Creating or managing review records
-- Verifying AC coverage before submitting work
-
-## Two Perspectives
-
-This skill serves both sides of the review process:
-
-- **As a reviewer:** Create reviews, investigate code, structure findings as threads, record checks, submit verdicts
-- **As a worker:** Read review threads, understand what's blocking, address findings, request re-review
-
-Both perspectives use the same review record system.
-
----
+- Verifying AC coverage
 
 ## Review Principles
 
@@ -47,6 +35,7 @@ Both perspectives use the same review record system.
 Before rendering any verdict, complete both deterministic and analytical checks:
 
 **Deterministic checks** (run these, don't reason about them):
+
 ```bash
 kspec item get @spec-ref                    # Own ACs + inherited trait ACs
 kspec validate                              # Trait coverage warnings
@@ -56,11 +45,16 @@ grep -rn "AC: @trait-" tests/               # Trait AC annotations
 ```
 
 **Analytical checks** (require reading and judgment):
+
 1. Read the diff — every changed file, not just the interesting ones
 2. Read surrounding context — unchanged files that interact with changed code
 3. Verify spec alignment — for each AC, confirm the code satisfies the behavior
 4. Verify at least one worker claim independently
 5. Search across categories — correctness, edge cases, error handling, security, test quality, integration
+
+**Complete ALL checks before recording any verdict.** Do not stop at the first finding. Each unrecorded finding becomes a future fix cycle that could have been avoided. Record every issue you find, then submit one verdict covering all of them.
+
+**Verify findings are real, not invented.** Every finding must be backed by evidence you can demonstrate — code you read, tests you ran, commands you executed. Run the test suite. If an AC implies edge case behavior (concurrency, boundary values, error paths), check whether tests actually cover those cases — missing edge case coverage is a must-fix. Do not emit findings based solely on reading code and reasoning about it; execute what you can to confirm.
 
 ---
 
@@ -117,6 +111,14 @@ If a trait AC genuinely doesn't apply, annotate it with a reason:
 
 Annotations must be standalone line comments, not embedded in block comments.
 
+### Source-Scanning Tests (Reject on Sight)
+
+Any test whose mechanism is reading implementation source files and asserting on their textual content is an automatic MUST-FIX — regardless of what AC it claims to cover, what language it's in, or how the file reading is accomplished. The technique is the problem, not the specific API used.
+
+The test: "does this source file contain this string?" The answer tells you nothing about whether the feature works. These tests create the illusion of coverage while testing nothing, and they are the most common shortcut agents take when ACs are difficult to test behaviorally.
+
+When you encounter source-scanning tests, flag them as MUST-FIX with a request to replace with behavioral tests that exercise the system. If an AC genuinely cannot be tested by exercising behavior, that signals the AC needs revision — not that source scanning is acceptable.
+
 ### Spec Alignment
 
 Implementation must match spec intent, not just pass tests:
@@ -139,12 +141,12 @@ draft → open → closed
               archived (terminal)
 ```
 
-| State | Meaning |
-|-------|---------|
-| `draft` | Review created but not yet started |
-| `open` | Active review in progress |
-| `closed` | Review concluded (auto-closed on approve/request_changes verdict) |
-| `archived` | Permanently archived |
+| State      | Meaning                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| `draft`    | Review created but not yet started                                |
+| `open`     | Active review in progress                                         |
+| `closed`   | Review concluded (auto-closed on approve/request_changes verdict) |
+| `archived` | Permanently archived                                              |
 
 **Auto-close on verdict:** When a reviewer submits an `approve` or `request_changes` verdict, the review record automatically transitions to `closed`. A `comment` verdict leaves the review open since it doesn't represent a final assessment. Each closed review is a point-in-time artifact.
 
@@ -153,6 +155,7 @@ draft → open → closed
 Each review cycle produces its own review record. This is analogous to individual PR reviews on GitHub — each review is a discrete artifact with its own verdict, and the collection of reviews across cycles comprises the full review history for the task.
 
 **How it works:**
+
 - When a task enters `pending_review`, the reviewer creates a **new** review record
 - If a prior closed review exists, it remains as a historical artifact
 - The task's `review_ref` is updated to point to the new record
@@ -164,11 +167,11 @@ Each review cycle produces its own review record. This is analogous to individua
 
 The disposition is computed from verdicts, checks, and threads — not set directly:
 
-| Disposition | Condition |
-|-------------|-----------|
-| `pending` | No verdicts, or only `comment` verdicts |
-| `approved` | At least one `approve` verdict matching current version, no blocking `request_changes`, all required gates passing, no unresolved blocker threads |
-| `changes_requested` | Any `request_changes` verdict matching current version, or required gates failing, or unresolved blocker threads |
+| Disposition         | Condition                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`           | No verdicts, or only `comment` verdicts                                                                                                           |
+| `approved`          | At least one `approve` verdict matching current version, no blocking `request_changes`, all required gates passing, no unresolved blocker threads |
+| `changes_requested` | Any `request_changes` verdict matching current version, or required gates failing, or unresolved blocker threads                                  |
 
 ### Creating Reviews
 
@@ -214,7 +217,7 @@ Only blocker threads affect disposition. Unresolved nits and questions do not bl
 
 #### Code-Targeted Comments
 
-Anchor findings to specific lines for code reviews:
+**Always anchor code findings to specific lines.** Use `--path`, `--line-start`, and `--line-end` so the finding is machine-parseable and the UI can render inline context at the exact location:
 
 ```bash
 kspec review comment @review-ref --body "Off-by-one error" --kind blocker \
@@ -222,32 +225,75 @@ kspec review comment @review-ref --body "Off-by-one error" --kind blocker \
   --commit def5678
 ```
 
+For multi-line ranges, set `--line-start` and `--line-end` to span the relevant block.
+
 #### Structured Anchors (for plans/specs)
+
+**Always anchor plan and spec findings to specific sections and fields.** Use `--section`, `--field`, and `--anchor-ref` so the finding is tied to the exact AC, description field, or plan section — not just described in prose:
 
 ```bash
 kspec review comment @review-ref --body "AC is too vague" --kind blocker \
   --section acceptance_criteria --field ac-3 --anchor-ref @spec-ref
 ```
 
+Common `--section` values: `acceptance_criteria`, `description`, `context`, `todos`. The `--field` identifies the specific item within that section (e.g., `ac-1`, `ac-2`). The `--anchor-ref` ties the anchor to a specific spec or plan item.
+
+#### Why Anchors Matter
+
+Anchored comments are machine-parseable and enable richer tooling: the UI can render findings inline at the exact location, agents can programmatically match findings to code or ACs, and fix-cycle workers can jump directly to the problem without re-reading the entire diff or spec.
+
+**Unanchored (avoid):**
+
+```bash
+# Finding describes location in body text — not machine-parseable
+kspec review comment @review-ref \
+  --body "In src/parser/validate.ts around line 42, there's an off-by-one error" \
+  --kind blocker
+```
+
+**Anchored (preferred):**
+
+```bash
+# Finding anchored to exact file and lines — UI renders inline, agents can match
+kspec review comment @review-ref \
+  --body "Off-by-one error: loop should use < instead of <=" --kind blocker \
+  --path src/parser/validate.ts --side head --line-start 42 --line-end 42 \
+  --commit def5678
+```
+
+**Unanchored plan comment (avoid):**
+
+```bash
+kspec review comment @review-ref \
+  --body "The third acceptance criterion on @spec-auth is too vague" \
+  --kind blocker
+```
+
+**Anchored plan comment (preferred):**
+
+```bash
+kspec review comment @review-ref \
+  --body "AC is too vague — 'handles errors properly' needs specific error types" \
+  --kind blocker \
+  --section acceptance_criteria --field ac-3 --anchor-ref @spec-auth
+```
+
 ### Recording Checks
 
-Checks record verification evidence bound to the reviewed state:
+Checks record verification evidence bound to the reviewed state. The `applies_to_version` is auto-derived from the review's subject — `code_compare` for code subjects, `entity_version` for task/plan/spec subjects — so callers do not provide version information.
 
 ```bash
 # Passing test run
 kspec review check @review-ref --name "vitest" --status pass \
-  --runner vitest --evidence "All 342 tests passed" \
-  --version-base abc1234 --version-head def5678
+  --runner vitest --evidence "All 342 tests passed"
 
 # Failing check
 kspec review check @review-ref --name "lint" --status fail \
-  --runner eslint --evidence "3 errors found" \
-  --version-base abc1234 --version-head def5678
+  --runner oxlint --evidence "3 errors found"
 
 # Informational (non-required) check
 kspec review check @review-ref --name "coverage" --status pass \
-  --no-required --evidence "87% coverage" \
-  --version-base abc1234 --version-head def5678
+  --no-required --evidence "87% coverage"
 ```
 
 **Check statuses:** `pass`, `fail`, `running`, `skipped`
@@ -256,23 +302,20 @@ Checks whose `applies_to_version` does not match the current subject version are
 
 ### Submitting Verdicts
 
-Verdicts record individual reviewer decisions:
+Verdicts record individual reviewer decisions. Like checks, the `applies_to_version` is auto-derived from the review's subject, so callers do not provide version information.
 
 ```bash
 # Approve
 kspec review verdict @review-ref --decision approve \
-  --reviewer agent@example.com \
-  --version-base abc1234 --version-head def5678
+  --reviewer agent@example.com
 
 # Request changes (triggers needs_work on linked task)
 kspec review verdict @review-ref --decision request_changes \
-  --reviewer agent@example.com \
-  --version-base abc1234 --version-head def5678
+  --reviewer agent@example.com
 
 # Comment (non-blocking)
 kspec review verdict @review-ref --decision comment \
-  --reviewer agent@example.com \
-  --version-base abc1234 --version-head def5678
+  --reviewer agent@example.com
 ```
 
 Verdicts are per-reviewer. A later verdict from the same reviewer replaces the earlier one for the same version. Verdicts not matching the current subject version are stale.
@@ -306,6 +349,8 @@ kspec review add --title "Review task-foo (cycle 2)" \
 kspec review for-task @task-foo  # Shows all reviews, current + historical
 ```
 
+When reviewing a fix cycle, read the prior review's threads. If the worker resolved threads, verify their resolutions are correct — a resolved thread is a claim that the issue was fixed, not proof. Reopen threads where the fix is insufficient.
+
 If dispatch workspace metadata is available, the new review's orientation will include a diff summary showing what changed since the prior review's examined commit.
 
 **Subject refresh** is still available for within-cycle updates (e.g., reviewer pushes a minor fix before verdicting):
@@ -337,46 +382,22 @@ Before emitting any finding, apply the **claim-disprove-emit** cycle:
 ### Finding Quality
 
 Every finding must include:
+
 - **Path and line** — exactly where the issue is
+- **Anchor** — use CLI anchor flags (`--path`/`--line-start`/`--line-end` for code, `--section`/`--field`/`--anchor-ref` for plans/specs) so the finding is machine-parseable, not just described in body text
 - **Claim** — what is wrong, stated precisely
 - **Impact** — what breaks, what guarantee is lost
 - **Evidence** — what you observed that proves the claim
 
 ### Severity Guide
 
-| Severity | When to use |
-|----------|-------------|
-| **MUST-FIX** | Correctness, security, spec violation, coverage loss. High or medium confidence required. |
-| **SHOULD-FIX** | Likely correctness issue, missing boundary case, fragile code. |
-| **SUGGESTION** | Pure style, naming, formatting. Zero correctness implications. |
+| Severity       | When to use                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| **MUST-FIX**   | Correctness, security, spec violation, coverage loss. High or medium confidence required. |
+| **SHOULD-FIX** | Likely correctness issue, missing boundary case, fragile code.                            |
+| **SUGGESTION** | Pure style, naming, formatting. Zero correctness implications.                            |
 
 **Default to MUST-FIX.** Only downgrade when you are certain the issue is cosmetic.
-
----
-
-## As a Worker: Reading Review Feedback
-
-When your task is in `needs_work`:
-
-```bash
-# Find all reviews for the task (current + historical)
-kspec review for-task @ref
-
-# Read the most recent review (the one that kicked back to needs_work)
-kspec review get @review-ref
-
-# Focus on blocker threads — these must be resolved
-# Address questions and nits where reasonable
-# Reply to threads explaining your fix
-kspec review reply @review-ref --thread <ulid> --body "Fixed in commit abc1234"
-```
-
-**Historical context:** If the task has been through multiple fix cycles, `kspec review for-task @ref` returns all reviews. Each is a closed artifact with its own findings and verdict. Read prior reviews to understand the full review history and avoid re-introducing previously flagged issues.
-
-After fixing:
-```bash
-kspec task submit @ref  # Back to pending_review — reviewer creates a new review record
-```
 
 ---
 
@@ -386,24 +407,27 @@ kspec task submit @ref  # Back to pending_review — reviewer creates a new revi
 2. **Create review** — `kspec review add --subject-type task --subject-ref @ref` (creates a new record each cycle)
 3. **Open review** — `kspec review open @review-ref`
 4. **Investigate** — deterministic checks, then analytical checks
-5. **Record findings** — `kspec review comment` for each finding with appropriate kind
+5. **Record ALL findings** — `kspec review comment` for each finding with appropriate kind. **Always use anchors:**
+   - Code reviews: `--path`, `--line-start`, `--line-end`, `--commit` to pin findings to exact source locations
+   - Plan/spec reviews: `--section`, `--field`, `--anchor-ref` to pin findings to specific ACs or fields
 6. **Record checks** — `kspec review check` for test/lint results
-7. **Submit verdict** — `kspec review verdict` (approve or request_changes — auto-closes the review)
+7. **Verify completeness** — Before submitting a verdict, confirm you have searched all categories, recorded every finding, and verified each finding with evidence. A review with one blocker and an immediate verdict is almost always incomplete. Each fix cycle costs time — find everything in one pass. Equally, do not invent findings — every issue must be backed by evidence you ran or read, not just suspicion.
+8. **Submit verdict** — `kspec review verdict` (approve or request_changes — auto-closes the review)
 
 ---
 
 ## CLI Lookups
 
-| Need | Command |
-|------|---------|
-| Spec + all ACs (own + inherited) | `kspec item get @spec-ref` |
-| Trait definition + ACs | `kspec item get @trait-slug` |
-| Review details | `kspec review get @review-ref` |
-| Reviews for a task | `kspec review for-task @task-ref` |
-| All open reviews | `kspec review list --status open` |
-| Search by keyword | `kspec search "keyword"` |
-| All traits | `kspec trait list` |
-| Validation | `kspec validate` |
+| Need                             | Command                           |
+| -------------------------------- | --------------------------------- |
+| Spec + all ACs (own + inherited) | `kspec item get @spec-ref`        |
+| Trait definition + ACs           | `kspec item get @trait-slug`      |
+| Review details                   | `kspec review get @review-ref`    |
+| Reviews for a task               | `kspec review for-task @task-ref` |
+| All open reviews                 | `kspec review list --status open` |
+| Search by keyword                | `kspec search "keyword"`          |
+| All traits                       | `kspec trait list`                |
+| Validation                       | `kspec validate`                  |
 
 ## Command Reference
 
@@ -435,7 +459,6 @@ kspec review refresh <ref> --head <commit> [--base <commit>]
 
 ## Integration
 
-- **`{skill:task-work}`** — Workers read review feedback during fix cycles
 - **`{skill:merge}`** — Merge gate checks review disposition before merging
 - **`{skill:writing-specs}`** — If review reveals spec gaps, update specs first
 - **`kspec validate`** — Automated validation complements manual review

@@ -13,12 +13,12 @@ Capture and act on systemic patterns — friction, successes, questions, and ide
 
 ## Observation Types
 
-| Type | When to use | Example |
-|------|-------------|---------|
-| `friction` | Something is harder than it should be | "Bulk updates require too many commands" |
-| `success` | A pattern that worked well | "Dry-run before derive prevented duplicate tasks" |
-| `question` | A systemic question about process | "When should agents use inbox vs tasks?" |
-| `idea` | An improvement opportunity | "CLI could suggest next steps after task completion" |
+| Type       | When to use                           | Example                                              |
+| ---------- | ------------------------------------- | ---------------------------------------------------- |
+| `friction` | Something is harder than it should be | "Bulk updates require too many commands"             |
+| `success`  | A pattern that worked well            | "Dry-run before derive prevented duplicate tasks"    |
+| `question` | A systemic question about process     | "When should agents use inbox vs tasks?"             |
+| `idea`     | An improvement opportunity            | "CLI could suggest next steps after task completion" |
 
 ## Capturing Observations
 
@@ -110,14 +110,14 @@ For each pending observation:
 
 ## Where Observations Fit
 
-| What you have | Where | Why |
-|---------------|-------|-----|
-| Vague idea for future | `inbox add` | Low-friction capture, triage later |
-| Clear actionable work | `task add` | Ready to implement |
-| Something was hard | `meta observe friction` | Informs process improvement |
-| Something worked well | `meta observe success` | Worth replicating |
-| Session-local question | `meta question add` | Track during current session |
-| Systemic process question | `meta observe question` | Broader than one session |
+| What you have             | Where                   | Why                                |
+| ------------------------- | ----------------------- | ---------------------------------- |
+| Vague idea for future     | `inbox add`             | Low-friction capture, triage later |
+| Clear actionable work     | `task add`              | Ready to implement                 |
+| Something was hard        | `meta observe friction` | Informs process improvement        |
+| Something worked well     | `meta observe success`  | Worth replicating                  |
+| Session-local question    | `meta question add`     | Track during current session       |
+| Systemic process question | `meta observe question` | Broader than one session           |
 
 ## Batch Capture
 

@@ -34,6 +34,7 @@ kspec workflow start @session-reflect-loop
 ```
 
 Key differences from interactive:
+
 - **High confidence only** — Only capture what you're certain about
 - **Search first** — MUST search before capturing anything
 - **No user prompts** — Skip discussion, auto-resolve
@@ -79,6 +80,7 @@ kspec search "<keyword>"  # Searches specs, tasks, AND inbox
 ```
 
 For each friction point:
+
 - **Already tracked** — Reference the existing item, don't duplicate
 - **Partially covered** — Note what's missing
 - **Not tracked** — Candidate for capture
@@ -86,6 +88,7 @@ For each friction point:
 ### Step 4: Propose Improvements
 
 For untracked friction, propose:
+
 - What it would do
 - How it would help
 - Rough scope (small/medium/large)
@@ -93,6 +96,7 @@ For untracked friction, propose:
 ### Step 5: Discussion (Interactive Only)
 
 Present findings one at a time:
+
 - Is this worth capturing?
 - Any refinements?
 - Related ideas from user perspective?
@@ -101,13 +105,13 @@ Present findings one at a time:
 
 Route each item to the right destination:
 
-| What you found | Where | Why |
-|----------------|-------|-----|
-| Clear scope (know what and where) | `task add` | Ready to implement |
-| Unclear scope (vague, needs triage) | `inbox add` | Will be triaged later |
-| Systemic friction pattern | `meta observe friction` | Informs process improvement |
-| Success pattern | `meta observe success` | Worth documenting |
-| Behavior change needing spec work | Ask user | May need spec-first workflow |
+| What you found                      | Where                   | Why                          |
+| ----------------------------------- | ----------------------- | ---------------------------- |
+| Clear scope (know what and where)   | `task add`              | Ready to implement           |
+| Unclear scope (vague, needs triage) | `inbox add`             | Will be triaged later        |
+| Systemic friction pattern           | `meta observe friction` | Informs process improvement  |
+| Success pattern                     | `meta observe success`  | Worth documenting            |
+| Behavior change needing spec work   | Ask user                | May need spec-first workflow |
 
 **Inbox vs Task:** Can you describe the change and where it goes? Use `task add`. Only use inbox when scope is genuinely unclear.
 

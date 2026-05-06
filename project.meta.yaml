@@ -64,7 +64,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F336H9B5ERMYXBD7RB9
     description: Capture and act on systemic patterns — friction, successes, questions, and ideas. The
       feedback loop that drives process improvement.
@@ -80,7 +80,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F37ATRYVM4DR66XX83J
     description: Structured reflection at the end of work sessions. Identifies learnings, friction
       points, and improvements for system evolution.
@@ -96,7 +96,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3BT5KGE3G2RDAM3CBE
     description: Triage inbox items systematically. Records decisions with audit trail, then executes
       actions. Supports inbox, observations, and automation eligibility triage.
@@ -112,7 +112,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3FXBHJ2SDV6EQWH7D8
     description: Process inbox items using the record-act pattern. Categorize, promote to spec/task,
       merge duplicates, defer, or delete stale items with full audit trail.
@@ -128,7 +128,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3KT9H859PJV5N5EZ1Q
     description: Assess and prepare tasks for automation eligibility. Verify spec coverage, acceptance
       criteria, and task readiness for automated agents.
@@ -144,7 +144,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3P81WHCYY6NKXGA21Q
     description: Create and maintain specification items — modules, features, requirements, acceptance
       criteria, and traits. The source of truth for what to build.
@@ -160,7 +160,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3TB0BES2VKPYGFPPFZ
     description: Translate approved plans into specs and tasks. Import structured documents or create
       incrementally. Plans persist as durable artifacts with audit trail.
@@ -176,7 +176,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F3Y17P5G4AYFYYV4SZP
     description: Structured task lifecycle — start, work, note, submit, complete. AC annotations, fix
       cycle handling via review records, scope management, and quality checks.
@@ -192,7 +192,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F42HPBBWXZJCVWDV1BZ
     description: Formalize repeatable patterns into trackable kspec workflows. Design steps, choose
       triggers, create loop variants, and integrate with skills.
@@ -208,7 +208,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KK672F46YYJFP1A2M5KS1RE2
     description: How to review work and use kspec review records. Covers both reviewer and worker
       perspectives — creating reviews, structuring findings, AC coverage verification, review
@@ -225,7 +225,7 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
   - _ulid: 01KM5T845QP8HFR4TYQWKE9A2V
     description: Merge approved work into an integration branch. Local-first git merge with gates based
       on kspec review disposition — approved status, passing checks, and resolved blocker threads.
@@ -241,5 +241,21 @@ skills:
       - claude-code
       - codex
       - droid
-    version: 0.12.0
+    version: 0.13.0
+  - _ulid: 01KQY8ZXZN9P78TJHXN0NHVS2W
+    description: Review a plan document for quality, completeness, and readiness. Checks spec quality,
+      task standalone-ness, dependency ordering, and alignment with existing specs.
+    origin: core
+    depends_on: []
+    tags:
+      - core
+    _type: skill
+    allowed_tools: []
+    id: review-plan
+    name: Plan Review
+    platforms:
+      - claude-code
+      - codex
+      - droid
+    version: 0.13.0
 workflows: []

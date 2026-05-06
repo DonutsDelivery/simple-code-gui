@@ -16,14 +16,14 @@ Create and maintain specification items — the source of truth for what to buil
 
 Use CLI commands to discover and inspect specs. **Do NOT search `.kspec/` YAML files manually.**
 
-| Need | Command |
-|------|---------|
-| View spec + all ACs | `kspec item get @ref` |
-| Search by keyword | `kspec search "keyword"` |
-| List by type | `kspec item list --type feature` |
-| All modules | `kspec item list --type module` |
-| All traits | `kspec trait list` |
-| Trait details + ACs | `kspec item get @trait-slug` |
+| Need                 | Command                           |
+| -------------------- | --------------------------------- |
+| View spec + all ACs  | `kspec item get @ref`             |
+| Search by keyword    | `kspec search "keyword"`          |
+| List by type         | `kspec item list --type feature`  |
+| All modules          | `kspec item list --type module`   |
+| All traits           | `kspec trait list`                |
+| Trait details + ACs  | `kspec item get @trait-slug`      |
 | Items under a parent | `kspec item list --under @parent` |
 
 ## Core Principles
@@ -50,14 +50,14 @@ module (organizational grouping)
 
 ### Choosing the Right Type
 
-| Type | Use when | Example |
-|------|----------|---------|
-| `module` | Grouping related features | "CLI Commands", "Web UI", "Schema" |
-| `feature` | User-facing capability | "JSON Export", "Inbox Triage", "Shadow Sync" |
-| `requirement` | Specific testable behavior within a feature | "Export validates output format", "Triage records audit trail" |
-| `constraint` | Non-functional limit or boundary | "Response time < 200ms", "Max 1000 items per module" |
-| `decision` | Architectural choice with rationale | "Use YAML over JSON for spec files" |
-| `trait` | Reusable AC bundle for cross-cutting behaviors | "JSON output mode", "Confirmation prompts" |
+| Type          | Use when                                       | Example                                                        |
+| ------------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `module`      | Grouping related features                      | "CLI Commands", "Web UI", "Schema"                             |
+| `feature`     | User-facing capability                         | "JSON Export", "Inbox Triage", "Shadow Sync"                   |
+| `requirement` | Specific testable behavior within a feature    | "Export validates output format", "Triage records audit trail" |
+| `constraint`  | Non-functional limit or boundary               | "Response time < 200ms", "Max 1000 items per module"           |
+| `decision`    | Architectural choice with rationale            | "Use YAML over JSON for spec files"                            |
+| `trait`       | Reusable AC bundle for cross-cutting behaviors | "JSON output mode", "Confirmation prompts"                     |
 
 **Rule of thumb:** If it has acceptance criteria that a user could verify, it's a feature or requirement. If it constrains how something works, it's a constraint. If multiple specs need the same behavior, extract a trait.
 
@@ -76,6 +76,7 @@ Then:  outcome (observable, verifiable result)
 ### Good AC Patterns
 
 **Specific and testable:**
+
 ```bash
 kspec item ac add @json-export \
   --given "user has 3 tasks in project" \
@@ -84,6 +85,7 @@ kspec item ac add @json-export \
 ```
 
 **Covers error cases:**
+
 ```bash
 kspec item ac add @json-export \
   --given "project has no tasks" \
@@ -92,6 +94,7 @@ kspec item ac add @json-export \
 ```
 
 **Boundary behavior:**
+
 ```bash
 kspec item ac add @bulk-delete \
   --given "user passes 50 refs (maximum supported)" \
@@ -101,13 +104,56 @@ kspec item ac add @bulk-delete \
 
 ### AC Anti-patterns
 
-| Anti-pattern | Problem | Better |
-|-------------|---------|--------|
-| "System works correctly" | Not testable | Describe specific observable outcome |
-| "User is happy" | Subjective | Describe what they can do or see |
-| "Fast performance" | Not measurable | "Response returns within 200ms" |
-| "Handles errors" | Vague | Specific error scenario + expected behavior |
-| Duplicating trait AC | Maintenance burden | Apply the trait instead |
+| Anti-pattern             | Problem            | Better                                              |
+| ------------------------ | ------------------ | --------------------------------------------------- |
+| "System works correctly" | Not testable       | Describe specific observable outcome                |
+| "User is happy"          | Subjective         | Describe what they can do or see                    |
+| "Fast performance"       | Not measurable     | "Response returns within 200ms"                     |
+| "Handles errors"         | Vague              | Specific error scenario + expected behavior         |
+| Duplicating trait AC     | Maintenance burden | Apply the trait instead                             |
+| Implementation details   | Not behavioral     | Describe observable outcome, not internal mechanism |
+| Rationale or commentary  | Not testable       | Move to description or implementation notes         |
+
+### Behavioral Language Rules
+
+Specs are standalone behavioral contracts. They must read as timeless descriptions of what the system does, not how it's built. A spec should make sense to someone who has never seen the codebase.
+
+**ACs describe observable behavior, not implementation:**
+ACs should describe what happens from the outside — what a user or consumer observes. They should not reveal how the system achieves the behavior internally. This includes field/variable names, protocol details, internal function calls, file formats, library names, and architectural terms. Use natural language to describe the same concept.
+
+Examples of implementation leaking into ACs:
+
+- `session_id`, `turn_count` → "session identifier", "turn count"
+- `ACP`, `JSON-RPC`, `WebSocket` → describe the behavior these enable
+- `client.prompt()`, `closeSession()` → "the prompt is delivered", "the session closes"
+- `events.jsonl` → "the session's event history"
+
+**ACs contain only assertions, not rationale:**
+Each AC should state what happens, not why it happens or how it relates to other concerns. Rationale, design context, backward compatibility notes, and cross-references to other specs belong in the description or implementation notes — not in the given/when/then.
+
+Examples of commentary leaking into ACs:
+
+- "the session closes; this preserves backward compatibility" → "the session closes"
+- "per @other-spec" → use `depends_on` or `relates_to` fields
+- "unlike the previous behavior" → just state the current behavior
+
+**Descriptions follow the same principles** — describe behavior and purpose, not implementation approach. Implementation guidance belongs in task descriptions or implementation notes.
+
+**Good:**
+
+```
+Given: A session is in idle state
+When: No prompt arrives within the configured grace period
+Then: The session is closed
+```
+
+**Bad:**
+
+```
+Given: A session emits session.idle and no session_prompt actions target it within 5 seconds
+When: The grace period timer fires
+Then: closeSession() is called with the standard teardown sequence; this preserves backward compatibility
+```
 
 ### AC Naming Convention
 
@@ -152,17 +198,17 @@ kspec item trait add @my-command @trait-json-output @trait-dry-run
 
 ### Common Traits
 
-| Trait | When to apply |
-|-------|---------------|
-| `@trait-json-output` | Command produces machine-readable output |
-| `@trait-dry-run` | Command supports preview before execution |
-| `@trait-confirmation-prompt` | Command is destructive |
-| `@trait-filterable-list` | Command lists items with filter options |
-| `@trait-shadow-commit` | Command modifies `.kspec/` data |
-| `@trait-semantic-exit-codes` | Command exit code carries meaning |
-| `@trait-error-guidance` | Command gives recovery suggestions on errors |
-| `@trait-multi-ref-batch` | Command accepts multiple references |
-| `@trait-priority-parameter` | Command accepts priority option |
+| Trait                        | When to apply                                |
+| ---------------------------- | -------------------------------------------- |
+| `@trait-json-output`         | Command produces machine-readable output     |
+| `@trait-dry-run`             | Command supports preview before execution    |
+| `@trait-confirmation-prompt` | Command is destructive                       |
+| `@trait-filterable-list`     | Command lists items with filter options      |
+| `@trait-shadow-commit`       | Command modifies `.kspec/` data              |
+| `@trait-semantic-exit-codes` | Command exit code carries meaning            |
+| `@trait-error-guidance`      | Command gives recovery suggestions on errors |
+| `@trait-multi-ref-batch`     | Command accepts multiple references          |
+| `@trait-priority-parameter`  | Command accepts priority option              |
 
 ### Creating New Traits
 
@@ -284,6 +330,7 @@ kspec validate --strict
 **Exit codes:** `0` = success, `4` = errors, `6` = warnings only.
 
 Validation catches:
+
 - Missing acceptance criteria
 - Broken references (`@slug` pointing to nonexistent items)
 - Missing descriptions
@@ -314,7 +361,7 @@ kspec item ac list <ref>               # List ACs for item
 kspec item ac add <ref> --given "..." --when "..." --then "..."
 kspec item ac add <ref> --id <id> --given "..." --when "..." --then "..."
 kspec item ac set <ref> <ac-id> --then "updated"
-kspec item ac remove <ref> <ac-id> [--force]
+kspec item ac remove <ref> <id> [--force]
 ```
 
 ### Traits

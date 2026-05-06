@@ -11,6 +11,7 @@ Assess and prepare tasks for automation eligibility. Goal: make tasks self-conta
 ## Eligibility Criteria
 
 A task is ready for automation when:
+
 1. Has `spec_ref` pointing to resolvable spec
 2. Spec has acceptance criteria (testable outcomes)
 3. Task type is not `spike` (spikes output knowledge, not code)
@@ -36,10 +37,12 @@ kspec tasks assess automation --auto --dry-run
 For each task shown:
 
 **If spike:**
+
 - Mark `manual_only` - spikes are inherently human work
 - `kspec task set @ref --automation manual_only --reason "Spike - output is knowledge"`
 
 **If missing spec_ref or no ACs:**
+
 - Ask: "Fix now or mark for later?"
 - **Fix now:**
   1. Create or find appropriate spec: `kspec item add --under @parent --title "..."`
@@ -50,6 +53,7 @@ For each task shown:
   - `kspec task set @ref --automation needs_review --reason "Missing spec - needs spec creation"`
 
 **If has spec + ACs:**
+
 - Review for eligibility:
   - Is the spec appropriate for this task?
   - Are the ACs adequate and testable?
@@ -70,6 +74,7 @@ kspec tasks ready --unassessed
 ```
 
 Auto mode is conservative:
+
 - Spikes → `manual_only`
 - Missing spec/ACs → `needs_review`
 - Has spec + ACs → **NOT auto-marked** (requires review)
@@ -106,11 +111,11 @@ kspec tasks ready --needs-review           # Tasks needing human triage
   → review_for_eligible (verify spec/AC adequacy)
 ```
 
-| Recommendation | Meaning | Auto Mode Action |
-|----------------|---------|------------------|
-| `review_for_eligible` | Passes criteria, needs review | No change (manual review) |
-| `needs_review` | Missing spec or ACs | Sets `needs_review` with reason |
-| `manual_only` | Spike task | Sets `manual_only` |
+| Recommendation        | Meaning                       | Auto Mode Action                |
+| --------------------- | ----------------------------- | ------------------------------- |
+| `review_for_eligible` | Passes criteria, needs review | No change (manual review)       |
+| `needs_review`        | Missing spec or ACs           | Sets `needs_review` with reason |
+| `manual_only`         | Spike task                    | Sets `manual_only`              |
 
 ## Key Principles
 

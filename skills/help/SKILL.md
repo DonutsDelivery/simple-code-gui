@@ -5,6 +5,7 @@ Get help with kspec commands and workflows.
 ## When to Use
 
 Use this skill when:
+
 - You need to understand kspec commands
 - You want to learn about task and spec workflows
 - You need help with CLI syntax

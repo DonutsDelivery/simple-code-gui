@@ -14,11 +14,11 @@ Formalize repeatable patterns into trackable kspec workflows. A meta-workflow fo
 
 Look for processes that are:
 
-| Signal | Example |
-|--------|---------|
-| Step-by-step instructions in docs | "To release: bump version, tag, push, create release" |
-| Checklists that get skipped | "Before merge: check CI, resolve threads, verify AC" |
-| Repeated command sequences | "Start daemon, run tests, check output, stop daemon" |
+| Signal                               | Example                                                      |
+| ------------------------------------ | ------------------------------------------------------------ |
+| Step-by-step instructions in docs    | "To release: bump version, tag, push, create release"        |
+| Checklists that get skipped          | "Before merge: check CI, resolve threads, verify AC"         |
+| Repeated command sequences           | "Start daemon, run tests, check output, stop daemon"         |
 | Quality gates with multiple criteria | "Review: AC coverage, test quality, code style, regressions" |
 
 Good sources: AGENTS.md, existing skills, task notes, session reflections.
@@ -31,32 +31,32 @@ Every workflow has:
 id: kebab-case-name
 description: What this workflow does
 trigger: when-it-starts
-mode: interactive  # or loop
+mode: interactive # or loop
 steps:
   - id: step-1
-    type: action    # action, check, or decision
+    type: action # action, check, or decision
     content: What to do in this step
 ```
 
 ### Triggers
 
-| Trigger | When |
-|---------|------|
-| `manual` | Invoked explicitly |
-| `session-start` | Beginning of work session |
-| `session-end` | End of work session |
-| `task-complete` | After completing a task |
+| Trigger           | When                        |
+| ----------------- | --------------------------- |
+| `manual`          | Invoked explicitly          |
+| `session-start`   | Beginning of work session   |
+| `session-end`     | End of work session         |
+| `task-complete`   | After completing a task     |
 | `behavior-change` | Before implementing changes |
-| `pre-release` | Before creating a release |
-| `pr-merge` | Before merging a PR |
+| `pre-release`     | Before creating a release   |
+| `pr-merge`        | Before merging a PR         |
 
 ### Step Types
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| `action` | Do something | "Run tests and verify all pass" |
-| `check` | Verify a condition | "All CI checks passing?" |
-| `decision` | Choose a path | "Import or manual path?" |
+| Type       | Purpose            | Example                         |
+| ---------- | ------------------ | ------------------------------- |
+| `action`   | Do something       | "Run tests and verify all pass" |
+| `check`    | Verify a condition | "All CI checks passing?"        |
+| `decision` | Choose a path      | "Import or manual path?"        |
 
 ### Modes
 
@@ -108,12 +108,12 @@ kspec workflow show  # Verify inputs and notes captured
 
 A workflow may benefit from a matching skill when:
 
-| Create a skill when | Skip the skill when |
-|---------------------|---------------------|
-| Steps need detailed context | Workflow is self-contained |
-| Multiple sub-documents help | Context exists elsewhere |
+| Create a skill when                | Skip the skill when            |
+| ---------------------------------- | ------------------------------ |
+| Steps need detailed context        | Workflow is self-contained     |
+| Multiple sub-documents help        | Context exists elsewhere       |
 | Users need a `/command` entrypoint | Workflow is internal/automated |
-| Complex decision logic | Simple sequential steps |
+| Complex decision logic             | Simple sequential steps        |
 
 If creating a skill, write it to `templates/skills/<name>/SKILL.md` and add a manifest entry.
 
@@ -198,6 +198,7 @@ kspec meta add workflow \
 ```
 
 Loop variants typically:
+
 - Auto-resolve decisions (pick the most common path)
 - Skip user confirmation steps
 - Add higher confidence thresholds
