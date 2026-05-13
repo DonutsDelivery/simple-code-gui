@@ -6,3 +6,31 @@ out/
 dist-build/
 .kspec/
 .kspec-sessions/
+
+# >>> kspec managed
+.kspec/
+.kspec-sessions/
+plans/
+.kspec-worktrees/
+.kspec-dispatch-workspace.json
+.kspec-dispatch-shadow-mutation
+# <<< kspec managed
+
+# Agent / skill scaffolding
+.agents/
+.factory/
+
+# Personal config
+.aider.conf.yml
+.codex
+.claude/settings.json
+.claude/scheduled_tasks.lock
+CONVENTIONS.md
+GEMINI.md
+HERMES.md
+OPENCODE.md
+kspec.config.yaml
+
+# Build artifacts
+*.apk
+.gitignore.backup-*
