@@ -46,6 +46,7 @@ export const miscHandlers = {
 
   // Clipboard
   readClipboardImage: () => ipcRenderer.invoke('clipboard:readImage'),
+  writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
 
   // File utilities
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
@@ -68,13 +69,23 @@ export const miscHandlers = {
   commandsSave: (name: string, content: string, projectPath: string | null) =>
     ipcRenderer.invoke('commands:save', { name, content, projectPath }),
 
-  // CLAUDE.md editor
-  claudeMdRead: (projectPath: string) => ipcRenderer.invoke('claudemd:read', projectPath),
-  claudeMdSave: (projectPath: string, content: string) => ipcRenderer.invoke('claudemd:save', { projectPath, content }),
+  // Instruction file editor (CLAUDE.md, GEMINI.md, AGENTS.md, etc.)
+  claudeMdRead: (projectPath: string, aiBackend?: string) => ipcRenderer.invoke('claudemd:read', projectPath, aiBackend),
+  claudeMdSave: (projectPath: string, content: string, aiBackend?: string) => ipcRenderer.invoke('claudemd:save', { projectPath, content, aiBackend }),
 
   // Auto Work mode marker
   autoworkSetActive: (projectPath: string) => ipcRenderer.invoke('autowork:setActive', projectPath),
   autoworkClearActive: (projectPath: string) => ipcRenderer.invoke('autowork:clearActive', projectPath),
+
+  // Global instruction injection
+  globalInstructionInject: (projectPath: string, instructionContent: string, aiBackends?: string[]) =>
+    ipcRenderer.invoke('globalInstruction:inject', projectPath, instructionContent, aiBackends),
+  globalInstructionRemove: (projectPath: string, aiBackends?: string[]) =>
+    ipcRenderer.invoke('globalInstruction:remove', projectPath, aiBackends),
+  globalInstructionInjectAll: (projects: Array<{ path: string }>, instructionContent: string, aiBackends?: string[]) =>
+    ipcRenderer.invoke('globalInstruction:injectAll', projects, instructionContent, aiBackends),
+  globalInstructionRemoveAll: (projects: Array<{ path: string }>, aiBackends?: string[]) =>
+    ipcRenderer.invoke('globalInstruction:removeAll', projects, aiBackends),
 
   // Extensions
   extensionsFetchRegistry: (forceRefresh?: boolean) => ipcRenderer.invoke('extensions:fetchRegistry', forceRefresh),

@@ -15,7 +15,6 @@ import {
 import {
   getTerminalBuffers,
   initBuffer,
-  addToBuffer,
   stripAnsi,
   isTerminalAtBottom,
   scrollDebug,
@@ -99,6 +98,14 @@ function loadWebGLAddon(
     }
 
     fitAddon.fit()
+
+    const forceViewportBackground = () => {
+      const vp = terminal.element?.querySelector('.xterm-viewport') as HTMLElement
+      if (vp) {
+        vp.style.backgroundColor = (terminal.options.theme as any)?.background || '#1e1e2e'
+      }
+    }
+
     import('@xterm/addon-webgl').then(({ WebglAddon }) => {
       if (state.disposed || !terminal) return
       try {
@@ -108,7 +115,7 @@ function loadWebGLAddon(
           console.warn('Terminal GPU: WebGL context lost, recovering...')
           state.webglAddonRef.current = null
           try { webglAddon.dispose() } catch { /* ignore */ }
-          // Force a full refresh so the canvas fallback renderer repaints
+          forceViewportBackground()
           terminal.refresh(0, terminal.rows - 1)
           // Try to reload WebGL after a delay
           setTimeout(() => {
@@ -120,20 +127,29 @@ function loadWebGLAddon(
                 console.warn('Terminal GPU: WebGL context lost again, staying on canvas')
                 state.webglAddonRef.current = null
                 try { newWebgl.dispose() } catch { /* ignore */ }
+                forceViewportBackground()
                 terminal.refresh(0, terminal.rows - 1)
               })
               terminal.loadAddon(newWebgl)
               console.log('Terminal GPU: WebGL recovered')
             } catch {
               console.warn('Terminal GPU: WebGL recovery failed, using canvas')
+              forceViewportBackground()
               terminal.refresh(0, terminal.rows - 1)
             }
           }, 1000)
         })
         terminal.loadAddon(webglAddon)
         console.log('Terminal GPU acceleration: WebGL enabled')
+        // Force a full repaint after WebGL loads so all cells render
+        // with the correct colors via the GPU pipeline. Without this,
+        // previously-written cells may appear grey/inactive.
+        forceViewportBackground()
+        terminal.refresh(0, terminal.rows - 1)
       } catch (e) {
         console.warn('Terminal GPU acceleration: WebGL failed, using canvas:', e)
+        forceViewportBackground()
+        terminal.refresh(0, terminal.rows - 1)
       }
     }).catch(e => {
       console.warn('Terminal GPU acceleration: WebGL unavailable, using canvas:', e)
@@ -270,6 +286,15 @@ function setupEventHandlers(
   )
   terminal.attachCustomKeyEventHandler(keyEventHandler)
 
+  // Best-effort auto-copy via onSelectionChange (works for backends that
+  // don't enable mouse tracking, unlike opencode which uses OSC 52).
+  const _selChangeDisposable = terminal.onSelectionChange(() => {
+    const sel = terminal.getSelection()
+    if (sel) {
+      navigator.clipboard.writeText(sel).catch(() => {})
+    }
+  })
+
   // Return cleanup function
   return () => {
     disposedRef.current = true
@@ -277,6 +302,7 @@ function setupEventHandlers(
     container.removeEventListener('contextmenu', contextmenuHandler)
     container.removeEventListener('auxclick', auxclickHandler)
     container.removeEventListener('mousedown', mousedownHandler)
+    _selChangeDisposable.dispose()
     cleanupInputHandlerState(inputState)
   }
 }
@@ -310,6 +336,15 @@ function postOpenSetup(
   // Initialize buffer
   initBuffer(ptyId)
 
+  // Force viewport background to match theme so gaps between the
+  // rendered content and the viewport edge don't show a grey border.
+  const syncViewportBackground = () => {
+    const vp = container?.querySelector('.xterm-viewport') as HTMLElement
+    if (vp) {
+      vp.style.backgroundColor = (terminal.options.theme as any)?.background || '#1e1e2e'
+    }
+  }
+
   // Replay buffered content on mount (for HMR recovery)
   const buffer = getTerminalBuffers().get(ptyId)!
   if (buffer.length > 0) {
@@ -320,6 +355,8 @@ function postOpenSetup(
       for (const chunk of buffer) {
         terminal.write(chunk)
       }
+      syncViewportBackground()
+      terminal.refresh(0, terminal.rows - 1)
       scrollDebug('bufferReplay:scrollToBottom', scrollSnapshot(terminal))
       terminal.scrollToBottom()
     })
@@ -332,6 +369,8 @@ function postOpenSetup(
       terminal.write(data)
     }
     state.pendingWrites.length = 0
+    syncViewportBackground()
+    terminal.refresh(0, terminal.rows - 1)
     scrollDebug('pendingFlush:scrollToBottom', scrollSnapshot(terminal))
     terminal.scrollToBottom()
   }
@@ -352,10 +391,21 @@ function postOpenSetup(
   )
   ;(container as any).__cleanupFn = cleanupFn
 
-  // Defer fit to next frame
+  // Defer fit + refresh to next frame (after WebGL has had a chance to load)
   requestAnimationFrame(() => {
     if (state.disposed) return
     fitAddon.fit()
+    syncViewportBackground()
+    terminal.refresh(0, terminal.rows - 1)
+    // OpenCode's TUI uses differential updates — after a workspace remount,
+    // cells not re-sent by the TUI stay grey/inactive. A SIGWINCH forces a
+    // full TUI redraw, preventing the bugged state.
+    if (options.backend === 'opencode') {
+      const dims = fitAddon.proposeDimensions()
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
+      }
+    }
   })
 }
 
@@ -536,10 +586,32 @@ export function handlePtyData(
   onAutoWorkMarker: (chunk: string) => void,
   state: InitState
 ): void {
-  addToBuffer(ptyId, data)
+  // Buffer is filled by useBackgroundBuffers hook (persistent listener,
+  // survives workspace switches). Don't double-append here.
 
   // Strip markers from display
   let displayData = data.replace(TTS_GUILLEMET_REGEX, '').replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
+
+  // Handle OSC 52 clipboard escape sequences (used by opencode, tmux, etc.)
+  // Format: ESC ] 52 ; <clipboard> ; <base64> BEL|ST
+  const osc52Re = /\x1b\]52;([cpqps]);([^\x07\x1b]*)(?:\x07|\x1b\\)/g
+  let oscMatch: RegExpExecArray | null
+  while ((oscMatch = osc52Re.exec(data)) !== null) {
+    const base64Data = oscMatch[2]
+    if (base64Data) {
+      try {
+        const text = atob(base64Data)
+        // Use Electron IPC clipboard (reliable without user gesture), fallback to navigator.clipboard
+        if (window.electronAPI?.writeClipboardText) {
+          window.electronAPI.writeClipboardText(text)
+        } else {
+          navigator.clipboard.writeText(text).catch(e => console.error('OSC 52 clipboard write failed:', e))
+        }
+      } catch { /* ignore invalid base64 */ }
+    }
+  }
+  // Strip OSC 52 sequences from display output
+  displayData = displayData.replace(osc52Re, '')
 
   // Process TTS, summary, and autowork
   const cleanChunk = stripAnsi(data)
@@ -654,7 +726,7 @@ export function handlePtyExit(
   } else {
     state.pendingWrites.push(exitMsg)
   }
-  addToBuffer(ptyId, exitMsg)
+  // Buffer fill handled by useBackgroundBuffers' persistent exit listener.
 }
 
 /**

@@ -14,7 +14,7 @@ export interface ElectronAPI {
   getCategoryMetaPath: (categoryName: string) => Promise<string>
 
   // Sessions
-  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<Session[]>
+  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<Session[]>
 
   // Settings
   getSettings: () => Promise<Settings>
@@ -51,6 +51,14 @@ export interface ElectronAPI {
   // Aider CLI
   aiderCheck: () => Promise<{ installed: boolean; pipInstalled: boolean }>
   aiderInstall: () => Promise<{ success: boolean; error?: string; needsPython?: boolean }>
+
+  // Droid CLI (Factory AI)
+  droidCheck: () => Promise<{ installed: boolean }>
+  droidInstall: () => Promise<{ success: boolean; error?: string }>
+
+  // Hermes Agent
+  hermesCheck: () => Promise<{ installed: boolean }>
+  hermesInstall: () => Promise<{ success: boolean; error?: string }>
 
   // Get Shit Done (GSD) - Claude Code workflow addon
   gsdCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
@@ -95,10 +103,17 @@ export interface ElectronAPI {
   kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
   kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
   kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
+  kspecDeleteTask: (cwd: string, taskRef: string) => Promise<{ success: boolean; error?: string }>
 
-  // TTS instructions (CLAUDE.md)
-  ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
-  ttsRemoveInstructions: (projectPath: string) => Promise<{ success: boolean }>
+  // TTS instructions (backend-specific instruction file)
+  ttsInstallInstructions: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
+  ttsRemoveInstructions: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
+
+  // Global instruction injection
+  globalInstructionInject: (projectPath: string, instructionContent: string, aiBackends?: string[]) => Promise<{ success: boolean; results: Record<string, boolean> }>
+  globalInstructionRemove: (projectPath: string, aiBackends?: string[]) => Promise<{ success: boolean; results: Record<string, boolean> }>
+  globalInstructionInjectAll: (projects: Array<{ path: string }>, instructionContent: string, aiBackends?: string[]) => Promise<{ success: boolean; applied: number; failed: number; error?: string }>
+  globalInstructionRemoveAll: (projects: Array<{ path: string }>, aiBackends?: string[]) => Promise<{ success: boolean; removed: number; failed: number }>
 
   // Voice (STT/TTS)
   voiceCheckWhisper: () => Promise<{ installed: boolean; models: string[]; currentModel: string | null }>
@@ -168,17 +183,18 @@ export interface ElectronAPI {
   tadaUseSampleVoice: (sampleId: string) => Promise<{ success: boolean; path?: string; error?: string }>
 
   // PTY
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<string>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<string>
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void
-  setPtyBackend: (id: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => Promise<void>
+  setPtyBackend: (id: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<void>
   onPtyData: (id: string, callback: (data: string) => void) => () => void
   onPtyExit: (id: string, callback: (code: number) => void) => () => void
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => void) => () => void
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' }) => void) => () => void
   setAutoAccept: (id: string, enabled: boolean) => void
   scrollDebugLog: (chunk: string) => void
   getAutoAcceptStatus: (id: string) => Promise<boolean>
+  setActivePtyIds: (ids: string[]) => void
 
   // API Server
   apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
@@ -232,6 +248,7 @@ export interface ElectronAPI {
 
   // Clipboard
   readClipboardImage: () => Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }>
+  writeClipboardText: (text: string) => Promise<{ success: boolean; error?: string }>
 
   // File utilities
   getPathForFile: (file: File) => string

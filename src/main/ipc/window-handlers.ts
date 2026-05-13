@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
 import { join, resolve } from 'path'
 import { tmpdir, homedir } from 'os'
 import { isWindows } from '../platform'
+import { type AIBackend, getInstructionFilePath, getInstructionFileRelativePath } from './instruction-files'
 
 /**
  * Validates that a project path is safe and doesn't contain path traversal attempts.
@@ -124,6 +125,16 @@ export function registerWindowHandlers(getMainWindow: () => BrowserWindow | null
     }
   })
 
+  // Write text to clipboard (for OSC 52 and other programmatic clipboard writes)
+  ipcMain.handle('clipboard:writeText', async (_, text: string) => {
+    try {
+      clipboard.writeText(text)
+      return { success: true }
+    } catch (e: any) {
+      return { success: false, error: e.message }
+    }
+  })
+
   // Custom commands
   ipcMain.handle('commands:save', async (_, { name, content, projectPath }: { name: string; content: string; projectPath: string | null }) => {
     try {
@@ -161,48 +172,42 @@ export function registerWindowHandlers(getMainWindow: () => BrowserWindow | null
     }
   })
 
-  // CLAUDE.md editor
-  ipcMain.handle('claudemd:read', async (_, projectPath: string) => {
+  // Instruction file editor (CLAUDE.md, GEMINI.md, AGENTS.md, etc.)
+  ipcMain.handle('claudemd:read', async (_, projectPath: string, aiBackend?: AIBackend) => {
     try {
-      // Validate project path to prevent path traversal attacks
       const validatedPath = validateProjectPath(projectPath)
-      const claudeMdPath = join(validatedPath, '.claude', 'CLAUDE.md')
+      const backend: AIBackend = aiBackend || 'claude'
+      const filePath = getInstructionFilePath(validatedPath, backend)
 
-      // Double-check the resolved path stays within the validated project path
-      const resolvedClaudeMdPath = resolve(claudeMdPath)
-      if (!resolvedClaudeMdPath.startsWith(validatedPath)) {
+      const resolvedFilePath = resolve(filePath)
+      if (!resolvedFilePath.startsWith(validatedPath)) {
         return { success: false, error: 'Invalid path: path traversal detected' }
       }
 
-      if (existsSync(resolvedClaudeMdPath)) {
-        const content = readFileSync(resolvedClaudeMdPath, 'utf8')
-        return { success: true, content, exists: true }
+      const relativePath = getInstructionFileRelativePath(backend)
+
+      if (existsSync(resolvedFilePath)) {
+        const content = readFileSync(resolvedFilePath, 'utf8')
+        return { success: true, content, exists: true, relativePath }
       }
-      return { success: true, content: '', exists: false }
+      return { success: true, content: '', exists: false, relativePath }
     } catch (error) {
       return { success: false, error: String(error) }
     }
   })
 
-  ipcMain.handle('claudemd:save', async (_, { projectPath, content }: { projectPath: string; content: string }) => {
+  ipcMain.handle('claudemd:save', async (_, { projectPath, content, aiBackend }: { projectPath: string; content: string; aiBackend?: AIBackend }) => {
     try {
-      // Validate project path to prevent path traversal attacks
       const validatedPath = validateProjectPath(projectPath)
-      const claudeDir = join(validatedPath, '.claude')
-      const claudeMdPath = join(claudeDir, 'CLAUDE.md')
+      const backend: AIBackend = aiBackend || 'claude'
+      const filePath = getInstructionFilePath(validatedPath, backend)
 
-      // Double-check the resolved paths stay within the validated project path
-      const resolvedClaudeDir = resolve(claudeDir)
-      const resolvedClaudeMdPath = resolve(claudeMdPath)
-      if (!resolvedClaudeDir.startsWith(validatedPath) || !resolvedClaudeMdPath.startsWith(validatedPath)) {
+      const resolvedFilePath = resolve(filePath)
+      if (!resolvedFilePath.startsWith(validatedPath)) {
         return { success: false, error: 'Invalid path: path traversal detected' }
       }
 
-      if (!existsSync(resolvedClaudeDir)) {
-        mkdirSync(resolvedClaudeDir, { recursive: true })
-      }
-
-      writeFileSync(resolvedClaudeMdPath, content, 'utf8')
+      writeFileSync(resolvedFilePath, content, 'utf8')
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }

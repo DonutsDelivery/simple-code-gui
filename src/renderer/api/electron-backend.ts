@@ -55,7 +55,14 @@ declare global {
       addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
 
       // TTS
-      ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
+      ttsInstallInstructions: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
+      ttsRemoveInstructions?: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
+
+      // Global instruction injection
+      globalInstructionInject?: (projectPath: string, instructionContent: string, aiBackends?: string[]) => Promise<{ success: boolean; results: Record<string, boolean> }>
+      globalInstructionRemove?: (projectPath: string, aiBackends?: string[]) => Promise<{ success: boolean; results: Record<string, boolean> }>
+      globalInstructionInjectAll?: (projects: Array<{ path: string }>, instructionContent: string, aiBackends?: string[]) => Promise<{ success: boolean; applied: number; failed: number; error?: string }>
+      globalInstructionRemoveAll?: (projects: Array<{ path: string }>, aiBackends?: string[]) => Promise<{ success: boolean; removed: number; failed: number }>
       voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
       xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
       voiceGetSettings?: () => Promise<{ ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number; tadaVoiceSample?: string | null }>
@@ -64,7 +71,6 @@ declare global {
       voiceInstallWhisper?: (model: string) => Promise<{ success: boolean; error?: string }>
       voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number; tadaVoiceSample?: string | null }) => Promise<{ success: boolean }>
       voiceSetVoice?: (voice: string | { voice: string; engine: 'piper' | 'xtts' | 'tada' }) => Promise<{ success: boolean }>
-      ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean }>
       extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
       voiceSpeak: (text: string) => Promise<{ success: boolean; audioData?: string; error?: string }>
       voiceStopSpeaking: () => Promise<{ success: boolean }>
@@ -99,6 +105,7 @@ declare global {
       windowIsMaximized: () => Promise<boolean>
       getPathForFile: (file: File) => string
       readClipboardImage: () => Promise<{ success: boolean; hasImage?: boolean; path?: string; error?: string }>
+      writeClipboardText: (text: string) => Promise<{ success: boolean; error?: string }>
       getVersion: () => Promise<string>
       isDebugMode: () => Promise<boolean>
       refresh: () => Promise<void>
@@ -260,9 +267,9 @@ export class ElectronBackend implements ExtendedApi {
   // TTS (Text-to-Speech)
   // ==========================================================================
 
-  async ttsInstallInstructions(projectPath: string): Promise<{ success: boolean }> {
+  async ttsInstallInstructions(projectPath: string, aiBackend?: string): Promise<{ success: boolean }> {
     this.checkApi()
-    return window.electronAPI!.ttsInstallInstructions(projectPath)
+    return window.electronAPI!.ttsInstallInstructions(projectPath, aiBackend)
   }
 
   async ttsSpeak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }> {
