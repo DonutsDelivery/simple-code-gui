@@ -201,9 +201,11 @@ function setupEventHandlers(
     fitAddon,
     userScrolledUpRef,
     ptyOperations.resizePty,
-    ptyId
+    ptyId,
+    ptyOperations.writePty,
+    options.backend
   )
-  container.addEventListener('wheel', wheelHandler, { passive: false })
+  terminal.attachCustomWheelEventHandler(wheelHandler)
 
   // Scroll tracking — DISABLED the onScroll handler for resetting userScrolledUpRef.
   //
@@ -276,6 +278,11 @@ function setupEventHandlers(
   )
   terminal.onData(dataHandler)
 
+  terminal.onBinary(data => {
+    if (inputSuppressedRef.current) return
+    ptyOperations.writePty(ptyId, data)
+  })
+
   // Key event handler for copy/paste shortcuts
   const keyEventHandler = createKeyEventHandler(
     terminal,
@@ -298,7 +305,7 @@ function setupEventHandlers(
   // Return cleanup function
   return () => {
     disposedRef.current = true
-    container.removeEventListener('wheel', wheelHandler)
+    terminal.attachCustomWheelEventHandler(() => true)
     container.removeEventListener('contextmenu', contextmenuHandler)
     container.removeEventListener('auxclick', auxclickHandler)
     container.removeEventListener('mousedown', mousedownHandler)

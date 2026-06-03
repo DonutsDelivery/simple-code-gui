@@ -11,6 +11,41 @@ import { handlePaste, isTerminalAtBottom, scrollDebug, scrollSnapshot } from '..
 
 type BackendType = 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
 
+function clampCell(value: number, max: number): number {
+  return Math.max(1, Math.min(max, value))
+}
+
+function getWheelCell(terminal: XTerm, event: WheelEvent): { col: number; row: number } {
+  const screen = terminal.element?.querySelector('.xterm-screen') as HTMLElement | null
+  const rect = screen?.getBoundingClientRect()
+  if (!rect || rect.width <= 0 || rect.height <= 0 || terminal.cols <= 0 || terminal.rows <= 0) {
+    return { col: 1, row: 1 }
+  }
+
+  const cellWidth = rect.width / terminal.cols
+  const cellHeight = rect.height / terminal.rows
+  return {
+    col: clampCell(Math.floor((event.clientX - rect.left) / cellWidth) + 1, terminal.cols),
+    row: clampCell(Math.floor((event.clientY - rect.top) / cellHeight) + 1, terminal.rows),
+  }
+}
+
+function getWheelReportCount(event: WheelEvent): number {
+  const delta = Math.abs(event.deltaY)
+  if (delta === 0) return 0
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return Math.min(5, Math.max(1, Math.round(delta)))
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return Math.min(5, Math.max(1, Math.round(delta * 3)))
+  return Math.min(5, Math.max(1, Math.ceil(delta / 40)))
+}
+
+function shouldFallbackToSgrWheel(terminal: XTerm, backend?: BackendType): boolean {
+  return (
+    backend === 'opencode' &&
+    terminal.buffer.active.type === 'alternate' &&
+    terminal.modes.mouseTrackingMode === 'none'
+  )
+}
+
 /**
  * Creates a wheel event handler for terminal zoom and scroll tracking.
  */
@@ -19,8 +54,10 @@ export function createWheelHandler(
   fitAddon: FitAddon,
   userScrolledUpRef: MutableRefObject<boolean>,
   resizePty: (id: string, cols: number, rows: number) => void,
-  ptyId: string
-): (e: WheelEvent) => void {
+  ptyId: string,
+  writePty: (id: string, data: string) => void,
+  backend?: BackendType
+): (e: WheelEvent) => boolean {
   return (e: WheelEvent) => {
     // Ctrl+scroll = zoom font size
     if (e.ctrlKey) {
@@ -38,14 +75,31 @@ export function createWheelHandler(
           resizePty(ptyId, dims.cols, dims.rows)
         }
       }
-      return
+      return false
     }
+
     // Normal scroll tracking
     if (e.deltaY < 0) {
       userScrolledUpRef.current = true
     } else if (e.deltaY > 0 && isTerminalAtBottom(terminal)) {
       userScrolledUpRef.current = false
     }
+
+    // xterm handles mouse wheel reporting when the foreground app enables
+    // mouse tracking. If OpenCode is already in an alternate-screen TUI but
+    // tracking is not active, synthesize SGR wheel reports as a narrow fallback.
+    if (shouldFallbackToSgrWheel(terminal, backend)) {
+      const reportCount = getWheelReportCount(e)
+      if (reportCount === 0) return true
+
+      e.preventDefault()
+      const { col, row } = getWheelCell(terminal, e)
+      const button = e.deltaY < 0 ? 64 : 65
+      writePty(ptyId, Array.from({ length: reportCount }, () => `\x1b[<${button};${col};${row}M`).join(''))
+      return false
+    }
+
+    return true
   }
 }
 
