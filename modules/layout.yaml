@@ -249,6 +249,11 @@ features:
         id: ac-2
         then: the window appears fully visible on a connected display instead of off-screen
         when: the app launches
+      - given: a workspace is open in the primary window
+        id: ac-3
+        then: the workspace moves to a new OS window with its terminals attached to the same running PTYs
+          (no respawn), and closing that window returns the workspace to the primary window
+        when: the user chooses Open in new window on its switcher tab
     tags: []
     created: 2026-06-10T03:19:21.965Z
     notes: []
