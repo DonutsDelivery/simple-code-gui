@@ -186,4 +186,21 @@ features:
     tags: []
     created: 2026-05-05T00:00:00.000Z
     notes: []
+  - _ulid: 01KTQRN97DKGSS8RFJJMRB17P6
+    slugs:
+      - tile-keyboard-shortcuts
+    title: Tile Keyboard Shortcuts
+    type: feature
+    description: "Keyboard control of the tiled layout: split focused tile (Ctrl+Shift+D right,
+      Ctrl+Shift+E down), close active tab (Ctrl+Shift+W), cycle sub-tabs (Ctrl+PgUp/PgDn), move
+      focus between tiles directionally (Ctrl+Alt+Arrows), toggle maximize (Ctrl+Shift+Z), equalize
+      layout (Ctrl+Alt+=). Registered capture-phase so they win over xterm."
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-06-10T03:19:19.533Z
+    notes: []
 notes: []
