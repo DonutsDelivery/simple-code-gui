@@ -205,6 +205,12 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: a tile is focused in the tiled view
+        id: ac-1
+        then: the corresponding layout action occurs and the keystroke is not forwarded to the terminal
+        when: the user presses a tile shortcut (split, close tab, cycle sub-tabs, directional focus,
+          maximize, equalize)
     tags: []
     created: 2026-06-10T03:19:19.533Z
     notes: []
