@@ -183,6 +183,11 @@ features:
         then: the response contains every workspace with its full openTabs/tileTree, allowing the mobile
           client to open any workspace, not just the first
         when: the Android APK calls GET /api/workspace via the mobile server
+      - given: the user has multiple workspaces in the switcher bar
+        id: ac-4
+        then: the switcher order updates with an insertion indicator during the drag, and the new order
+          persists across app restart
+        when: they drag a workspace tab to a new position
     tags: []
     created: 2026-05-05T00:00:00.000Z
     notes: []
