@@ -3,171 +3,177 @@ slugs:
   - layout
 title: Layout & Navigation
 type: module
+description: Tiled and tabbed terminal layout, sidebar navigation, project management UI
 status:
   maturity: draft
   implementation: not_started
-description: Tiled and tabbed terminal layout, sidebar navigation, project management UI
-tags:
-  - ui
 depends_on: []
 implements: []
 relates_to: []
 tests: []
 traits: []
-notes: []
+tags:
+  - ui
 features:
   - _ulid: 01KK67C21DPVGAHNPTREZFH029
     slugs:
       - tiled-layout
     title: Tiled Terminal Layout
     type: feature
-    tags: []
     description: Flexible grid layout where terminals are positioned as tiles using percentage-based
       coordinates. Supports splitting, swapping, and multi-tab tiles on a pannable canvas.
+    status:
+      maturity: draft
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
-    created: 2026-03-08T08:00:13.357Z
     acceptance_criteria:
-      - id: ac-1
-        given: user is in tiled view mode
-        when: a new session is opened
+      - given: user is in tiled view mode
+        id: ac-1
         then: a new tile is added to the layout with percentage-based coordinates and the terminal renders
           inside it
-      - id: ac-2
-        given: multiple tiles exist on the canvas
-        when: a tile is split
+        when: a new session is opened
+      - given: multiple tiles exist on the canvas
+        id: ac-2
         then: the tile divides into two tiles in the specified direction (top/bottom/left/right) each
           getting half the space
-    status:
-      maturity: draft
-      implementation: implemented
+        when: a tile is split
+    tags: []
+    created: 2026-03-08T08:00:13.357Z
+    notes: []
   - _ulid: 01KK67C43QN01EYHYHABV8BBVE
     slugs:
       - tile-drag-drop
     title: Tile Drag & Drop
     type: feature
-    tags: []
     description: Drag projects from sidebar or tabs between tiles. Drop zones support swap,
       split-top/bottom/left/right. Visual preview during drag.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    acceptance_criteria:
+      - given: a tile contains two or more tabs
+        id: ac-1
+        then: the dragged tab is removed from its source tile and becomes its own tile split in that
+          direction; no tab is lost
+        when: the user drags one of its sub-tabs to the edge zone of any tile (including its own) and drops
+    tags: []
     created: 2026-03-08T08:00:15.480Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67C5G8P9DBB3ZC020NS5MQ
     slugs:
       - tile-resizing
     title: Tile Resizing
     type: feature
-    tags: []
     description: Resize tiles by dragging edges. Proportional resizing spreads width/height among
       adjacent tiles. Visual edge highlighting on hover.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:00:16.905Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67C74KF39CXGH08EAA3089
     slugs:
       - canvas-panning
     title: Canvas Panning
     type: feature
-    tags: []
     description: Middle-mouse-button horizontal panning across a virtual canvas wider than the viewport.
       3px threshold before drag starts, suppresses paste during panning.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:00:18.579Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67C9AQPXS2BZXTN88KXCNT
     slugs:
       - sidebar
     title: Sidebar Navigation
     type: feature
-    tags: []
     description: "Project tree with categories, session lists, inline rename, drag-to-reorder, context
       menus. Desktop: collapsible left panel with resize handle. Mobile: drawer overlay with
       hamburger toggle."
+    status:
+      maturity: draft
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:00:20.824Z
-    status:
-      maturity: draft
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67CAKFEEA1S2W21BYEESQA
     slugs:
       - tabbed-view
     title: Tabbed View Mode
     type: feature
-    tags: []
     description: Traditional tab-based terminal switching as alternative to tiled layout. Supports undo
       close tab.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:00:22.127Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KQTHPRWXVY2C4253R9QDYJ2H
     slugs:
       - multi-workspace-persistence
     title: Multi-Workspace Persistence
     type: feature
-    tags: []
     description: The user can have multiple named workspaces (each one a saved set of tabs/tiles) and
       switch between them. Workspaces are restored lazily — only the active one spawns PTYs at
-      startup; inactive ones keep their saved tab/tile data parked until switched into. The
-      complete set of workspaces and their saved contents must survive desktop restart and must
-      be readable via the mobile-server `/api/workspace` endpoint so the Android client can list
-      and open every workspace, not only the previously-active one.
+      startup; inactive ones keep their saved tab/tile data parked until switched into. The complete
+      set of workspaces and their saved contents must survive desktop restart and must be readable
+      via the mobile-server `/api/workspace` endpoint so the Android client can list and open every
+      workspace, not only the previously-active one.
+    status:
+      maturity: draft
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
-    created: 2026-05-05T00:00:00.000Z
     acceptance_criteria:
-      - id: ac-1
-        given: the user has two or more workspaces and only the first has been switched into during the
+      - given: the user has two or more workspaces and only the first has been switched into during the
           current session
+        id: ac-1
+        then: every workspace's saved tabs and tile tree are preserved on disk — unswitched workspaces must
+          not be flushed to empty
         when: the desktop app saves workspace state
-        then: every workspace's saved tabs and tile tree are preserved on disk — unswitched workspaces
-          must not be flushed to empty
-      - id: ac-2
-        given: the desktop app is restarted with multiple workspaces previously persisted
+      - given: the desktop app is restarted with multiple workspaces previously persisted
+        id: ac-2
+        then: every workspace appears in the switcher with its saved tabs intact and switching into any one
+          of them restores its PTYs
         when: the workspace loader reads workspace.json
-        then: every workspace appears in the switcher with its saved tabs intact and switching into any
-          one of them restores its PTYs
-      - id: ac-3
-        given: the desktop has multiple populated workspaces
-        when: the Android APK calls GET /api/workspace via the mobile server
+      - given: the desktop has multiple populated workspaces
+        id: ac-3
         then: the response contains every workspace with its full openTabs/tileTree, allowing the mobile
           client to open any workspace, not just the first
-    status:
-      maturity: draft
-      implementation: implemented
+        when: the Android APK calls GET /api/workspace via the mobile server
+    tags: []
+    created: 2026-05-05T00:00:00.000Z
+    notes: []
+notes: []
