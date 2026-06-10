@@ -64,6 +64,11 @@ features:
         then: the dragged tab is removed from its source tile and becomes its own tile split in that
           direction; no tab is lost
         when: the user drags one of its sub-tabs to the edge zone of any tile (including its own) and drops
+      - given: the user is dragging a sub-tab, tile, or sidebar project
+        id: ac-2
+        then: a new tile is created as a new column (right) or row (bottom) containing the dragged
+          tab/session, with a visible drop-zone preview before the drop
+        when: they drop it on empty canvas space outside all tiles (right of or below the layout)
     tags: []
     created: 2026-03-08T08:00:15.480Z
     notes: []
