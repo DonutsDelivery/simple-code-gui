@@ -43,7 +43,7 @@ export { startNonceCleanup, stopNonceCleanup, createNonce, verifyNonce, getNonce
 export { encryptToken, decryptToken, writeSecureFile } from './encryption.js'
 
 // Path Validation
-export { validatePath, validateProjectPath, validateFilePath, validateDirectoryPath } from './path-validation.js'
+export { validatePath, validateProjectPath, validateFilePath, validateDirectoryPath, validateWithinProjectRoots } from './path-validation.js'
 
 // Combined security config for backwards compatibility
 export const securityConfig = {

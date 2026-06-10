@@ -25,7 +25,14 @@ import {
 
 import { MobileServerConfig, LocalPty, PendingFile, DEFAULT_PORT } from './types'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
-import { log, getRendererPath, getLocalIPs, getTailscaleHostname } from './utils'
+import {
+  issueDeviceToken,
+  isDeviceTokenValid,
+  revokeDevice as revokeDeviceFn,
+  listDevices as listDevicesFn,
+  type PairedDeviceInfo
+} from './device-registry'
+import { log, getRendererPath, getLocalIPs, getTailscaleHostname, tokensEqual } from './utils'
 import {
   setupCorsMiddleware,
   setupStaticMiddleware,
@@ -90,7 +97,7 @@ export class MobileServer {
 
   private setupMiddleware(): void {
     setupCorsMiddleware(this.app)
-    setupStaticMiddleware(this.app, this.rendererPath)
+    setupStaticMiddleware(this.app, this.rendererPath, () => this.token)
     setupJsonMiddleware(this.app)
     setupRateLimitMiddleware(this.app)
     setupAuthMiddleware(this.app, () => this.token)
@@ -109,7 +116,7 @@ export class MobileServer {
     this.app.get('/ws-test', (req: Request, res: Response) => {
       const token = req.query.token as string
       log('WS test request', { providedToken: token?.slice(0, 8), expectedToken: this.token.slice(0, 8), clientIp: getClientIp(req) })
-      if (token === this.token) {
+      if (tokensEqual(token, this.token) || isDeviceTokenValid(token)) {
         res.json({ ok: true, message: 'Token valid, WebSocket should work' })
       } else {
         res.status(403).json({ ok: false, message: 'Invalid token' })
@@ -148,11 +155,23 @@ export class MobileServer {
         })
       }
 
+      // H3: a valid single-use nonce is the pairing moment. If the device
+      // identifies itself, issue it a per-device token (trust-on-first-use) so
+      // it can stop using the shared QR token. Devices that don't send a
+      // deviceId (older clients) keep working with the shared token.
+      let deviceToken: string | undefined
+      const deviceId = req.body?.deviceId
+      if (typeof deviceId === 'string' && deviceId.length > 0) {
+        const deviceName = typeof req.body?.deviceName === 'string' ? req.body.deviceName : ''
+        deviceToken = issueDeviceToken(deviceId, deviceName)
+      }
+
       res.json({
         valid: true,
         fingerprint: getOrCreateFingerprint(),
         certFingerprint: this.certFingerprint,
-        secure: this.useTls
+        secure: this.useTls,
+        ...(deviceToken ? { deviceToken } : {})
       })
     })
 
@@ -160,6 +179,7 @@ export class MobileServer {
     setupTerminalRoutes(
       this.app,
       () => this.ptyManager,
+      () => this.sessionStore,
       () => this.terminalSubscriptions,
       (ptyId, data) => this.broadcastTerminalData(ptyId, data)
     )
@@ -173,12 +193,14 @@ export class MobileServer {
       () => this.pendingFiles,
       (filePath, message) => this.sendFileToMobile(filePath, message),
       (fileId) => this.removePendingFile(fileId),
-      () => this.connectedClients.size
+      () => this.connectedClients.size,
+      () => this.sessionStore
     )
 
     setupPtyRoutes(
       this.app,
       () => this.ptyManager,
+      () => this.sessionStore,
       () => this.localPtys,
       () => this.ptyStreams,
       () => this.ptyDataBuffer,
@@ -200,7 +222,8 @@ export class MobileServer {
       getPtyStreams: () => this.ptyStreams,
       getPtyDataBuffer: () => this.ptyDataBuffer,
       getConnectedClients: () => this.connectedClients,
-      getPendingFiles: () => this.pendingFiles
+      getPendingFiles: () => this.pendingFiles,
+      getLocalPtys: () => this.localPtys
     })
   }
 
@@ -232,7 +255,42 @@ export class MobileServer {
   // Token management
   regenerateToken(): string {
     this.token = regenerateTokenFn()
+    // H3: a real revoke must drop live sockets, not just reject new ones.
+    // Rotating the shared token invalidates any socket still holding the old
+    // one; per-device-token sockets stay valid and are left connected.
+    this.closeSockets((token) => !tokensEqual(token, this.token) && !isDeviceTokenValid(token))
     return this.token
+  }
+
+  // Per-device revoke (H3): mark the device revoked and forcibly close any of
+  // its live WebSocket sessions so a removed phone stops streaming immediately.
+  revokeDevice(deviceId: string): { revoked: number } {
+    const tokens = new Set(revokeDeviceFn(deviceId))
+    if (tokens.size > 0) {
+      this.closeSockets((token) => tokens.has(token))
+    }
+    return { revoked: tokens.size }
+  }
+
+  listDevices(): PairedDeviceInfo[] {
+    return listDevicesFn()
+  }
+
+  // Close every live socket whose auth token matches the predicate. Covers both
+  // the main /ws clients and per-PTY stream sockets.
+  private closeSockets(shouldClose: (token: string) => boolean): void {
+    const closeIfMatch = (ws: WebSocket): void => {
+      const token = (ws as WebSocket & { __authToken?: string }).__authToken || ''
+      if (shouldClose(token)) {
+        try {
+          ws.close(1008, 'Access revoked')
+        } catch {
+          try { ws.terminate() } catch { /* ignore */ }
+        }
+      }
+    }
+    this.connectedClients.forEach(closeIfMatch)
+    this.ptyStreams.forEach((sockets) => sockets.forEach(closeIfMatch))
   }
 
   // Connection info for QR code

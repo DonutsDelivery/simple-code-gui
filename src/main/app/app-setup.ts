@@ -25,6 +25,12 @@ export function setupAppConfig(): void {
 }
 
 export function setupSecurityHeaders(): void {
+  // M7: in packaged builds drop full 'unsafe-eval' (a key XSS escalation primitive)
+  // and keep only 'wasm-unsafe-eval', which xterm/WASM need. Dev (Vite HMR) still
+  // requires full eval, so only relax it for the unpackaged dev renderer.
+  const scriptSrc = app.isPackaged
+    ? "script-src 'self' 'wasm-unsafe-eval' blob:; "
+    : "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; "
   // Enable Cross-Origin Isolation for SharedArrayBuffer and configure CSP
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -34,7 +40,7 @@ export function setupSecurityHeaders(): void {
         'Cross-Origin-Embedder-Policy': ['require-corp'],
         'Content-Security-Policy': [
           "default-src 'self'; " +
-          "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; " +
+          scriptSrc +
           "worker-src 'self' blob:; " +
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
           "font-src 'self' https://fonts.gstatic.com; " +

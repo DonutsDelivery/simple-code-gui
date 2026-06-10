@@ -6,19 +6,21 @@ import { Express, Request, Response } from 'express'
 import { basename, resolve } from 'path'
 import { existsSync, statSync, readdirSync, createReadStream } from 'fs'
 import {
-  validateProjectPath,
   validateFilePath,
-  validateDirectoryPath
+  validateDirectoryPath,
+  validateWithinProjectRoots
 } from '../../mobile-security'
-import { log } from '../utils'
+import { log, getProjectRoots } from '../utils'
 import { PendingFile } from '../types'
+import type { SessionStore } from '../../session-store'
 
 export function setupFilesRoutes(
   app: Express,
   getPendingFiles: () => Map<string, PendingFile>,
   sendFileToMobile: (filePath: string, message?: string) => { success: boolean; fileId?: string; error?: string },
   removePendingFile: (fileId: string) => boolean,
-  getConnectedClientCount: () => number
+  getConnectedClientCount: () => number,
+  getSessionStore: () => SessionStore | null
 ): void {
   // List directory contents
   app.get('/api/files/list', async (req: Request, res: Response) => {
@@ -32,7 +34,13 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'basePath query parameter is required (project root)' })
       }
 
-      const baseValidation = validateProjectPath(basePath)
+      // M1: the client-supplied basePath must itself be a registered project
+      // root (or under one) — not just any existing directory.
+      const baseValidation = validateWithinProjectRoots(
+        basePath,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true, mustBeDirectory: true }
+      )
       if (!baseValidation.valid) {
         return res.status(400).json({ error: `Invalid basePath: ${baseValidation.error}` })
       }
@@ -72,7 +80,7 @@ export function setupFilesRoutes(
       res.json({ path: safePath, basePath: safeBasePath, files })
     } catch (error: any) {
       log('Files list error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -88,7 +96,13 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'basePath query parameter is required (project root)' })
       }
 
-      const baseValidation = validateProjectPath(basePath)
+      // M1: the client-supplied basePath must itself be a registered project
+      // root (or under one) — not just any existing directory.
+      const baseValidation = validateWithinProjectRoots(
+        basePath,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true, mustBeDirectory: true }
+      )
       if (!baseValidation.valid) {
         return res.status(400).json({ error: `Invalid basePath: ${baseValidation.error}` })
       }
@@ -118,7 +132,7 @@ export function setupFilesRoutes(
       })
     } catch (error: any) {
       log('File download error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -130,12 +144,14 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'path query parameter is required' })
       }
 
-      // Validate path against blocked system directories and traversal attacks
-      const pathValidation = validateProjectPath(filePath)
-      // validateProjectPath requires a directory; fall back to file validation
-      const validation = pathValidation.valid
-        ? pathValidation
-        : validateFilePath(filePath)
+      // M1: only stat paths inside a registered project (file or directory).
+      // Previously this validated against the system blocklist only, allowing a
+      // LAN token-holder to stat any readable file outside blocked system roots.
+      const validation = validateWithinProjectRoots(
+        filePath,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true }
+      )
       if (!validation.valid) {
         return res.status(400).json({ error: validation.error })
       }
@@ -153,7 +169,7 @@ export function setupFilesRoutes(
       })
     } catch (error: any) {
       log('File info error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -165,8 +181,13 @@ export function setupFilesRoutes(
         return res.status(400).json({ error: 'path is required in request body' })
       }
 
-      // Validate path before passing to sendFileToMobile
-      const pathValidation = validateFilePath(filePath)
+      // M1: only send files that live inside a registered project. Previously
+      // any readable file outside blocked system roots could be exfiltrated.
+      const pathValidation = validateWithinProjectRoots(
+        filePath,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true, mustBeDirectory: false }
+      )
       if (!pathValidation.valid) {
         return res.status(400).json({ error: pathValidation.error })
       }
@@ -183,7 +204,7 @@ export function setupFilesRoutes(
       }
     } catch (error: any) {
       log('File send error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -202,7 +223,7 @@ export function setupFilesRoutes(
       res.json({ files })
     } catch (error: any) {
       log('Pending files error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -239,7 +260,7 @@ export function setupFilesRoutes(
       })
     } catch (error: any) {
       log('Pending file download error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -251,7 +272,7 @@ export function setupFilesRoutes(
       res.json({ success: removed })
     } catch (error: any) {
       log('Pending file delete error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 }

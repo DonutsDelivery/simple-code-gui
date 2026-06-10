@@ -4,8 +4,19 @@
 
 import { WebSocket, WebSocketServer } from 'ws'
 import { Server } from 'http'
-import { log } from './utils'
-import { PendingFile } from './types'
+import { isDeviceTokenValid } from './device-registry'
+import { log, tokensEqual } from './utils'
+import { PendingFile, LocalPty } from './types'
+
+// L3: ceiling on simultaneous WebSocket connections (main + PTY streams) so a
+// client can't exhaust sockets/file descriptors by opening connections in a loop.
+const MAX_WS_CONNECTIONS = 64
+
+function totalWsConnections(deps: WebSocketManagerDeps): number {
+  let ptyStreamSockets = 0
+  for (const set of deps.getPtyStreams().values()) ptyStreamSockets += set.size
+  return deps.getConnectedClients().size + ptyStreamSockets
+}
 
 export interface WebSocketManagerDeps {
   getToken: () => string
@@ -16,6 +27,9 @@ export interface WebSocketManagerDeps {
   getPtyDataBuffer: () => Map<string, string[]>
   getConnectedClients: () => Set<WebSocket>
   getPendingFiles: () => Map<string, PendingFile>
+  // Optional: PTYs spawned by the mobile-server itself (vs. attached-to
+  // desktop-owned PTYs).  Used to gate phone-driven resize.
+  getLocalPtys?: () => Map<string, LocalPty>
 }
 
 export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebSocketServer {
@@ -34,7 +48,7 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
     const token = tokenFromProtocol || tokenFromQuery
 
     log('WebSocket upgrade request', {
-      url: req.url,
+      // M3: never log the token query string — req.url contains ?token=<secret>
       pathname,
       hasProtocolToken: !!tokenFromProtocol,
       hasQueryToken: !!tokenFromQuery,
@@ -45,10 +59,19 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
       }
     })
 
-    // Validate token for all WebSocket connections
-    if (token !== deps.getToken()) {
+    // Validate token for all WebSocket connections. Accept the legacy shared
+    // token (back-compat) or a valid per-device token (H3).
+    if (!token || (!tokensEqual(token, deps.getToken()) && !isDeviceTokenValid(token))) {
       log('WebSocket auth failed', { providedToken: token?.slice(0, 8) })
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+      socket.destroy()
+      return
+    }
+
+    // L3: reject once the global connection ceiling is reached.
+    if (totalWsConnections(deps) >= MAX_WS_CONNECTIONS) {
+      log('WebSocket rejected: connection cap reached', { active: totalWsConnections(deps) })
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n')
       socket.destroy()
       return
     }
@@ -57,13 +80,15 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
     const ptyStreamMatch = pathname.match(/^\/api\/pty\/([^/]+)\/stream$/)
     if (ptyStreamMatch) {
       const ptyId = ptyStreamMatch[1]
-      handlePtyStreamUpgrade(req, socket, head, ptyId, deps)
+      handlePtyStreamUpgrade(req, socket, head, ptyId, token, deps)
       return
     }
 
     // Handle main WebSocket path: /ws
     if (pathname === '/ws') {
       wss.handleUpgrade(req, socket, head, (ws) => {
+        // Tag the socket with its auth token so per-device revoke can target it.
+        ;(ws as WebSocket & { __authToken?: string }).__authToken = token
         wss.emit('connection', ws, req)
       })
       return
@@ -116,6 +141,7 @@ function handlePtyStreamUpgrade(
   socket: any,
   head: any,
   ptyId: string,
+  authToken: string,
   deps: WebSocketManagerDeps
 ): void {
   const ptyManager = deps.getPtyManager()
@@ -129,6 +155,8 @@ function handlePtyStreamUpgrade(
   const streamWss = new WebSocketServer({ noServer: true })
 
   streamWss.handleUpgrade(req, socket, head, (ws) => {
+    // Tag the socket with its auth token so per-device revoke can target it.
+    ;(ws as WebSocket & { __authToken?: string }).__authToken = authToken
     log('PTY stream connected', { ptyId })
 
     const ptyStreams = deps.getPtyStreams()
@@ -139,8 +167,44 @@ function handlePtyStreamUpgrade(
 
     ws.send(JSON.stringify({ type: 'connected', ptyId }))
 
-    // Flush any buffered data
+    // Replay buffered raw bytes so a late-attaching client (e.g. phone
+    // attaching to a desktop-owned PTY) reconstructs the current screen.
+    // The pty-manager replay buffer captures every byte since spawn (capped),
+    // unlike the legacy ptyDataBuffer which only stored data while no
+    // subscriber was connected.
+    const replayBytes = ptyManager.getReplayBytes ? ptyManager.getReplayBytes(ptyId) : null
+    if (replayBytes && replayBytes.length > 0) {
+      ws.send(JSON.stringify({ type: 'data', data: replayBytes }))
+    }
+    // Also flush any legacy buffered data (covers PTYs spawned before the
+    // pty-manager replay buffer was added or any other edge case).
     flushPtyBuffer(ptyId, ws, deps.getPtyDataBuffer())
+
+    // Live forwarding via additive listener — does not clobber the primary
+    // dataCallback (which is owned by whoever spawned the PTY: desktop
+    // renderer or the mobile-server spawn route).
+    const disposeData = ptyManager.addDataListener
+      ? ptyManager.addDataListener(ptyId, (data: string) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'data', data }))
+          }
+        })
+      : (() => {})
+    const disposeExit = ptyManager.addExitListener
+      ? ptyManager.addExitListener(ptyId, (code: number) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'exit', code }))
+            ws.close(1000, 'PTY exited')
+          }
+        })
+      : (() => {})
+
+    // Resize gating: only honor phone-driven resize if this PTY was
+    // spawned by the mobile server.  A desktop-owned PTY is sized to the
+    // desktop's xterm; mutating its dimensions from the phone would
+    // garble the desktop display and trigger Ink-backend re-render storms.
+    const localPtys = deps.getLocalPtys ? deps.getLocalPtys() : null
+    const isMobileOwned = (): boolean => !!(localPtys && localPtys.has(ptyId))
 
     ws.on('message', (message: Buffer) => {
       try {
@@ -154,7 +218,7 @@ function handlePtyStreamUpgrade(
             break
 
           case 'resize':
-            if (msg.cols && msg.rows && ptyManager) {
+            if (msg.cols && msg.rows && ptyManager && isMobileOwned()) {
               ptyManager.resize(ptyId, msg.cols, msg.rows)
             }
             break
@@ -173,6 +237,8 @@ function handlePtyStreamUpgrade(
 
     ws.on('close', () => {
       log('PTY stream disconnected', { ptyId })
+      disposeData()
+      disposeExit()
       ptyStreams.get(ptyId)?.delete(ws)
       if (ptyStreams.get(ptyId)?.size === 0) {
         ptyStreams.delete(ptyId)
@@ -181,6 +247,8 @@ function handlePtyStreamUpgrade(
 
     ws.on('error', (err) => {
       log('PTY stream error', { error: String(err), ptyId })
+      disposeData()
+      disposeExit()
       ptyStreams.get(ptyId)?.delete(ws)
     })
   })

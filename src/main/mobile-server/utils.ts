@@ -7,6 +7,20 @@ import { app } from 'electron'
 import { join, resolve } from 'path'
 import { existsSync } from 'fs'
 import { networkInterfaces } from 'os'
+import { timingSafeEqual } from 'crypto'
+
+/**
+ * Constant-time comparison of two secret strings (M4). Avoids leaking how many
+ * leading characters of a guessed token match via response timing. Tokens here
+ * are fixed-length hex, so the early length check leaks nothing useful.
+ */
+export function tokensEqual(a?: string, b?: string): boolean {
+  if (!a || !b) return false
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
 
 export function log(message: string, data?: any): void {
   const timestamp = new Date().toISOString()
@@ -16,6 +30,24 @@ export function log(message: string, data?: any): void {
   const logPath = join(app.getPath('userData'), 'mobile-server.log')
   appendFileSync(logPath, logLine)
   console.log('[MobileServer]', message, data || '')
+}
+
+/**
+ * The server-side allowlist of directories a LAN/mobile client is permitted to
+ * spawn a backend in or read files from: the roots of the user's registered
+ * workspace projects. Returns [] when no store / no projects, which makes the
+ * project-scoped path checks fail closed.
+ */
+export function getProjectRoots(sessionStore: any): string[] {
+  try {
+    const projects = sessionStore?.getWorkspace?.()?.projects
+    if (!Array.isArray(projects)) return []
+    return projects
+      .map((p: any) => p?.path)
+      .filter((p: any): p is string => typeof p === 'string' && p.length > 0)
+  } catch {
+    return []
+  }
 }
 
 export function getRendererPath(): string {

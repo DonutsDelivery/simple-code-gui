@@ -70,14 +70,18 @@ export function getClientIp(req: {
   connection?: { remoteAddress?: string }
   headers?: Record<string, string | string[] | undefined>
 }): string {
-  // Check X-Forwarded-For header (should only trust on localhost)
-  const forwarded = req.headers?.['x-forwarded-for']
-  if (forwarded) {
-    const forwardedIp = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim()
-    // Only trust forwarded header if request comes from localhost
-    const directIp = req.ip || req.connection?.remoteAddress || ''
-    if (classifyIp(directIp) === 'localhost') {
-      return forwardedIp
+  // M10: X-Forwarded-For is attacker-controllable and must NOT influence access
+  // classification unless the operator explicitly runs behind a trusted reverse
+  // proxy (CT_TRUST_PROXY=1). Otherwise a loopback-bound process could forge an
+  // XFF to masquerade as localhost and gain admin access. Default: socket address.
+  if (process.env.CT_TRUST_PROXY === '1') {
+    const forwarded = req.headers?.['x-forwarded-for']
+    if (forwarded) {
+      const forwardedIp = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim()
+      const directIp = req.ip || req.connection?.remoteAddress || ''
+      if (classifyIp(directIp) === 'localhost') {
+        return forwardedIp
+      }
     }
   }
 

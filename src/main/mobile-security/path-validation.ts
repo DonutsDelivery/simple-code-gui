@@ -6,7 +6,7 @@
  */
 
 import { existsSync, statSync } from 'fs'
-import { resolve, isAbsolute, normalize } from 'path'
+import { resolve, isAbsolute, normalize, sep } from 'path'
 import { homedir } from 'os'
 import type { PathValidationResult, PathValidationOptions } from './types.js'
 
@@ -162,4 +162,48 @@ export function validateDirectoryPath(path: string, allowedBasePaths?: string[])
     mustBeDirectory: true,
     allowedBasePaths
   })
+}
+
+/**
+ * Authorize a path against the server-side allowlist of registered project
+ * roots. The path must resolve to one of the roots or a descendant of one.
+ *
+ * This is the gate that stops a token-authenticated LAN client from spawning a
+ * backend in — or reading files from — an arbitrary directory outside the
+ * user's registered projects (H2/M1). It is boundary-safe: a root of
+ * `/home/u/proj` authorizes `/home/u/proj` and `/home/u/proj/sub`, but NOT the
+ * sibling `/home/u/proj-evil` (a plain `startsWith` would wrongly allow it).
+ *
+ * Fails closed: with no registered projects, nothing is authorized.
+ */
+export function validateWithinProjectRoots(
+  inputPath: string,
+  projectRoots: string[],
+  options: PathValidationOptions = {}
+): PathValidationResult {
+  if (!projectRoots || projectRoots.length === 0) {
+    return { valid: false, error: 'Path is not within a registered project' }
+  }
+
+  // Run the standard checks first (traversal, null bytes, blocked system dirs,
+  // existence / type), then enforce the project-root boundary on the result.
+  const base = validatePath(inputPath, options)
+  if (!base.valid) return base
+  const target = base.normalizedPath!
+
+  const authorized = projectRoots.some(root => {
+    if (!root || typeof root !== 'string') return false
+    let normRoot: string
+    try {
+      normRoot = normalize(resolve(root))
+    } catch {
+      return false
+    }
+    return target === normRoot || target.startsWith(normRoot + sep)
+  })
+
+  if (!authorized) {
+    return { valid: false, error: 'Path is not within a registered project' }
+  }
+  return base
 }

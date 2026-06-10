@@ -4,19 +4,44 @@
 
 import { Express, Request, Response } from 'express'
 import { WebSocket } from 'ws'
-import { validateProjectPath } from '../../mobile-security'
-import { log } from '../utils'
+import { validateWithinProjectRoots } from '../../mobile-security'
+import { log, getProjectRoots } from '../utils'
 import { LocalPty } from '../types'
+import type { SessionStore } from '../../session-store'
+import { resolveMobileSpawnSettings } from './spawn-settings'
+
+// L3: cap how many backends a mobile client can spawn so a runaway/abusive
+// client can't exhaust host resources by spawning unbounded PTY processes.
+const MAX_MOBILE_PTYS = 16
 
 export function setupPtyRoutes(
   app: Express,
   getPtyManager: () => any,
+  getSessionStore: () => SessionStore | null,
   getLocalPtys: () => Map<string, LocalPty>,
   getPtyStreams: () => Map<string, Set<WebSocket>>,
   getPtyDataBuffer: () => Map<string, string[]>,
   broadcastPtyData: (ptyId: string, data: string) => void,
   broadcastPtyExit: (ptyId: string, code: number) => void
 ): void {
+  // List all active PTYs (any owner: desktop renderer or mobile-spawned).
+  // Mobile clients call this before spawning so they can attach to a
+  // matching live PTY instead of spawning a parallel `--resume` process,
+  // which would branch the conversation.
+  app.get('/api/pty/list', (_req: Request, res: Response) => {
+    try {
+      const ptyManager = getPtyManager()
+      if (!ptyManager) {
+        return res.status(500).json({ error: 'PTY manager not available' })
+      }
+      const sessions = ptyManager.listSessions()
+      res.json({ ptys: sessions })
+    } catch (error) {
+      log('PTY list error', { error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
   // Spawn a new PTY
   app.post('/api/pty/spawn', async (req: Request, res: Response) => {
     try {
@@ -26,7 +51,14 @@ export function setupPtyRoutes(
         return res.status(400).json({ error: 'projectPath is required' })
       }
 
-      const pathValidation = validateProjectPath(projectPath)
+      // H2: constrain the spawn cwd to a registered workspace project (or a
+      // subdirectory of one). A LAN token-holder must not be able to start a
+      // backend in an arbitrary directory.
+      const pathValidation = validateWithinProjectRoots(
+        projectPath,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true, mustBeDirectory: true }
+      )
       if (!pathValidation.valid) {
         return res.status(400).json({ error: pathValidation.error })
       }
@@ -37,15 +69,35 @@ export function setupPtyRoutes(
         return res.status(500).json({ error: 'PTY manager not available' })
       }
 
-      log('PTY spawn request', { projectPath: safeProjectPath, sessionId, model, backend })
+      // L3: enforce the mobile-spawned PTY ceiling.
+      if (getLocalPtys().size >= MAX_MOBILE_PTYS) {
+        log('PTY spawn rejected: cap reached', { active: getLocalPtys().size })
+        return res.status(429).json({ error: 'Too many active sessions. Close one before starting another.' })
+      }
+
+      const spawnSettings = resolveMobileSpawnSettings(
+        getSessionStore(),
+        safeProjectPath,
+        backend,
+        model
+      )
+
+      log('PTY spawn request', {
+        projectPath: safeProjectPath,
+        sessionId,
+        model: spawnSettings.model,
+        backend: spawnSettings.backend,
+        permissionMode: spawnSettings.permissionMode,
+        autoAcceptTools: spawnSettings.autoAcceptTools
+      })
 
       const ptyId = ptyManager.spawn(
         safeProjectPath,
         sessionId,
-        undefined, // autoAcceptTools
-        undefined, // permissionMode
-        model,
-        backend
+        spawnSettings.autoAcceptTools,
+        spawnSettings.permissionMode,
+        spawnSettings.model,
+        spawnSettings.backend
       )
 
       // Track this PTY for cleanup
@@ -75,7 +127,7 @@ export function setupPtyRoutes(
       res.json({ ptyId })
     } catch (error) {
       log('PTY spawn error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -103,7 +155,7 @@ export function setupPtyRoutes(
       res.json({ success: true })
     } catch (error) {
       log('PTY write error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -135,7 +187,7 @@ export function setupPtyRoutes(
       res.json({ success: true })
     } catch (error) {
       log('PTY resize error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -171,7 +223,7 @@ export function setupPtyRoutes(
       res.json({ success: true })
     } catch (error) {
       log('PTY kill error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 }

@@ -4,22 +4,58 @@
 
 import { Express, Request, Response } from 'express'
 import { WebSocket } from 'ws'
+import type { SessionStore } from '../../session-store'
+import { resolveMobileSpawnSettings } from './spawn-settings'
+import { validateWithinProjectRoots } from '../../mobile-security'
+import { getProjectRoots } from '../utils'
 
 export function setupTerminalRoutes(
   app: Express,
   getPtyManager: () => any,
+  getSessionStore: () => SessionStore | null,
   getTerminalSubscriptions: () => Map<string, Set<WebSocket>>,
   broadcastTerminalData: (ptyId: string, data: string) => void
 ): void {
   app.post('/api/terminal/create', async (req: Request, res: Response) => {
     try {
-      const { cwd, backend = 'claude' } = req.body
+      const { cwd, projectPath, sessionId, model, backend } = req.body
+      const spawnCwd = projectPath || cwd
+      if (!spawnCwd || typeof spawnCwd !== 'string') {
+        return res.status(400).json({ error: 'projectPath is required' })
+      }
+
       const ptyManager = getPtyManager()
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
 
-      const ptyId = await ptyManager.spawn(cwd, backend)
+      // H2: constrain the spawn cwd to a registered workspace project (or a
+      // subdirectory of one) — same gate as /api/pty/spawn.
+      const pathValidation = validateWithinProjectRoots(
+        spawnCwd,
+        getProjectRoots(getSessionStore()),
+        { mustExist: true, mustBeDirectory: true }
+      )
+      if (!pathValidation.valid) {
+        return res.status(400).json({ error: pathValidation.error })
+      }
+      const safeSpawnCwd = pathValidation.normalizedPath!
+
+      const spawnSettings = resolveMobileSpawnSettings(
+        getSessionStore(),
+        safeSpawnCwd,
+        backend,
+        model
+      )
+
+      const ptyId = await ptyManager.spawn(
+        safeSpawnCwd,
+        sessionId,
+        spawnSettings.autoAcceptTools,
+        spawnSettings.permissionMode,
+        spawnSettings.model,
+        spawnSettings.backend
+      )
 
       // Set up data forwarding to WebSocket subscribers
       ptyManager.onData(ptyId, (data: string) => {
@@ -28,7 +64,7 @@ export function setupTerminalRoutes(
 
       res.json({ success: true, ptyId })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -43,7 +79,7 @@ export function setupTerminalRoutes(
       ptyManager.write(ptyId, data)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -58,7 +94,7 @@ export function setupTerminalRoutes(
       ptyManager.resize(ptyId, cols, rows)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -73,7 +109,7 @@ export function setupTerminalRoutes(
       getTerminalSubscriptions().delete(ptyId)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 }

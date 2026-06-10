@@ -23,7 +23,7 @@ export function setupWorkspaceRoutes(
       const workspace = sessionStore.getWorkspace()
       res.json({ success: true, projectCount: workspace.projects?.length || 0 })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -36,7 +36,7 @@ export function setupWorkspaceRoutes(
       const workspace = sessionStore.getWorkspace()
       res.json(workspace)
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -60,7 +60,7 @@ export function setupWorkspaceRoutes(
       sessionStore.saveWorkspace(req.body)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -89,7 +89,7 @@ export function setupWorkspaceRoutes(
       sessionStore.saveWorkspace(workspace)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -103,7 +103,7 @@ export function setupWorkspaceRoutes(
       const settings = sessionStore.getSettings()
       res.json(settings)
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -116,7 +116,7 @@ export function setupWorkspaceRoutes(
       sessionStore.saveSettings(req.body)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -129,7 +129,7 @@ export function setupWorkspaceRoutes(
       sessionStore.saveSettings(req.body)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -137,7 +137,7 @@ export function setupWorkspaceRoutes(
   app.get('/api/sessions', async (req: Request, res: Response) => {
     try {
       const projectPath = req.query.path as string
-      const backend = (req.query.backend as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') || 'claude'
+      const backend = (req.query.backend as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') || 'claude'
       if (!projectPath) {
         return res.status(400).json({ error: 'Missing path' })
       }
@@ -152,7 +152,7 @@ export function setupWorkspaceRoutes(
       res.json({ sessions })
     } catch (error: any) {
       log('Sessions error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -177,7 +177,7 @@ export function setupWorkspaceRoutes(
       res.json({ path: safeProjectPath, name })
     } catch (error) {
       log('Project add error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 }

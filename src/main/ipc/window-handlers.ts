@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, clipboard } from 'electron'
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { writeFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, readdirSync, realpathSync } from 'fs'
 import { join, resolve } from 'path'
 import { tmpdir, homedir } from 'os'
 import { isWindows } from '../platform'
@@ -24,17 +24,66 @@ function validateProjectPath(projectPath: string): string {
     throw new Error('Invalid project path: must be within home directory or temp directories')
   }
 
-  // Verify that the resolved path doesn't escape via symlink traversal
-  // by checking that joining with a subpath stays within the base
-  const testPath = resolve(resolved, '.claude')
-  if (!testPath.startsWith(resolved)) {
-    throw new Error('Invalid project path: path traversal detected')
+  // L5: resolve symlinks for real. The previous check (resolve(resolved,'.claude')
+  // startsWith resolved) was a no-op — string resolve never escapes. Use the OS to
+  // canonicalize the real path and re-verify containment, so a symlink inside the
+  // allowed roots can't point the path at /etc, another user's home, etc.
+  const allowedRoot = (p: string): boolean =>
+    p.startsWith(home) || p.startsWith('/tmp') || p.startsWith('/var/tmp')
+  if (existsSync(resolved)) {
+    let realResolved: string
+    try {
+      realResolved = realpathSync(resolved)
+    } catch {
+      throw new Error('Invalid project path: cannot resolve real path')
+    }
+    if (!allowedRoot(realResolved)) {
+      throw new Error('Invalid project path: symlink escapes allowed directories')
+    }
+    return realResolved
   }
 
   return resolved
 }
 
+// Temp PNG files created when pasting clipboard images into the terminal.
+// We track them so they can be removed on quit instead of leaking into /tmp.
+const CLIPBOARD_TEMP_RE = /^clipboard-\d+\.png$/
+const clipboardTempFiles = new Set<string>()
+
+/** Delete all clipboard temp files this session created. Call on app quit. */
+export function cleanupClipboardTempFiles() {
+  for (const filepath of clipboardTempFiles) {
+    try {
+      if (existsSync(filepath)) unlinkSync(filepath)
+    } catch {
+      // best-effort cleanup
+    }
+  }
+  clipboardTempFiles.clear()
+}
+
+/** Remove leftover clipboard temp files from prior sessions (e.g. after a crash). */
+function sweepStaleClipboardTempFiles() {
+  try {
+    const dir = tmpdir()
+    for (const name of readdirSync(dir)) {
+      if (CLIPBOARD_TEMP_RE.test(name)) {
+        try {
+          unlinkSync(join(dir, name))
+        } catch {
+          // best-effort cleanup
+        }
+      }
+    }
+  } catch {
+    // best-effort cleanup
+  }
+}
+
 export function registerWindowHandlers(getMainWindow: () => BrowserWindow | null) {
+  sweepStaleClipboardTempFiles()
+
   ipcMain.handle('window:minimize', () => {
     getMainWindow()?.minimize()
   })
@@ -118,6 +167,7 @@ export function registerWindowHandlers(getMainWindow: () => BrowserWindow | null
       const filepath = join(tmpdir(), filename)
       const pngBuffer = image.toPNG()
       writeFileSync(filepath, pngBuffer)
+      clipboardTempFiles.add(filepath)
 
       return { success: true, hasImage: true, path: filepath }
     } catch (e: any) {

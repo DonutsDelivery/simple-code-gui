@@ -1,6 +1,45 @@
 import { ipcMain } from 'electron'
 import { extensionManager, Extension } from '../extension-manager'
 
+/**
+ * M12: SSRF guard for fetching remote extension manifests. Custom URLs are a
+ * user feature, so we allow any *public* https host but reject the targets an
+ * SSRF actually wants: non-https schemes, localhost, and private/loopback/
+ * link-local IP literals (incl. the cloud metadata 169.254.169.254). DNS names
+ * that resolve to internal IPs (rebinding) remain a documented residual — full
+ * coverage needs resolve-then-pin, out of scope for this pass.
+ */
+function assertSafePublicUrl(raw: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error('Invalid URL')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Only https:// extension URLs are allowed')
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '0.0.0.0' || host === '::1' || host === '[::1]') {
+    throw new Error('Refusing to fetch from a loopback/local address')
+  }
+  // IPv4 literal in a private/loopback/link-local range
+  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (m) {
+    const [a, b] = [parseInt(m[1], 10), parseInt(m[2], 10)]
+    const isPrivate =
+      a === 10 ||
+      a === 127 ||
+      (a === 192 && b === 168) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 169 && b === 254) ||      // link-local + cloud metadata
+      (a === 100 && b >= 64 && b <= 127) // CGNAT
+    if (isPrivate) {
+      throw new Error('Refusing to fetch from a private/internal address')
+    }
+  }
+}
+
 export function registerExtensionHandlers() {
   // Registry
   ipcMain.handle('extensions:fetchRegistry', async (_, forceRefresh?: boolean) => {
@@ -13,6 +52,7 @@ export function registerExtensionHandlers() {
 
   ipcMain.handle('extensions:fetchFromUrl', async (_, url: string) => {
     try {
+      assertSafePublicUrl(url)
       return await extensionManager.fetchFromUrl(url)
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }
@@ -113,6 +153,7 @@ export function registerExtensionHandlers() {
   // Custom URLs
   ipcMain.handle('extensions:addCustomUrl', async (_, url: string) => {
     try {
+      assertSafePublicUrl(url)
       extensionManager.addCustomUrl(url)
       return { success: true }
     } catch (e) {

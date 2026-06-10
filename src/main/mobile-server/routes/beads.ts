@@ -43,7 +43,7 @@ export function setupBeadsRoutes(app: Express): void {
       res.json({ installed: true, initialized: existsSync(beadsDir) })
     } catch (error) {
       log('Beads check error', { error: String(error) })
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -114,7 +114,7 @@ export function setupBeadsRoutes(app: Express): void {
       res.json(JSON.parse(stdout))
     } catch (error: any) {
       log('Beads list error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -138,7 +138,7 @@ export function setupBeadsRoutes(app: Express): void {
       res.json(JSON.parse(stdout))
     } catch (error: any) {
       log('Beads show error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -173,7 +173,7 @@ export function setupBeadsRoutes(app: Express): void {
       res.json(JSON.parse(stdout))
     } catch (error: any) {
       log('Beads create error', { error: String(error) })
-      res.status(500).json({ error: error.message || String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 

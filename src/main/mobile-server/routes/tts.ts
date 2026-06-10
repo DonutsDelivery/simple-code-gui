@@ -30,7 +30,7 @@ export function setupTtsRoutes(
         res.status(500).json({ error: result.error || 'TTS failed' })
       }
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -56,7 +56,7 @@ export function setupTtsRoutes(
         res.status(500).json({ error: result.error || 'TTS failed' })
       }
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -69,7 +69,7 @@ export function setupTtsRoutes(
       voiceManager.stopSpeaking()
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -87,7 +87,7 @@ export function setupTtsRoutes(
         currentEngine: settings.ttsEngine
       })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 
@@ -103,7 +103,7 @@ export function setupTtsRoutes(
       if (speed) voiceManager.setTTSSpeed(speed)
       res.json({ success: true })
     } catch (error) {
-      res.status(500).json({ error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
     }
   })
 }
