@@ -2,8 +2,8 @@ import React from 'react'
 import { BACKEND_MODES } from './settingsTypes'
 
 interface BackendSettingsProps {
-  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
-  onChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => void
+  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  onChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => void
 }
 
 export function BackendSettings({ backend, onChange }: BackendSettingsProps): React.ReactElement {
@@ -21,7 +21,7 @@ export function BackendSettings({ backend, onChange }: BackendSettingsProps): Re
               name="backend"
               value={mode.value}
               checked={backend === mode.value}
-              onChange={(e) => onChange(e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider')}
+              onChange={(e) => onChange(e.target.value as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok')}
             />
             <span className="mode-label">{mode.label}</span>
             <span className="mode-desc">{mode.desc}</span>

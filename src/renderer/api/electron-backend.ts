@@ -16,7 +16,9 @@ import {
   PtyExitCallback,
   PtyRecreatedCallback,
   ApiOpenSessionCallback,
-  Unsubscribe
+  OrchestratorSessionCreatedCallback,
+  Unsubscribe,
+  PtySession
 } from './types'
 import type { BackendId } from './types'
 
@@ -27,14 +29,16 @@ declare global {
   interface Window {
     electronAPI?: {
       // PTY Management
+      listPtys: () => Promise<PtySession[]>
       spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
       killPty: (id: string) => void
       writePty: (id: string, data: string) => void
       resizePty: (id: string, cols: number, rows: number) => void
       onPtyData: (id: string, callback: (data: string) => void) => () => void
       onPtyExit: (id: string, callback: (code: number) => void) => () => void
-      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId }) => void) => () => void
+      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void) => () => void
       setPtyBackend: (id: string, backend: BackendId) => Promise<void>
+      getPtyReplay?: (id: string) => Promise<string | null>
       setAutoAccept?: (id: string, enabled: boolean) => void
       getAutoAcceptStatus?: (id: string) => Promise<boolean>
 
@@ -91,6 +95,7 @@ declare global {
 
       // Events
       onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
+      onOrchestratorSessionCreated: (callback: OrchestratorSessionCreatedCallback) => () => void
 
       // API Server
       apiStart?: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
@@ -111,6 +116,17 @@ declare global {
       refresh: () => Promise<void>
       openExternal: (url: string) => Promise<void>
       debugLog: (message: string) => void
+      headroomGetStatus: () => Promise<{ running: boolean; port: number; error: string | null }>
+      onHeadroomStatus: (callback: (status: { running: boolean; port: number; error: string | null }) => void) => () => void
+
+      // Mobile Server (phone app connectivity)
+      mobileIsEnabled?: () => Promise<boolean>
+      mobileSetEnabled?: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean }>
+      mobileGetConnectionInfo?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; nonceExpires: number }>
+      mobileRegenerateToken?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; nonceExpires: number }>
+      mobileIsRunning?: () => Promise<boolean>
+      mobileListDevices?: () => Promise<Array<{ deviceId: string; name: string; createdAt: number; lastSeen: number; revoked: boolean }>>
+      mobileRevokeDevice?: (deviceId: string) => Promise<{ revoked: number }>
 
       // Beads
       beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
@@ -163,6 +179,11 @@ export class ElectronBackend implements ExtendedApi {
   // ==========================================================================
   // PTY Management
   // ==========================================================================
+
+  async listPtys(): Promise<PtySession[]> {
+    this.checkApi()
+    return window.electronAPI!.listPtys()
+  }
 
   async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     this.checkApi()
@@ -289,6 +310,11 @@ export class ElectronBackend implements ExtendedApi {
   onApiOpenSession(callback: ApiOpenSessionCallback): Unsubscribe {
     this.checkApi()
     return window.electronAPI!.onApiOpenSession(callback)
+  }
+
+  onOrchestratorSessionCreated(callback: OrchestratorSessionCreatedCallback): Unsubscribe {
+    this.checkApi()
+    return window.electronAPI!.onOrchestratorSessionCreated(callback)
   }
 
   // ==========================================================================

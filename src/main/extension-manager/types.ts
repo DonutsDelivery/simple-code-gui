@@ -7,6 +7,8 @@ export interface Extension {
   type: 'skill' | 'mcp' | 'agent'
   repo?: string        // GitHub URL for skills
   npm?: string         // npm package for MCPs
+  sourceDir?: string   // Relative path for bundled MCPs (from project root)
+  entryPoint?: string  // Entry file for bundled MCPs (default: server.mjs)
   commands?: string[]  // Slash commands provided
   tags?: string[]
   configSchema?: Record<string, unknown>  // JSON schema for MCP config

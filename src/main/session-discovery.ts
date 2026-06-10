@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { createReadStream, existsSync, readFileSync } from 'fs'
 import { readdir, readFile, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
@@ -13,7 +13,7 @@ export interface DiscoveredSession {
   fileSize: number
 }
 
-export type SessionBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes'
+export type SessionBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 // Message types that indicate actual conversation content (not just summaries)
 const CONVERSATION_TYPES = ['user', 'assistant']
@@ -384,14 +384,103 @@ async function discoverDroidSessions(projectPath: string): Promise<DiscoveredSes
   return sorted
 }
 
+async function discoverCodexSessions(projectPath: string): Promise<DiscoveredSession[]> {
+  // Codex stores sessions under ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<UUID>.jsonl
+  // The first line of each file is a session_meta entry with {id, cwd}.
+  const codexSessionsDir = join(homedir(), '.codex', 'sessions')
+
+  const results: DiscoveredSession[] = []
+
+  function readFirstLine(filePath: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const stream = createReadStream(filePath, { encoding: 'utf-8', highWaterMark: 8192 })
+      let buffered = ''
+      let settled = false
+
+      const finish = (line: string | null) => {
+        if (settled) return
+        settled = true
+        stream.destroy()
+        resolve(line)
+      }
+
+      stream.on('data', (chunk) => {
+        buffered += chunk
+        const newlineIndex = buffered.indexOf('\n')
+        if (newlineIndex !== -1) {
+          finish(buffered.slice(0, newlineIndex))
+        }
+      })
+      stream.on('end', () => finish(buffered || null))
+      stream.on('error', () => finish(null))
+    })
+  }
+
+  async function scanDir(dir: string): Promise<void> {
+    let entries: string[]
+    try {
+      entries = await readdir(dir)
+    } catch {
+      return
+    }
+
+    await Promise.all(entries.map(async entry => {
+      const fullPath = join(dir, entry)
+      if (entry.endsWith('.jsonl')) {
+        try {
+          // Codex session files can be very large. Only the first line is needed
+          // for session_meta, so avoid loading full JSONL files during polling.
+          const firstLine = await readFirstLine(fullPath)
+          if (!firstLine) return
+          if (!firstLine.includes('session_meta')) return
+
+          const idMatch = firstLine.match(/"id":"([0-9a-f-]+)"/)
+          const cwdMatch = firstLine.match(/"cwd":"((?:[^"\\]|\\.)*)"/)
+          if (!idMatch || !cwdMatch) return
+          if (cwdMatch[1] !== projectPath) return
+
+          const fileStat = await stat(fullPath)
+          // Extract timestamp from filename for the slug
+          const tsMatch = entry.match(/rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-/)
+          const slug = tsMatch
+            ? tsMatch[1].replace('T', ' ').replace(/-(\d{2})-(\d{2})$/, ':$1:$2').slice(0, 16)
+            : idMatch[1].slice(0, 8)
+
+          results.push({
+            sessionId: idMatch[1],
+            slug,
+            lastModified: fileStat.mtimeMs,
+            cwd: cwdMatch[1],
+            fileSize: fileStat.size,
+          })
+        } catch {
+          // Skip unparseable files
+        }
+      } else {
+        await scanDir(fullPath)
+      }
+    }))
+  }
+
+  await scanDir(codexSessionsDir)
+  results.sort((a, b) => b.lastModified - a.lastModified)
+  return results
+}
+
 export async function discoverSessions(projectPath: string, backend: SessionBackend = 'claude'): Promise<DiscoveredSession[]> {
   if (backend === 'opencode') {
     return await discoverOpenCodeSessions(projectPath)
+  }
+  if (backend === 'codex') {
+    return await discoverCodexSessions(projectPath)
   }
   if (backend === 'droid') {
     return discoverDroidSessions(projectPath)
   }
   if (backend === 'hermes') {
+    return []
+  }
+  if (backend === 'grok') {
     return []
   }
   return discoverClaudeSessions(projectPath)

@@ -9,7 +9,8 @@ import {
   PtyExitCallback,
   PtyRecreatedCallback,
   Unsubscribe,
-  BackendId
+  BackendId,
+  PtySession
 } from '../types'
 import { ConnectionManager } from './connection'
 import { PtyWebSocketManager } from './pty-websocket'
@@ -19,14 +20,47 @@ export class PtyApi {
   private connection: ConnectionManager
   private wsManager: PtyWebSocketManager
   private ptyRecreatedCallbacks: Set<PtyRecreatedCallback> = new Set()
+  // PTYs we attached to (already running on the host, owned by the desktop
+  // renderer or a sibling client).  We must NOT issue DELETE on these when
+  // closing the tab on phone — that would kill the desktop's session too.
+  private attachedPtyIds: Set<string> = new Set()
 
   constructor(connection: ConnectionManager, wsManager: PtyWebSocketManager) {
     this.connection = connection
     this.wsManager = wsManager
   }
 
+  async listPtys(): Promise<PtySession[]> {
+    const list = await this.connection.fetchJson<{ ptys: PtySession[] }>('/api/pty/list', { method: 'GET' })
+    return list.ptys || []
+  }
+
   async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     this.connection.setConnectionState('connecting')
+
+    // If we know the sessionId, see if a PTY for the same project+session is
+    // already running on the host and attach to it instead of spawning a
+    // parallel `--resume` process (which would branch the conversation —
+    // each fork writes to the backend's session file independently).
+    if (sessionId) {
+      try {
+        const list = await this.connection.fetchJson<{
+          ptys: Array<{ id: string; cwd: string; backend: string; sessionId?: string }>
+        }>('/api/pty/list', { method: 'GET' })
+        const match = list.ptys?.find(
+          p => p.cwd === cwd && p.sessionId === sessionId && (!backend || p.backend === backend)
+        )
+        if (match) {
+          console.log('[HttpBackend] Attaching to existing PTY:', match.id, 'for session:', sessionId)
+          this.attachedPtyIds.add(match.id)
+          this.wsManager.connectPtyStream(match.id)
+          return match.id
+        }
+      } catch (e) {
+        // List failed — fall through to spawn.  Don't block the user.
+        console.warn('[HttpBackend] /api/pty/list failed, falling back to spawn:', e)
+      }
+    }
 
     const data = await this.connection.fetchJson<{ ptyId: string }>('/api/pty/spawn', {
       method: 'POST',
@@ -47,6 +81,13 @@ export class PtyApi {
   killPty(id: string): void {
     // Disconnect WebSocket first
     this.wsManager.disconnectPtyStream(id)
+
+    // For attached PTYs, only detach — don't kill the underlying process.
+    // The desktop (or whoever owns it) is still using it.
+    if (this.attachedPtyIds.has(id)) {
+      this.attachedPtyIds.delete(id)
+      return
+    }
 
     // Then send kill request (fire and forget)
     this.connection.fetch(`/api/pty/${id}`, { method: 'DELETE' }).catch((err) => {

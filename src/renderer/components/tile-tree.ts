@@ -455,6 +455,9 @@ export function moveLeaf(
   direction: 'horizontal' | 'vertical',
   position: 'before' | 'after' = 'after'
 ): TileNode {
+  // Safety: moving a leaf onto itself would remove it and fail to reinsert
+  if (sourceLeafId === targetLeafId) return tree
+
   // Get the source leaf's content before removing
   const sourceLeaf = findLeafById(tree, sourceLeafId)
   if (!sourceLeaf) return tree
@@ -506,6 +509,95 @@ export function setActiveTabInLeaf(tree: TileNode, leafId: string, tabId: string
   if (!leaf || !leaf.tabIds.includes(tabId)) return tree
   leaf.activeTabId = tabId
   return newTree
+}
+
+/** Reorder a tab within its leaf's tab strip (move tabId to toIndex). activeTabId is preserved. */
+export function reorderTabInLeaf(tree: TileNode, leafId: string, tabId: string, toIndex: number): TileNode {
+  const newTree = cloneNode(tree)
+  const leaf = findLeafInMutableTree(newTree, leafId)
+  if (!leaf) return tree
+  const from = leaf.tabIds.indexOf(tabId)
+  if (from < 0) return tree
+  leaf.tabIds.splice(from, 1)
+  const clamped = Math.max(0, Math.min(toIndex, leaf.tabIds.length))
+  leaf.tabIds.splice(clamped, 0, tabId)
+  return newTree
+}
+
+/** Add a new tile at the root level (a new column or new row spanning the whole canvas). */
+export function splitRoot(
+  tree: TileNode,
+  direction: 'horizontal' | 'vertical',
+  newLeaf: TileLeaf,
+  position: 'before' | 'after' = 'after'
+): TileNode {
+  if (tree.type === 'branch' && tree.direction === direction) {
+    const n = tree.children.length + 1
+    const newRatios = tree.ratios.map(r => r * (n - 1) / n)
+    const children = [...tree.children]
+    if (position === 'after') {
+      children.push(newLeaf)
+      newRatios.push(1 / n)
+    } else {
+      children.unshift(newLeaf)
+      newRatios.unshift(1 / n)
+    }
+    return { ...tree, children, ratios: newRatios }
+  }
+  const children = position === 'after' ? [tree, newLeaf] : [newLeaf, tree]
+  return createBranch(generateTileId(), direction, children, [0.5, 0.5])
+}
+
+/** Reset every branch's ratios to equal sizes, recursively. */
+export function equalizeRatios(tree: TileNode): TileNode {
+  if (tree.type === 'leaf') return tree
+  const children = tree.children.map(equalizeRatios)
+  return { ...tree, children, ratios: children.map(() => 1 / children.length) }
+}
+
+/** Find the adjacent leaf in a given direction, by computed-rect geometry. */
+export function findAdjacentLeaf(
+  tree: TileNode,
+  bounds: ComputedRect,
+  leafId: string,
+  dir: 'left' | 'right' | 'up' | 'down'
+): TileLeaf | null {
+  const rects = computeRects(tree, bounds)
+  const from = rects.get(leafId)
+  if (!from) return null
+  const fromCx = from.x + from.width / 2
+  const fromCy = from.y + from.height / 2
+
+  let best: TileLeaf | null = null
+  let bestScore = -Infinity
+  for (const leaf of getAllLeaves(tree)) {
+    if (leaf.id === leafId) continue
+    const r = rects.get(leaf.id)
+    if (!r) continue
+    const cx = r.x + r.width / 2
+    const cy = r.y + r.height / 2
+
+    // Must be on the correct side; score by perpendicular overlap minus distance.
+    let onSide = false
+    let overlap = 0
+    let dist = 0
+    if (dir === 'left' || dir === 'right') {
+      onSide = dir === 'left' ? cx < fromCx : cx > fromCx
+      overlap = Math.min(from.y + from.height, r.y + r.height) - Math.max(from.y, r.y)
+      dist = Math.abs(cx - fromCx)
+    } else {
+      onSide = dir === 'up' ? cy < fromCy : cy > fromCy
+      overlap = Math.min(from.x + from.width, r.x + r.width) - Math.max(from.x, r.x)
+      dist = Math.abs(cy - fromCy)
+    }
+    if (!onSide || overlap <= 0) continue
+    const score = overlap - dist
+    if (score > bestScore) {
+      bestScore = score
+      best = leaf
+    }
+  }
+  return best
 }
 
 // ── Default Tree Generation ──

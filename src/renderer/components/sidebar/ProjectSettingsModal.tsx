@@ -46,6 +46,36 @@ export function ProjectSettingsModal({
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-content">
+          <div className="settings-section">
+            <h3>Appearance</h3>
+            <p className="form-hint">Choose any emoji for this project. Leave blank to use the automatic icon.</p>
+
+            <div className="form-group">
+              <label>Project Icon</label>
+              <div className="project-icon-setting">
+                <div className="project-icon-preview" aria-hidden="true">
+                  {state.icon.trim() || 'Auto'}
+                </div>
+                <input
+                  type="text"
+                  value={state.icon}
+                  onChange={(e) => onChange({ icon: e.target.value })}
+                  placeholder="Paste or type any emoji"
+                  aria-label="Project emoji icon"
+                />
+                {state.icon && (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => onChange({ icon: '' })}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <p className="form-hint">Use your system emoji picker for the full emoji set.</p>
+            </div>
+          </div>
+
           {/* API Settings Section */}
           <div className="settings-section">
             <h3>API Settings</h3>
@@ -212,6 +242,9 @@ export function ProjectSettingsModal({
                   { value: 'codex', label: 'Codex', desc: 'Forces this project to use Codex.' },
                   { value: 'opencode', label: 'OpenCode', desc: 'Forces this project to use OpenCode.' },
                   { value: 'aider', label: 'Aider', desc: 'Forces this project to use Aider.' },
+                  { value: 'droid', label: 'Droid', desc: 'Forces this project to use Factory Droid.' },
+                  { value: 'hermes', label: 'Hermes', desc: 'Forces this project to use Hermes Agent.' },
+                  { value: 'grok', label: 'Grok', desc: 'Forces this project to use Grok Build.' },
                 ].map((backend) => (
                   <label key={backend.value} className={`permission-mode-option ${state.backend === backend.value ? 'selected' : ''}`}>
                     <input

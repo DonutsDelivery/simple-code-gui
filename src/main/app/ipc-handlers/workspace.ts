@@ -53,5 +53,5 @@ export function registerWorkspaceHandlers(
   })
 
   // Session discovery
-  ipcMain.handle('sessions:discover', (_, projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => discoverSessions(projectPath, backend))
+  ipcMain.handle('sessions:discover', (_, projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => discoverSessions(projectPath, backend))
 }

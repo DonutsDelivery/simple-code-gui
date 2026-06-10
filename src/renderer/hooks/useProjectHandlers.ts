@@ -8,6 +8,7 @@ import type { DropZone } from '../components/tiled-layout-utils.js'
 import {
   createLeaf,
   splitLeaf,
+  splitRoot,
   addLeafToTree,
   addTabToLeaf,
   removeTabFromLeaf,
@@ -68,14 +69,24 @@ export function useProjectHandlers({
   const tileTreeRef = useRef(tileTree)
   tileTreeRef.current = tileTree
 
+  /** Resolve project → effective AI backend, used for instruction file injection */
+  const getEffectiveBackend = useCallback((projectPath: string): BackendId => {
+    const project = projects.find((p) => p.path === projectPath)
+    return (project?.backend && project.backend !== 'default'
+      ? project.backend
+      : (settings?.backend && settings.backend !== 'default'
+        ? settings.backend
+        : 'claude')) as BackendId
+  }, [projects, settings?.backend])
+
   const handleAddProject = useCallback(async () => {
     const path = await api.addProject()
     if (path) {
       const name = path.split(/[/\\]/).pop() || path
       addProject({ path, name })
-      await api.ttsInstallInstructions?.(path)
+      await api.ttsInstallInstructions?.(path, getEffectiveBackend(path))
     }
-  }, [api, addProject])
+  }, [api, addProject, getEffectiveBackend])
 
   const handleAddProjectsFromParent = useCallback(async () => {
     const projectsToAdd = await api.addProjectsFromParent?.()
@@ -85,7 +96,7 @@ export function useProjectHandlers({
 
       for (const project of newProjects) {
         addProject({ path: project.path, name: project.name })
-        await api.ttsInstallInstructions?.(project.path)
+        await api.ttsInstallInstructions?.(project.path, getEffectiveBackend(project.path))
       }
     }
   }, [api, addProject, projects])
@@ -132,7 +143,7 @@ export function useProjectHandlers({
     const title = slug ? `${projectName} - ${slug}` : `${projectName} - New`
 
     try {
-      await api.ttsInstallInstructions?.(projectPath)
+      await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
 
       const ptyId = await api.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
 
@@ -185,7 +196,7 @@ export function useProjectHandlers({
     const title = `${projectName} - New`
 
     try {
-      await api.ttsInstallInstructions?.(projectPath)
+      await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
       const ptyId = await api.spawnPty(projectPath, undefined, undefined, effectiveBackend)
 
       let newTree: TileNode
@@ -204,6 +215,9 @@ export function useProjectHandlers({
         } else {
           newTree = addLeafToTree(latestTree, ptyId, containerSize.width, containerSize.height)
         }
+      } else if (dropZone && (dropZone.type === 'root-right' || dropZone.type === 'root-bottom') && latestTree) {
+        // Drop on empty canvas: new root-level column/row
+        newTree = splitRoot(latestTree, dropZone.type === 'root-right' ? 'horizontal' : 'vertical', newLeaf, 'after')
       } else if (dropZone && dropZone.type !== 'swap' && latestTree) {
         // Split target tile in the drop direction
         const dirMap: Record<string, { dir: 'horizontal' | 'vertical'; pos: 'before' | 'after' }> = {
@@ -249,7 +263,7 @@ export function useProjectHandlers({
     const title = `${projectName} - New`
 
     try {
-      await api.ttsInstallInstructions?.(projectPath)
+      await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
       const ptyId = await api.spawnPty(projectPath, undefined, undefined, effectiveBackend)
 
       const currentTree = tileTreeRef.current

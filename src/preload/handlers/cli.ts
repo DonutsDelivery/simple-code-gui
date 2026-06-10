@@ -29,6 +29,18 @@ export const cliHandlers = {
   aiderCheck: () => ipcRenderer.invoke('aider:check'),
   aiderInstall: () => ipcRenderer.invoke('aider:install'),
 
+  // Droid CLI (Factory AI)
+  droidCheck: () => ipcRenderer.invoke('droid:check'),
+  droidInstall: () => ipcRenderer.invoke('droid:install'),
+
+  // Hermes Agent
+  hermesCheck: () => ipcRenderer.invoke('hermes:check'),
+  hermesInstall: () => ipcRenderer.invoke('hermes:install'),
+
+  // Grok Build
+  grokCheck: () => ipcRenderer.invoke('grok:check'),
+  grokInstall: () => ipcRenderer.invoke('grok:install'),
+
   // Get Shit Done (GSD) - Claude Code workflow addon
   gsdCheck: () => ipcRenderer.invoke('gsd:check'),
   gsdInstall: () => ipcRenderer.invoke('gsd:install'),

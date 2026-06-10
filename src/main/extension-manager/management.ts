@@ -1,8 +1,8 @@
 import { existsSync, rmSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { InstalledExtension, ExtensionConfig, OperationResult } from './types.js'
-import { getSkillsDir, getMcpConfigPath } from './constants.js'
-import { spawnAsync, isValidNpmPackageName } from './validation.js'
+import { getSkillsDir, getExtensionsDir, getMcpConfigPath } from './constants.js'
+import { spawnAsync, isValidNpmPackageName, removeFromOpenCodeMcpConfig } from './validation.js'
 
 export function getInstalled(config: ExtensionConfig): InstalledExtension[] {
   return config.installed
@@ -91,6 +91,10 @@ export async function update(config: ExtensionConfig, extensionId: string): Prom
     }
   }
 
+  if (extension.type === 'mcp' && extension.sourceDir) {
+    return { success: false, error: 'Update not supported for bundled MCPs. Remove and reinstall to update.' }
+  }
+
   return { success: false, error: 'Cannot update this extension type' }
 }
 
@@ -127,6 +131,17 @@ export async function remove(config: ExtensionConfig, extensionId: string): Prom
         if (mcpServers && mcpServers[extension.id]) {
           delete mcpServers[extension.id]
           writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2))
+        }
+      }
+
+      // Remove from OpenCode config too
+      removeFromOpenCodeMcpConfig(extension.id)
+
+      // Remove local MCP install directory
+      if (extension.sourceDir) {
+        const installDir = join(getExtensionsDir(), extension.id)
+        if (existsSync(installDir)) {
+          rmSync(installDir, { recursive: true })
         }
       }
 

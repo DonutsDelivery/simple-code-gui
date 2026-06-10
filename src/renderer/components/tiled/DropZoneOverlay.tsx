@@ -6,7 +6,9 @@ const DROP_ZONE_LABELS: Record<DropZoneType, string> = {
   'split-top': 'Add Above',
   'split-bottom': 'Add Below',
   'split-left': 'Add Left',
-  'split-right': 'Add Right'
+  'split-right': 'Add Right',
+  'root-right': 'New Column',
+  'root-bottom': 'New Row'
 }
 
 interface DropZoneOverlayProps {

@@ -34,3 +34,4 @@ kspec.config.yaml
 # Build artifacts
 *.apk
 .gitignore.backup-*
+.claude/worktrees/

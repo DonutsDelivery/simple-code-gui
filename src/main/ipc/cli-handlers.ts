@@ -285,6 +285,34 @@ export function registerCliHandlers(getMainWindow: () => BrowserWindow | null) {
     }
   })
 
+  ipcMain.handle('droid:check', async () => {
+    const installed = await checkCliInstalled('droid')
+    return { installed }
+  })
+
+  ipcMain.handle('droid:install', async () => {
+    // Droid is a native binary — direct the user to install from factory.ai
+    return { success: false, error: 'Droid is installed from factory.ai. Visit https://docs.factory.ai/cli/getting-started/overview for installation instructions.' }
+  })
+
+  ipcMain.handle('hermes:check', async () => {
+    const installed = await checkCliInstalled('hermes')
+    return { installed }
+  })
+
+  ipcMain.handle('hermes:install', async () => {
+    return { success: false, error: 'Hermes is installed with the official installer: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash' }
+  })
+
+  ipcMain.handle('grok:check', async () => {
+    const installed = await checkCliInstalled('grok') || await checkCliInstalled('agent')
+    return { installed }
+  })
+
+  ipcMain.handle('grok:install', async () => {
+    return { success: false, error: 'Grok Build is installed externally. Install it so either `grok` or `agent` is available on PATH.' }
+  })
+
   ipcMain.handle('gsd:check', async () => {
     const installed = checkGSDInstalled()
     const npmInstalled = await checkNpmInstalled()

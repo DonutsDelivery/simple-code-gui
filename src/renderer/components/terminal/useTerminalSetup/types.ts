@@ -7,7 +7,7 @@ import type { Api } from '../../../api/types.js'
 export interface UseTerminalSetupOptions {
   ptyId: string
   theme: Theme
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
   api?: Api  // API abstraction (uses window.electronAPI if not provided)
   onTTSChunk: (cleanChunk: string) => void
   onUserInput: (data: string) => void

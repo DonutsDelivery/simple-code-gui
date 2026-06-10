@@ -8,7 +8,7 @@
 // Backend Types
 // =============================================================================
 
-export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 // =============================================================================
 // Theme Types
@@ -48,6 +48,7 @@ export interface Settings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | BackendId
+  globalInstructionInjection?: string
 }
 
 export interface VoiceSettings {
@@ -85,6 +86,7 @@ export interface Project {
   apiModel?: 'default' | 'opus' | 'sonnet' | 'haiku'
   autoAcceptTools?: string[]
   permissionMode?: string
+  icon?: string
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
@@ -120,14 +122,25 @@ export interface TileLayout {
 // Workspace Types
 // =============================================================================
 
-export interface Workspace {
-  projects: Project[]
+export interface SavedWorkspaceSession {
+  id: string
+  name: string
   openTabs: OpenTab[]
   activeTabId: string | null
+  tileTree?: any
+}
+
+export interface Workspace {
+  projects: Project[]
+  categories: ProjectCategory[]
+  sessions?: SavedWorkspaceSession[]
+  activeSessionId?: string | null
+  // Legacy single-session fields (for migration)
+  openTabs?: OpenTab[]
+  activeTabId?: string | null
   viewMode?: 'tabs' | 'tiled'
   tileLayout?: TileLayout[]
   tileTree?: any
-  categories: ProjectCategory[]
 }
 
 export interface Session {
@@ -224,6 +237,7 @@ export type TerminalExitCallback = (ptyId: string, code: number) => void
  */
 export interface ApiClient {
   // Terminal
+  listPtys(): Promise<Array<{ id: string; cwd: string; backend: BackendId; sessionId?: string; spawnedAt: number }>>
   spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string>
   writePty(id: string, data: string): void
   resizePty(id: string, cols: number, rows: number): void
@@ -264,6 +278,8 @@ export interface ApiClient {
   codexCheck(): Promise<{ installed: boolean; npmInstalled: boolean }>
   opencodeCheck(): Promise<{ installed: boolean; npmInstalled: boolean }>
   aiderCheck(): Promise<{ installed: boolean; pipInstalled: boolean }>
+  hermesCheck(): Promise<{ installed: boolean }>
+  grokCheck(): Promise<{ installed: boolean }>
 
   // Voice
   voiceSpeak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }>

@@ -46,6 +46,21 @@ function registerCodex(orchestratorScript: string): void {
   })
 }
 
+function registerHermes(orchestratorScript: string): void {
+  execFileQuiet('hermes', ['mcp', 'list'], (err, stdout) => {
+    if (err || stdout.includes(SERVER_NAME)) return
+
+    // `hermes mcp add` is interactive: after probing the server it prompts
+    // "Enable all N tools? [Y/n/select]". Without a TTY it cancels, so feed "Y"
+    // on stdin to accept all tools and persist the server to ~/.hermes/config.yaml.
+    const child = execFile('hermes', ['mcp', 'add', SERVER_NAME, '--command', 'node', '--args', orchestratorScript], (addErr) => {
+      if (!addErr) console.log('[Startup] Registered orchestrator MCP server with Hermes')
+      else console.warn('[Startup] Could not register orchestrator MCP with Hermes:', addErr.message)
+    })
+    child.stdin?.end('Y\n')
+  })
+}
+
 function registerGemini(orchestratorScript: string): void {
   try {
     const settingsPath = join(homedir(), '.gemini', 'settings.json')
@@ -76,6 +91,7 @@ function registerOpenCode(orchestratorScript: string): void {
 export function registerOrchestratorMcp(orchestratorScript: string): void {
   registerClaude(orchestratorScript)
   registerCodex(orchestratorScript)
+  registerHermes(orchestratorScript)
   registerGemini(orchestratorScript)
   registerOpenCode(orchestratorScript)
 }

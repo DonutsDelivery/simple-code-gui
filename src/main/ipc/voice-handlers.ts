@@ -5,6 +5,7 @@ import { voiceManager, WHISPER_MODELS, PIPER_VOICES, WhisperModelName, PiperVoic
 import { xttsManager, XTTS_LANGUAGES, XTTS_SAMPLE_VOICES } from '../xtts-manager'
 import { tadaTTS, TADA_SAMPLE_VOICES, getTadaSamplePath } from '../voice/tada-tts'
 import { installTaskInstructions } from './kspec-handlers'
+import { type AIBackend, readInstructionFile, writeInstructionFile, ensureAiderConfig } from './instruction-files'
 
 const TTS_INSTRUCTIONS_START = '\n\n<!-- TTS_VOICE_OUTPUT_START -->'
 const TTS_INSTRUCTIONS_END = '<!-- TTS_VOICE_OUTPUT_END -->\n'
@@ -25,34 +26,30 @@ Examples:
 ✗ «tts»npm install«/tts»  (command - don't wrap)
 ${TTS_INSTRUCTIONS_END}`
 
-function installTTSInstructions(projectPath: string): boolean {
+function installTTSInstructions(projectPath: string, aiBackend: AIBackend = 'claude'): boolean {
   try {
-    const claudeDir = join(projectPath, '.claude')
-    const claudeMdPath = join(claudeDir, 'CLAUDE.md')
+    let content = readInstructionFile(projectPath, aiBackend)
 
-    if (!existsSync(claudeDir)) {
-      mkdirSync(claudeDir, { recursive: true })
-    }
-
-    let content = ''
-    if (existsSync(claudeMdPath)) {
-      content = readFileSync(claudeMdPath, 'utf8')
-      if (content.includes(TTS_INSTRUCTIONS_START)) {
-        const startIdx = content.indexOf(TTS_INSTRUCTIONS_START)
-        const endIdx = content.indexOf(TTS_INSTRUCTIONS_END)
-        if (startIdx !== -1 && endIdx !== -1) {
-          content = content.substring(0, startIdx) + content.substring(endIdx + TTS_INSTRUCTIONS_END.length)
-        }
+    if (content.includes(TTS_INSTRUCTIONS_START)) {
+      const startIdx = content.indexOf(TTS_INSTRUCTIONS_START)
+      const endIdx = content.indexOf(TTS_INSTRUCTIONS_END)
+      if (startIdx !== -1 && endIdx !== -1) {
+        content = content.substring(0, startIdx) + content.substring(endIdx + TTS_INSTRUCTIONS_END.length)
       }
     }
 
     content += TTS_INSTRUCTIONS
-    writeFileSync(claudeMdPath, content)
+    writeInstructionFile(projectPath, aiBackend, content)
+
+    // For aider, ensure .aider.conf.yml loads the conventions file
+    if (aiBackend === 'aider') {
+      ensureAiderConfig(projectPath)
+    }
 
     // Also refresh task instructions on every session open so outdated
-    // CLAUDE.md entries (e.g. wrong --type list) get corrected.
+    // instruction entries (e.g. wrong --type list) get corrected.
     // Runs after TTS write so installTaskInstructions reads the updated file.
-    refreshTaskInstructions(projectPath)
+    refreshTaskInstructions(projectPath, aiBackend)
 
     return true
   } catch (e) {
@@ -66,32 +63,31 @@ function installTTSInstructions(projectPath: string): boolean {
  * Detects kspec (.kspec/) or beads (.beads/) and re-injects current instructions,
  * ensuring outdated instructions from older app versions get replaced.
  */
-function refreshTaskInstructions(projectPath: string): void {
+function refreshTaskInstructions(projectPath: string, aiBackend: AIBackend = 'claude'): void {
   try {
     const hasKspec = existsSync(join(projectPath, '.kspec'))
     const hasBeads = existsSync(join(projectPath, '.beads'))
     if (!hasKspec && !hasBeads) return
 
     const backend = hasKspec ? 'kspec' : 'beads'
-    installTaskInstructions(projectPath, backend)
+    installTaskInstructions(projectPath, backend, aiBackend)
   } catch {
     // Non-critical — task instructions will be injected at next init
   }
 }
 
-function removeTTSInstructions(projectPath: string): boolean {
+function removeTTSInstructions(projectPath: string, aiBackend: AIBackend = 'claude'): boolean {
   try {
-    const claudeMdPath = join(projectPath, '.claude', 'CLAUDE.md')
-    if (!existsSync(claudeMdPath)) return true
+    let content = readInstructionFile(projectPath, aiBackend)
+    if (!content) return true
 
-    let content = readFileSync(claudeMdPath, 'utf8')
     const startIdx = content.indexOf(TTS_INSTRUCTIONS_START)
     const endIdx = content.indexOf(TTS_INSTRUCTIONS_END)
 
     if (startIdx !== -1 && endIdx !== -1) {
       content = content.slice(0, startIdx) + content.slice(endIdx + TTS_INSTRUCTIONS_END.length)
       content = content.trimEnd() + '\n'
-      writeFileSync(claudeMdPath, content)
+      writeInstructionFile(projectPath, aiBackend, content)
     }
     return true
   } catch (e) {
@@ -102,12 +98,12 @@ function removeTTSInstructions(projectPath: string): boolean {
 
 export function registerVoiceHandlers(getMainWindow: () => BrowserWindow | null) {
   // TTS Instructions
-  ipcMain.handle('tts:installInstructions', (_, projectPath: string) => {
-    return { success: installTTSInstructions(projectPath) }
+  ipcMain.handle('tts:installInstructions', (_, projectPath: string, aiBackend?: AIBackend) => {
+    return { success: installTTSInstructions(projectPath, aiBackend || 'claude') }
   })
 
-  ipcMain.handle('tts:removeInstructions', (_, projectPath: string) => {
-    return { success: removeTTSInstructions(projectPath) }
+  ipcMain.handle('tts:removeInstructions', (_, projectPath: string, aiBackend?: AIBackend) => {
+    return { success: removeTTSInstructions(projectPath, aiBackend || 'claude') }
   })
 
   // Whisper (STT)

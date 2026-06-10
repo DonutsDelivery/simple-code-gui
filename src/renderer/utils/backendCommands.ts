@@ -1,4 +1,4 @@
-export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 export interface CommandMenuItem {
   id: string
@@ -55,6 +55,30 @@ const backendCommandItems: Record<BackendId, CommandMenuItem[]> = {
     cmd('help'), cmd('model'), cmd('clear'), cmd('commit'),
     cmd('tokens'), cmd('reset'), cmd('diff'), cmd('lint'),
     cmd('test'), cmd('undo'), cmd('quit'), cmd('exit'),
+    { ...DIVIDER, id: 'divider-cmd' },
+    ADD_CUSTOM,
+  ],
+  droid: [
+    cmd('help'),
+    { ...DIVIDER, id: 'divider-droid' },
+    cmd('plugin-list', '/plugin list'),
+    cmd('mcp'),
+    cmd('search'),
+    cmd('update'),
+    { ...DIVIDER, id: 'divider-cmd' },
+    ADD_CUSTOM,
+  ],
+  hermes: [
+    cmd('help'), cmd('model'), cmd('tools'), cmd('skills-browse', '/skills browse'),
+    cmd('background'), cmd('voice-on', '/voice on'), cmd('voice-tts', '/voice tts'),
+    cmd('reasoning-high', '/reasoning high'), cmd('title'), cmd('usage'),
+    cmd('busy-status', '/busy status'), cmd('verbose'), cmd('quit'), cmd('exit'),
+    { ...DIVIDER, id: 'divider-cmd' },
+    ADD_CUSTOM,
+  ],
+  grok: [
+    cmd('help'), cmd('clear'), cmd('compact'), cmd('status'),
+    cmd('model'), cmd('config'), cmd('doctor'), cmd('exit'), cmd('quit'),
     { ...DIVIDER, id: 'divider-cmd' },
     ADD_CUSTOM,
   ],

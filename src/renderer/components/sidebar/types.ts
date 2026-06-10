@@ -13,7 +13,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   ptyId?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export interface SidebarProps {
@@ -51,11 +51,12 @@ export interface ProjectSettingsModalState {
   apiModel: 'default' | 'opus' | 'sonnet' | 'haiku'
   tools: string[]
   permissionMode: string
+  icon: string
   apiStatus?: 'checking' | 'success' | 'error'
   apiError?: string
   ttsVoice: string
   ttsEngine: 'piper' | 'xtts' | ''
-  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export interface InstalledVoice {

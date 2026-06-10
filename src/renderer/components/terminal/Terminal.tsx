@@ -32,7 +32,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [api])
 
   // Backend change handler
-  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => {
+  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
     if (newBackend === 'default') return
     api?.setPtyBackend?.(ptyId, newBackend)
     window.electronAPI?.setPtyBackend?.(ptyId, newBackend)
@@ -129,6 +129,11 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
           if (dims && dims.cols > 0 && dims.rows > 0) {
             window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
           }
+
+          // Force repaint on reactivation (fixes grey frame from WebGL
+          // context loss when the terminal was hidden via display:none)
+          terminalRef.current.refresh(0, terminalRef.current.rows - 1)
+
           if (wasAtBottom) {
             requestAnimationFrame(() => {
               terminalRef.current?.scrollToBottom()
@@ -141,8 +146,42 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       requestAnimationFrame(doFit)
       setTimeout(doFit, 50)
       setTimeout(doFit, 150)
+
+      // OpenCode and Hermes run full-screen alternate-buffer TUIs that only
+      // repaint on a real SIGWINCH. Returning to a workspace whose PTY already
+      // sits at the tile size produces no dimension change, so the TUI never
+      // redraws and leaves a blank frame (no scrollback to recover, since the
+      // alt screen has none). Force a redraw by shrinking one row then restoring
+      // — but with a real delay between the two resizes: a requestAnimationFrame
+      // gap (~16ms) gets coalesced into a single winsize read, so the TUI sees
+      // only the final (unchanged) size and skips the repaint. ~150ms guarantees
+      // two distinct SIGWINCH events.
+      if (backend === 'opencode' || backend === 'hermes') {
+        setTimeout(() => {
+          if (!fitAddonRef.current || !terminalRef.current) return
+          const dims = fitAddonRef.current.proposeDimensions()
+          if (dims && dims.cols > 0 && dims.rows > 0) {
+            window.electronAPI?.resizePty(ptyId, dims.cols, Math.max(1, dims.rows - 1))
+            setTimeout(() => {
+              if (!terminalRef.current) return
+              window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
+            }, 150)
+          }
+        }, 200)
+      }
     }
   }, [isActive, ptyId, containerRef, terminalRef, fitAddonRef, userScrolledUpRef])
+
+  // Allow keyboard tile-focus navigation to move xterm focus to this terminal
+  useEffect(() => {
+    const onFocusEvent = (e: Event) => {
+      if ((e as CustomEvent).detail?.ptyId === ptyId) {
+        terminalRef.current?.focus()
+      }
+    }
+    window.addEventListener('ct-focus-terminal', onFocusEvent)
+    return () => window.removeEventListener('ct-focus-terminal', onFocusEvent)
+  }, [ptyId, terminalRef])
 
   // Check if a drag event is a tile/sidebar/sub-tab drag (not a file drop)
   const isTileDrag = useCallback((e: React.DragEvent) => {
@@ -217,8 +256,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     // Suppress user keyboard input to prevent race conditions
     inputSuppressedRef.current = true
 
-    // Always send Ctrl+C to cancel any input (works for multiline too)
-    writePty(ptyId, '\x03')
+    // Send Ctrl+C to cancel any input (works for multiline too).
+    // Skip for backends that don't handle SIGINT gracefully (e.g. OpenCode exits on Ctrl+C).
+    const skipCtrlC = backend === 'opencode'
+    if (!skipCtrlC) {
+      writePty(ptyId, '\x03')
+    }
     currentLineInputRef.current = ''
 
     // Send /clear command
@@ -238,15 +281,15 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
                 inputSuppressedRef.current = false
                 clearInProgressRef.current = false
               }, 100)
-            }, 500) // Wait for /clear to complete
+            }, skipCtrlC ? 200 : 500) // Shorter wait without Ctrl+C
           } else {
             setTimeout(() => {
               inputSuppressedRef.current = false
               clearInProgressRef.current = false
-            }, 500)
+            }, skipCtrlC ? 200 : 500)
           }
         }, 100)
-      }, 300) // Wait for Ctrl+C to process and show fresh prompt
+      }, skipCtrlC ? 100 : 300) // Shorter delay without Ctrl+C
     } else {
       inputSuppressedRef.current = false
       clearInProgressRef.current = false
@@ -263,8 +306,12 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     // Suppress user keyboard input to prevent race conditions
     inputSuppressedRef.current = true
 
-    // Always send Ctrl+C to cancel any input (works for multiline too)
-    writePty(ptyId, '\x03')
+    // Send Ctrl+C to cancel any input (works for multiline too).
+    // Skip for backends that don't handle SIGINT gracefully (e.g. OpenCode exits on Ctrl+C).
+    const skipCtrlC = backend === 'opencode'
+    if (!skipCtrlC) {
+      writePty(ptyId, '\x03')
+    }
     currentLineInputRef.current = ''
 
     // Send /compact command
@@ -284,15 +331,15 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
                 inputSuppressedRef.current = false
                 clearInProgressRef.current = false
               }, 100)
-            }, 500) // Wait for /compact to complete
+            }, skipCtrlC ? 200 : 500) // Shorter wait without Ctrl+C
           } else {
             setTimeout(() => {
               inputSuppressedRef.current = false
               clearInProgressRef.current = false
-            }, 500)
+            }, skipCtrlC ? 200 : 500)
           }
         }, 100)
-      }, 300) // Wait for Ctrl+C to process and show fresh prompt
+      }, skipCtrlC ? 100 : 300) // Shorter delay without Ctrl+C
     } else {
       inputSuppressedRef.current = false
       clearInProgressRef.current = false
@@ -359,7 +406,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         ptyId={ptyId}
         onCommand={handleMenuCommand}
         onInput={(data) => writePty(ptyId, data)}
-        currentBackend={(backend || 'claude') as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'}
+        currentBackend={(backend || 'claude') as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'}
         onBackendChange={handleBackendChange}
         isMobile={isMobile}
         onOpenFileBrowser={onOpenFileBrowser}

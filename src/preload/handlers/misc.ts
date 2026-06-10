@@ -25,13 +25,24 @@ export const miscHandlers = {
     return () => ipcRenderer.removeListener('api:open-session', handler)
   },
 
+  onOrchestratorSessionCreated: (callback: (data: { ptyId: string; projectPath: string; backend: string; workspaceId?: string; tileId?: string; placement?: string }) => void): (() => void) => {
+    const handler = (_: IpcRendererEvent, data: { ptyId: string; projectPath: string; backend: string; workspaceId?: string; tileId?: string; placement?: string }) => callback(data)
+    ipcRenderer.on('orchestrator:session-created', handler)
+    return () => ipcRenderer.removeListener('orchestrator:session-created', handler)
+  },
+
   // Mobile Server
+  mobileIsEnabled: (): Promise<boolean> => ipcRenderer.invoke('mobile:isEnabled'),
+  mobileSetEnabled: (enabled: boolean): Promise<{ enabled: boolean; running: boolean }> =>
+    ipcRenderer.invoke('mobile:setEnabled', enabled),
   mobileGetConnectionInfo: () => ipcRenderer.invoke('mobile:getConnectionInfo'),
   mobileRegenerateToken: () => ipcRenderer.invoke('mobile:regenerateToken'),
   mobileIsRunning: () => ipcRenderer.invoke('mobile:isRunning'),
   mobileSendFile: (filePath: string, message?: string) => ipcRenderer.invoke('mobile:sendFile', filePath, message),
   mobileGetConnectedClients: () => ipcRenderer.invoke('mobile:getConnectedClients'),
   mobileGetPendingFiles: () => ipcRenderer.invoke('mobile:getPendingFiles'),
+  mobileListDevices: () => ipcRenderer.invoke('mobile:listDevices'),
+  mobileRevokeDevice: (deviceId: string) => ipcRenderer.invoke('mobile:revokeDevice', deviceId),
 
   // Updater
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),
@@ -59,6 +70,15 @@ export const miscHandlers = {
 
   // Debug logging
   debugLog: (message: string) => ipcRenderer.send('debug:log', message),
+
+  // Headroom compression proxy
+  headroomGetStatus: (): Promise<{ running: boolean; port: number; error: string | null }> =>
+    ipcRenderer.invoke('headroom:status'),
+  onHeadroomStatus: (callback: (status: { running: boolean; port: number; error: string | null }) => void): (() => void) => {
+    const handler = (_: IpcRendererEvent, status: { running: boolean; port: number; error: string | null }) => callback(status)
+    ipcRenderer.on('headroom:status', handler)
+    return () => ipcRenderer.removeListener('headroom:status', handler)
+  },
 
   // App utilities
   isDebugMode: () => ipcRenderer.invoke('app:isDebugMode'),

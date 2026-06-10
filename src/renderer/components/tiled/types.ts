@@ -6,6 +6,7 @@ import type { DropZone, OpenTab } from '../tiled-layout-utils.js'
 export interface Project {
   path: string
   name: string
+  icon?: string
   color?: string
 }
 

@@ -15,10 +15,11 @@ export interface Project {
   apiModel?: 'default' | 'opus' | 'sonnet' | 'haiku'
   autoAcceptTools?: string[]
   permissionMode?: string
+  icon?: string
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts' | 'tada'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
   categoryId?: string
   order?: number
 }
@@ -29,7 +30,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export interface Workspace {

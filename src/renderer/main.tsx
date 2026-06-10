@@ -4,7 +4,10 @@ import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { VoiceProvider } from './contexts/VoiceContext'
 import { ModalProvider } from './contexts/ModalContext'
+import { installDebugBridge } from './debug/debugBridge'
 import './styles.css'
+
+installDebugBridge()
 
 // Suppress Vite dev server reconnection errors (expected when dev server stops)
 if (import.meta.env.DEV) {

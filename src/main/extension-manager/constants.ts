@@ -102,6 +102,18 @@ export const BUILTIN_REGISTRY: Registry = {
       npm: '@modelcontextprotocol/server-fetch',
       tags: ['http', 'web', 'api'],
       configSchema: {}
+    },
+    {
+      id: 'ocr-mcp',
+      name: 'OCR MCP',
+      description: 'Extract text from images using OCR (Tesseract.js). No API keys needed, runs entirely offline.',
+      type: 'mcp',
+      sourceDir: 'mcp-servers/ocr',
+      entryPoint: 'server.mjs',
+      tags: ['ocr', 'image', 'text', 'offline'],
+      configSchema: {
+        language: { type: 'string', description: 'Default language for OCR (e.g., eng, fra, deu)' }
+      }
     }
   ],
   agents: [
@@ -143,4 +155,8 @@ export function getSkillsDir(): string {
 
 export function getMcpConfigPath(): string {
   return join(homedir(), '.claude', 'mcp_config.json')
+}
+
+export function getOpenCodeConfigPath(): string {
+  return join(homedir(), '.config', 'opencode', 'opencode.jsonc')
 }

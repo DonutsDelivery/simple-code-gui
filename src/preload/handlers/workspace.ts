@@ -9,6 +9,6 @@ export const workspaceHandlers = {
   getMetaProjectsPath: (): Promise<string> => ipcRenderer.invoke('workspace:getMetaProjectsPath'),
   getCategoryMetaPath: (categoryName: string): Promise<string> => ipcRenderer.invoke('workspace:getCategoryMetaPath', categoryName),
 
-  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') =>
+  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') =>
     ipcRenderer.invoke('sessions:discover', projectPath, backend)
 }

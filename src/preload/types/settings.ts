@@ -26,5 +26,10 @@ export interface Settings {
   voicePushToTalk?: boolean
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  globalInstructionInjection?: string
+  // Headroom context-compression proxy
+  headroomEnabled?: boolean
+  headroomPort?: number
+  headroomProxyPath?: string
 }

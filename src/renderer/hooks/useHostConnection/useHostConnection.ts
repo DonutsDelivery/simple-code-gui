@@ -440,6 +440,13 @@ export function useHostConnection(): UseHostConnectionReturn {
           host = { ...host, certFingerprint: serverCertFingerprint, secure: serverSecure }
         }
 
+        // Adopt a per-device token if the server issued one (H3). It replaces the
+        // shared QR token for all subsequent auth and is persisted below, so the
+        // device never needs to re-scan and can be revoked individually.
+        if (result.deviceToken) {
+          host = { ...host, token: result.deviceToken }
+        }
+
         // Check fingerprint (TOFU - Trust On First Use)
         if (host.fingerprint) {
           // We have a stored fingerprint - verify it matches
@@ -488,11 +495,11 @@ export function useHostConnection(): UseHostConnectionReturn {
         return
       }
 
-      // Clear the nonce from host config
+      // Clear the nonce from host config; persist the adopted per-device token.
       setHosts(prev =>
         prev.map(h =>
           h.id === hostId
-            ? { ...h, pendingNonce: undefined }
+            ? { ...h, token: host?.token ?? h.token, pendingNonce: undefined }
             : h
         )
       )

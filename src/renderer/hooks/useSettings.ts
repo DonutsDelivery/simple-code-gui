@@ -25,7 +25,7 @@ export interface AppSettings {
   themeCustomization?: ThemeCustomization | null
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 interface UseSettingsReturn {

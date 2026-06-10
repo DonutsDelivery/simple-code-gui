@@ -129,7 +129,7 @@ describe('PtyManager', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'claude',
-        ['--allowedTools', 'Read', '--allowedTools', 'Write'],
+        ['--allowedTools', 'Read,Write'],
         expect.any(Object)
       )
     })
@@ -190,7 +190,16 @@ describe('PtyManager', () => {
 
         expect(pty.spawn).toHaveBeenCalledWith(
           'codex',
-          ['--resume', 'session-123', '--full-auto'],
+          [
+            '--resume',
+            'session-123',
+            '-a',
+            'never',
+            '-s',
+            'workspace-write',
+            '-c',
+            'sandbox_workspace_write.network_access=true',
+          ],
           expect.any(Object)
         )
       })
@@ -393,6 +402,53 @@ describe('PtyManager', () => {
     })
   })
 
+  describe('gracefulShutdown()', () => {
+    // AC: @terminal/pty-lifecycle ac-4
+    it('sends SIGTERM first so backends can flush their session files', async () => {
+      let callCount = 0
+      vi.mocked(crypto.randomUUID).mockImplementation(
+        () => `uuid-${callCount++}`
+      )
+
+      const id = manager.spawn('/test/dir1')
+
+      // Simulate the process exiting cleanly shortly after SIGTERM.
+      setTimeout(() => {
+        if (exitCallback) exitCallback({ exitCode: 0 })
+      }, 25)
+
+      await manager.gracefulShutdown(1000)
+
+      const sigtermCalls = mockPtyProcess.kill.mock.calls.filter(
+        (args) => args[0] === 'SIGTERM'
+      )
+      expect(sigtermCalls.length).toBeGreaterThan(0)
+      expect(manager.getProcess(id)).toBeUndefined()
+    })
+
+    it('falls back to SIGKILL after timeout when a backend ignores SIGTERM', async () => {
+      manager.spawn('/test/dir1')
+
+      // Don't trigger exit — process "ignores" SIGTERM. Use a tiny timeout.
+      await manager.gracefulShutdown(80)
+
+      const sigtermCalls = mockPtyProcess.kill.mock.calls.filter(
+        (args) => args[0] === 'SIGTERM'
+      )
+      const sigkillCalls = mockPtyProcess.kill.mock.calls.filter(
+        (args) => args[0] === 'SIGKILL'
+      )
+      expect(sigtermCalls.length).toBeGreaterThan(0)
+      expect(sigkillCalls.length).toBeGreaterThan(0)
+    })
+
+    it('returns immediately when no processes are running', async () => {
+      const start = Date.now()
+      await manager.gracefulShutdown(5000)
+      expect(Date.now() - start).toBeLessThan(50)
+    })
+  })
+
   describe('getProcess()', () => {
     it('should return process info for existing ID', () => {
       const id = manager.spawn('/test/dir')
@@ -459,6 +515,90 @@ describe('PtyManager', () => {
       exitCallback?.({ exitCode: 0 })
 
       expect(manager.getProcess(id)).toBeUndefined()
+    })
+  })
+
+  describe('addDataListener / addExitListener', () => {
+    // AC: @terminal/mobile-live-attach ac-2
+    it('fires additional data listeners alongside the primary callback', () => {
+      const id = manager.spawn('/test/dir')
+      const primary = vi.fn()
+      const listenerA = vi.fn()
+      const listenerB = vi.fn()
+
+      manager.onData(id, primary)
+      manager.addDataListener(id, listenerA)
+      manager.addDataListener(id, listenerB)
+
+      dataCallback?.('hello')
+
+      expect(primary).toHaveBeenCalledWith('hello')
+      expect(listenerA).toHaveBeenCalledWith('hello')
+      expect(listenerB).toHaveBeenCalledWith('hello')
+    })
+
+    // AC: @terminal/mobile-live-attach ac-3
+    it('disposing a data listener stops it without affecting the primary or siblings', () => {
+      const id = manager.spawn('/test/dir')
+      const primary = vi.fn()
+      const listenerA = vi.fn()
+      const listenerB = vi.fn()
+
+      manager.onData(id, primary)
+      const disposeA = manager.addDataListener(id, listenerA)
+      manager.addDataListener(id, listenerB)
+
+      disposeA()
+      dataCallback?.('after dispose')
+
+      expect(primary).toHaveBeenCalledWith('after dispose')
+      expect(listenerA).not.toHaveBeenCalled()
+      expect(listenerB).toHaveBeenCalledWith('after dispose')
+    })
+
+    it('fires exit listeners alongside the primary exit callback', () => {
+      const id = manager.spawn('/test/dir')
+      const primary = vi.fn()
+      const listener = vi.fn()
+
+      manager.onExit(id, primary)
+      manager.addExitListener(id, listener)
+
+      exitCallback?.({ exitCode: 7 })
+
+      expect(primary).toHaveBeenCalledWith(7)
+      expect(listener).toHaveBeenCalledWith(7)
+    })
+
+    it('a thrown listener does not block sibling listeners or the primary callback', () => {
+      const id = manager.spawn('/test/dir')
+      const primary = vi.fn()
+      const bad = vi.fn(() => { throw new Error('boom') })
+      const good = vi.fn()
+
+      manager.onData(id, primary)
+      manager.addDataListener(id, bad)
+      manager.addDataListener(id, good)
+
+      expect(() => dataCallback?.('x')).not.toThrow()
+      expect(primary).toHaveBeenCalledWith('x')
+      expect(good).toHaveBeenCalledWith('x')
+    })
+  })
+
+  describe('getReplayBytes()', () => {
+    // AC: @terminal/mobile-live-attach ac-1
+    it('returns the bytes captured since spawn so a late attacher can rebuild the screen', () => {
+      const id = manager.spawn('/test/dir')
+
+      dataCallback?.('chunk1')
+      dataCallback?.('chunk2')
+
+      expect(manager.getReplayBytes(id)).toBe('chunk1chunk2')
+    })
+
+    it('returns null for a non-existent PTY', () => {
+      expect(manager.getReplayBytes('not-a-real-id')).toBeNull()
     })
   })
 
@@ -590,6 +730,55 @@ describe('buildPermissionArgs (via spawn)', () => {
   })
 
   describe('codex backend', () => {
+    it('should resume the most recent Codex session for the resume-last sentinel', () => {
+      const id = manager.spawn(
+        '/test',
+        '__codex_resume_last__',
+        undefined,
+        undefined,
+        undefined,
+        'codex'
+      )
+
+      expect(pty.spawn).toHaveBeenCalledWith(
+        'codex',
+        ['resume', '--last'],
+        expect.any(Object)
+      )
+      expect(manager.getProcess(id)?.sessionId).toBeUndefined()
+    })
+
+    it('should retry stale Codex session IDs with resume --last', () => {
+      let localExitCallback: ((result: { exitCode: number }) => void) | undefined
+      mockPtyProcess.onExit.mockImplementationOnce((cb: (result: { exitCode: number }) => void) => {
+        localExitCallback = cb
+      })
+
+      manager.spawn(
+        '/test',
+        'ses_stale',
+        undefined,
+        undefined,
+        undefined,
+        'codex'
+      )
+
+      localExitCallback?.({ exitCode: 1 })
+
+      expect(pty.spawn).toHaveBeenNthCalledWith(
+        1,
+        'codex',
+        ['resume', 'ses_stale'],
+        expect.any(Object)
+      )
+      expect(pty.spawn).toHaveBeenNthCalledWith(
+        2,
+        'codex',
+        ['resume', '--last'],
+        expect.any(Object)
+      )
+    })
+
     it('should map acceptEdits to --full-auto', () => {
       manager.spawn(
         '/test',
@@ -607,7 +796,31 @@ describe('buildPermissionArgs (via spawn)', () => {
       )
     })
 
-    it('should map bypassPermissions to --dangerously-bypass...', () => {
+    it('should map dontAsk to no-approval workspace mode with network access', () => {
+      manager.spawn(
+        '/test',
+        undefined,
+        undefined,
+        'dontAsk',
+        undefined,
+        'codex'
+      )
+
+      expect(pty.spawn).toHaveBeenCalledWith(
+        'codex',
+        [
+          '-a',
+          'never',
+          '-s',
+          'workspace-write',
+          '-c',
+          'sandbox_workspace_write.network_access=true',
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('should map bypassPermissions to --yolo', () => {
       manager.spawn(
         '/test',
         undefined,
@@ -619,7 +832,7 @@ describe('buildPermissionArgs (via spawn)', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
-        ['--dangerously-bypass-approvals-and-sandbox'],
+        ['--yolo'],
         expect.any(Object)
       )
     })

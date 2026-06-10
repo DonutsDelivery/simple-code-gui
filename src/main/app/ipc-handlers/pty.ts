@@ -3,9 +3,11 @@ import { PtyManager } from '../../pty-manager.js'
 import { SessionStore } from '../../session-store.js'
 import { ApiServerManager } from '../../api-server.js'
 import { pendingApiPrompts, autoCloseSessions } from '../api-prompt-handler.js'
-import { appendFileSync } from 'fs'
+import { appendFileSync, existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import { installTaskInstructions } from '../../ipc/kspec-handlers.js'
+import type { AIBackend } from '../../ipc/instruction-files.js'
 
 const DEBUG_LOG = '/tmp/auto-accept-debug.log'
 const SCROLL_DEBUG_LOG = join(homedir(), 'scroll-debug.log')
@@ -96,9 +98,16 @@ export function registerPtyHandlers(
   apiServerManager: ApiServerManager,
   ptyToProject: Map<string, string>,
   ptyToBackend: Map<string, string>,
-  getMainWindow: () => BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null,
 ): void {
-  ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => {
+  ipcMain.handle('pty:list', () => ptyManager.listSessions())
+
+  // Serialized screen snapshot for restoring scrollback on terminal remount.
+  // Uses the headless-xterm-interpreted state (clean, like tmux attach) rather
+  // than raw replay bytes, which corrupt formatting when sizes changed.
+  ipcMain.handle('pty:get-replay', (_, id: string) => ptyManager.getSerializedBuffer(id))
+
+  ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {
     try {
       const workspace = sessionStore.getWorkspace()
       const project = workspace.projects.find(p => p.path === cwd)
@@ -188,7 +197,7 @@ export function registerPtyHandlers(
     ptyManager.kill(id)
   })
 
-  ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => {
+  ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {
     const process = ptyManager.getProcess(oldId)
     if (!process) return
 
@@ -231,7 +240,19 @@ export function registerPtyHandlers(
       autoAcceptCooldown.delete(newId)
     })
 
-    mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend })
+    // Refresh instruction file for the new backend so it gets kspec/beads context
+    if (projectPath) {
+      try {
+        const hasKspec = existsSync(join(projectPath, '.kspec'))
+        const hasBeads = existsSync(join(projectPath, '.beads'))
+        if (hasKspec || hasBeads) {
+          const taskBackend = hasKspec ? 'kspec' : 'beads'
+          installTaskInstructions(projectPath, taskBackend, newBackend as AIBackend)
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend, sessionId: effectiveSessionId })
   })
 
   // Auto-accept toggle

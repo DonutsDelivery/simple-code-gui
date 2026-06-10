@@ -106,6 +106,12 @@ export class HttpApiClient {
   // Terminal/PTY API
   // ===========================================================================
 
+  async listPtys() {
+    const res = await this.config.fetch('/api/pty/list')
+    const data = await res.json()
+    return data.ptys || []
+  }
+
   spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     return terminal.spawnPty(this.config, this.wsManager, cwd, sessionId, model, backend)
   }
@@ -134,7 +140,7 @@ export class HttpApiClient {
     return this.wsManager.onTerminalExit(id, callback)
   }
 
-  onPtyRecreated(callback: (data: { oldId: string; newId: string; backend: BackendId }) => void): () => void {
+  onPtyRecreated(callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void): () => void {
     return misc.onPtyRecreated(callback)
   }
 
@@ -160,6 +166,14 @@ export class HttpApiClient {
 
   aiderCheck(): Promise<{ installed: boolean; pipInstalled: boolean }> {
     return misc.aiderCheck(this.config)
+  }
+
+  hermesCheck(): Promise<{ installed: boolean }> {
+    return misc.hermesCheck(this.config)
+  }
+
+  grokCheck(): Promise<{ installed: boolean }> {
+    return misc.grokCheck(this.config)
   }
 
   // ===========================================================================

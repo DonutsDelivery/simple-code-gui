@@ -1,8 +1,11 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
-type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 export const ptyHandlers = {
+  listPtys: (): Promise<Array<{ id: string; cwd: string; backend: Backend; sessionId?: string; spawnedAt: number }>> =>
+    ipcRenderer.invoke('pty:list'),
+
   spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: Backend): Promise<string> =>
     ipcRenderer.invoke('pty:spawn', { cwd, sessionId, model, backend }),
 
@@ -14,6 +17,9 @@ export const ptyHandlers = {
 
   setPtyBackend: (id: string, backend: Backend): Promise<void> =>
     ipcRenderer.invoke('pty:set-backend', { id, backend }),
+
+  getPtyReplay: (id: string): Promise<string | null> =>
+    ipcRenderer.invoke('pty:get-replay', id),
 
   onPtyData: (id: string, callback: (data: string) => void): (() => void) => {
     const handler = (_: IpcRendererEvent, data: string) => callback(data)
@@ -27,7 +33,7 @@ export const ptyHandlers = {
     return () => ipcRenderer.removeListener(`pty:exit:${id}`, handler)
   },
 
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: Backend }) => void): (() => void) => {
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: Backend; sessionId?: string }) => void): (() => void) => {
     const handler = (_: IpcRendererEvent, data: { oldId: string; newId: string; backend: Backend }) => callback(data)
     ipcRenderer.on('pty:recreated', handler)
     return () => ipcRenderer.removeListener('pty:recreated', handler)
@@ -40,5 +46,5 @@ export const ptyHandlers = {
     ipcRenderer.invoke('pty:auto-accept-status', id),
 
   scrollDebugLog: (chunk: string): void =>
-    ipcRenderer.send('scroll-debug-log', chunk)
+    ipcRenderer.send('scroll-debug-log', chunk),
 }

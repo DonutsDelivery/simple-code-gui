@@ -13,7 +13,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export type DropZoneType =
@@ -22,6 +22,8 @@ export type DropZoneType =
   | 'split-bottom'
   | 'split-left'
   | 'split-right'
+  | 'root-right'
+  | 'root-bottom'
 
 export interface DropZone {
   type: DropZoneType
@@ -478,6 +480,29 @@ export function computeDropZone(
   }
 
   return { type, targetTileId: targetTile.id, bounds }
+}
+
+/**
+ * Fallback drop zone for empty canvas space outside all tiles. Used when
+ * computeDropZone returns null. Dropping right of the layout creates a new
+ * column; dropping below it creates a new row. targetTileId is '' (root-level).
+ */
+export function computeFallbackDropZone(
+  layout: TileLayout[],
+  mouseX: number,
+  mouseY: number
+): DropZone | null {
+  if (layout.length === 0) return null
+  const maxX = Math.max(...layout.map(t => t.x + t.width))
+  const maxY = Math.max(...layout.map(t => t.y + t.height))
+
+  if (mouseX > maxX) {
+    return { type: 'root-right', targetTileId: '', bounds: { x: maxX, y: 0, width: 15, height: 100 } }
+  }
+  if (mouseY > maxY) {
+    return { type: 'root-bottom', targetTileId: '', bounds: { x: 0, y: maxY, width: 100, height: 15 } }
+  }
+  return null
 }
 
 /** Migrate a legacy tile (without tabIds) to the new format */

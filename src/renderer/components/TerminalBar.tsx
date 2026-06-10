@@ -15,8 +15,8 @@ interface TerminalBarProps {
   ptyId: string
   onCommand: (command: string, options?: AutoWorkOptions) => void
   onInput?: (data: string) => void
-  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
-  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => void
+  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => void
   isMobile?: boolean
   onOpenFileBrowser?: () => void
   onClearWithRestore?: () => void
@@ -258,6 +258,9 @@ export function TerminalBar({
         { id: 'codex', label: 'Codex' },
         { id: 'opencode', label: 'OpenCode' },
         { id: 'aider', label: 'Aider' },
+        { id: 'droid', label: 'Droid' },
+        { id: 'hermes', label: 'Hermes' },
+        { id: 'grok', label: 'Grok' },
       ],
     },
   ]
@@ -275,7 +278,7 @@ export function TerminalBar({
     }
 
     if (categoryId === 'backend') {
-      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider')
+      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok')
       setOpenMenu(null)
       return
     }

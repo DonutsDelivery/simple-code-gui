@@ -63,6 +63,11 @@ export interface Settings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: BackendSelection
+  globalInstructionInjection?: string
+  // Headroom context-compression proxy
+  headroomEnabled?: boolean
+  headroomPort?: number
+  headroomProxyPath?: string
 }
 
 /**
@@ -88,6 +93,7 @@ export interface Project {
   apiModel?: 'default' | 'opus' | 'sonnet' | 'haiku'
   autoAcceptTools?: string[]
   permissionMode?: string
+  icon?: string
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
@@ -108,6 +114,14 @@ export interface OpenTab {
   backend?: BackendSelection
 }
 
+export interface PtySession {
+  id: string
+  cwd: string
+  backend: BackendId
+  sessionId?: string
+  spawnedAt: number
+}
+
 /**
  * Tile layout configuration for tiled view mode
  */
@@ -122,16 +136,31 @@ export interface TileLayout {
 }
 
 /**
- * Workspace state containing all projects, tabs, and layout
+ * A saved workspace session (isolated tiled environment with its own PTYs)
+ */
+export interface SavedWorkspaceSession {
+  id: string
+  name: string
+  openTabs: OpenTab[]
+  activeTabId: string | null
+  tileTree?: any
+}
+
+/**
+ * Workspace state containing all projects, sessions, and layout
  */
 export interface Workspace {
   projects: Project[]
-  openTabs: OpenTab[]
-  activeTabId: string | null
+  categories: ProjectCategory[]
+  // Multi-session format
+  sessions?: SavedWorkspaceSession[]
+  activeSessionId?: string | null
+  // Legacy single-session fields (kept for migration)
+  openTabs?: OpenTab[]
+  activeTabId?: string | null
   viewMode?: 'tabs' | 'tiled'
   tileLayout?: TileLayout[]
   tileTree?: any
-  categories: ProjectCategory[]
 }
 
 /**
@@ -159,9 +188,9 @@ export type Unsubscribe = () => void
 
 export type PtyDataCallback = (data: string) => void
 export type PtyExitCallback = (code: number) => void
-export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: BackendId }) => void
+export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void
 
-export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 export type BackendSelection = 'default' | BackendId
 
 export interface ApiOpenSessionEvent {
@@ -171,6 +200,16 @@ export interface ApiOpenSessionEvent {
 }
 
 export type ApiOpenSessionCallback = (event: ApiOpenSessionEvent) => void
+
+export interface OrchestratorSessionCreatedEvent {
+  ptyId: string
+  projectPath: string
+  backend: string
+  workspaceId?: string
+  tileId?: string
+  placement?: 'new-tile' | 'sub-tab' | 'split-left' | 'split-right' | 'split-top' | 'split-bottom'
+}
+export type OrchestratorSessionCreatedCallback = (event: OrchestratorSessionCreatedEvent) => void
 
 /**
  * Core API interface for the renderer
@@ -185,7 +224,7 @@ export interface Api {
   voiceInstallWhisper?: (model: string) => Promise<{ success: boolean; error?: string }>
   voiceApplySettings?: (settings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number }) => Promise<{ success: boolean }>
   voiceSetVoice?: (voice: string | { voice: string; engine: 'piper' | 'xtts' }) => Promise<{ success: boolean }>
-  ttsRemoveInstructions?: (projectPath: string) => Promise<{ success: boolean }>
+  ttsRemoveInstructions?: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
   extensionsGetInstalled?: () => Promise<Array<{ id: string; name: string; type: string }>>
 
   // Optional: API server control (desktop only)
@@ -256,6 +295,11 @@ export interface Api {
   // ==========================================================================
 
   /**
+   * List live PTY processes
+   */
+  listPtys: () => Promise<PtySession[]>
+
+  /**
    * Spawn a new PTY session
    * @param cwd Working directory
    * @param sessionId Optional session ID to resume
@@ -297,18 +341,19 @@ export interface Api {
   /**
    * Subscribe to PTY recreated events (backend switching)
    */
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId }) => void) => Unsubscribe
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void) => Unsubscribe
 
   // ==========================================================================
   // TTS (Text-to-Speech)
   // ==========================================================================
 
   /**
-   * Install TTS instructions (CLAUDE.md markers) for a project
+   * Install TTS instructions in the backend's instruction file
    * @param projectPath Path to the project
+   * @param aiBackend Optional backend override (claude, gemini, codex, etc.)
    * @returns Promise resolving to success status
    */
-  ttsInstallInstructions: (projectPath: string) => Promise<{ success: boolean }>
+  ttsInstallInstructions: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
 
   /**
    * Speak text using TTS
@@ -333,6 +378,13 @@ export interface Api {
    * @returns Unsubscribe function
    */
   onApiOpenSession: (callback: ApiOpenSessionCallback) => Unsubscribe
+
+  /**
+   * Subscribe to orchestrator session created events (triggered by MCP create_session tool)
+   * @param callback Function called when a session is created by the orchestrator
+   * @returns Unsubscribe function
+   */
+  onOrchestratorSessionCreated: (callback: OrchestratorSessionCreatedCallback) => Unsubscribe
 
   /**
    * Get connection info for external components (HTTP backend only)

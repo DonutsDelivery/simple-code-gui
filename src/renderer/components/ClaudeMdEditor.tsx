@@ -5,33 +5,48 @@ interface ClaudeMdEditorProps {
   onClose: () => void
   projectPath: string
   projectName: string
+  aiBackend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
-export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: ClaudeMdEditorProps) {
+const BACKEND_FILE_LABELS: Record<string, string> = {
+  claude: 'CLAUDE.md',
+  gemini: 'GEMINI.md',
+  codex: 'AGENTS.md',
+  opencode: 'OPENCODE.md',
+  aider: 'CONVENTIONS.md',
+  droid: 'AGENTS.md',
+  hermes: 'HERMES.md',
+  grok: 'AGENTS.md',
+}
+
+export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName, aiBackend = 'claude' }: ClaudeMdEditorProps) {
   const [content, setContent] = useState('')
   const [originalContent, setOriginalContent] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const [fileExists, setFileExists] = useState(false)
+  const [relativePath, setRelativePath] = useState('')
+  const fileLabel = BACKEND_FILE_LABELS[aiBackend] || 'CLAUDE.md'
 
   useEffect(() => {
     if (isOpen) {
       loadContent()
     }
-  }, [isOpen, projectPath])
+  }, [isOpen, projectPath, aiBackend])
 
   const loadContent = async () => {
     setIsLoading(true)
     setError('')
     try {
-      const result = await window.electronAPI?.claudeMdRead(projectPath)
+      const result = await window.electronAPI?.claudeMdRead(projectPath, aiBackend)
       if (result.success) {
         setContent(result.content || '')
         setOriginalContent(result.content || '')
         setFileExists(result.exists || false)
+        setRelativePath(result.relativePath || '')
       } else {
-        setError(result.error || 'Failed to load CLAUDE.md')
+        setError(result.error || `Failed to load ${fileLabel}`)
       }
     } catch (e) {
       setError(String(e))
@@ -44,13 +59,13 @@ export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: Cl
     setIsSaving(true)
     setError('')
     try {
-      const result = await window.electronAPI?.claudeMdSave(projectPath, content)
+      const result = await window.electronAPI?.claudeMdSave(projectPath, content, aiBackend)
       if (result.success) {
         setOriginalContent(content)
         setFileExists(true)
         onClose()
       } else {
-        setError(result.error || 'Failed to save CLAUDE.md')
+        setError(result.error || `Failed to save ${fileLabel}`)
       }
     } catch (e) {
       setError(String(e))
@@ -84,7 +99,7 @@ export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: Cl
         onKeyDown={handleKeyDown}
       >
         <div className="modal-header">
-          <h2>Edit CLAUDE.md</h2>
+          <h2>Edit {fileLabel}</h2>
           <span className="modal-subtitle">{projectName}</span>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
@@ -103,19 +118,19 @@ export function ClaudeMdEditor({ isOpen, onClose, projectPath, projectName }: Cl
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Add project-specific instructions for Claude...
+                  placeholder={`Add project-specific instructions for ${aiBackend === 'claude' ? 'Claude' : aiBackend}...
 
 Examples:
 - Coding style preferences
 - Project conventions
 - File structure notes
-- Testing requirements"
+- Testing requirements`}
                   rows={20}
                   autoFocus
                   className="claudemd-textarea"
                 />
                 <div className="form-hint">
-                  This file will be saved to: .claude/CLAUDE.md
+                  This file will be saved to: {relativePath || fileLabel}
                 </div>
               </div>
               {error && <div className="form-error">{error}</div>}

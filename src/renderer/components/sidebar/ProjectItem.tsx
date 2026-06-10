@@ -59,6 +59,7 @@ export const ProjectItem = React.memo(function ProjectItem({
 }: ProjectItemProps) {
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
+  const taskTotal = taskCounts ? taskCounts.open + taskCounts.inProgress : 0
 
   return (
     <div>
@@ -84,8 +85,8 @@ export const ProjectItem = React.memo(function ProjectItem({
         >
           {isExpanded ? '▼' : '▶'}
         </button>
-        <ProjectIcon projectName={project.name} size={28} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <ProjectIcon projectName={project.name} customIcon={project.icon} size={24} />
+        <div className="project-main">
           {isEditing ? (
             <input
               ref={editInputRef}
@@ -106,23 +107,15 @@ export const ProjectItem = React.memo(function ProjectItem({
               {project.name}
             </div>
           )}
-          {taskCounts ? (
-            <div className="project-tasks" title={project.path}>
-              {taskCounts.open + taskCounts.inProgress > 0 ? (
-                <>
-                  <span className="task-count">{taskCounts.open + taskCounts.inProgress} tasks</span>
-                  {taskCounts.inProgress > 0 && (
-                    <span className="task-in-progress">({taskCounts.inProgress} active)</span>
-                  )}
-                </>
-              ) : (
-                <span className="task-count task-done">No open tasks</span>
-              )}
-            </div>
-          ) : (
-            <div className="project-path" title={project.path}>{project.path}</div>
-          )}
         </div>
+        {taskCounts && taskTotal > 0 && (
+          <div className="project-badges" title={`${taskTotal} open tasks`}>
+            {taskCounts.inProgress > 0 && (
+              <span className="project-badge active">{taskCounts.inProgress}</span>
+            )}
+            <span className="project-badge">{taskTotal}</span>
+          </div>
+        )}
         {project.executable && (
           <button
             className="start-btn"

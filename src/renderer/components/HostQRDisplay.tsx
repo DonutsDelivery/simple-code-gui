@@ -95,6 +95,12 @@ export function HostQRDisplay({
   const [nonceExpires, setNonceExpires] = useState<number>(0)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
   const nonceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // H1: mobile/LAN access is opt-in. null = still checking, false = off (show
+  // the enable prompt instead of a non-working QR), true = server running.
+  const [accessEnabled, setAccessEnabled] = useState<boolean | null>(null)
+  const [toggling, setToggling] = useState(false)
+  // H3: paired phones, individually revocable.
+  const [devices, setDevices] = useState<Array<{ deviceId: string; name: string; lastSeen: number }>>([])
 
   // Refresh QR code with new nonce
   const refreshQRCode = useCallback(async () => {
@@ -114,36 +120,81 @@ export function HostQRDisplay({
     }
   }, [])
 
+  // H3: load the list of paired devices so each can be revoked individually.
+  const loadDevices = useCallback(async () => {
+    if (!window.electronAPI?.mobileListDevices) return
+    try {
+      const list = await window.electronAPI.mobileListDevices()
+      setDevices(list.map(d => ({ deviceId: d.deviceId, name: d.name, lastSeen: d.lastSeen })))
+    } catch (e) {
+      console.error('Failed to list paired devices:', e)
+    }
+  }, [])
+
+  // Revoke a single paired device: closes its live sockets and rejects future
+  // requests, without rotating the shared token or kicking other devices.
+  const handleRevokeDevice = useCallback(async (deviceId: string) => {
+    if (!window.electronAPI?.mobileRevokeDevice) return
+    try {
+      await window.electronAPI.mobileRevokeDevice(deviceId)
+      await loadDevices()
+    } catch (e) {
+      console.error('Failed to revoke device:', e)
+    }
+  }, [loadDevices])
+
   // Get connection info from mobile server on mount
   useEffect(() => {
-    const loadConnectionInfo = async () => {
-      if (window.electronAPI?.mobileGetConnectionInfo) {
-        try {
-          const info = await window.electronAPI?.mobileGetConnectionInfo()
-          setToken(info.token)
-          setLocalIPs(info.ips.length > 0 ? info.ips : ['localhost'])
-          setServerPort(info.port)
-          setFingerprint(info.fingerprint)
-          setFormattedFingerprint(info.formattedFingerprint)
-          setQrData(info.qrData)
-          setNonceExpires(info.nonceExpires)
-        } catch (e) {
-          console.error('Failed to get mobile connection info:', e)
-          // Fallback to local discovery
-          getLocalIPs().then((ips) => {
-            setLocalIPs(ips)
-          })
-          setToken(generateToken())
-        }
-      } else {
-        // Not in Electron, use local discovery
-        getLocalIPs().then((ips) => {
-          setLocalIPs(ips)
-        })
+    const init = async () => {
+      // Non-Electron (e.g. mobile web build): no main process to gate, just
+      // fall back to local discovery.
+      if (!window.electronAPI?.mobileGetConnectionInfo) {
+        setAccessEnabled(true)
+        getLocalIPs().then(setLocalIPs)
         setToken(generateToken())
+        return
+      }
+      // H1: only load connection info (and assume a live server) when the user
+      // has enabled mobile access. Otherwise show the enable prompt.
+      const isEnabled = window.electronAPI.mobileIsEnabled
+        ? await window.electronAPI.mobileIsEnabled().catch(() => false)
+        : true
+      setAccessEnabled(isEnabled)
+      if (isEnabled) {
+        await refreshQRCode()
+        await loadDevices()
       }
     }
-    loadConnectionInfo()
+    init()
+  }, [refreshQRCode, loadDevices])
+
+  // Enable mobile access (starts the server), then load the QR.
+  const handleEnableAccess = useCallback(async () => {
+    if (!window.electronAPI?.mobileSetEnabled) return
+    setToggling(true)
+    try {
+      await window.electronAPI.mobileSetEnabled(true)
+      setAccessEnabled(true)
+      await refreshQRCode()
+    } catch (e) {
+      console.error('Failed to enable mobile access:', e)
+    } finally {
+      setToggling(false)
+    }
+  }, [refreshQRCode])
+
+  // Disable mobile access (stops the server).
+  const handleDisableAccess = useCallback(async () => {
+    if (!window.electronAPI?.mobileSetEnabled) return
+    setToggling(true)
+    try {
+      await window.electronAPI.mobileSetEnabled(false)
+      setAccessEnabled(false)
+    } catch (e) {
+      console.error('Failed to disable mobile access:', e)
+    } finally {
+      setToggling(false)
+    }
   }, [])
 
   // Update time remaining countdown
@@ -217,6 +268,44 @@ export function HostQRDisplay({
       // Clipboard API not available
     }
   }, [connectionUrl])
+
+  // H1: still resolving whether mobile access is on.
+  if (accessEnabled === null) {
+    return (
+      <div className={`host-qr-display ${className}`}>
+        <div className="host-qr-display__header">
+          <h3 className="host-qr-display__title">Connect Mobile Device</h3>
+          <p className="host-qr-display__subtitle">Checking mobile access…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // H1: mobile access is off by default. Show a one-tap enable prompt rather
+  // than a QR that points at a server which isn't listening.
+  if (accessEnabled === false) {
+    return (
+      <div className={`host-qr-display ${className}`}>
+        <div className="host-qr-display__header">
+          <h3 className="host-qr-display__title">Connect Mobile Device</h3>
+          <p className="host-qr-display__subtitle">
+            Mobile access is off. Turn it on to expose a token-protected
+            connection on your local network for the Claude Terminal mobile app.
+            It stays off until you enable it, and you can turn it off again here.
+          </p>
+        </div>
+        <div className="host-qr-display__actions">
+          <button
+            className="host-qr-display__button host-qr-display__button--primary"
+            onClick={handleEnableAccess}
+            disabled={toggling}
+          >
+            {toggling ? 'Enabling…' : 'Enable mobile access'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`host-qr-display ${className}`}>
@@ -333,6 +422,38 @@ export function HostQRDisplay({
       {/* URL Display */}
       <div className="host-qr-display__url">
         <code className="host-qr-display__url-text">{connectionUrl}</code>
+      </div>
+
+      {/* H3: paired devices — each phone has its own token and can be revoked
+          individually without affecting the others. */}
+      {devices.length > 0 && (
+        <div className="host-qr-display__devices">
+          <div className="host-qr-display__devices-title">Paired devices</div>
+          {devices.map(d => (
+            <div key={d.deviceId} className="host-qr-display__device">
+              <span className="host-qr-display__device-name">{d.name}</span>
+              <button
+                className="host-qr-display__button host-qr-display__button--secondary"
+                onClick={() => handleRevokeDevice(d.deviceId)}
+                title="Revoke this device's access and disconnect it now"
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* H1: let the user turn mobile access back off from here. */}
+      <div className="host-qr-display__actions">
+        <button
+          className="host-qr-display__button host-qr-display__button--secondary"
+          onClick={handleDisableAccess}
+          disabled={toggling}
+          title="Stop the mobile server and turn off LAN access"
+        >
+          {toggling ? 'Disabling…' : 'Disable mobile access'}
+        </button>
       </div>
     </div>
   )

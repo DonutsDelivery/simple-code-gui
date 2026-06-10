@@ -1,6 +1,9 @@
 import * as pty from 'node-pty'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
+import { Terminal } from '@xterm/headless'
+import { SerializeAddon } from '@xterm/addon-serialize'
 import {
   isWindows,
   getEnhancedPathWithPortable,
@@ -9,40 +12,129 @@ import {
 import { getPortableBinDirs } from './portable-deps'
 
 // Backends that use Ink (React for CLI) and are sensitive to rapid resize during startup
-const INK_BACKENDS = new Set(['gemini'])
+const INK_BACKENDS = new Set(['gemini', 'droid'])
+const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
+type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
-// Ring buffer for storing recent PTY output
-const OUTPUT_BUFFER_MAX_LINES = 200
+// Headroom proxy routing. Anthropic-shaped harnesses honor ANTHROPIC_BASE_URL;
+// OpenAI-compatible ones honor OPENAI_BASE_URL. Backends not listed here speak a
+// proprietary/native API the proxy can't compress, so we leave their env alone.
+const HEADROOM_ANTHROPIC_BACKENDS = new Set<Backend>(['claude', 'grok'])
+const HEADROOM_OPENAI_BACKENDS = new Set<Backend>(['codex', 'opencode', 'aider'])
 
+interface HeadroomRouting {
+  enabled: boolean
+  port: number
+  // Hermes (MiniMax via Anthropic Messages) routes through a dedicated proxy
+  // instance pointed at MiniMax's upstream, via MINIMAX_BASE_URL.
+  minimaxPort: number
+}
+
+// Uses a headless xterm.js terminal to correctly interpret all VT/ANSI sequences
+// (cursor-up redraws, erase-line, carriage-return overwrites, bracketed paste
+// markers, OSC, DCS, …) before serving output to the orchestrator.  This avoids
+// the regex-strip approach which left spinner chars, partial Ink redraws, and
+// cursor-positioned text fragments in the buffer.
 class OutputBuffer {
-  private lines: string[] = []
-  private partial: string = '' // incomplete line (no newline yet)
+  private terminal: Terminal
+  private serializeAddon: SerializeAddon
+  private writeChain: Promise<void> = Promise.resolve()
+
+  constructor(cols: number = 120, rows: number = 30) {
+    // Scrollback matches the renderer's terminal (constants.ts) so a restore
+    // after workspace switch can rebuild as much history as the user had.
+    this.terminal = new Terminal({ cols, rows, scrollback: 5000, allowProposedApi: true })
+    this.serializeAddon = new SerializeAddon()
+    this.terminal.loadAddon(this.serializeAddon)
+  }
 
   append(data: string): void {
-    // Split incoming data by newlines, preserving partial lines
-    const text = this.partial + data
-    const parts = text.split('\n')
-    // Last element is either empty (if data ended with \n) or a partial line
-    this.partial = parts.pop() || ''
-    for (const line of parts) {
-      // Strip ANSI escape sequences for readability
-      const clean = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim()
-      if (clean) {
-        this.lines.push(clean)
-        if (this.lines.length > OUTPUT_BUFFER_MAX_LINES) {
-          this.lines.shift()
-        }
-      }
+    // Chain writes so getRecent can await all pending data.
+    this.writeChain = this.writeChain.then(
+      () => new Promise<void>(resolve => this.terminal.write(data, resolve))
+    )
+  }
+
+  resize(cols: number, rows: number): void {
+    try {
+      this.terminal.resize(cols, rows)
+    } catch {
+      // Terminal may already be disposed
     }
   }
 
-  getRecent(maxLines: number = 50): string[] {
-    return this.lines.slice(-maxLines)
+  async getRecent(maxLines: number = 50): Promise<string[]> {
+    await this.writeChain
+    const buffer = this.terminal.buffer.active
+    const lines: string[] = []
+    // Walk backwards so we collect the most recent maxLines non-empty rows.
+    for (let i = buffer.length - 1; i >= 0 && lines.length < maxLines; i--) {
+      const bufLine = buffer.getLine(i)
+      if (!bufLine) continue
+      const text = bufLine.translateToString(true).trim()
+      if (text) lines.unshift(text)
+    }
+    return lines
+  }
+
+  // Clean VT snapshot of the interpreted screen state (scrollback + viewport,
+  // colors, cursor) — like a tmux attach. Unlike raw byte replay, this never
+  // contains stale cursor-positioning from old terminal sizes, so writing it
+  // into a fresh xterm reconstructs the buffer without formatting corruption.
+  async serialize(): Promise<string> {
+    await this.writeChain
+    return this.serializeAddon.serialize()
   }
 
   clear(): void {
-    this.lines = []
-    this.partial = ''
+    this.terminal.reset()
+    this.writeChain = Promise.resolve()
+  }
+
+  stats(): { lines: number; cols: number; rows: number } {
+    const buffer = this.terminal.buffer.active
+    return { lines: buffer.length, cols: this.terminal.cols, rows: this.terminal.rows }
+  }
+
+  dispose(): void {
+    this.terminal.dispose()
+  }
+}
+
+// Raw byte ring buffer — preserves ANSI/VT bytes exactly so a late-attaching
+// client (e.g. mobile xterm.js) can replay them and reconstruct the screen.
+// OutputBuffer above runs bytes through xterm.js (lossy: cursor positioning,
+// alternate screen state, scrollback get flattened to text), so it can't be
+// used for replay.
+class ReplayBuffer {
+  private chunks: string[] = []
+  private totalBytes = 0
+  private readonly cap: number
+
+  constructor(capBytes: number = 64 * 1024) {
+    this.cap = capBytes
+  }
+
+  append(data: string): void {
+    this.chunks.push(data)
+    this.totalBytes += data.length
+    while (this.totalBytes > this.cap && this.chunks.length > 1) {
+      const dropped = this.chunks.shift()!
+      this.totalBytes -= dropped.length
+    }
+  }
+
+  read(): string {
+    return this.chunks.join('')
+  }
+
+  size(): number {
+    return this.totalBytes
+  }
+
+  clear(): void {
+    this.chunks.length = 0
+    this.totalBytes = 0
   }
 }
 
@@ -51,13 +143,16 @@ interface ClaudeProcess {
   pty: pty.IPty
   cwd: string
   sessionId?: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: Backend
   disposables: { dispose: () => void }[]
   spawnedAt: number
   resizeTimeout?: ReturnType<typeof setTimeout>
   lastResizeCols?: number
   lastResizeRows?: number
   outputBuffer: OutputBuffer
+  replayBuffer: ReplayBuffer
+  /** Ink backends: suppress data forwarding until the first resize sets the correct terminal size */
+  suppressOutput?: boolean
 }
 
 // Extended node-pty options - useConpty is a Windows-specific option not in @types/node-pty
@@ -65,10 +160,30 @@ interface ExtendedPtyForkOptions extends pty.IPtyForkOptions {
   useConpty?: boolean
 }
 
-function getEnhancedEnv(): { [key: string]: string } {
+function getEnhancedEnv(
+  backend?: Backend,
+  headroom?: HeadroomRouting
+): { [key: string]: string } {
   const env = { ...process.env } as { [key: string]: string }
   delete env.CLAUDECODE
   env.SIMPLE_CODE_GUI = '1'
+
+  // Route this harness's LLM traffic through the Headroom compression proxy when
+  // enabled and the backend speaks a shape the proxy understands.
+  if (headroom?.enabled && backend) {
+    const base = `http://127.0.0.1:${headroom.port}`
+    if (HEADROOM_ANTHROPIC_BACKENDS.has(backend)) {
+      env.ANTHROPIC_BASE_URL = base
+    } else if (HEADROOM_OPENAI_BACKENDS.has(backend)) {
+      env.OPENAI_BASE_URL = `${base}/v1`
+    } else if (backend === 'hermes') {
+      // Hermes posts /v1/messages (anthropic_messages transport, pinned via
+      // ~/.hermes/config.yaml api_mode) to MINIMAX_BASE_URL. Point it at the
+      // MiniMax-targeted proxy instance with no path suffix so it lands on the
+      // proxy's /v1/messages route, which forwards to …/anthropic/v1/messages.
+      env.MINIMAX_BASE_URL = `http://127.0.0.1:${headroom.minimaxPort}`
+    }
+  }
   const enhancedPath = getEnhancedPathWithPortable()
 
   // On Windows, environment variables are case-insensitive but we need to set the right one
@@ -109,7 +224,7 @@ function getEnhancedEnv(): { [key: string]: string } {
 
 // Find executable for the given backend
 function findExecutable(
-  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude'
+  backend: Backend = 'claude'
 ): string {
   if (backend === 'gemini') {
     return findGeminiExecutable()
@@ -122,6 +237,15 @@ function findExecutable(
   }
   if (backend === 'aider') {
     return findAiderExecutable()
+  }
+  if (backend === 'droid') {
+    return findDroidExecutable()
+  }
+  if (backend === 'hermes') {
+    return findHermesExecutable()
+  }
+  if (backend === 'grok') {
+    return findGrokExecutable()
   }
   return findClaudeExecutable()
 }
@@ -308,10 +432,118 @@ function findAiderExecutable(): string {
   return 'aider'
 }
 
+// Find droid executable - native binary installed to ~/.local/bin or PATH
+function findDroidExecutable(): string {
+  if (!isWindows) {
+    return 'droid'
+  }
+
+  // On Windows, check for droid.exe in portable dirs first
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    const droidExe = path.join(dir, 'droid.exe')
+    if (fs.existsSync(droidExe)) {
+      console.log('Found Droid at (portable):', droidExe)
+      return droidExe
+    }
+  }
+
+  // Check common install locations
+  const additionalPaths = getAdditionalPaths()
+  for (const dir of additionalPaths) {
+    const droidExe = path.join(dir, 'droid.exe')
+    if (fs.existsSync(droidExe)) {
+      console.log('Found Droid at:', droidExe)
+      return droidExe
+    }
+  }
+
+  // Fall back to just 'droid' and let PATH resolve it
+  return 'droid'
+}
+
+// Find hermes executable - native install normally exposes `hermes` on PATH.
+function findHermesExecutable(): string {
+  if (!isWindows) {
+    return 'hermes'
+  }
+
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    const hermesExe = path.join(dir, 'hermes.exe')
+    const hermesCmd = path.join(dir, 'hermes.cmd')
+    if (fs.existsSync(hermesExe)) {
+      console.log('Found Hermes at (portable):', hermesExe)
+      return hermesExe
+    }
+    if (fs.existsSync(hermesCmd)) {
+      console.log('Found Hermes at (portable):', hermesCmd)
+      return hermesCmd
+    }
+  }
+
+  const additionalPaths = getAdditionalPaths()
+  for (const dir of additionalPaths) {
+    const hermesExe = path.join(dir, 'hermes.exe')
+    const hermesCmd = path.join(dir, 'hermes.cmd')
+    if (fs.existsSync(hermesExe)) {
+      console.log('Found Hermes at:', hermesExe)
+      return hermesExe
+    }
+    if (fs.existsSync(hermesCmd)) {
+      console.log('Found Hermes at:', hermesCmd)
+      return hermesCmd
+    }
+  }
+
+  return 'hermes'
+}
+
+// Find Grok executable. Grok Build is commonly exposed as `grok`, with `agent`
+// as an alternate command name.
+function findGrokExecutable(): string {
+  if (!isWindows) {
+    const pathDirs = (process.env.PATH || '').split(path.delimiter)
+    for (const name of ['grok', 'agent']) {
+      for (const dir of pathDirs) {
+        const grokPath = path.join(dir, name)
+        if (fs.existsSync(grokPath)) return name
+      }
+    }
+    return 'grok'
+  }
+
+  const names = ['grok.exe', 'grok.cmd', 'agent.exe', 'agent.cmd']
+
+  const portableDirs = getPortableBinDirs()
+  for (const dir of portableDirs) {
+    for (const name of names) {
+      const grokPath = path.join(dir, name)
+      if (fs.existsSync(grokPath)) {
+        console.log('Found Grok at (portable):', grokPath)
+        return grokPath
+      }
+    }
+  }
+
+  const additionalPaths = getAdditionalPaths()
+  for (const dir of additionalPaths) {
+    for (const name of names) {
+      const grokPath = path.join(dir, name)
+      if (fs.existsSync(grokPath)) {
+        console.log('Found Grok at:', grokPath)
+        return grokPath
+      }
+    }
+  }
+
+  return 'grok'
+}
+
 // Build backend-specific permission arguments
 // Maps our internal permission modes to each backend's CLI flags
 function buildPermissionArgs(
-  backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' = 'claude',
+  backend: Backend = 'claude',
   permissionMode?: string,
   autoAcceptTools?: string[]
 ): string[] {
@@ -350,16 +582,24 @@ function buildPermissionArgs(
       break
 
     case 'codex':
-      // Codex CLI: --full-auto or --dangerously-bypass-approvals-and-sandbox
-      // See: https://developers.openai.com/codex/cli/reference/
       if (permissionMode) {
         switch (permissionMode) {
           case 'acceptEdits':
+            // Auto-approve within workspace sandbox; --full-auto is not a valid flag in 0.128+
+            args.push('-a', 'never', '-s', 'workspace-write')
+            break
           case 'dontAsk':
-            args.push('--full-auto')
+            args.push(
+              '-a',
+              'never',
+              '-s',
+              'workspace-write',
+              '-c',
+              'sandbox_workspace_write.network_access=true'
+            )
             break
           case 'bypassPermissions':
-            args.push('--dangerously-bypass-approvals-and-sandbox')
+            args.push('--yolo')
             break
           // 'default' mode = no flag needed
         }
@@ -378,9 +618,139 @@ function buildPermissionArgs(
         args.push('--yes')
       }
       break
+
+    case 'droid':
+      // Droid doesn't expose permission flags via CLI
+      break
+
+    case 'hermes':
+      // Hermes permissions are configured inside Hermes; avoid passing unknown flags.
+      break
+
+    case 'grok':
+      // Grok Build accepts Claude-style permission modes.
+      if (permissionMode && permissionMode !== 'default') {
+        args.push('--permission-mode', permissionMode)
+      }
+      if (autoAcceptTools && autoAcceptTools.length > 0) {
+        args.push('--allowedTools', autoAcceptTools.join(','))
+      }
+      break
   }
 
   return args
+}
+
+// Claude Code sessions are append-only JSONL trees (each entry has
+// parentUuid/uuid). Over time a session can fork into many branches —
+// `claude -r <sessionId>` doesn't let us specify which leaf to resume to,
+// and in practice it keeps picking stale branches when automated replies
+// (e.g. the "Continue from where you left off" auto-prompt) have tacked
+// themselves onto an old parent. We prune the JSONL to the linear chain
+// leading to the latest REAL user leaf before spawning, so claude CLI has
+// no branches to disambiguate.
+function claudeSessionJsonlPath(cwd: string, sessionId: string): string {
+  // Must match Claude's own encoding (same as encodeProjectPath in session-discovery.ts):
+  // each separator char is replaced individually, so "/.config" → "--config" (two dashes),
+  // not "-config" (one dash) as the collapsed [^a-zA-Z0-9]+ regex would produce.
+  const dir = cwd
+    .replace(/[/\\]+$/, '')
+    .replace(/[/\\]/g, '-')
+    .replace(/:/g, '-')
+    .replace(/_/g, '-')
+    .replace(/ /g, '-')
+    .replace(/\./g, '-')
+  return path.join(os.homedir(), '.claude', 'projects', dir, `${sessionId}.jsonl`)
+}
+
+
+export function pruneClaudeSessionToLatestBranch(cwd: string, sessionId: string): void {
+  try {
+    const filePath = claudeSessionJsonlPath(cwd, sessionId)
+    if (!fs.existsSync(filePath)) return
+
+    const rawLines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim().length > 0)
+    if (rawLines.length === 0) return
+
+    // Parse each line, tracking which lines are valid JSON vs corrupted.
+    // Corrupted lines (concurrent-write collisions) are dropped — Claude Code
+    // can't parse them and will exit immediately if they remain in the file.
+    const entries: (any | null)[] = rawLines.map(l => {
+      try { return JSON.parse(l) } catch { return null }
+    })
+
+    const corruptedCount = entries.filter(e => e === null).length
+    if (corruptedCount > 0) {
+      console.warn(`[PtyManager] ${sessionId}: ${corruptedCount} corrupted line(s) found, will strip them`)
+    }
+
+    const byUuid = new Map<string, any>()
+    const hasChildren = new Set<string>()
+    for (const e of entries) {
+      if (e?.uuid) byUuid.set(e.uuid, e)
+    }
+    for (const e of entries) {
+      if (e?.parentUuid && byUuid.has(e.parentUuid)) hasChildren.add(e.parentUuid)
+    }
+
+    const leafUuids: string[] = []
+    for (const u of byUuid.keys()) {
+      if (!hasChildren.has(u)) leafUuids.push(u)
+    }
+    if (leafUuids.length <= 1 && corruptedCount === 0) return // nothing to do
+
+    // Anchor directly on the most recent real conversation turn (user/assistant)
+    // by timestamp, then keep its ancestor chain. `claude -r` can only resume
+    // from a user/assistant turn, so that ancestor is what we land on.
+    //
+    // Earlier this walked up from the single freshest leaf of *any* type. That
+    // breaks on heavily-compacted sessions (each compaction forks the tree):
+    // if the freshest leaf is a trailing attachment/system/summary marker that
+    // got parented onto a stale pre-compaction branch, the walk-up lands on an
+    // old turn and we resume a pre-compaction view of the conversation. Picking
+    // the newest user/assistant entry globally always lands on the latest real
+    // turn regardless of which branch the freshest non-conversation entry is on.
+    const CONVERSATION_TYPES = new Set(['user', 'assistant'])
+    let terminusUuid: string | undefined
+    let terminusTs = ''
+    for (const [uuid, e] of byUuid) {
+      if (!CONVERSATION_TYPES.has(e.type || '')) continue
+      const ts = e.timestamp || ''
+      if (terminusUuid === undefined || ts.localeCompare(terminusTs) > 0) {
+        terminusUuid = uuid
+        terminusTs = ts
+      }
+    }
+    if (!terminusUuid && corruptedCount === 0) return // nothing safe to prune to
+
+    const chainUuids = new Set<string>()
+    if (terminusUuid) {
+      let cur: string | null | undefined = terminusUuid
+      while (cur) {
+        const e = byUuid.get(cur)
+        if (!e) break
+        chainUuids.add(cur)
+        cur = e.parentUuid
+      }
+    }
+
+    const keepLines: string[] = []
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i]
+      // Drop corrupted lines (null = parse error).
+      if (e === null) continue
+      // Preserve metadata entries (no uuid) and entries on the chosen chain.
+      if (!e?.uuid || chainUuids.has(e.uuid)) keepLines.push(rawLines[i])
+    }
+    if (keepLines.length === rawLines.length) return
+
+    const backupPath = `${filePath}.bak-${Date.now()}`
+    fs.copyFileSync(filePath, backupPath)
+    fs.writeFileSync(filePath, keepLines.join('\n') + '\n')
+    console.log(`[PtyManager] Pruned ${sessionId}: ${rawLines.length} -> ${keepLines.length} lines (backup: ${backupPath})`)
+  } catch (e) {
+    console.error('[PtyManager] pruneClaudeSessionToLatestBranch failed:', e)
+  }
 }
 
 function buildResumeArgs(
@@ -394,11 +764,17 @@ function buildResumeArgs(
     case 'gemini':
       return ['--resume', sessionId]
     case 'codex':
-      return ['--resume', sessionId]
+      return ['resume', sessionId]
     case 'opencode':
       return ['--session', sessionId]
     case 'aider':
       return ['--restore', sessionId]
+    case 'droid':
+      return ['-r', sessionId]
+    case 'hermes':
+      return ['--resume', sessionId]
+    case 'grok':
+      return ['-r', sessionId]
     case 'claude':
     default:
       return ['-r', sessionId]
@@ -409,6 +785,19 @@ export class PtyManager {
   private processes: Map<string, ClaudeProcess> = new Map()
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
   private exitCallbacks: Map<string, (code: number) => void> = new Map()
+  // Multi-subscriber listeners (additive, do not clobber the primary callback).
+  // Used by the mobile server to attach to PTYs already owned by the desktop
+  // renderer without disrupting the desktop's data feed.
+  private dataListeners: Map<string, Set<(data: string) => void>> = new Map()
+  private exitListeners: Map<string, Set<(code: number) => void>> = new Map()
+
+  // Headroom proxy routing applied to newly spawned PTYs. Updated by the app
+  // whenever settings change.
+  private headroom: HeadroomRouting = { enabled: false, port: 8787, minimaxPort: 8788 }
+
+  setHeadroomRouting(routing: HeadroomRouting): void {
+    this.headroom = routing
+  }
 
   spawn(
     cwd: string,
@@ -416,25 +805,50 @@ export class PtyManager {
     autoAcceptTools?: string[],
     permissionMode?: string,
     model?: string,
-    backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+    backend?: Backend
   ): string {
     const id = crypto.randomUUID()
 
-    const args: string[] = []
-    args.push(...buildResumeArgs(backend || 'claude', sessionId))
-
-    // Add model if specified (and not default)
-    if (model && model !== 'default') {
-      args.push('--model', model)
+    if ((!backend || backend === 'claude') && sessionId) {
+      pruneClaudeSessionToLatestBranch(cwd, sessionId)
     }
 
-    // Add backend-specific permission arguments
     const permissionArgs = buildPermissionArgs(
       backend || 'claude',
       permissionMode,
       autoAcceptTools
     )
-    args.push(...permissionArgs)
+
+    const args: string[] = []
+
+    // Codex resume: flags must come before the session ID positional arg.
+    // Build as: resume <flags> <sessionId>  rather than: resume <sessionId> <flags>
+    const resumeCodexLast = backend === 'codex' && sessionId === CODEX_RESUME_LAST_SESSION_ID
+    if ((backend === 'codex') && sessionId) {
+      args.push('resume')
+      args.push(...permissionArgs)
+      if (model && model !== 'default') {
+        args.push('--model', model)
+      }
+      args.push(resumeCodexLast ? '--last' : sessionId)
+    } else {
+      args.push(...buildResumeArgs(backend || 'claude', sessionId))
+      args.push(...permissionArgs)
+      // Add model if specified (and not default)
+      if (model && model !== 'default') {
+        args.push('--model', model)
+      }
+    }
+
+    // Hermes defaults to the classic REPL (display.interface: cli), which paints
+    // a full-height frame and spills its bottom padding into xterm scrollback —
+    // pinning the input prompt to the top of the viewport with dozens of blank
+    // lines below it, so conversation context scrolls off-screen while typing.
+    // Force the modern alternate-screen TUI (fixed height, no scrollback padding),
+    // which is what the renderer already assumes Hermes uses (see Terminal.tsx).
+    if (backend === 'hermes') {
+      args.unshift('--tui')
+    }
 
     const exe = findExecutable(backend)
     console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)
@@ -444,7 +858,7 @@ export class PtyManager {
       cols: 120,
       rows: 30,
       cwd,
-      env: getEnhancedEnv(),
+      env: getEnhancedEnv(backend, this.headroom),
       handleFlowControl: true, // Enable XON/XOFF flow control for better backpressure handling
     }
 
@@ -459,35 +873,126 @@ export class PtyManager {
       id,
       pty: shell,
       cwd,
-      sessionId,
-      backend: backend as
-        | 'claude'
-        | 'gemini'
-        | 'codex'
-        | 'opencode'
-        | 'aider'
-        | undefined,
+      sessionId: resumeCodexLast ? undefined : sessionId,
+      backend: backend as Backend | undefined,
       disposables: [],
       spawnedAt: Date.now(),
       outputBuffer: new OutputBuffer(),
+      replayBuffer: new ReplayBuffer(),
     }
+
+    // Ink backends: suppress output until the first resize sets the real
+    // terminal dimensions.  This prevents the initial render at 120×30 from
+    // showing (and being duplicated when the resize triggers a re-render).
+    const isInk = INK_BACKENDS.has(backend || '')
+    if (isInk) proc.suppressOutput = true
 
     this.processes.set(id, proc)
 
     // Store disposables from onData/onExit for proper cleanup
     const dataDisposable = shell.onData(data => {
       proc.outputBuffer.append(data)
+      if (proc.suppressOutput) return // swallow until first resize
+      proc.replayBuffer.append(data)
       const callback = this.dataCallbacks.get(id)
       if (callback) {
         callback(data)
+      }
+      const listeners = this.dataListeners.get(id)
+      if (listeners) {
+        for (const ln of listeners) {
+          try { ln(data) } catch (e) { console.error('[pty-manager] data listener threw:', e) }
+        }
       }
     })
     proc.disposables.push(dataDisposable)
 
     const exitDisposable = shell.onExit(({ exitCode }) => {
+      const elapsed = Date.now() - proc.spawnedAt
+
+      // If the process exits within 3 seconds with a non-zero code and had a
+      // session resume arg, the session likely no longer exists.  Respawn
+      // without the session ID so the user gets a fresh terminal instead of a
+      // dead tab.
+      if (exitCode !== 0 && elapsed < 3000 && sessionId && !resumeCodexLast) {
+        const retryMode = backend === 'codex' ? 'with resume --last' : 'without session resume'
+        console.log(`[pty-manager] ${backend || 'claude'} exited quickly (${elapsed}ms, code ${exitCode}) — retrying ${retryMode}`)
+
+        // Preserve callbacks before cleanup deletes them
+        const savedDataCb = this.dataCallbacks.get(id)
+        const savedExitCb = this.exitCallbacks.get(id)
+        this.cleanupProcess(id)
+        if (savedDataCb) this.dataCallbacks.set(id, savedDataCb)
+        if (savedExitCb) this.exitCallbacks.set(id, savedExitCb)
+
+        // Clear the renderer's terminal so the failed attempt's garbage is gone
+        // ESC[2J = clear screen, ESC[H = cursor home
+        if (savedDataCb) savedDataCb('\x1b[2J\x1b[H')
+
+        // Re-spawn with the same id slot so the renderer doesn't need to know
+        const retryArgs: string[] = []
+        if (backend === 'codex') {
+          retryArgs.push('resume')
+          retryArgs.push(...buildPermissionArgs(backend || 'claude', permissionMode, autoAcceptTools))
+          if (model && model !== 'default') retryArgs.push('--model', model)
+          retryArgs.push('--last')
+        } else {
+          if (model && model !== 'default') retryArgs.push('--model', model)
+          retryArgs.push(...buildPermissionArgs(backend || 'claude', permissionMode, autoAcceptTools))
+        }
+
+        const retryShell = pty.spawn(exe, retryArgs, ptyOptions)
+        const retryProc: ClaudeProcess = {
+          id,
+          pty: retryShell,
+          cwd,
+          sessionId: undefined,
+          backend: backend as any,
+          disposables: [],
+          spawnedAt: Date.now(),
+          outputBuffer: new OutputBuffer(),
+          replayBuffer: new ReplayBuffer(),
+        }
+        this.processes.set(id, retryProc)
+
+        const retryDataDisp = retryShell.onData(data => {
+          retryProc.outputBuffer.append(data)
+          retryProc.replayBuffer.append(data)
+          const cb = this.dataCallbacks.get(id)
+          if (cb) cb(data)
+          const listeners = this.dataListeners.get(id)
+          if (listeners) {
+            for (const ln of listeners) {
+              try { ln(data) } catch (e) { console.error('[pty-manager] data listener threw:', e) }
+            }
+          }
+        })
+        retryProc.disposables.push(retryDataDisp)
+
+        const retryExitDisp = retryShell.onExit(({ exitCode: retryCode }) => {
+          const cb = this.exitCallbacks.get(id)
+          if (cb) cb(retryCode)
+          const exitListeners = this.exitListeners.get(id)
+          if (exitListeners) {
+            for (const ln of exitListeners) {
+              try { ln(retryCode) } catch (e) { console.error('[pty-manager] exit listener threw:', e) }
+            }
+          }
+          this.cleanupProcess(id)
+        })
+        retryProc.disposables.push(retryExitDisp)
+        return
+      }
+
       const callback = this.exitCallbacks.get(id)
       if (callback) {
         callback(exitCode)
+      }
+      const exitLn = this.exitListeners.get(id)
+      if (exitLn) {
+        for (const ln of exitLn) {
+          try { ln(exitCode) } catch (e) { console.error('[pty-manager] exit listener threw:', e) }
+        }
       }
       this.cleanupProcess(id)
     })
@@ -498,7 +1003,22 @@ export class PtyManager {
 
   write(id: string, data: string): void {
     const proc = this.processes.get(id)
-    if (proc) {
+    if (!proc) return
+
+    // Codex's TUI input buffer can't absorb large pastes atomically — pasted text
+    // gets silently truncated, requiring manual Space presses to flush the remainder.
+    // Chunk-writing with small delays works around the issue.
+    if (proc.backend === 'codex' && data.length > 80) {
+      const CHUNK = 80
+      let offset = 0
+      const writeNext = () => {
+        if (offset >= data.length) return
+        proc.pty.write(data.slice(offset, offset + CHUNK))
+        offset += CHUNK
+        if (offset < data.length) setTimeout(writeNext, 30)
+      }
+      writeNext()
+    } else {
       proc.pty.write(data)
     }
   }
@@ -518,8 +1038,9 @@ export class PtyManager {
 
     const elapsed = Date.now() - proc.spawnedAt
     const isInkBackend = INK_BACKENDS.has(proc.backend || '')
-    // During first 5s of Ink-backend startup, coalesce resizes with 1.5s debounce
-    // to let the CLI finish initialization before sending SIGWINCH
+
+    // Ink backends re-render on every SIGWINCH.  Coalesce resizes during
+    // startup so only one SIGWINCH reaches the process after it initializes.
     const debounceMs = isInkBackend && elapsed < 5000 ? 1500 : 50
 
     proc.resizeTimeout = setTimeout(() => {
@@ -531,6 +1052,16 @@ export class PtyManager {
       } catch (e) {
         // PTY may have already exited, ignore resize errors
         console.log('PTY resize ignored (may have exited):', id)
+      }
+      proc.outputBuffer.resize(cols, rows)
+
+      // First resize for Ink backends: stop suppressing output.
+      // The resize triggered a clean re-render at the correct size —
+      // send a clear so no garbage from the initial 120×30 render leaks through.
+      if (proc.suppressOutput) {
+        proc.suppressOutput = false
+        const cb = this.dataCallbacks.get(id)
+        if (cb) cb('\x1b[2J\x1b[H')
       }
     }, debounceMs)
   }
@@ -552,10 +1083,13 @@ export class PtyManager {
         }
       }
       proc.disposables.length = 0
+      proc.outputBuffer.dispose()
     }
     this.processes.delete(id)
     this.dataCallbacks.delete(id)
     this.exitCallbacks.delete(id)
+    this.dataListeners.delete(id)
+    this.exitListeners.delete(id)
   }
 
   kill(id: string): void {
@@ -583,6 +1117,40 @@ export class PtyManager {
     this.processes.clear()
   }
 
+  // Send a graceful termination signal to every PTY and wait up to
+  // `timeoutMs` for them to exit on their own before SIGKILLing holdouts.
+  // This gives AI CLI backends a chance to flush their session files to disk
+  // so resumed sessions don't lose their most recent turn(s).
+  async gracefulShutdown(timeoutMs: number = 1500): Promise<void> {
+    if (this.processes.size === 0) return
+
+    const initialCount = this.processes.size
+    console.log(`[pty-manager] Graceful shutdown of ${initialCount} processes (timeout ${timeoutMs}ms)`)
+
+    for (const [, proc] of this.processes) {
+      try {
+        if (isWindows) {
+          // Windows ConPTY has no graceful signal — kill() is the only option.
+          proc.pty.kill()
+        } else {
+          proc.pty.kill('SIGTERM')
+        }
+      } catch {
+        // Process may already be dead — cleanupProcess will remove it.
+      }
+    }
+
+    const start = Date.now()
+    while (this.processes.size > 0 && Date.now() - start < timeoutMs) {
+      await new Promise(r => setTimeout(r, 50))
+    }
+
+    if (this.processes.size > 0) {
+      console.log(`[pty-manager] ${this.processes.size}/${initialCount} processes still alive after ${timeoutMs}ms — force-killing`)
+      this.killAll()
+    }
+  }
+
   getProcess(id: string): ClaudeProcess | undefined {
     return this.processes.get(id)
   }
@@ -593,6 +1161,56 @@ export class PtyManager {
 
   onExit(id: string, callback: (code: number) => void): void {
     this.exitCallbacks.set(id, callback)
+  }
+
+  // Additive subscriber that fires alongside the primary callback set via
+  // onData/onExit.  Returns a disposer.  Used for cross-client live attach
+  // (e.g. mobile attaching to a desktop-owned PTY) without clobbering the
+  // primary feed.
+  addDataListener(id: string, callback: (data: string) => void): () => void {
+    let set = this.dataListeners.get(id)
+    if (!set) {
+      set = new Set()
+      this.dataListeners.set(id, set)
+    }
+    set.add(callback)
+    return () => {
+      const s = this.dataListeners.get(id)
+      if (!s) return
+      s.delete(callback)
+      if (s.size === 0) this.dataListeners.delete(id)
+    }
+  }
+
+  addExitListener(id: string, callback: (code: number) => void): () => void {
+    let set = this.exitListeners.get(id)
+    if (!set) {
+      set = new Set()
+      this.exitListeners.set(id, set)
+    }
+    set.add(callback)
+    return () => {
+      const s = this.exitListeners.get(id)
+      if (!s) return
+      s.delete(callback)
+      if (s.size === 0) this.exitListeners.delete(id)
+    }
+  }
+
+  // Returns the raw byte stream captured since this PTY was spawned, capped
+  // by ReplayBuffer.  Late-attaching clients can write this to their xterm
+  // to faithfully reconstruct the current screen.
+  getReplayBytes(id: string): string | null {
+    const proc = this.processes.get(id)
+    return proc ? proc.replayBuffer.read() : null
+  }
+
+  // Clean serialized snapshot of the interpreted screen state (see
+  // OutputBuffer.serialize). Preferred over getReplayBytes for restoring
+  // scrollback into a fresh renderer terminal.
+  async getSerializedBuffer(id: string): Promise<string | null> {
+    const proc = this.processes.get(id)
+    return proc ? proc.outputBuffer.serialize() : null
   }
 
   // Orchestrator API: list all active sessions
@@ -611,9 +1229,30 @@ export class PtyManager {
   }
 
   // Orchestrator API: read recent output from a PTY
-  readOutput(id: string, maxLines: number = 50): string[] | null {
+  async readOutput(id: string, maxLines: number = 50): Promise<string[] | null> {
     const proc = this.processes.get(id)
     if (!proc) return null
     return proc.outputBuffer.getRecent(maxLines)
+  }
+
+  // Debug API: internal buffer/process state for a PTY
+  getDebugStats(id: string): Record<string, unknown> | null {
+    const proc = this.processes.get(id)
+    if (!proc) return null
+    const output = proc.outputBuffer.stats()
+    return {
+      id,
+      cwd: proc.cwd,
+      backend: proc.backend || 'claude',
+      sessionId: proc.sessionId ?? null,
+      spawnedAt: proc.spawnedAt,
+      outputBufferLines: output.lines,
+      outputBufferCols: output.cols,
+      outputBufferRows: output.rows,
+      replayBufferBytes: proc.replayBuffer.size(),
+      lastResizeCols: proc.lastResizeCols ?? null,
+      lastResizeRows: proc.lastResizeRows ?? null,
+      suppressOutput: proc.suppressOutput ?? false,
+    }
   }
 }

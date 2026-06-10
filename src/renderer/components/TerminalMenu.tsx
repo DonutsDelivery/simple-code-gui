@@ -10,8 +10,8 @@ function isEventTargetNode(target: EventTarget | null): target is Node {
 interface TerminalMenuProps {
   ptyId: string
   onCommand: (command: string, options?: AutoWorkOptions) => void
-  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
-  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider') => void
+  currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => void
 }
 
 export interface AutoWorkOptions {
@@ -142,6 +142,9 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
         { id: 'codex', label: 'Codex' },
         { id: 'opencode', label: 'OpenCode' },
         { id: 'aider', label: 'Aider' },
+        { id: 'droid', label: 'Droid' },
+        { id: 'hermes', label: 'Hermes' },
+        { id: 'grok', label: 'Grok' },
       ],
     },
   ]
@@ -189,7 +192,7 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
     }
 
     if (categoryId === 'backend') {
-      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider')
+      onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok')
       setOpenDropdown(null)
       return
     }

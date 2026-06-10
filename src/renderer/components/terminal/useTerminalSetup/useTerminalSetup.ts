@@ -12,6 +12,7 @@ import {
   cleanupTerminal,
 } from './terminalInit.js'
 import { createThemeUpdateHandler } from './eventHandlers.js'
+import { registerTerminal, unregisterTerminal } from '../../../debug/debugBridge.js'
 
 // Setup error handler on module load
 setupXtermErrorHandler()
@@ -90,7 +91,7 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
 
     // Try to initialize terminal
     const tryInit = (): boolean => {
-      return initTerminal(
+      const ok = initTerminal(
         containerRef,
         terminalRef,
         fitAddonRef,
@@ -103,6 +104,16 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
         options,
         state
       )
+      if (ok && state.terminal) {
+        registerTerminal(ptyId, {
+          terminal: state.terminal,
+          fitAddon: state.fitAddon,
+          userScrolledUpRef,
+          container: containerRef.current,
+          webglActive: () => !!state.webglAddonRef.current,
+        })
+      }
+      return ok
     }
 
     // PTY output handling
@@ -159,6 +170,7 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
       if (handleThemeUpdate) {
         window.removeEventListener('terminal-theme-update', handleThemeUpdate)
       }
+      unregisterTerminal(ptyId)
       cleanupTerminal(containerRef, state, initCheckInterval, null, cleanupData, cleanupExit)
     }
   }, [ptyId])

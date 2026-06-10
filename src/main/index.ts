@@ -1,11 +1,13 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { mkdirSync, existsSync, copyFileSync, statSync } from 'fs'
 
 import { PtyManager } from './pty-manager.js'
+import { HeadroomProxyManager, HEADROOM_DEFAULT_PORT, HEADROOM_MINIMAX_PORT } from './headroom-proxy.js'
 import { SessionStore } from './session-store.js'
 import { ApiServerManager } from './api-server.js'
 import { OrchestratorApi } from './orchestrator-api.js'
+import { registerOrchestratorMcp } from './orchestrator-mcp-registration.js'
 import { MobileServer } from './mobile-server.js'
 import { voiceManager } from './voice-manager.js'
 import { setPortableBinDirs } from './platform.js'
@@ -17,8 +19,10 @@ import {
   registerVoiceHandlers,
   registerExtensionHandlers,
   registerWindowHandlers,
+  cleanupClipboardTempFiles,
   registerGsdHandlers,
   registerKspecHandlers,
+  registerGlobalInstructionHandlers,
 } from './ipc/index.js'
 
 import { setupAppConfig, setupSecurityHeaders } from './app/app-setup.js'
@@ -55,11 +59,28 @@ const mobileServer = new MobileServer()
 // PTY tracking
 const ptyToProject = new Map<string, string>()
 const ptyToBackend = new Map<string, string>()
-
 const getMainWindow = (): BrowserWindow | null => mainWindow
 
 const orchestratorApi = new OrchestratorApi(ptyManager, ptyToProject, ptyToBackend, sessionStore, getMainWindow)
 const setMainWindow = (win: BrowserWindow | null): void => { mainWindow = win }
+
+// Headroom context-compression proxy. Pushes status to the renderer and is kept
+// in sync with the saved settings on startup and on every save.
+const headroomProxy = new HeadroomProxyManager((status) => {
+  try {
+    mainWindow?.webContents.send('headroom:status', status)
+  } catch { /* window gone */ }
+})
+
+function syncHeadroom(settings = sessionStore.getSettings()): void {
+  const enabled = settings.headroomEnabled === true
+  const port = settings.headroomPort ?? HEADROOM_DEFAULT_PORT
+  const minimaxPort = HEADROOM_MINIMAX_PORT
+  ptyManager.setHeadroomRouting({ enabled, port, minimaxPort })
+  void headroomProxy.ensure({ enabled, port, minimaxPort, binPath: settings.headroomProxyPath })
+}
+
+ipcMain.handle('headroom:status', () => headroomProxy.getStatus())
 
 // Register IPC handlers
 registerCliHandlers(getMainWindow)
@@ -69,10 +90,11 @@ registerExtensionHandlers()
 registerWindowHandlers(getMainWindow)
 registerGsdHandlers()
 registerKspecHandlers()
+registerGlobalInstructionHandlers()
 registerWorkspaceHandlers(sessionStore, getMainWindow)
 registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow)
-registerServerHandlers(apiServerManager, mobileServer)
-registerSettingsHandlers(sessionStore, getMainWindow)
+registerServerHandlers(apiServerManager, mobileServer, sessionStore)
+registerSettingsHandlers(sessionStore, getMainWindow, (settings) => syncHeadroom(settings))
 
 // Setup API prompt handler
 setupApiPromptHandler(apiServerManager, sessionStore, ptyManager, ptyToProject, getMainWindow)
@@ -124,20 +146,30 @@ app.whenReady().then(() => {
   mainWindow = createWindow(sessionStore, ptyManager, setMainWindow)
   createApplicationMenu(mainWindow)
   if (mainWindow) initUpdater(mainWindow)
+  if (mainWindow) orchestratorApi.debugApi.attachToWindow(mainWindow)
 
-  // Refresh CLAUDE.md task instructions for all projects on startup.
+  // Start the Headroom proxy if enabled in settings.
+  syncHeadroom()
+
+  // Refresh task instructions in each project's backend-specific instruction file on startup.
   // This ensures existing sessions pick up updated instructions after compaction.
   try {
-    const projects = sessionStore.getData()?.workspace?.projects || []
-    // Import is resolved at bundle time — no dynamic require needed
+    const projects = sessionStore.getWorkspace().projects || []
+    const globalBackend = sessionStore.getSettings().backend
     import('./ipc/kspec-handlers.js').then(({ installTaskInstructions: installTaskInstr }) => {
       for (const project of projects) {
         if (!project?.path) continue
         try {
           const hasKspec = existsSync(join(project.path, '.kspec'))
           const hasBeads = existsSync(join(project.path, '.beads'))
-          if (hasKspec) installTaskInstr(project.path, 'kspec')
-          else if (hasBeads) installTaskInstr(project.path, 'beads')
+          if (!hasKspec && !hasBeads) continue
+          const aiBackend = (project.backend && project.backend !== 'default'
+            ? project.backend
+            : (globalBackend && globalBackend !== 'default'
+              ? globalBackend
+              : 'claude')) as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+          if (hasKspec) installTaskInstr(project.path, 'kspec', aiBackend)
+          else installTaskInstr(project.path, 'beads', aiBackend)
         } catch { /* skip individual project errors */ }
       }
     }).catch(() => { /* kspec handlers not available */ })
@@ -148,33 +180,72 @@ app.whenReady().then(() => {
   // Start orchestrator API for MCP-based session control
   orchestratorApi.start()
 
-  // Start mobile server for phone app connectivity
+  // Ensure the orchestrator MCP server is registered globally so project sessions
+  // can coordinate with orchestrator/meta sessions without manual MCP setup.
+  const orchestratorScript = join(app.getAppPath(), 'scripts', 'orchestrator-mcp.mjs')
+  registerOrchestratorMcp(orchestratorScript)
+
+  // Mobile server for phone app connectivity. Opt-in (default off): the server
+  // binds 0.0.0.0 over plain HTTP and can drive PTYs, so we must not silently
+  // expose it on the LAN at every launch (H1). Managers are wired up regardless
+  // so the user can turn it on later (Connect Mobile Device) without a restart.
   mobileServer.setPtyManager(ptyManager)
   mobileServer.setSessionStore(sessionStore)
   mobileServer.setVoiceManager(voiceManager)
-  mobileServer.start().then(() => {
-    const info = mobileServer.getConnectionInfo()
-    console.log(`[Mobile] Server ready at ${info.ips[0]}:${info.port}`)
-  }).catch(err => {
-    console.error('[Mobile] Failed to start server:', err)
-  })
+  if (sessionStore.getSettings().mobileAccessEnabled === true) {
+    mobileServer.start().then(() => {
+      const info = mobileServer.getConnectionInfo()
+      console.log(`[Mobile] Server ready at ${info.ips[0]}:${info.port}`)
+    }).catch(err => {
+      console.error('[Mobile] Failed to start server:', err)
+    })
+  } else {
+    console.log('[Mobile] Server disabled (enable via Connect Mobile Device).')
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createWindow(sessionStore, ptyManager, setMainWindow)
       createApplicationMenu(mainWindow)
+      if (mainWindow) orchestratorApi.debugApi.attachToWindow(mainWindow)
     }
   })
 })
 
 app.on('window-all-closed', () => {
-  ptyManager.killAll()
+  // Don't SIGKILL here — let `before-quit` run a graceful shutdown so backends
+  // can flush their session files. On Linux/Windows `app.quit()` triggers
+  // `before-quit` next; on macOS the app stays alive and PTYs are torn down
+  // by the renderer on next window open.
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
-  orchestratorApi.stop()
-  mobileServer.stop()
-  apiServerManager.stopAll()
-  ptyManager.killAll()
+let gracefulShutdownInProgress = false
+let gracefulShutdownComplete = false
+
+app.on('before-quit', (event) => {
+  if (gracefulShutdownComplete) return
+  if (gracefulShutdownInProgress) {
+    event.preventDefault()
+    return
+  }
+
+  event.preventDefault()
+  gracefulShutdownInProgress = true
+
+  ;(async () => {
+    try {
+      orchestratorApi.stop()
+      headroomProxy.stop()
+      mobileServer.stop()
+      apiServerManager.stopAll()
+      await ptyManager.gracefulShutdown(1500)
+      cleanupClipboardTempFiles()
+    } catch (e) {
+      console.error('[shutdown] error during graceful shutdown:', e)
+    } finally {
+      gracefulShutdownComplete = true
+      app.quit()
+    }
+  })()
 })

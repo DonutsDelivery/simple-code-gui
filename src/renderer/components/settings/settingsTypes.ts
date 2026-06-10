@@ -53,6 +53,9 @@ export const BACKEND_MODES = [
   { label: 'Codex', value: 'codex', desc: 'Use Codex for code generation' },
   { label: 'OpenCode', value: 'opencode', desc: 'Use OpenCode for code generation' },
   { label: 'Aider', value: 'aider', desc: 'Use Aider AI pair programmer' },
+  { label: 'Droid', value: 'droid', desc: 'Use Factory Droid AI coding agent' },
+  { label: 'Hermes', value: 'hermes', desc: 'Use Hermes Agent coding harness' },
+  { label: 'Grok', value: 'grok', desc: 'Use Grok Build coding harness' },
 ]
 
 // Terminal ANSI colors customization
@@ -90,7 +93,7 @@ export interface GeneralSettings {
   autoAcceptTools: string[]
   permissionMode: string
   customTool: string
-  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export interface VoiceSettings {
@@ -171,7 +174,7 @@ export interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
   onThemeChange: (theme: Theme) => void
-  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' }) => void
+  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => void
   appVersion?: string
   updateStatus?: UpdateStatus
   onDownloadUpdate?: () => void

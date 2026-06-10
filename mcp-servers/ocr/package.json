@@ -1,0 +1,11 @@
+{
+  "name": "ocr-mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server for extracting text from images using OCR (Tesseract.js)",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "tesseract.js": "^5.1.1"
+  }
+}

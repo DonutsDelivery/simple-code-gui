@@ -11,6 +11,9 @@ import type { OpenTab, Project, ResizeEdge, ClientToCanvasPercent } from './type
 interface TileTerminalProps {
   leafId: string
   rect: ComputedRect
+  hidden?: boolean
+  isMaximized?: boolean
+  onToggleMaximize?: (leafId: string) => void
   tabIds: string[]
   activeTabId: string
   tabs: OpenTab[]
@@ -33,6 +36,7 @@ interface TileTerminalProps {
   onRenameTab: (id: string, title: string) => void
   onFocusTab: (id: string) => void
   onSwitchSubTab: (leafId: string, tabId: string) => void
+  onReorderSubTab: (leafId: string, tabId: string, toIndex: number) => void
   onAddTab?: (projectPath: string, tileId: string) => void
   onDragStart: (e: React.DragEvent, tileId: string) => void
   onSubTabDragStart: (e: React.DragEvent, tabId: string, tileId: string) => void
@@ -69,7 +73,11 @@ export function TileTerminal({
   onCloseTab,
   onRenameTab,
   onFocusTab,
+  hidden,
+  isMaximized,
+  onToggleMaximize,
   onSwitchSubTab,
+  onReorderSubTab,
   onAddTab,
   onDragStart,
   onSubTabDragStart,
@@ -89,6 +97,39 @@ export function TileTerminal({
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
   }, [leafId, onSwitchSubTab, onFocusTab])
 
+  // Insertion marker index while dragging a sub-tab over this tile's strip.
+  const [subTabInsert, setSubTabInsert] = useState<number | null>(null)
+
+  const parseSubTab = useCallback((e: React.DragEvent): { tabId: string; tileId: string } | null => {
+    try {
+      const raw = e.dataTransfer.getData('application/x-subtab')
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }, [])
+
+  const handleSubTabDragOver = useCallback((e: React.DragEvent, tabIndex: number) => {
+    if (!e.dataTransfer.types.includes('application/x-subtab')) return
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const before = e.clientX < rect.left + rect.width / 2
+    setSubTabInsert(tabIndex + (before ? 0 : 1))
+    setCurrentDropZone(null)
+  }, [setCurrentDropZone])
+
+  const handleSubTabDrop = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('application/x-subtab')) return
+    const payload = parseSubTab(e)
+    const insertAt = subTabInsert
+    setSubTabInsert(null)
+    // Same-tile reorder; cross-tile moves fall through to the container handler.
+    if (payload && payload.tileId === leafId && insertAt !== null) {
+      e.preventDefault()
+      e.stopPropagation()
+      onReorderSubTab(leafId, payload.tabId, insertAt)
+    }
+  }, [parseSubTab, subTabInsert, leafId, onReorderSubTab])
+
   const handleSubTabClose = useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation()
     e.preventDefault()
@@ -106,10 +147,11 @@ export function TileTerminal({
 
   function handleTileDragOver(e: React.DragEvent): void {
     const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
-    if (isSidebarDrag) {
+    const isSubTabDrag = e.dataTransfer.types.includes('application/x-subtab')
+    if (isSidebarDrag || isSubTabDrag) {
       e.preventDefault()
       e.stopPropagation()
-      if (!draggedSidebarProject) {
+      if (isSidebarDrag && !draggedSidebarProject) {
         setDraggedSidebarProject('pending')
       }
       const { x: mouseX, y: mouseY } = clientToCanvasPercent(e.clientX, e.clientY)
@@ -121,7 +163,8 @@ export function TileTerminal({
 
   function handleTileDrop(e: React.DragEvent): void {
     const sidebarPath = e.dataTransfer.getData('application/x-sidebar-project')
-    if (sidebarPath) {
+    const isSubTabDrag = e.dataTransfer.types.includes('application/x-subtab')
+    if (sidebarPath || isSubTabDrag) {
       e.preventDefault()
       e.stopPropagation()
       onContainerDrop(e)
@@ -189,7 +232,8 @@ export function TileTerminal({
         top: `${rect.y / 100 * viewportSize.height + GAP}px`,
         width: `${rect.width / 100 * viewportSize.width - GAP}px`,
         height: `${rect.height / 100 * viewportSize.height - GAP}px`,
-        display: 'flex',
+        display: hidden ? 'none' : 'flex',
+        zIndex: isMaximized ? 20 : undefined,
         flexDirection: 'column',
         background: projectColor ? `color-mix(in srgb, ${projectColor} 20%, var(--bg-elevated))` : 'var(--bg-elevated)',
         borderRadius: 'var(--radius-sm)',
@@ -203,20 +247,26 @@ export function TileTerminal({
         draggable
         onDragStart={(e) => onDragStart(e, leafId)}
         onDragEnd={onDragEnd}
+        onDoubleClick={() => onToggleMaximize?.(leafId)}
         style={{ cursor: 'grab', background: projectColor ? `color-mix(in srgb, ${projectColor} 35%, var(--bg-surface))` : undefined }}
       >
         {hasMultipleTabs ? (
           <>
-            <div className="tile-subtabs">
-              {tabs.map(tab => (
+            <div
+              className="tile-subtabs"
+              onDragLeave={() => setSubTabInsert(null)}
+              onDrop={handleSubTabDrop}
+            >
+              {tabs.map((tab, tabIndex) => (
                 <div
                   key={tab.id}
-                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}`}
+                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}${draggedSubTab?.tabId === tab.id ? ' subtab-dragging' : ''}${subTabInsert === tabIndex ? ' subtab-insert-before' : ''}${subTabInsert === tabIndex + 1 && tabIndex === tabs.length - 1 ? ' subtab-insert-after' : ''}`}
                   draggable
                   onDragStart={(e) => {
                     e.stopPropagation()
                     onSubTabDragStart(e, tab.id, leafId)
                   }}
+                  onDragOver={(e) => handleSubTabDragOver(e, tabIndex)}
                   onDragEnd={onDragEnd}
                   onClick={() => handleSubTabClick(tab.id)}
                 >
@@ -260,6 +310,13 @@ export function TileTerminal({
                 >+</button>
               )}
               <button
+                className="tile-maximize"
+                draggable={false}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleMaximize?.(leafId) }}
+                onMouseDown={(e) => e.stopPropagation()}
+                title={isMaximized ? 'Restore' : 'Maximize'}
+              >{isMaximized ? '❐' : '▢'}</button>
+              <button
                 className="tile-close"
                 draggable={false}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); onCloseTab(activeSubTabId) }}
@@ -300,6 +357,13 @@ export function TileTerminal({
                 >+</button>
               )}
               <button
+                className="tile-maximize"
+                draggable={false}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleMaximize?.(leafId) }}
+                onMouseDown={(e) => e.stopPropagation()}
+                title={isMaximized ? 'Restore' : 'Maximize'}
+              >{isMaximized ? '❐' : '▢'}</button>
+              <button
                 className="tile-close"
                 draggable={false}
                 onClick={(e) => { e.stopPropagation(); e.preventDefault(); onCloseTab(activeTab.id) }}
@@ -331,7 +395,7 @@ export function TileTerminal({
           </div>
         ))}
       </div>
-      {((draggedTile && draggedTile !== leafId) || (draggedSubTab && draggedSubTab.tileId === leafId && hasMultipleTabs) || draggedSidebarProject) && (
+      {((draggedTile && draggedTile !== leafId) || (draggedSubTab && hasMultipleTabs) || draggedSidebarProject) && (
         <div
           className="tile-drop-overlay"
           style={{

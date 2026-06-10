@@ -9,5 +9,6 @@ export const kspecHandlers = {
   kspecMigrateFromBeads: (cwd: string) => ipcRenderer.invoke('kspec:migrate-from-beads', cwd),
   kspecDispatchStart: (cwd: string) => ipcRenderer.invoke('kspec:dispatch-start', cwd),
   kspecDispatchStop: (cwd: string) => ipcRenderer.invoke('kspec:dispatch-stop', cwd),
-  kspecDispatchStatus: (cwd: string) => ipcRenderer.invoke('kspec:dispatch-status', cwd)
+  kspecDispatchStatus: (cwd: string) => ipcRenderer.invoke('kspec:dispatch-status', cwd),
+  kspecDeleteTask: (cwd: string, taskRef: string) => ipcRenderer.invoke('kspec:delete-task', cwd, taskRef)
 }

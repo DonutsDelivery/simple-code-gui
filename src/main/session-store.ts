@@ -20,10 +20,11 @@ export interface Project {
   apiModel?: 'default' | 'opus' | 'sonnet' | 'haiku'  // Model for API-triggered sessions
   autoAcceptTools?: string[]  // Per-project tool patterns to auto-accept
   permissionMode?: string     // Per-project permission mode
+  icon?: string               // Custom project emoji icon
   color?: string              // Project color for visual identification
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' // Per-project backend (overrides global)
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' // Per-project backend (overrides global)
   categoryId?: string         // Category this project belongs to
   order?: number              // Order within category or uncategorized list
 }
@@ -34,7 +35,7 @@ export interface OpenTab {
   sessionId?: string
   title: string
   ptyId?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
 export interface TileLayout {
@@ -47,14 +48,26 @@ export interface TileLayout {
   height: number
 }
 
-export interface Workspace {
-  projects: Project[]
+export interface SavedWorkspaceSession {
+  id: string
+  name: string
   openTabs: OpenTab[]
   activeTabId: string | null
+  tileTree?: any
+}
+
+export interface Workspace {
+  projects: Project[]
+  categories?: ProjectCategory[]
+  // Multi-session format
+  sessions?: SavedWorkspaceSession[]
+  activeSessionId?: string | null
+  // Legacy single-session fields (for migration)
+  openTabs?: OpenTab[]
+  activeTabId?: string | null
   viewMode?: 'tabs' | 'tiled'
   tileLayout?: TileLayout[]
   tileTree?: any
-  categories?: ProjectCategory[]
 }
 
 export interface WindowBounds {
@@ -91,7 +104,15 @@ export interface Settings {
   voiceSilenceThreshold?: number
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  globalInstructionInjection?: string
+  // Mobile/LAN access. Off by default — the embedded HTTP+WS server (which can
+  // drive PTYs) only listens once the user explicitly opts in (H1).
+  mobileAccessEnabled?: boolean
+  // Headroom context-compression proxy
+  headroomEnabled?: boolean
+  headroomPort?: number
+  headroomProxyPath?: string
 }
 
 
@@ -245,7 +266,7 @@ export class SessionStore {
   }
 
   getSettings(): Settings {
-    return this.data.settings ?? { defaultProjectDir: '', theme: 'default', backend: 'default' }
+    return this.data.settings ?? { defaultProjectDir: '', theme: 'default', backend: 'default', globalInstructionInjection: '' }
   }
 
   saveSettings(settings: Settings): void {

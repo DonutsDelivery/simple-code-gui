@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Api } from '../api'
-import type { BackendId } from '../api/types'
+import type { BackendId, PtySession } from '../api/types'
 import type { AppSettings } from './useSettings'
 import { useWorkspaceStore, WorkspaceSession, OpenTab } from '../stores/workspace'
 import { Theme, getThemeById, applyTheme, themes } from '../themes'
@@ -31,15 +31,19 @@ interface UseWorkspaceLoaderReturn {
   restoreSession: (sessionId: string) => Promise<void>
 }
 
-async function spawnSessionTabs(
+const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
+
+export async function spawnSessionTabs(
   api: Api,
   savedTabs: any[],
   projects: any[],
   settings: AppSettings | null,
-  onAddTab: (tab: OpenTab, idMapping: Map<string, string>) => void
+  onAddTab: (tab: OpenTab, idMapping: Map<string, string>) => void,
+  livePtys: PtySession[] = []
 ): Promise<{ idMapping: Map<string, string>; restoredTabs: OpenTab[] }> {
   const idMapping = new Map<string, string>()
   const restoredTabs: OpenTab[] = []
+  const livePtysById = new Map(livePtys.map(pty => [pty.id, pty]))
 
   const usedSessionIds = new Set<string>()
   const sessionsCache = new Map<string, { list: { sessionId: string; slug: string }[]; nextIndex: number }>()
@@ -50,99 +54,124 @@ async function spawnSessionTabs(
       let titleToRestore = savedTab.title || `${projectName} - New`
 
       const projectForTab = projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
-      const savedBackend = savedTab.backend
-      const effectiveBackend = (savedBackend
+      const savedBackend = savedTab.backend && savedTab.backend !== 'default'
+        ? savedTab.backend
+        : undefined
+      let effectiveBackend = (savedBackend
         || (projectForTab?.backend && projectForTab.backend !== 'default'
           ? projectForTab.backend
           : (settings?.backend && settings.backend !== 'default'
             ? settings.backend
             : 'claude'))) as BackendId
+      const attachedPty = livePtysById.get(savedTab.ptyId) || livePtysById.get(savedTab.id)
+      if (attachedPty) {
+        effectiveBackend = attachedPty.backend
+      }
 
       await api.ttsInstallInstructions?.(savedTab.projectPath, effectiveBackend)
 
-      let sessionIdToRestore: string | undefined = savedTab.sessionId
+      let sessionIdToRestore: string | undefined = attachedPty
+        ? attachedPty.sessionId
+        : savedTab.sessionId
+      let sessionIdForSpawn = sessionIdToRestore
 
-      let sessionsForProject = sessionsCache.get(savedTab.projectPath)
-      if (!sessionsForProject) {
-        const list = await api.discoverSessions(savedTab.projectPath, effectiveBackend)
-        sessionsForProject = { list, nextIndex: 0 }
-        sessionsCache.set(savedTab.projectPath, sessionsForProject)
-      }
-
-      const list = sessionsForProject.list || []
-
-      // Extract slug from saved title (format: "projectName - slug")
-      const savedSlug = savedTab.title?.replace(/^.*?-\s*/, '')?.trim() || ''
-      function matchBySlug(): { sessionId: string; slug: string } | null {
-        if (!savedSlug) return null
-        for (const s of list) {
-          if (s.slug === savedSlug && !usedSessionIds.has(s.sessionId)) return s
+      if (!attachedPty) {
+        let sessionsForProject = sessionsCache.get(savedTab.projectPath)
+        if (!sessionsForProject) {
+          const list = await api.discoverSessions(savedTab.projectPath, effectiveBackend)
+          sessionsForProject = { list, nextIndex: 0 }
+          sessionsCache.set(savedTab.projectPath, sessionsForProject)
         }
-        return null
-      }
 
-      if (savedTab.sessionId) {
-        const savedMatch = list.find((s: any) => s.sessionId === savedTab.sessionId)
-        // For projects not in workspace.projects (e.g. the meta-project), always prefer
-        // the most recently modified session. These projects' sessions can change externally
-        // (orchestrator spawning a new session, /reset inside the terminal) without the
-        // GUI ever updating the saved sessionId.
-        const mostRecent = list.length > 0 && !usedSessionIds.has(list[0].sessionId) ? list[0] : null
-        const preferMostRecent = !projectForTab && mostRecent && mostRecent.sessionId !== savedTab.sessionId
-        if (preferMostRecent) {
-          sessionIdToRestore = mostRecent!.sessionId
-          if (!savedTab.customTitle) {
-            titleToRestore = `${projectName} - ${mostRecent!.slug}`
+        const list = sessionsForProject.list || []
+
+        // Extract slug from saved title (format: "projectName - slug")
+        const savedSlug = savedTab.title?.replace(/^.*?-\s*/, '')?.trim() || ''
+        function matchBySlug(): { sessionId: string; slug: string } | null {
+          if (!savedSlug) return null
+          for (const s of list) {
+            if (s.slug === savedSlug && !usedSessionIds.has(s.sessionId)) return s
           }
-          sessionsForProject.nextIndex = 1
-        } else if (savedMatch && !usedSessionIds.has(savedMatch.sessionId)) {
-          sessionIdToRestore = savedMatch.sessionId
-          if (!savedTab.customTitle) {
-            titleToRestore = `${projectName} - ${savedMatch.slug}`
-          }
-        } else {
-          // Saved sessionId is stale — try matching by slug from title first,
-          // then fall back to next unclaimed session
-          const slugMatch = matchBySlug()
-          if (slugMatch) {
-            sessionIdToRestore = slugMatch.sessionId
+          return null
+        }
+
+        if (savedTab.sessionId) {
+          const savedMatch = list.find((s: any) => s.sessionId === savedTab.sessionId)
+          // For projects not in workspace.projects (e.g. the meta-project), always prefer
+          // the most recently modified session. These projects' sessions can change externally
+          // (orchestrator spawning a new session, /reset inside the terminal) without the
+          // GUI ever updating the saved sessionId.
+          const mostRecent = list.length > 0 && !usedSessionIds.has(list[0].sessionId) ? list[0] : null
+          const preferMostRecent = !projectForTab && mostRecent && mostRecent.sessionId !== savedTab.sessionId
+          if (preferMostRecent) {
+            sessionIdToRestore = mostRecent!.sessionId
+            sessionIdForSpawn = sessionIdToRestore
             if (!savedTab.customTitle) {
-              titleToRestore = `${projectName} - ${slugMatch.slug}`
+              titleToRestore = `${projectName} - ${mostRecent!.slug}`
+            }
+            sessionsForProject.nextIndex = 1
+          } else if (savedMatch && !usedSessionIds.has(savedMatch.sessionId)) {
+            sessionIdToRestore = savedMatch.sessionId
+            sessionIdForSpawn = sessionIdToRestore
+            if (!savedTab.customTitle) {
+              titleToRestore = `${projectName} - ${savedMatch.slug}`
             }
           } else {
-            for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
-              const candidate = list[i]
-              if (!usedSessionIds.has(candidate.sessionId)) {
-                sessionIdToRestore = candidate.sessionId
-                if (!savedTab.customTitle) {
-                  titleToRestore = `${projectName} - ${candidate.slug}`
+            // Saved sessionId is stale — try matching by slug from title first,
+            // then fall back to next unclaimed session. If discovery has no
+            // replacement, clear the stale ID. Codex can still resume its most
+            // recent recorded session with `resume --last`.
+            sessionIdToRestore = undefined
+            sessionIdForSpawn = undefined
+            const slugMatch = matchBySlug()
+            if (slugMatch) {
+              sessionIdToRestore = slugMatch.sessionId
+              sessionIdForSpawn = sessionIdToRestore
+              if (!savedTab.customTitle) {
+                titleToRestore = `${projectName} - ${slugMatch.slug}`
+              }
+            } else {
+              for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
+                const candidate = list[i]
+                if (!usedSessionIds.has(candidate.sessionId)) {
+                  sessionIdToRestore = candidate.sessionId
+                  sessionIdForSpawn = sessionIdToRestore
+                  if (!savedTab.customTitle) {
+                    titleToRestore = `${projectName} - ${candidate.slug}`
+                  }
+                  sessionsForProject.nextIndex = i + 1
+                  break
                 }
-                sessionsForProject.nextIndex = i + 1
-                break
               }
             }
-          }
-        }
-      } else {
-        for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
-          const candidate = list[i]
-          if (!usedSessionIds.has(candidate.sessionId)) {
-            sessionIdToRestore = candidate.sessionId
-            if (!savedTab.customTitle) {
-              titleToRestore = `${projectName} - ${candidate.slug}`
+            if (!sessionIdToRestore && effectiveBackend === 'codex') {
+              sessionIdForSpawn = CODEX_RESUME_LAST_SESSION_ID
             }
-            sessionsForProject.nextIndex = i + 1
-            break
+          }
+        } else {
+          for (let i = sessionsForProject.nextIndex; i < list.length; i++) {
+            const candidate = list[i]
+            if (!usedSessionIds.has(candidate.sessionId)) {
+              sessionIdToRestore = candidate.sessionId
+              sessionIdForSpawn = sessionIdToRestore
+              if (!savedTab.customTitle) {
+                titleToRestore = `${projectName} - ${candidate.slug}`
+              }
+              sessionsForProject.nextIndex = i + 1
+              break
+            }
           }
         }
       }
 
-      const ptyId = await api.spawnPty(
-        savedTab.projectPath,
-        sessionIdToRestore,
-        undefined,
-        effectiveBackend
-      )
+      const ptyId = attachedPty
+        ? attachedPty.id
+        : await api.spawnPty(
+          savedTab.projectPath,
+          sessionIdForSpawn,
+          undefined,
+          effectiveBackend
+        )
 
       if (savedTab.id) {
         idMapping.set(savedTab.id, ptyId)
@@ -169,6 +198,48 @@ async function spawnSessionTabs(
   }
 
   return { idMapping, restoredTabs }
+}
+
+function attachUntrackedLivePtys(
+  savedSessions: Array<{ id: string; name: string; openTabs: any[]; activeTabId: string | null; tileTree?: any }>,
+  activeSessionId: string | null,
+  livePtys: PtySession[]
+): void {
+  if (livePtys.length === 0) return
+
+  const claimedPtyIds = new Set<string>()
+  for (const session of savedSessions) {
+    for (const tab of session.openTabs ?? []) {
+      if (tab.ptyId) claimedPtyIds.add(tab.ptyId)
+      if (tab.id) claimedPtyIds.add(tab.id)
+    }
+  }
+
+  for (const pty of livePtys) {
+    if (claimedPtyIds.has(pty.id)) continue
+
+    const matchingSession = savedSessions.find(session =>
+      (session.openTabs ?? []).some(tab => tab.projectPath === pty.cwd)
+    )
+    const targetSession = matchingSession
+      ?? savedSessions.find(session => session.id === activeSessionId)
+      ?? savedSessions[0]
+    if (!targetSession) continue
+
+    const projectName = pty.cwd.split(/[/\\]/).pop() || pty.cwd
+    targetSession.openTabs = [
+      ...(targetSession.openTabs ?? []),
+      {
+        id: pty.id,
+        projectPath: pty.cwd,
+        sessionId: pty.sessionId,
+        title: `${projectName} - Attached live`,
+        ptyId: pty.id,
+        backend: pty.backend,
+      },
+    ]
+    claimedPtyIds.add(pty.id)
+  }
 }
 
 function buildRestoredTree(
@@ -246,12 +317,19 @@ export function useWorkspaceLoader({
     const { savedData } = session
 
     const restoredTabs: OpenTab[] = []
+    let livePtys: PtySession[] = []
+    try {
+      livePtys = await api.listPtys()
+    } catch (e) {
+      console.error('Failed to list live PTYs:', e)
+    }
     const { idMapping } = await spawnSessionTabs(
       api,
       savedData.openTabs,
       projectsRef.current,
       settingsRef.current,
-      (tab) => { restoredTabs.push(tab) }
+      (tab) => { restoredTabs.push(tab) },
+      livePtys
     )
 
     const liveTabIds = new Set(restoredTabs.map(t => t.id))
@@ -325,6 +403,14 @@ export function useWorkspaceLoader({
           activeSessionId = legacyId
         }
 
+        let livePtys: PtySession[] = []
+        try {
+          livePtys = await api.listPtys()
+          attachUntrackedLivePtys(savedSessions, activeSessionId, livePtys)
+        } catch (e) {
+          console.error('Failed to list live PTYs:', e)
+        }
+
         // Build WorkspaceSession objects; set savedData for inactive sessions
         const sessions: WorkspaceSession[] = savedSessions.map(s => ({
           id: s.id,
@@ -358,7 +444,8 @@ export function useWorkspaceLoader({
             activeSaved.openTabs,
             workspace.projects ?? [],
             loadedSettings,
-            (tab) => { restoredTabs.push(tab) }
+            (tab) => { restoredTabs.push(tab) },
+            livePtys
           )
 
           const liveTabIds = new Set(restoredTabs.map(t => t.id))

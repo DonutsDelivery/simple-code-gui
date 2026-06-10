@@ -5,7 +5,7 @@ export const BUFFER_KEY = '__TERMINAL_BUFFERS__'
 export const ERROR_HANDLER_KEY = '__XTERM_ERROR_HANDLER__'
 
 // Buffer limits
-export const MAX_BUFFER_CHUNKS = 1000
+export const MAX_BUFFER_CHUNKS = 5000
 export const MAX_TTS_BUFFER_SIZE = 2000
 export const MAX_SPOKEN_SET_SIZE = 1000
 export const MAX_SUMMARY_BUFFER_SIZE = 200000

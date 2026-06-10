@@ -412,12 +412,15 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
         />
       )}
 
-      {/* CLAUDE.md Editor Modal */}
+      {/* Instruction File Editor Modal */}
       {claudeMdEditorModal && (
         <ClaudeMdEditor
           isOpen={true}
           projectPath={claudeMdEditorModal.project.path}
           projectName={claudeMdEditorModal.project.name}
+          aiBackend={claudeMdEditorModal.project.backend && claudeMdEditorModal.project.backend !== 'default'
+            ? claudeMdEditorModal.project.backend as any
+            : undefined}
           onClose={() => setClaudeMdEditorModal(null)}
         />
       )}

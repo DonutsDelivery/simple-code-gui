@@ -80,7 +80,7 @@ export class WorkspaceApi {
 
   // TTS (Text-to-Speech)
 
-  async ttsInstallInstructions(projectPath: string): Promise<{ success: boolean }> {
+  async ttsInstallInstructions(projectPath: string, _aiBackend?: string): Promise<{ success: boolean }> {
     // TTS instruction installation is a desktop-only feature
     // The mobile app uses the host's TTS directly
     console.warn('[HttpBackend] ttsInstallInstructions() - Desktop-only feature')

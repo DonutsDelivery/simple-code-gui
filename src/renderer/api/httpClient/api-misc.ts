@@ -45,6 +45,18 @@ export function aiderCheck(
   return get<{ installed: boolean; pipInstalled: boolean }>(config, '/settings/cli/aider')
 }
 
+export function hermesCheck(
+  config: HostConfig
+): Promise<{ installed: boolean }> {
+  return get<{ installed: boolean }>(config, '/settings/cli/hermes')
+}
+
+export function grokCheck(
+  config: HostConfig
+): Promise<{ installed: boolean }> {
+  return get<{ installed: boolean }>(config, '/settings/cli/grok')
+}
+
 // =============================================================================
 // GSD API
 // =============================================================================
@@ -133,7 +145,7 @@ export function setPtyBackend(_id: string, _backend: BackendId): Promise<void> {
 
 // PTY recreated callback
 export function onPtyRecreated(
-  _callback: (data: { oldId: string; newId: string; backend: BackendId }) => void
+  _callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void
 ): () => void {
   console.warn('[HttpApiClient] onPtyRecreated not implemented in HTTP API')
   return () => {}

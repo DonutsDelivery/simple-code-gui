@@ -2,6 +2,7 @@ export { registerCliHandlers, getExecOptions, checkCliInstalled, resetCliCache }
 export { registerBeadsHandlers, getBeadsExecOptions, checkBeadsInstalled, spawnBdCommand, validateTaskId, TASK_ID_PATTERN } from './beads-handlers'
 export { registerVoiceHandlers } from './voice-handlers'
 export { registerExtensionHandlers } from './extension-handlers'
-export { registerWindowHandlers } from './window-handlers'
+export { registerWindowHandlers, cleanupClipboardTempFiles } from './window-handlers'
 export { registerGsdHandlers } from './gsd-handlers'
 export { registerKspecHandlers } from './kspec-handlers'
+export { registerGlobalInstructionHandlers } from './global-instruction-handlers'

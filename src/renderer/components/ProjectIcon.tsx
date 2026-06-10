@@ -3,20 +3,22 @@ import { getProjectIcon } from '../utils/projectIcons'
 
 interface ProjectIconProps {
   projectName: string
+  customIcon?: string
   size?: number
 }
 
-export function ProjectIcon({ projectName, size = 24 }: ProjectIconProps) {
+export function ProjectIcon({ projectName, customIcon, size = 24 }: ProjectIconProps) {
   const icon = getProjectIcon(projectName)
+  const emoji = customIcon?.trim() || icon.emoji
 
-  if (icon.emoji) {
+  if (emoji) {
     return (
       <span
         className="project-icon emoji"
         style={{ fontSize: size * 0.75 }}
         title={projectName}
       >
-        {icon.emoji}
+        {emoji}
       </span>
     )
   }

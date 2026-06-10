@@ -1,15 +1,17 @@
 import React, { useEffect, useState, useCallback, useRef, RefObject } from 'react'
 import { TitleBar } from '../components/TitleBar'
 import { Sidebar } from '../components/Sidebar'
-import { TerminalTabs } from '../components/TerminalTabs'
 import { Terminal } from '../components/terminal/Terminal'
 import { TiledTerminalView } from '../components/tiled/index.js'
+import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
+import { getAllTabIds, createLeaf, createBranch, generateTileId } from '../components/tile-tree'
 import { SettingsModal } from '../components/SettingsModal'
 import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
 import { useWorkspaceStore } from '../stores/workspace'
+import { serializeSessionsForSave } from '../stores/workspace-persistence'
 import { useVoice } from '../contexts/VoiceContext'
 import { useModals } from '../contexts/ModalContext'
 import {
@@ -19,7 +21,7 @@ import {
   useWorkspaceLoader,
   useSessionPolling,
   useApiListeners,
-  useProjectHandlers
+  useProjectHandlers,
 } from '../hooks'
 import type { Api } from '../api'
 import { InstallationPrompt } from './InstallationPrompt'
@@ -37,22 +39,30 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     openTabs,
     activeTabId,
     categories,
+    sessions,
+    activeSessionId,
+    activeTileTree,
     addProject,
     removeProject,
     updateProject,
     addTab,
     removeTab,
     updateTab,
-    setActiveTab
+    setActiveTab,
+    setActiveTileTree,
+    addSession,
+    removeSession,
+    renameSession,
+    reorderSessions,
+    switchSession,
+    setSessionSavedData,
   } = useWorkspaceStore()
 
   const { voiceOutputEnabled, setProjectVoice } = useVoice()
   const voiceOutputEnabledRef = useRef(voiceOutputEnabled)
 
-  // Modal state from context
   const { settingsOpen, makeProjectOpen, openSettings, closeSettings, openMakeProject, closeMakeProject } = useModals()
 
-  // Installation state from hook
   const {
     claudeInstalled,
     npmInstalled,
@@ -66,52 +76,43 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     handleInstallClaude
   } = useInstallation()
 
-  // Updater state from hook
   const { appVersion, updateStatus, downloadUpdate, installUpdate } = useUpdater()
 
-  // View state from hook
   const {
-    viewMode,
-    tileTree,
     lastFocusedTabId,
     sidebarWidth,
     sidebarCollapsed,
-    setViewMode,
-    setTileTree,
     setLastFocusedTabId,
     setSidebarWidth,
     setSidebarCollapsed,
-    toggleViewMode
   } = useViewState()
 
-  // Workspace loader hook
   const {
     loading,
     currentTheme,
     settings,
     setCurrentTheme,
-    setSettings
+    setSettings,
+    restoreSession,
   } = useWorkspaceLoader({
     api,
     checkInstallation,
-    setViewMode,
-    setTileTree
   })
 
-  // Session polling hook
-  useSessionPolling({ api, openTabs, updateTab })
+  useSessionPolling({ api, projects, openTabs, updateTab })
 
-  // API listeners hook
   useApiListeners({
     api,
     projects,
     settings,
     addTab,
     updateTab,
-    setActiveTab
+    setActiveTab,
+    tileTree: activeTileTree,
+    setTileTree: setActiveTileTree,
+    openTabs,
   })
 
-  // Project handlers hook
   const {
     handleAddProject,
     handleAddProjectsFromParent,
@@ -128,19 +129,18 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     projects,
     openTabs,
     settings,
-    tileTree,
+    tileTree: activeTileTree,
     addProject,
     removeTab,
     addTab,
     setActiveTab,
-    setTileTree
+    setTileTree: setActiveTileTree,
   })
 
   const handleRenameTab = useCallback((id: string, title: string) => {
     updateTab(id, { title, customTitle: true })
   }, [updateTab])
 
-  // App-specific state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
   const [showFileBrowser, setShowFileBrowser] = useState(false)
@@ -148,22 +148,29 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
   const hadProjectsRef = useRef(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
 
-  // Keep ref in sync for callbacks
   useEffect(() => {
     voiceOutputEnabledRef.current = voiceOutputEnabled
   }, [voiceOutputEnabled])
 
-  // Apply per-project voice settings when active tab changes
+  // Orphan healer: every openTab in the active session must appear in its tileTree
   useEffect(() => {
-    if (!activeTabId) {
-      setProjectVoice(null)
-      return
-    }
+    const tabIds = openTabs.map(t => t.id)
+    if (tabIds.length === 0) return
+    const tabsInTree = activeTileTree ? getAllTabIds(activeTileTree) : new Set<string>()
+    const orphanIds = tabIds.filter(id => !tabsInTree.has(id))
+    if (orphanIds.length === 0) return
+    const orphanLeaf = createLeaf(generateTileId(), orphanIds, orphanIds[0])
+    const newTree = activeTileTree
+      ? createBranch(generateTileId(), 'horizontal', [activeTileTree, orphanLeaf])
+      : orphanLeaf
+    setActiveTileTree(newTree)
+  }, [openTabs, activeTileTree, setActiveTileTree])
+
+  // Apply per-project voice when active tab changes
+  useEffect(() => {
+    if (!activeTabId) { setProjectVoice(null); return }
     const activeTab = openTabs.find(t => t.id === activeTabId)
-    if (!activeTab) {
-      setProjectVoice(null)
-      return
-    }
+    if (!activeTab) { setProjectVoice(null); return }
     const project = projects.find(p => p.path === activeTab.projectPath)
     if (project?.ttsVoice && project?.ttsEngine) {
       setProjectVoice({ ttsVoice: project.ttsVoice, ttsEngine: project.ttsEngine })
@@ -172,50 +179,67 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     }
   }, [activeTabId, openTabs, projects, setProjectVoice])
 
-  // Save workspace when it changes
+  // Save workspace when state changes
   useEffect(() => {
-    if (!loading) {
-      const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
+    if (loading) return
 
-      if (projects.length === 0 && hadProjects) {
-        console.warn('Skipping save: projects empty but previously had projects (likely hot reload)')
-        return
-      }
-
-      if (projects.length > 0) {
-        hadProjectsRef.current = true
-        sessionStorage.setItem('hadProjects', 'true')
-      }
-
-      api.saveWorkspace({
-        projects,
-        openTabs: openTabs.map(t => ({
-          id: t.id,
-          projectPath: t.projectPath,
-          sessionId: t.sessionId,
-          title: t.title,
-          customTitle: t.customTitle || undefined,
-          ptyId: t.ptyId,
-          backend: t.backend
-        })),
-        activeTabId,
-        viewMode,
-        tileTree: tileTree || undefined,
-        categories
-      })
+    const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
+    if (projects.length === 0 && hadProjects) {
+      console.warn('Skipping save: projects empty but previously had projects (likely hot reload)')
+      return
     }
-  }, [api, projects, openTabs, activeTabId, loading, viewMode, tileTree, categories])
+    if (projects.length > 0) {
+      hadProjectsRef.current = true
+      sessionStorage.setItem('hadProjects', 'true')
+    }
 
-  // Mobile drawer handlers
-  const openMobileDrawer = useCallback(() => {
-    setMobileDrawerOpen(true)
-  }, [])
+    const allSessions = useWorkspaceStore.getState().sessions
+    const savedSessions = serializeSessionsForSave(allSessions)
 
-  const closeMobileDrawer = useCallback(() => {
-    setMobileDrawerOpen(false)
-  }, [])
+    api.saveWorkspace({
+      projects,
+      categories,
+      sessions: savedSessions,
+      activeSessionId,
+    })
+  }, [api, projects, openTabs, activeTabId, loading, activeTileTree, categories, sessions, activeSessionId])
 
-  // Open file browser (mobile only)
+  // Workspace switcher handlers
+  const handleSwitchSession = useCallback(async (id: string) => {
+    const state = useWorkspaceStore.getState()
+    const session = state.sessions.find(s => s.id === id)
+    if (!session) return
+
+    if (!session.isRestored) {
+      // Lazy restore before switching
+      await restoreSession(id)
+    }
+    switchSession(id)
+    // Trigger resize so terminals refit
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
+  }, [restoreSession, switchSession])
+
+  const handleAddSession = useCallback(() => {
+    addSession()
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+  }, [addSession])
+
+  const handleRemoveSession = useCallback((id: string) => {
+    const state = useWorkspaceStore.getState()
+    const session = state.sessions.find(s => s.id === id)
+    if (session) {
+      for (const tab of session.openTabs) {
+        api.killPty(tab.id)
+      }
+    }
+    removeSession(id)
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+  }, [api, removeSession])
+
+  const openMobileDrawer = useCallback(() => setMobileDrawerOpen(true), [])
+  const closeMobileDrawer = useCallback(() => setMobileDrawerOpen(false), [])
+
   const handleOpenFileBrowser = useCallback((projectPath?: string) => {
     setFileBrowserPath(projectPath || null)
     setShowFileBrowser(true)
@@ -261,7 +285,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
           onDisconnect={onDisconnect}
         />
 
-        {/* Mobile: render each terminal as its own slide */}
+        {/* Mobile: each terminal as its own slide */}
         {isMobile && openTabs.map((tab) => (
           <div key={tab.id} className="mobile-terminal-slide">
             <div className="mobile-slide-header">
@@ -286,7 +310,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
           </div>
         ))}
 
-        {/* Desktop: wrap terminals in main-content */}
+        {/* Desktop */}
         {!isMobile && (
           <div className="main-content">
             {claudeInstalled === false || gitBashInstalled === false ? (
@@ -301,51 +325,18 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                 onInstallGit={handleInstallGit}
                 onInstallClaude={handleInstallClaude}
               />
-            ) : openTabs.length > 0 ? (
+            ) : (
               <>
-                <div className="terminal-header">
-                  {viewMode === 'tabs' && (
-                    <TerminalTabs
-                      tabs={openTabs}
-                      activeTabId={activeTabId}
-                      onSelectTab={setActiveTab}
-                      onCloseTab={handleCloseTab}
-                      onRenameTab={handleRenameTab}
-                      onNewSession={(projectPath) => handleOpenSession(projectPath, undefined, undefined, undefined, true)}
-                      swipeContainerRef={terminalContainerRef as RefObject<HTMLElement>}
-                      onOpenSidebar={openMobileDrawer}
-                    />
-                  )}
-                  <button
-                    className="view-toggle-btn"
-                    onClick={toggleViewMode}
-                    title={viewMode === 'tabs' ? 'Switch to tiled view' : 'Switch to tabs view'}
-                  >
-                    {viewMode === 'tabs' ? '\u229E' : '\u25AD'}
-                  </button>
-                </div>
-                {viewMode === 'tabs' ? (
-                  <div className="terminal-container" ref={terminalContainerRef}>
-                    {openTabs.map((tab) => (
-                      <div
-                        key={tab.id}
-                        className={`terminal-wrapper ${tab.id === activeTabId ? 'active' : ''}`}
-                      >
-                        <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
-                          <Terminal
-                            ptyId={tab.id}
-                            isActive={tab.id === activeTabId}
-                            theme={currentTheme}
-                            onFocus={() => setLastFocusedTabId(tab.id)}
-                            projectPath={tab.projectPath}
-                            backend={tab.backend}
-                            api={api}
-                          />
-                        </ErrorBoundary>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
+                <WorkspaceSwitcher
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  onSwitch={handleSwitchSession}
+                  onAdd={handleAddSession}
+                  onRemove={handleRemoveSession}
+                  onRename={renameSession}
+                  onReorder={reorderSessions}
+                />
+                {openTabs.length > 0 ? (
                   <ErrorBoundary componentName="TiledTerminalView">
                     <TiledTerminalView
                       tabs={openTabs}
@@ -355,22 +346,46 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                       onCloseTab={handleCloseTab}
                       onRenameTab={handleRenameTab}
                       onFocusTab={setLastFocusedTabId}
-                      tileTree={tileTree}
-                      onTreeChange={setTileTree}
+                      tileTree={activeTileTree}
+                      onTreeChange={setActiveTileTree}
                       onOpenSessionAtPosition={handleOpenSessionAtPosition}
                       onAddTab={handleAddTabToTile}
                       onUndoCloseTab={canUndoCloseTab ? handleUndoCloseTab : undefined}
                       api={api}
                     />
                   </ErrorBoundary>
+                ) : (
+                  <div className="empty-state">
+                    <h2>Simple Code GUI</h2>
+                    <p>Add a project from the sidebar, then click a session to open it</p>
+                  </div>
                 )}
               </>
-            ) : (
-              <div className="empty-state">
-                <h2>Simple Code GUI</h2>
-                <p>Add a project from the sidebar, then click a session to open it</p>
-              </div>
             )}
+            {/* Background terminals: keep inactive workspace PTYs mounted to preserve xterm/PTY state */}
+            {sessions
+              .filter(s => s.id !== activeSessionId && s.isRestored && s.openTabs.length > 0)
+              .flatMap(s => s.openTabs)
+              .map(tab => (
+                <div
+                  key={tab.id}
+                  style={{ position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' }}
+                >
+                  <ErrorBoundary componentName={`BgTerminal(${tab.id})`}>
+                    <Terminal
+                      ptyId={tab.id}
+                      isActive={false}
+                      theme={currentTheme}
+                      onFocus={() => {}}
+                      projectPath={tab.projectPath}
+                      backend={tab.backend}
+                      api={api}
+                      isMobile={false}
+                    />
+                  </ErrorBoundary>
+                </div>
+              ))
+            }
           </div>
         )}
 
@@ -391,7 +406,6 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
           onProjectCreated={handleProjectCreated}
         />
 
-        {/* Mobile Connect Modal (QR Code) - only show in Electron */}
         {isElectron && (
           <MobileConnectModal
             isOpen={mobileConnectOpen}
@@ -400,11 +414,9 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
           />
         )}
 
-        {/* File Browser Modal (mobile only) */}
         {isMobile && showFileBrowser && fileBrowserPath && (() => {
           const connInfo = api.getConnectionInfo?.()
           if (!connInfo) return null
-
           const hostConfig: HostConfig = {
             id: 'current',
             name: 'Desktop',
@@ -413,14 +425,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
             token: connInfo.token
           }
           return (
-            <div style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 100
-            }}>
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
               <FileBrowser
                 host={hostConfig}
                 basePath={fileBrowserPath}

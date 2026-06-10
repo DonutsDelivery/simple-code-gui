@@ -9,7 +9,7 @@ import {
 } from '../constants.js'
 import { handlePaste, isTerminalAtBottom, scrollDebug, scrollSnapshot } from '../utils.js'
 
-type BackendType = 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'
+type BackendType = 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 function clampCell(value: number, max: number): number {
   return Math.max(1, Math.min(max, value))
@@ -177,6 +177,14 @@ export function createResizeHandler(
 ): () => void {
   return () => {
     if (disposedRef.current || !containerRef.current) return
+
+    // Inactive-workspace terminals stay mounted in a full-window `inset:0` box
+    // (MainApp background terminals), which is far larger than the tile they
+    // actually live in. Resizing the PTY to that oversized geometry while hidden
+    // reflows the TUI's content taller than the tile, so on return it's pinned to
+    // the input line with scrollback wedged. Skip resizes while hidden; the
+    // refit-on-active effect re-fits to the real tile size on reactivation.
+    if (containerRef.current.checkVisibility && !containerRef.current.checkVisibility()) return
 
     const resizeRect = containerRef.current.getBoundingClientRect()
     if (resizeRect.width > 50 && resizeRect.height > 50) {

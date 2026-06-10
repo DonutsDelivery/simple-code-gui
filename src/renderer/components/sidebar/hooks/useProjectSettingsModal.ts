@@ -88,6 +88,7 @@ export function useProjectSettingsModal({
       apiModel: project.apiModel || 'default',
       tools: project.autoAcceptTools || [],
       permissionMode: project.permissionMode || 'default',
+      icon: project.icon || '',
       ttsVoice: project.ttsVoice || '',
       ttsEngine: project.ttsEngine || '',
       backend: project.backend || 'default',
@@ -157,6 +158,7 @@ export function useProjectSettingsModal({
         projectSettingsModal.permissionMode !== 'default'
           ? projectSettingsModal.permissionMode
           : undefined,
+      icon: projectSettingsModal.icon.trim() || undefined,
       ttsVoice: projectSettingsModal.ttsVoice || undefined,
       ttsEngine: projectSettingsModal.ttsEngine || undefined,
       backend:

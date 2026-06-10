@@ -372,13 +372,16 @@ const TOOLS = [
   },
   {
     name: 'debug_input_event',
-    description: 'Send a REAL input event through Chromium\'s input pipeline (webContents.sendInputEvent) — exercises the actual wheel/key handlers exactly like a physical mouse/keyboard. For type=wheel, the event is aimed at the center of the given terminal (pty_id required; positive delta_y scrolls content up/back in history, negative scrolls down); returns before/after terminal snapshots so you can verify viewportY moved. For type=key, pass key (e.g. "Up", "Enter", "a") and optional modifiers; focus the terminal first with debug_action focus_terminal.',
+    description: 'Send a REAL input event through Chromium\'s input pipeline (webContents.sendInputEvent) — exercises the actual wheel/key handlers exactly like a physical mouse/keyboard. For type=wheel, the event is aimed at the center of the given terminal (pty_id required; positive delta_y scrolls content up/back in history, negative scrolls down); returns before/after terminal snapshots so you can verify viewportY moved. For type=key, pass key (e.g. "Up", "Enter", "a") and optional modifiers; focus the terminal first with debug_action focus_terminal. For type=click, pass x/y viewport coordinates or a CSS selector — performs a real mouseDown+mouseUp (use for tab/workspace switching through the actual UI).',
     inputSchema: {
       type: 'object',
       properties: {
         instance_port: { type: 'number', description: 'Target a specific instance by orchestrator port (from debug_instances). Defaults to the instance this MCP connected to.' },
-        type: { type: 'string', enum: ['wheel', 'key'], description: 'Input event type' },
+        type: { type: 'string', enum: ['wheel', 'key', 'click'], description: 'Input event type' },
         pty_id: { type: 'string', description: 'Target terminal PTY ID (required for wheel)' },
+        x: { type: 'number', description: 'Viewport x coordinate for type=click' },
+        y: { type: 'number', description: 'Viewport y coordinate for type=click' },
+        selector: { type: 'string', description: 'CSS selector to click (alternative to x/y for type=click; aims at element center)' },
         delta_y: { type: 'number', description: 'Wheel vertical delta per step (positive = scroll up into history)' },
         delta_x: { type: 'number', description: 'Wheel horizontal delta per step' },
         steps: { type: 'number', description: 'Repeat the wheel event N times, 30ms apart (default 1, max 50)' },
@@ -680,6 +683,9 @@ async function handleToolCall(name, args) {
         steps: args.steps,
         key: args.key,
         modifiers: args.modifiers,
+        x: args.x,
+        y: args.y,
+        selector: args.selector,
       }
       const result = await apiRequest('POST', '/debug/input-event', body, args.instance_port)
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }

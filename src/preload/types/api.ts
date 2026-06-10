@@ -14,7 +14,7 @@ export interface ElectronAPI {
   getCategoryMetaPath: (categoryName: string) => Promise<string>
 
   // Sessions
-  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<Session[]>
+  discoverSessions: (projectPath: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => Promise<Session[]>
 
   // Settings
   getSettings: () => Promise<Settings>
@@ -59,6 +59,10 @@ export interface ElectronAPI {
   // Hermes Agent
   hermesCheck: () => Promise<{ installed: boolean }>
   hermesInstall: () => Promise<{ success: boolean; error?: string }>
+
+  // Grok Build
+  grokCheck: () => Promise<{ installed: boolean }>
+  grokInstall: () => Promise<{ success: boolean; error?: string }>
 
   // Get Shit Done (GSD) - Claude Code workflow addon
   gsdCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
@@ -183,26 +187,30 @@ export interface ElectronAPI {
   tadaUseSampleVoice: (sampleId: string) => Promise<{ success: boolean; path?: string; error?: string }>
 
   // PTY
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<string>
+  listPtys: () => Promise<Array<{ id: string; cwd: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; sessionId?: string; spawnedAt: number }>>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => Promise<string>
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void
-  setPtyBackend: (id: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes') => Promise<void>
+  setPtyBackend: (id: string, backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => Promise<void>
+  getPtyReplay: (id: string) => Promise<string | null>
   onPtyData: (id: string, callback: (data: string) => void) => () => void
   onPtyExit: (id: string, callback: (code: number) => void) => () => void
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' }) => void) => () => void
+  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; sessionId?: string }) => void) => () => void
   setAutoAccept: (id: string, enabled: boolean) => void
   scrollDebugLog: (chunk: string) => void
   getAutoAcceptStatus: (id: string) => Promise<boolean>
-  setActivePtyIds: (ids: string[]) => void
 
   // API Server
   apiStart: (projectPath: string, port: number) => Promise<{ success: boolean; error?: string }>
   apiStop: (projectPath: string) => Promise<{ success: boolean }>
   apiStatus: (projectPath: string) => Promise<{ running: boolean; port?: number }>
   onApiOpenSession: (callback: (data: { projectPath: string; autoClose: boolean; model?: string }) => void) => () => void
+  onOrchestratorSessionCreated: (callback: (data: { ptyId: string; projectPath: string; backend: string; workspaceId?: string; tileId?: string; placement?: string }) => void) => () => void
 
   // Mobile Server (for phone app connectivity)
+  mobileIsEnabled: () => Promise<boolean>
+  mobileSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean }>
   mobileGetConnectionInfo: () => Promise<{
     url: string
     token: string
@@ -238,6 +246,14 @@ export interface ElectronAPI {
     expiresAt: number
     message?: string
   }>>
+  mobileListDevices: () => Promise<Array<{
+    deviceId: string
+    name: string
+    createdAt: number
+    lastSeen: number
+    revoked: boolean
+  }>>
+  mobileRevokeDevice: (deviceId: string) => Promise<{ revoked: number }>
 
   // Updater
   getVersion: () => Promise<string>
@@ -261,6 +277,10 @@ export interface ElectronAPI {
 
   // Debug logging
   debugLog: (message: string) => void
+
+  // Headroom compression proxy
+  headroomGetStatus: () => Promise<{ running: boolean; port: number; error: string | null }>
+  onHeadroomStatus: (callback: (status: { running: boolean; port: number; error: string | null }) => void) => () => void
 
   // App utilities
   isDebugMode: () => Promise<boolean>

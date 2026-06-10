@@ -8,10 +8,12 @@ import {
   ProjectDirectorySettings,
   PermissionsSettings,
   BackendSettings,
+  HeadroomSettings,
   ExtensionsSettings,
   VoiceInputSettings,
   VoiceOutputSettings,
   UninstallTTSSection,
+  GlobalInstructionSettings,
   VersionSettings,
   DEFAULT_GENERAL,
   DEFAULT_VOICE,
@@ -87,6 +89,16 @@ export function SettingsModal({
   const [tadaInstalling, setTadaInstalling] = useState(false)
   const [tadaInstallError, setTadaInstallError] = useState<string | null>(null)
 
+  // Global instruction injection state
+  const [globalInstructionContent, setGlobalInstructionContent] = useState('')
+  const [globalInstructionApplying, setGlobalInstructionApplying] = useState(false)
+  const [globalInstructionApplyResult, setGlobalInstructionApplyResult] = useState<{ applied: number; failed: number } | null>(null)
+  const [globalInstructionRemoveResult, setGlobalInstructionRemoveResult] = useState<{ removed: number; failed: number } | null>(null)
+
+  // Headroom compression proxy state
+  const [headroom, setHeadroom] = useState<{ enabled: boolean; port: number; proxyPath: string }>({ enabled: false, port: 8787, proxyPath: '' })
+  const [headroomStatus, setHeadroomStatus] = useState<{ running: boolean; port: number; error: string | null } | null>(null)
+
   // Load installed voices (Piper, XTTS, and TADA)
   async function refreshInstalledVoices(): Promise<void> {
     try {
@@ -137,7 +149,15 @@ export function SettingsModal({
           permissionMode: settings.permissionMode || 'default',
           backend: settings.backend || 'default'
         }))
+        setGlobalInstructionContent(settings.globalInstructionInjection || '')
+        setHeadroom({
+          enabled: settings.headroomEnabled === true,
+          port: settings.headroomPort ?? 8787,
+          proxyPath: settings.headroomProxyPath || ''
+        })
       })
+
+      window.electronAPI?.headroomGetStatus?.()?.then(setHeadroomStatus)?.catch(() => {})
 
       // Load voice settings (active voice)
       window.electronAPI?.voiceGetSettings?.()?.then((voiceSettings: { ttsVoice?: string; ttsEngine?: string; ttsSpeed?: number; xttsTemperature?: number; xttsTopK?: number; xttsTopP?: number; xttsRepetitionPenalty?: number; tadaVoiceSample?: string | null }) => {
@@ -183,6 +203,12 @@ export function SettingsModal({
     }
   }, [isOpen])
 
+  // Live Headroom proxy status updates pushed from the main process.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onHeadroomStatus?.(setHeadroomStatus)
+    return () => unsubscribe?.()
+  }, [])
+
   async function handleSave(): Promise<void> {
     const newSettings = {
       defaultProjectDir: general.defaultProjectDir,
@@ -190,7 +216,11 @@ export function SettingsModal({
       themeCustomization: general.themeCustomization,
       autoAcceptTools: general.autoAcceptTools,
       permissionMode: general.permissionMode,
-      backend: general.backend
+      backend: general.backend,
+      globalInstructionInjection: globalInstructionContent,
+      headroomEnabled: headroom.enabled,
+      headroomPort: headroom.port,
+      headroomProxyPath: headroom.proxyPath || undefined
     }
     await window.electronAPI?.saveSettings(newSettings)
     // Save voice settings including XTTS quality settings and TADA sample
@@ -360,6 +390,14 @@ export function SettingsModal({
             onChange={(backend) => setGeneral(prev => ({ ...prev, backend }))}
           />
 
+          <HeadroomSettings
+            enabled={headroom.enabled}
+            port={headroom.port}
+            proxyPath={headroom.proxyPath}
+            status={headroomStatus}
+            onChange={setHeadroom}
+          />
+
           <ExtensionsSettings installedExtensions={installedExtensions} />
 
           <VoiceInputSettings
@@ -415,12 +453,34 @@ export function SettingsModal({
             }}
           />
 
-          <UninstallTTSSection
-            removingTTS={ui.removingTTS}
-            ttsRemovalResult={ui.ttsRemovalResult}
-            onRemove={handleRemoveTTSFromAllProjects}
-          />
-        </div>
+           <UninstallTTSSection
+             removingTTS={ui.removingTTS}
+             ttsRemovalResult={ui.ttsRemovalResult}
+             onRemove={handleRemoveTTSFromAllProjects}
+           />
+
+           <GlobalInstructionSettings
+             savedContent={globalInstructionContent}
+             onSaved={(content) => {
+               setGlobalInstructionContent(content)
+               window.electronAPI?.saveSettings({
+                 defaultProjectDir: general.defaultProjectDir,
+                 theme: general.selectedTheme,
+                 themeCustomization: general.themeCustomization,
+                 autoAcceptTools: general.autoAcceptTools,
+                 permissionMode: general.permissionMode,
+                 backend: general.backend,
+                 globalInstructionInjection: content
+               })
+             }}
+             isApplying={globalInstructionApplying}
+             setIsApplying={setGlobalInstructionApplying}
+             applyResult={globalInstructionApplyResult}
+             setApplyResult={setGlobalInstructionApplyResult}
+             removeResult={globalInstructionRemoveResult}
+             setRemoveResult={setGlobalInstructionRemoveResult}
+           />
+         </div>
         <div className="modal-footer">
           <a
             href="https://ko-fi.com/donutsdelivery"

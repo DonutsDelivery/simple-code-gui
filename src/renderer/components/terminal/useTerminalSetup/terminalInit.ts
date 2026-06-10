@@ -54,6 +54,7 @@ interface InitState {
   initPending: boolean
   pendingWrites: string[]
   firstData: boolean
+  replayPending: boolean
 }
 
 /**
@@ -70,7 +71,6 @@ function configureMobileKeyboard(textarea: HTMLTextAreaElement): void {
   ;(textarea as any).autocorrect = 'off'
   ;(textarea as any).autocapitalize = 'off'
   textarea.spellcheck = false
-  console.log('[Terminal] Disabled mobile keyboard features on textarea')
 }
 
 /**
@@ -131,7 +131,6 @@ function loadWebGLAddon(
                 terminal.refresh(0, terminal.rows - 1)
               })
               terminal.loadAddon(newWebgl)
-              console.log('Terminal GPU: WebGL recovered')
             } catch {
               console.warn('Terminal GPU: WebGL recovery failed, using canvas')
               forceViewportBackground()
@@ -140,7 +139,6 @@ function loadWebGLAddon(
           }, 1000)
         })
         terminal.loadAddon(webglAddon)
-        console.log('Terminal GPU acceleration: WebGL enabled')
         // Force a full repaint after WebGL loads so all cells render
         // with the correct colors via the GPU pipeline. Without this,
         // previously-written cells may appear grey/inactive.
@@ -168,7 +166,6 @@ function loadWebLinksAddon(terminal: XTerm, state: InitState): void {
         window.electronAPI?.openExternal?.(uri) ?? window.open(uri, '_blank')
       })
       terminal.loadAddon(webLinksAddon)
-      console.log('Terminal links: enabled (clickable URLs)')
     } catch (e) {
       console.warn('Terminal links: failed to load addon:', e)
     }
@@ -367,11 +364,42 @@ function postOpenSetup(
       scrollDebug('bufferReplay:scrollToBottom', scrollSnapshot(terminal))
       terminal.scrollToBottom()
     })
+  } else if (window.electronAPI?.getPtyReplay) {
+    // No local cache — this is a (re)mount of a live PTY, e.g. after a
+    // workspace switch unmounted the terminal and destroyed its scrollback.
+    // Restore full history from the main process ReplayBuffer (raw VT bytes,
+    // same source the mobile client uses for late attach). Live PTY data is
+    // queued in pendingWrites until the replay is written so ordering holds.
+    state.replayPending = true
+    window.electronAPI.getPtyReplay(ptyId).then((replay: string | null) => {
+      if (state.disposed) {
+        state.replayPending = false
+        return
+      }
+      if (replay) {
+        // Chunks queued before the snapshot are already contained in it.
+        state.pendingWrites.length = 0
+        options.prePopulateSpokenContent([replay])
+        terminal.write(replay)
+        syncViewportBackground()
+        terminal.refresh(0, terminal.rows - 1)
+        scrollDebug('replayBuffer:restored', { bytes: replay.length, ...scrollSnapshot(terminal) })
+        terminal.scrollToBottom()
+      } else if (state.pendingWrites.length > 0) {
+        for (const data of state.pendingWrites) {
+          terminal.write(data)
+        }
+        state.pendingWrites.length = 0
+        terminal.scrollToBottom()
+      }
+      state.replayPending = false
+    }).catch(() => {
+      state.replayPending = false
+    })
   }
 
   // Flush any pending writes that arrived before terminal was ready
   if (state.pendingWrites.length > 0) {
-    console.log('[Terminal] Flushing', state.pendingWrites.length, 'pending writes')
     for (const data of state.pendingWrites) {
       terminal.write(data)
     }
@@ -404,14 +432,17 @@ function postOpenSetup(
     fitAddon.fit()
     syncViewportBackground()
     terminal.refresh(0, terminal.rows - 1)
-    // OpenCode's TUI uses differential updates — after a workspace remount,
-    // cells not re-sent by the TUI stay grey/inactive. A SIGWINCH forces a
-    // full TUI redraw, preventing the bugged state.
-    if (options.backend === 'opencode') {
-      const dims = fitAddon.proposeDimensions()
-      if (dims && dims.cols > 0 && dims.rows > 0) {
+    // Force TUI to redraw by sending a transient SIGWINCH with rows-1 then
+    // restoring the correct size. TUIs like Ink (Claude Code) cache terminal
+    // dimensions and skip full redraws when SIGWINCH arrives with unchanged
+    // dimensions (e.g. after switching back to a workspace whose PTY is idle).
+    const dims = fitAddon.proposeDimensions()
+    if (dims && dims.cols > 0 && dims.rows > 0) {
+      ptyOperations.resizePty(ptyId, dims.cols, Math.max(1, dims.rows - 1))
+      requestAnimationFrame(() => {
+        if (state.disposed) return
         ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
-      }
+      })
     }
   })
 }
@@ -433,19 +464,16 @@ export function initTerminal(
   options: UseTerminalSetupOptions,
   state: InitState
 ): boolean {
-  console.log('[Terminal] initTerminal called, disposed:', state.disposed, 'terminal:', !!state.terminal, 'initPending:', state.initPending)
   if (state.disposed || state.terminal) return true
   if (state.initPending) return false
 
   const container = containerRef.current
   if (!container) {
-    console.log('[Terminal] No container ref')
     return false
   }
 
   const offsetW = container.offsetWidth
   const offsetH = container.offsetHeight
-  console.log('[Terminal] offset dimensions:', offsetW, 'x', offsetH)
   if (offsetW < 50 || offsetH < 50) {
     return false
   }
@@ -464,8 +492,6 @@ export function initTerminal(
   if (computedW < 50 || computedH < 50) {
     return false
   }
-
-  console.log('[Terminal] Container ready (v3), initializing xterm:', Math.round(computedW), 'x', Math.round(computedH))
 
   const t = theme.terminal
   const cachedTheme = getLastTerminalTheme()
@@ -524,7 +550,6 @@ export function initTerminal(
     const finalStyle = getComputedStyle(container)
     const finalW = parseFloat(finalStyle.width) || 0
     const finalH = parseFloat(finalStyle.height) || 0
-    console.log('[Terminal] Opening terminal with dimensions:', Math.round(finalW), 'x', Math.round(finalH))
 
     if (finalW < 50 || finalH < 50) {
       console.warn('[Terminal] Dimensions too small after delay, will retry')
@@ -535,7 +560,6 @@ export function initTerminal(
 
     try {
       newTerminal.open(container)
-      console.log('[Terminal] xterm.open() succeeded')
 
       const textarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
       if (textarea) {
@@ -593,8 +617,6 @@ export function handlePtyData(
   onAutoWorkMarker: (chunk: string) => void,
   state: InitState
 ): void {
-  // Buffer is filled by useBackgroundBuffers hook (persistent listener,
-  // survives workspace switches). Don't double-append here.
 
   // Strip markers from display
   let displayData = data.replace(TTS_GUILLEMET_REGEX, '').replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
@@ -629,8 +651,9 @@ export function handlePtyData(
   // Strip autowork marker from display
   displayData = displayData.replace(AUTOWORK_MARKER_REGEX, '')
 
-  // Queue writes if terminal not ready yet
-  if (!terminal) {
+  // Queue writes if terminal not ready yet, or while a history replay is
+  // being restored (keeps replay-then-live ordering intact)
+  if (!terminal || state.replayPending) {
     state.pendingWrites.push(displayData)
     return
   }
@@ -733,7 +756,6 @@ export function handlePtyExit(
   } else {
     state.pendingWrites.push(exitMsg)
   }
-  // Buffer fill handled by useBackgroundBuffers' persistent exit listener.
 }
 
 /**
@@ -757,6 +779,7 @@ export function createInitState(): InitState {
     initPending: false,
     pendingWrites: [],
     firstData: true,
+    replayPending: false,
   }
 }
 

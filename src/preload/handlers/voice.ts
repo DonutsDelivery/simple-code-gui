@@ -56,7 +56,7 @@ export const voiceHandlers = {
   tadaGetSampleVoices: () => ipcRenderer.invoke('tada:getSampleVoices'),
   tadaUseSampleVoice: (sampleId: string) => ipcRenderer.invoke('tada:useSampleVoice', sampleId),
 
-  // TTS instructions (CLAUDE.md)
-  ttsInstallInstructions: (projectPath: string) => ipcRenderer.invoke('tts:installInstructions', projectPath),
-  ttsRemoveInstructions: (projectPath: string) => ipcRenderer.invoke('tts:removeInstructions', projectPath)
+  // TTS instructions (backend-specific instruction file)
+  ttsInstallInstructions: (projectPath: string, aiBackend?: string) => ipcRenderer.invoke('tts:installInstructions', projectPath, aiBackend),
+  ttsRemoveInstructions: (projectPath: string, aiBackend?: string) => ipcRenderer.invoke('tts:removeInstructions', projectPath, aiBackend)
 }

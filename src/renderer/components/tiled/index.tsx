@@ -19,9 +19,13 @@ import {
   createLeaf,
   generateTileId,
   splitLeaf,
-  removeTabFromLeaf
+  removeTabFromLeaf,
+  splitRoot,
+  reorderTabInLeaf,
+  equalizeRatios,
+  findAdjacentLeaf
 } from '../tile-tree.js'
-import { computeDropZone } from '../tiled-layout-utils.js'
+import { computeDropZone, computeFallbackDropZone } from '../tiled-layout-utils.js'
 import { usePanning } from './usePanning.js'
 import { TileTerminal } from './TileTerminal.js'
 import { DropZoneOverlay } from './DropZoneOverlay.js'
@@ -85,6 +89,19 @@ export function TiledTerminalView({
   const [currentDropZone, setCurrentDropZone] = useState<DropZone | null>(null)
   const [tileResizing, setTileResizing] = useState<TileResizeState | null>(null)
   const [hoveredEdge, setHoveredEdge] = useState<{ tileId: string; edge: string } | null>(null)
+  const [maximizedLeafId, setMaximizedLeafId] = useState<string | null>(null)
+
+  // Drop the maximized state whenever its leaf leaves the tree (tab closed, tile removed, workspace switched).
+  useEffect(() => {
+    if (maximizedLeafId && (!tileTree || !findLeafById(tileTree, maximizedLeafId))) {
+      setMaximizedLeafId(null)
+    }
+  }, [tileTree, maximizedLeafId])
+
+  const toggleMaximize = useCallback((leafId: string) => {
+    setMaximizedLeafId(prev => (prev === leafId ? null : leafId))
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+  }, [])
 
   // Compute rects from tree
   const bounds: ComputedRect = useMemo(() => ({ x: 0, y: 0, width: 100, height: 100 }), [])
@@ -98,6 +115,78 @@ export function TiledTerminalView({
     if (!tileTree) return []
     return getAllLeaves(tileTree)
   }, [tileTree])
+
+  const leafRectsRef = useRef(leafRects)
+  leafRectsRef.current = leafRects
+
+  // ── Keyboard shortcuts for tile management (capture phase so they beat xterm) ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tree = tileTreeRef.current
+      if (!tree) return
+      const allLeaves = getAllLeaves(tree)
+      const focused = (focusedTabId ? allLeaves.find(l => l.tabIds.includes(focusedTabId)) : null) || allLeaves[0]
+      if (!focused) return
+      // In this view the tab id IS the pty id (TileTerminal passes ptyId={tab.id}).
+      const focusTab = (tabId: string) => {
+        onFocusTab(tabId)
+        window.dispatchEvent(new CustomEvent('ct-focus-terminal', { detail: { ptyId: tabId } }))
+      }
+
+      // Ctrl+Shift+D / Ctrl+Shift+E — split focused tile right / down
+      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.code === 'KeyD' || e.code === 'KeyE')) {
+        const activeTab = tabs.find(t => t.id === focused.activeTabId)
+        const rect = leafRectsRef.current.get(focused.id)
+        if (activeTab && rect && onOpenSessionAtPosition) {
+          e.preventDefault(); e.stopPropagation()
+          const type = e.code === 'KeyD' ? 'split-right' : 'split-bottom'
+          onOpenSessionAtPosition(activeTab.projectPath, { type, targetTileId: focused.id, bounds: rect }, containerSizeRef.current, tree)
+        }
+        return
+      }
+      // Ctrl+Shift+W — close active tab in focused tile
+      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyW') {
+        e.preventDefault(); e.stopPropagation()
+        onCloseTab(focused.activeTabId)
+        return
+      }
+      // Ctrl+Shift+Z — toggle maximize focused tile
+      if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyZ') {
+        e.preventDefault(); e.stopPropagation()
+        toggleMaximize(focused.id)
+        return
+      }
+      // Ctrl+PageUp / Ctrl+PageDown — cycle sub-tabs in focused tile
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.code === 'PageUp' || e.code === 'PageDown') && focused.tabIds.length > 1) {
+        e.preventDefault(); e.stopPropagation()
+        const i = focused.tabIds.indexOf(focused.activeTabId)
+        const n = focused.tabIds.length
+        const next = focused.tabIds[(i + (e.code === 'PageDown' ? 1 : n - 1)) % n]
+        onTreeChange(setActiveTabInLeaf(tree, focused.id, next))
+        focusTab(next)
+        return
+      }
+      // Ctrl+Alt+Arrows — move focus between tiles directionally
+      if (e.ctrlKey && e.altKey && !e.shiftKey && e.code.startsWith('Arrow')) {
+        const dir = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.code as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown']
+        if (!dir) return
+        const target = findAdjacentLeaf(tree, bounds, focused.id, dir)
+        if (target) {
+          e.preventDefault(); e.stopPropagation()
+          focusTab(target.activeTabId)
+        }
+        return
+      }
+      // Ctrl+Alt+= — equalize layout
+      if (e.ctrlKey && e.altKey && !e.shiftKey && (e.code === 'Equal' || e.key === '=')) {
+        e.preventDefault(); e.stopPropagation()
+        onTreeChange(equalizeRatios(tree))
+        return
+      }
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [focusedTabId, tabs, bounds, onFocusTab, onCloseTab, onTreeChange, onOpenSessionAtPosition, toggleMaximize])
 
   // Build a "flat layout" from the tree for computeDropZone compatibility
   const flatLayoutForDropZone = useMemo(() => {
@@ -164,6 +253,12 @@ export function TiledTerminalView({
     onTreeChange(newTree)
   }, [onTreeChange])
 
+  // ── Reorder a sub-tab within its own tile ──
+  const handleReorderSubTab = useCallback((leafId: string, tabId: string, toIndex: number) => {
+    if (!tileTreeRef.current) return
+    onTreeChange(reorderTabInLeaf(tileTreeRef.current, leafId, tabId, toIndex))
+  }, [onTreeChange])
+
   // ── Drag start ──
   const handleDragStart = useCallback((e: React.DragEvent, tileId: string) => {
     e.dataTransfer.setData('text/plain', tileId)
@@ -177,8 +272,13 @@ export function TiledTerminalView({
     e.dataTransfer.setData('application/x-subtab', JSON.stringify({ tabId, tileId }))
     e.dataTransfer.setData('text/plain', tileId)
     e.dataTransfer.effectAllowed = 'move'
-    setDraggedSubTab({ tabId, tileId })
-    setDraggedTile(tileId)
+    // Defer the state updates: mutating React state synchronously inside
+    // dragstart re-renders and disturbs the dragged sub-tab node, which makes
+    // Chromium abort the drag immediately (dragstart → dragend, no dragover).
+    requestAnimationFrame(() => {
+      setDraggedSubTab({ tabId, tileId })
+      setDraggedTile(tileId)
+    })
   }, [])
 
   // ── Drag over ──
@@ -198,6 +298,7 @@ export function TiledTerminalView({
     const isSubTabDrag = e.dataTransfer.types.includes('application/x-subtab')
     const sourceTileId = isSidebarProjectDrag || isSubTabDrag ? null : draggedTile
     const zone = computeDropZone(flatLayoutForDropZone, sourceTileId, mouseX, mouseY)
+      ?? computeFallbackDropZone(flatLayoutForDropZone, mouseX, mouseY)
     setCurrentDropZone(zone)
     setDropTarget(zone?.targetTileId || null)
   }, [draggedTile, draggedSidebarProject, flatLayoutForDropZone, clientToCanvasPercentRef])
@@ -225,7 +326,11 @@ export function TiledTerminalView({
     const textPlainData = e.dataTransfer.getData('text/plain')
 
     const { x: mouseX, y: mouseY } = clientToCanvasPercentRef.current(e.clientX, e.clientY)
-    const dropZone = computeDropZone(flatLayoutForDropZone, null, mouseX, mouseY)
+    // For sub-tab drags, pass null so source tile is a valid target (enables splitting within same tile)
+    // For tile drags, exclude the source tile to prevent self-drop which destroys the tile
+    const dragSourceForExclusion = isSubTabDrag ? null : textPlainData
+    const dropZone = computeDropZone(flatLayoutForDropZone, dragSourceForExclusion, mouseX, mouseY)
+      ?? computeFallbackDropZone(flatLayoutForDropZone, mouseX, mouseY)
 
     console.log('[TiledDrop] drop event:', {
       isSidebarDrag, isSubTabDrag, sidebarProjectPath,
@@ -267,22 +372,26 @@ export function TiledTerminalView({
             const newLeafId = generateTileId()
             const newLeaf = createLeaf(newLeafId, [tabId], tabId)
             let newTree = removeTabFromLeaf(tree, tabId) || tree
-            const dirMap: Record<string, { dir: 'horizontal' | 'vertical'; pos: 'before' | 'after' }> = {
-              'split-left': { dir: 'horizontal', pos: 'before' },
-              'split-right': { dir: 'horizontal', pos: 'after' },
-              'split-top': { dir: 'vertical', pos: 'before' },
-              'split-bottom': { dir: 'vertical', pos: 'after' }
+            if (dropZone.type === 'root-right' || dropZone.type === 'root-bottom') {
+              newTree = splitRoot(newTree, dropZone.type === 'root-right' ? 'horizontal' : 'vertical', newLeaf, 'after')
+            } else {
+              const dirMap: Record<string, { dir: 'horizontal' | 'vertical'; pos: 'before' | 'after' }> = {
+                'split-left': { dir: 'horizontal', pos: 'before' },
+                'split-right': { dir: 'horizontal', pos: 'after' },
+                'split-top': { dir: 'vertical', pos: 'before' },
+                'split-bottom': { dir: 'vertical', pos: 'after' }
+              }
+              const { dir, pos } = dirMap[dropZone.type]
+              newTree = splitLeaf(newTree, dropZone.targetTileId, dir, newLeaf, pos)
             }
-            const { dir, pos } = dirMap[dropZone.type]
-            newTree = splitLeaf(newTree, dropZone.targetTileId, dir, newLeaf, pos)
             onTreeChange(newTree)
           }
         } else if (sourceLeaf && sourceLeaf.tabIds.length === 1) {
           // Only one tab — fall through to normal tile-to-tile drag behavior
           handleTileDrop(sourceTileId)
         }
-      } catch {
-        // Invalid JSON, ignore
+      } catch (err) {
+        console.error('[TiledDrop] sub-tab drop error:', err)
       }
 
       setDraggedTile(null)
@@ -305,6 +414,8 @@ export function TiledTerminalView({
 
     function handleTileDrop(sourceTileId: string) {
       const tree = tileTreeRef.current!
+      // Self-drop: no-op (prevents tile destruction)
+      if (sourceTileId === dropZone!.targetTileId) return
       let newTree: TileNode
       if (dropZone!.type === 'swap') {
         // Check if same project → merge tabs; different → swap positions
@@ -330,6 +441,18 @@ export function TiledTerminalView({
           }
         } else {
           newTree = tree
+        }
+      } else if (dropZone!.type === 'root-right' || dropZone!.type === 'root-bottom') {
+        // Move the whole source leaf to a new root-level column/row
+        const sourceLeaf = findLeafById(tree, sourceTileId)
+        if (!sourceLeaf) { newTree = tree }
+        else {
+          const detached = removeLeaf(tree, sourceTileId)
+          if (!detached) { newTree = tree }
+          else {
+            const movedLeaf = createLeaf(generateTileId(), [...sourceLeaf.tabIds], sourceLeaf.activeTabId)
+            newTree = splitRoot(detached, dropZone!.type === 'root-right' ? 'horizontal' : 'vertical', movedLeaf, 'after')
+          }
         }
       } else {
         const dirMap: Record<string, { dir: 'horizontal' | 'vertical'; pos: 'before' | 'after' }> = {
@@ -576,8 +699,12 @@ export function TiledTerminalView({
         }}
       >
         {leaves.map((leaf) => {
-          const rect = leafRects.get(leaf.id)
-          if (!rect) return null
+          const baseRect = leafRects.get(leaf.id)
+          if (!baseRect) return null
+
+          const isMaximized = maximizedLeafId === leaf.id
+          const isHidden = maximizedLeafId != null && !isMaximized
+          const rect = isMaximized ? { x: 0, y: 0, width: bounds.width, height: bounds.height } : baseRect
 
           const tileTabs = leaf.tabIds
             .map(id => tabs.find(t => t.id === id))
@@ -597,6 +724,9 @@ export function TiledTerminalView({
               key={leaf.id}
               leafId={leaf.id}
               rect={rect}
+              hidden={isHidden}
+              isMaximized={isMaximized}
+              onToggleMaximize={toggleMaximize}
               tabIds={leaf.tabIds}
               activeTabId={leaf.activeTabId}
               tabs={tileTabs}
@@ -606,7 +736,7 @@ export function TiledTerminalView({
               api={api}
               GAP={GAP}
               isFocused={isFocused}
-              isDragging={draggedTile === leaf.id}
+              isDragging={draggedTile === leaf.id && !draggedSubTab}
               isDropTarget={dropTarget === leaf.id}
               draggedTile={draggedTile}
               draggedSubTab={draggedSubTab}
@@ -619,6 +749,7 @@ export function TiledTerminalView({
               onRenameTab={onRenameTab}
               onFocusTab={onFocusTab}
               onSwitchSubTab={handleSwitchSubTab}
+              onReorderSubTab={handleReorderSubTab}
               onAddTab={onAddTab}
               onDragStart={handleDragStart}
               onSubTabDragStart={handleSubTabDragStart}

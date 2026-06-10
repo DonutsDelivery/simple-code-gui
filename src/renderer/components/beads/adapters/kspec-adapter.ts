@@ -103,7 +103,18 @@ async function api<T>(method: string, path: string, cwd: string, body?: unknown,
     const text = await res.text()
     throw new Error(text || `HTTP ${res.status}`)
   }
-  return res.json()
+  const json = await res.json()
+  // kspec >= 0.13 wraps responses in { data, meta }.  Earlier versions
+  // returned the payload at the top level (with shapes like { items: [] }
+  // for lists or task fields directly).  Unwrap centrally so callers can
+  // read the payload regardless of daemon version.
+  if (
+    json && typeof json === 'object' && !Array.isArray(json) &&
+    'data' in json && 'meta' in json
+  ) {
+    return json.data as T
+  }
+  return json as T
 }
 
 function normalizeStatus(status: string): TaskStatus {
@@ -237,10 +248,16 @@ export class KspecAdapter implements TaskAdapter {
 
   async list(cwd: string): Promise<UnifiedTask[]> {
     try {
-      const data = await this.withRetry(cwd, () =>
-        api<{ items: Record<string, unknown>[] }>('GET', '/api/tasks', cwd, undefined, this))
-      return (data.items ?? []).map(toUnified)
-    } catch {
+      // kspec >= 0.13: api() unwraps { data, meta } so we get the array directly.
+      // Earlier kspec returned { items: [...] } at top level. Support both.
+      const raw = await this.withRetry(cwd, () =>
+        api<Record<string, unknown>[] | { items: Record<string, unknown>[] }>(
+          'GET', '/api/tasks', cwd, undefined, this
+        ))
+      const items = Array.isArray(raw) ? raw : (raw?.items ?? [])
+      return items.map(toUnified)
+    } catch (e) {
+      console.warn('[kspec-adapter] task list failed:', e)
       return []
     }
   }
@@ -292,6 +309,10 @@ export class KspecAdapter implements TaskAdapter {
   }
 
   async delete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
+    // Daemon doesn't have a DELETE endpoint — use CLI via IPC (Electron) or proxy route (mobile)
+    if (window.electronAPI?.kspecDeleteTask) {
+      return window.electronAPI.kspecDeleteTask(cwd, taskId)
+    }
     try {
       await this.withRetry(cwd, () =>
         api('DELETE', `/api/tasks/${encodeURIComponent(taskId)}`, cwd, undefined, this))

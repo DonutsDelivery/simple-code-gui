@@ -2,6 +2,7 @@ import type { Terminal as XTerm } from '@xterm/xterm'
 import type { MutableRefObject } from 'react'
 import type { TerminalGlobals } from './types.js'
 import { BUFFER_KEY, ERROR_HANDLER_KEY, MAX_BUFFER_CHUNKS } from './constants.js'
+import { debugTrace } from '../../debug/debugBridge.js'
 
 // Get or create the global buffer map (survives HMR)
 export function getTerminalBuffers(): Map<string, string[]> {
@@ -143,7 +144,7 @@ export function isClaudeProseResponse(text: string): boolean {
 }
 
 // Format a single path for backend-specific syntax
-export function formatPathForBackend(path: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
+export function formatPathForBackend(path: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'): string {
   const normalized = backend && backend !== 'default' ? backend : 'claude'
   const escaped = path.includes('"') ? path.replace(/"/g, '\\"') : path
   const safePath = /\s/.test(escaped) ? `"${escaped}"` : escaped
@@ -158,12 +159,12 @@ export function formatPathForBackend(path: string, backend?: 'default' | 'claude
 }
 
 // Format multiple paths for backend
-export function formatPathsForBackend(paths: string[], backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider'): string {
+export function formatPathsForBackend(paths: string[], backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'): string {
   return paths.map((path) => formatPathForBackend(path, backend)).join(' ')
 }
 
 // Custom paste handler for xterm
-export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider', currentLineInputRef?: MutableRefObject<string>): Promise<void> {
+export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok', currentLineInputRef?: MutableRefObject<string>): Promise<void> {
   try {
     // Check if clipboard has an image or file
     const imageResult = await window.electronAPI?.readClipboardImage()
@@ -214,11 +215,12 @@ export function isTerminalAtBottom(term: XTerm): boolean {
 // Logs all non-user scroll events to help diagnose unwanted scroll-to-top.
 // Writes to ~/scroll-debug.log via IPC, and also to console with [SCROLL-DBG] prefix.
 
-const SCROLL_DEBUG = true // flip to false to disable
+const SCROLL_DEBUG = false // flip to true to diagnose scroll issues
 const scrollLogBuffer: string[] = []
 let scrollLogFlushTimer: ReturnType<typeof setTimeout> | null = null
 
 export function scrollDebug(source: string, details: Record<string, unknown>): void {
+  debugTrace(`scroll:${source}`, details)
   if (!SCROLL_DEBUG) return
   const ts = new Date().toISOString().slice(11, 23)
   const line = `[${ts}] ${source}: ${JSON.stringify(details)}`

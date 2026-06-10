@@ -88,7 +88,11 @@ export function ProjectContextMenu({
         <span className="icon">🧩</span> Extensions...
       </button>
       <button onClick={onEditClaudeMd}>
-        <span className="icon">📝</span> Edit CLAUDE.md
+        <span className="icon">📝</span> Edit {
+          { claude: 'CLAUDE.md', gemini: 'GEMINI.md', codex: 'AGENTS.md', opencode: 'OPENCODE.md', aider: 'CONVENTIONS.md', droid: 'AGENTS.md', hermes: 'HERMES.md', grok: 'AGENTS.md' }[
+            project.backend && project.backend !== 'default' ? project.backend : 'claude'
+          ] || 'CLAUDE.md'
+        }
       </button>
       <div className="context-menu-divider" />
       <div className="context-menu-label">Color</div>

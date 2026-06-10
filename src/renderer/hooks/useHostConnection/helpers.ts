@@ -12,6 +12,35 @@ export function generateId(): string {
   return `host-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+const DEVICE_ID_KEY = 'ct_device_id'
+
+/**
+ * Stable per-install device identity (H3). Persisted so this device keeps the
+ * same per-device token across reconnects/restarts — no re-scan needed.
+ */
+export function getDeviceIdentity(): { deviceId: string; deviceName: string } {
+  let deviceId = ''
+  try {
+    deviceId = localStorage.getItem(DEVICE_ID_KEY) || ''
+    if (!deviceId) {
+      deviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      localStorage.setItem(DEVICE_ID_KEY, deviceId)
+    }
+  } catch {
+    deviceId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
+  let deviceName = 'Mobile device'
+  try {
+    const ua = navigator.userAgent || ''
+    if (/iPhone|iPad|iPod/i.test(ua)) deviceName = 'iOS device'
+    else if (/Android/i.test(ua)) deviceName = 'Android device'
+    else if (/Mac/i.test(ua)) deviceName = 'Mac'
+    else if (/Windows/i.test(ua)) deviceName = 'Windows PC'
+    else if (/Linux/i.test(ua)) deviceName = 'Linux device'
+  } catch { /* keep default */ }
+  return { deviceId, deviceName }
+}
+
 /**
  * Load hosts from localStorage
  */
@@ -100,14 +129,17 @@ export async function verifyHandshake(host: HostConfig, nonce: string): Promise<
   fingerprint?: string
   certFingerprint?: string
   secure?: boolean
+  deviceToken?: string
   error?: string
 }> {
   try {
     const url = buildHttpUrl(host, '/verify-handshake')
+    // Send our device identity so the server can issue a per-device token (H3).
+    const { deviceId, deviceName } = getDeviceIdentity()
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nonce })
+      body: JSON.stringify({ nonce, deviceId, deviceName })
     })
 
     if (!response.ok) {
@@ -121,7 +153,8 @@ export async function verifyHandshake(host: HostConfig, nonce: string): Promise<
         success: true,
         fingerprint: data.fingerprint,
         certFingerprint: data.certFingerprint,
-        secure: data.secure
+        secure: data.secure,
+        deviceToken: data.deviceToken
       }
     }
 

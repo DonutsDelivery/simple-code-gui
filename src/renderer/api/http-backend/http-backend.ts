@@ -107,6 +107,10 @@ export class HttpBackend implements Api {
 
   // PTY Management
 
+  listPtys() {
+    return this.ptyApi.listPtys()
+  }
+
   spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
     return this.ptyApi.spawnPty(cwd, sessionId, model, backend)
   }
@@ -173,8 +177,8 @@ export class HttpBackend implements Api {
 
   // TTS
 
-  ttsInstallInstructions(projectPath: string): Promise<{ success: boolean }> {
-    return this.workspaceApi.ttsInstallInstructions(projectPath)
+  ttsInstallInstructions(projectPath: string, aiBackend?: string): Promise<{ success: boolean }> {
+    return this.workspaceApi.ttsInstallInstructions(projectPath, aiBackend)
   }
 
   ttsSpeak(text: string): Promise<{ success: boolean; audioData?: string; error?: string }> {

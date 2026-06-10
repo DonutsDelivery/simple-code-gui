@@ -111,7 +111,7 @@ export function createKeyEventHandler(
   terminal: XTerm,
   writePty: (id: string, data: string) => void,
   ptyId: string,
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider',
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok',
   currentLineInputRef?: MutableRefObject<string>
 ): (event: KeyboardEvent) => boolean {
   return (event: KeyboardEvent) => {
@@ -126,6 +126,13 @@ export function createKeyEventHandler(
       const selection = terminal.getSelection()
       if (selection && selection.length > 0) {
         handleCopy(terminal)
+        return false
+      }
+      // Ctrl+C with no selection: send SIGINT.
+      // Skip for backends that don't handle it gracefully (e.g. OpenCode exits on Ctrl+C).
+      // Send Escape as a safe alternative to interrupt/clear.
+      if (backend === 'opencode') {
+        writePty(ptyId, '\x1b')
         return false
       }
       return true
