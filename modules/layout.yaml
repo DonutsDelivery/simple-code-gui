@@ -240,6 +240,11 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: the app was closed while maximized or fullscreen
+        id: ac-1
+        then: the window restores maximized/fullscreen with the correct pre-maximize bounds remembered
+        when: it is launched again
     tags: []
     created: 2026-06-10T03:19:21.965Z
     notes: []
