@@ -228,6 +228,12 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: multiple tiles are laid out
+        id: ac-1
+        then: the tile fills the canvas and on restore the exact previous layout and all terminal scrollback
+          are intact
+        when: the user maximizes one tile and then restores it
     tags: []
     created: 2026-06-10T03:19:20.781Z
     notes: []
