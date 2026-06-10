@@ -69,6 +69,11 @@ features:
         then: a new tile is created as a new column (right) or row (bottom) containing the dragged
           tab/session, with a visible drop-zone preview before the drop
         when: they drop it on empty canvas space outside all tiles (right of or below the layout)
+      - given: a tile contains two or more tabs
+        id: ac-3
+        then: the tab order within the tile changes to match the drop position, an insertion indicator is
+          shown during the drag, and the order persists across app restart
+        when: the user drags a sub-tab over its own tile's tab strip and drops between two tabs
     tags: []
     created: 2026-03-08T08:00:15.480Z
     notes: []
