@@ -254,6 +254,11 @@ features:
         then: the workspace moves to a new OS window with its terminals attached to the same running PTYs
           (no respawn), and closing that window returns the workspace to the primary window
         when: the user chooses Open in new window on its switcher tab
+      - given: workspaces are split across multiple windows
+        id: ac-4
+        then: no window's save clobbers sessions owned by another window — workspace.json always contains
+          every session
+        when: any window saves workspace state
     tags: []
     created: 2026-06-10T03:19:21.965Z
     notes: []
