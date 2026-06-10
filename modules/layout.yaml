@@ -245,6 +245,10 @@ features:
         id: ac-1
         then: the window restores maximized/fullscreen with the correct pre-maximize bounds remembered
         when: it is launched again
+      - given: saved window bounds reference a display that is no longer connected
+        id: ac-2
+        then: the window appears fully visible on a connected display instead of off-screen
+        when: the app launches
     tags: []
     created: 2026-06-10T03:19:21.965Z
     notes: []
