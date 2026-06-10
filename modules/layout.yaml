@@ -220,4 +220,22 @@ features:
     tags: []
     created: 2026-06-10T03:19:20.781Z
     notes: []
+  - _ulid: 01KTQRNBKC5AW23E8PH0C4PK8Y
+    slugs:
+      - window-management
+    title: Window State & Multi-Window
+    type: feature
+    description: Window bounds, maximized and fullscreen state persist across restarts; saved bounds are
+      validated against connected displays so the window never restores off-screen. Window state
+      changes are pushed to the renderer (no polling). A workspace can be detached into its own OS
+      window and returns to the primary window when that window closes; PTYs keep running in the
+      main process throughout.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-06-10T03:19:21.965Z
+    notes: []
 notes: []
