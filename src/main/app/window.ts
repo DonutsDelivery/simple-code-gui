@@ -1,13 +1,16 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { SessionStore } from '../session-store.js'
-import { PtyManager } from '../pty-manager.js'
 import { IS_DEBUG_MODE } from './app-setup.js'
+
+const RENDERER_RELOAD_WINDOW_MS = 60_000
+const RENDERER_RELOAD_MAX = 3
+let rendererReloadTimes: number[] = []
 
 export function createWindow(
   sessionStore: SessionStore,
-  ptyManager: PtyManager,
-  setMainWindow: (win: BrowserWindow | null) => void
+  setMainWindow: (win: BrowserWindow | null) => void,
+  onRendererFailure?: (reason: 'gone' | 'unresponsive') => Promise<void> | void,
 ): BrowserWindow {
   const bounds = sessionStore.getWindowBounds()
   const iconPath = app.isPackaged
@@ -70,8 +73,24 @@ export function createWindow(
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
-    console.error(`[window] Renderer process exited (${details.reason}); stopping active PTYs`)
-    void ptyManager.gracefulShutdown(1500)
+    console.error(`[window] Renderer process exited (${details.reason})`)
+    if (details.reason !== 'crashed' && details.reason !== 'oom') return
+
+    const now = Date.now()
+    rendererReloadTimes = rendererReloadTimes.filter(time => now - time < RENDERER_RELOAD_WINDOW_MS)
+    if (rendererReloadTimes.length >= RENDERER_RELOAD_MAX) {
+      console.error('[window] Renderer reload suppressed after repeated crashes')
+      return
+    }
+    rendererReloadTimes.push(now)
+
+    void Promise.resolve(onRendererFailure?.('gone')).finally(() => {
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.reload()
+    })
+  })
+
+  mainWindow.on('unresponsive', () => {
+    void onRendererFailure?.('unresponsive')
   })
 
   mainWindow.on('close', () => {

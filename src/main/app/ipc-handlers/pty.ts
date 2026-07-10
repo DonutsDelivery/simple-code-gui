@@ -7,7 +7,9 @@ import { appendFileSync, existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { installTaskInstructions } from '../../ipc/kspec-handlers.js'
+import { installSelfCompactionInstructions } from '../../ipc/self-compaction-instructions.js'
 import type { AIBackend } from '../../ipc/instruction-files.js'
+import type { HermesBackupManager } from '../../hermes-backup-manager.js'
 
 const DEBUG_LOG = '/tmp/auto-accept-debug.log'
 const SCROLL_DEBUG_LOG = join(homedir(), 'scroll-debug.log')
@@ -86,7 +88,10 @@ function maybeRespondToCursorPositionRequest(
   data: string
 ): void {
   const backend = ptyToBackend.get(ptyId)
-  if (!backend || backend === 'claude') return
+  // Hermes/prompt_toolkit uses DSR 6 cursor-position replies to maintain its
+  // full-screen layout. xterm answers that request itself through onData;
+  // injecting a hard-coded 1;1 response races it and corrupts redraws.
+  if (!backend || backend === 'claude' || backend === 'hermes') return
   if (data.includes('\x1b[6n') || data.includes('\x1b[?6n')) {
     ptyManager.write(ptyId, '\x1b[1;1R')
   }
@@ -99,6 +104,7 @@ export function registerPtyHandlers(
   ptyToProject: Map<string, string>,
   ptyToBackend: Map<string, string>,
   getMainWindow: () => BrowserWindow | null,
+  hermesBackupManager?: HermesBackupManager,
 ): void {
   ipcMain.handle('pty:list', () => ptyManager.listSessions())
 
@@ -107,7 +113,7 @@ export function registerPtyHandlers(
   // than raw replay bytes, which corrupt formatting when sizes changed.
   ipcMain.handle('pty:get-replay', (_, id: string) => ptyManager.getSerializedBuffer(id))
 
-  ipcMain.handle('pty:spawn', (_, { cwd, sessionId, model, backend }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {
+  ipcMain.handle('pty:spawn', async (_, { cwd, sessionId, model, backend, hermesTmuxSessionId }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; hermesTmuxSessionId?: string }) => {
     try {
       const workspace = sessionStore.getWorkspace()
       const project = workspace.projects.find(p => p.path === cwd)
@@ -128,9 +134,18 @@ export function registerPtyHandlers(
       const autoAcceptTools = project?.autoAcceptTools ?? globalSettings.autoAcceptTools
       const permissionMode = project?.permissionMode ?? globalSettings.permissionMode
 
-      const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode, effectiveModel, effectiveBackend)
+      // Ensure the self-compaction block is present before the CLI launches and
+      // reads its instruction file (covers projects added after startup).
+      try { installSelfCompactionInstructions(cwd, effectiveBackend as AIBackend) } catch { /* non-fatal */ }
+
+      if (effectiveBackend === 'hermes' && hermesBackupManager) {
+        await hermesBackupManager.snapshot('pre-launch')
+      }
+
+      const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode, effectiveModel, effectiveBackend, hermesTmuxSessionId)
       ptyToProject.set(id, cwd)
       ptyToBackend.set(id, effectiveBackend)
+      if (effectiveBackend === 'hermes') hermesBackupManager?.start()
 
       if (project?.apiPort && project.apiAutoStart && !apiServerManager.isRunning(cwd)) {
         apiServerManager.start(cwd, project.apiPort)
@@ -160,6 +175,9 @@ export function registerPtyHandlers(
         autoAcceptEnabled.delete(id)
         autoAcceptBuffers.delete(id)
         autoAcceptCooldown.delete(id)
+        if (effectiveBackend === 'hermes' && ![...ptyToBackend.values()].includes('hermes')) {
+          hermesBackupManager?.stop()
+        }
       })
 
       if (pending) {
@@ -192,9 +210,13 @@ export function registerPtyHandlers(
   ipcMain.on('pty:write', (_, { id, data }: { id: string; data: string }) => ptyManager.write(id, data))
   ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; rows: number }) => ptyManager.resize(id, cols, rows))
   ipcMain.on('pty:kill', (_, id: string) => {
+    const backend = ptyToBackend.get(id)
     ptyToProject.delete(id)
     ptyToBackend.delete(id)
     ptyManager.kill(id)
+    if (backend === 'hermes' && ![...ptyToBackend.values()].includes('hermes')) {
+      hermesBackupManager?.stop()
+    }
   })
 
   ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {
@@ -243,6 +265,7 @@ export function registerPtyHandlers(
     // Refresh instruction file for the new backend so it gets kspec/beads context
     if (projectPath) {
       try {
+        installSelfCompactionInstructions(projectPath, newBackend as AIBackend)
         const hasKspec = existsSync(join(projectPath, '.kspec'))
         const hasBeads = existsSync(join(projectPath, '.beads'))
         if (hasKspec || hasBeads) {

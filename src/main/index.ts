@@ -1,13 +1,14 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, globalShortcut, ipcMain, Notification } from 'electron'
 import { join } from 'path'
 import { mkdirSync, existsSync, copyFileSync, statSync } from 'fs'
 
 import { PtyManager } from './pty-manager.js'
-import { HeadroomProxyManager, HEADROOM_DEFAULT_PORT, HEADROOM_MINIMAX_PORT } from './headroom-proxy.js'
+import { HeadroomProxyManager, HEADROOM_DEFAULT_PORT } from './headroom-proxy.js'
 import { SessionStore } from './session-store.js'
 import { ApiServerManager } from './api-server.js'
 import { OrchestratorApi } from './orchestrator-api.js'
 import { registerOrchestratorMcp } from './orchestrator-mcp-registration.js'
+import { installSelfCompactionInstructions } from './ipc/self-compaction-instructions.js'
 import { MobileServer } from './mobile-server.js'
 import { voiceManager } from './voice-manager.js'
 import { setPortableBinDirs } from './platform.js'
@@ -33,6 +34,7 @@ import { registerWorkspaceHandlers } from './app/ipc-handlers/workspace.js'
 import { registerPtyHandlers } from './app/ipc-handlers/pty.js'
 import { registerServerHandlers } from './app/ipc-handlers/servers.js'
 import { registerSettingsHandlers } from './app/ipc-handlers/settings.js'
+import { HermesBackupManager, type HermesBackupReason } from './hermes-backup-manager.js'
 
 // Apply app config (must be done before app.whenReady)
 setupAppConfig()
@@ -55,6 +57,7 @@ const ptyManager = new PtyManager()
 const sessionStore = new SessionStore()
 const apiServerManager = new ApiServerManager()
 const mobileServer = new MobileServer()
+const hermesBackupManager = new HermesBackupManager(join(app.getPath('userData'), 'backups', 'hermes'))
 
 // PTY tracking
 const ptyToProject = new Map<string, string>()
@@ -75,9 +78,37 @@ const headroomProxy = new HeadroomProxyManager((status) => {
 function syncHeadroom(settings = sessionStore.getSettings()): void {
   const enabled = settings.headroomEnabled === true
   const port = settings.headroomPort ?? HEADROOM_DEFAULT_PORT
-  const minimaxPort = HEADROOM_MINIMAX_PORT
-  ptyManager.setHeadroomRouting({ enabled, port, minimaxPort })
-  void headroomProxy.ensure({ enabled, port, minimaxPort, binPath: settings.headroomProxyPath })
+  ptyManager.setHeadroomRouting({ enabled, port })
+  void headroomProxy.ensure({ enabled, port, binPath: settings.headroomProxyPath })
+}
+
+const hasActiveHermes = (): boolean => [...ptyToBackend.values()].includes('hermes')
+
+async function backupHermes(reason: HermesBackupReason, notify = false): Promise<string | null> {
+  try {
+    const backupPath = await hermesBackupManager.snapshot(reason)
+    if (notify && backupPath && Notification.isSupported()) {
+      new Notification({
+        title: 'Hermes session backup saved',
+        body: 'The snapshot passed its integrity check. It is safe to close the app.',
+      }).show()
+    }
+    return backupPath
+  } catch (error) {
+    console.error(`[hermes-backup] ${reason} failed:`, error)
+    if (notify && Notification.isSupported()) {
+      new Notification({
+        title: 'Hermes backup failed',
+        body: 'Do not force-close the app yet. Check the application log.',
+      }).show()
+    }
+    return null
+  }
+}
+
+async function handleRendererFailure(reason: 'gone' | 'unresponsive'): Promise<void> {
+  const backupReason = reason === 'gone' ? 'renderer-gone' : 'renderer-unresponsive'
+  await backupHermes(backupReason, true)
 }
 
 ipcMain.handle('headroom:status', () => headroomProxy.getStatus())
@@ -92,7 +123,7 @@ registerGsdHandlers()
 registerKspecHandlers()
 registerGlobalInstructionHandlers()
 registerWorkspaceHandlers(sessionStore, getMainWindow)
-registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow)
+registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow, hermesBackupManager)
 registerServerHandlers(apiServerManager, mobileServer, sessionStore)
 registerSettingsHandlers(sessionStore, getMainWindow, (settings) => syncHeadroom(settings))
 
@@ -143,10 +174,14 @@ app.whenReady().then(() => {
   setupSecurityHeaders()
 
   createApplicationMenu(mainWindow)
-  mainWindow = createWindow(sessionStore, ptyManager, setMainWindow)
+  mainWindow = createWindow(sessionStore, setMainWindow, handleRendererFailure)
   createApplicationMenu(mainWindow)
   if (mainWindow) initUpdater(mainWindow)
   if (mainWindow) orchestratorApi.debugApi.attachToWindow(mainWindow)
+
+  globalShortcut.register('CommandOrControl+Alt+Shift+B', () => {
+    void backupHermes('emergency', true)
+  })
 
   // Start the Headroom proxy if enabled in settings.
   syncHeadroom()
@@ -177,6 +212,28 @@ app.whenReady().then(() => {
     console.error('[Startup] Failed to refresh task instructions:', e)
   }
 
+  // Inject self-compaction instructions into every project's instruction file so
+  // sessions know to compact themselves via the orchestrator `compact_session`
+  // tool when they finish a task with remaining work. Always-on (not gated on a
+  // task backend), since the orchestrator MCP is registered for all sessions.
+  try {
+    const projects = sessionStore.getWorkspace().projects || []
+    const globalBackend = sessionStore.getSettings().backend
+    for (const project of projects) {
+      if (!project?.path) continue
+      try {
+        const aiBackend = (project.backend && project.backend !== 'default'
+          ? project.backend
+          : (globalBackend && globalBackend !== 'default'
+            ? globalBackend
+            : 'claude')) as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+        installSelfCompactionInstructions(project.path, aiBackend)
+      } catch { /* skip individual project errors */ }
+    }
+  } catch (e) {
+    console.error('[Startup] Failed to inject self-compaction instructions:', e)
+  }
+
   // Start orchestrator API for MCP-based session control
   orchestratorApi.start()
 
@@ -205,7 +262,7 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow(sessionStore, ptyManager, setMainWindow)
+      mainWindow = createWindow(sessionStore, setMainWindow, handleRendererFailure)
       createApplicationMenu(mainWindow)
       if (mainWindow) orchestratorApi.debugApi.attachToWindow(mainWindow)
     }
@@ -239,6 +296,8 @@ app.on('before-quit', (event) => {
       headroomProxy.stop()
       mobileServer.stop()
       apiServerManager.stopAll()
+      if (hasActiveHermes()) await backupHermes('shutdown')
+      hermesBackupManager.stop()
       await ptyManager.gracefulShutdown(1500)
       cleanupClipboardTempFiles()
     } catch (e) {
@@ -248,4 +307,8 @@ app.on('before-quit', (event) => {
       app.quit()
     }
   })()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
