@@ -104,9 +104,12 @@ function configureMobileKeyboard(textarea: HTMLTextAreaElement): void {
 function loadWebGLAddon(
   terminal: XTerm,
   fitAddon: FitAddon,
-  state: InitState
+  state: InitState,
+  backend?: UseTerminalSetupOptions['backend']
 ): void {
-  if (!ENABLE_WEBGL) return
+  // Hermes renders a rapidly-changing full-screen TUI. The WebGL addon can
+  // retain stale atlas cells while xterm scrolls, leaving ghost glyphs behind.
+  if (!ENABLE_WEBGL || backend === 'hermes') return
 
   setTimeout(() => {
     if (state.disposed || !terminal) return
@@ -240,8 +243,20 @@ function setupEventHandlers(
   // 1. The wheel handler (user scrolls down to bottom)
   // 2. The debounced scroll-to-bottom (when !userScrolledUp, confirms at bottom)
   //
-  // The onScroll handler is kept only for debug logging.
+  // xterm's canvas renderer can leave stale cells after a viewport scroll when
+  // the scroll event and DOM paint land in different frames. Coalesce a full
+  // row refresh so the visible canvas is rebuilt from the logical buffer.
+  let scrollRefreshPending = false
   state.cleanupScroll = terminal.onScroll(() => {
+    terminal.refresh(0, terminal.rows - 1)
+    if (!scrollRefreshPending) {
+      scrollRefreshPending = true
+      requestAnimationFrame(() => {
+        scrollRefreshPending = false
+        if (!disposedRef.current) terminal.refresh(0, terminal.rows - 1)
+      })
+    }
+
     const snap = scrollSnapshot(terminal)
     scrollDebug('onScroll:info', { ...snap, userScrolledUp: userScrolledUpRef.current, writingData: state.writingData })
   })
@@ -361,7 +376,7 @@ function postOpenSetup(
   fitAddonRef.current = fitAddon
 
   // Load WebGL addon
-  loadWebGLAddon(terminal, fitAddon, state)
+  loadWebGLAddon(terminal, fitAddon, state, options.backend)
 
   // Initialize buffer
   initBuffer(ptyId)

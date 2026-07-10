@@ -56,6 +56,8 @@ export default defineConfig({
     },
     server: {
       host: true,  // Expose to network for mobile live reload
+      port: 5173,
+      strictPort: true,
       hmr: false,  // Disable hot reload - use manual refresh button in debug mode
       watch: null  // Disable file watching to prevent reconnection spam
     },
