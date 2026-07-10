@@ -69,6 +69,11 @@ export function createWindow(
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[window] Renderer process exited (${details.reason}); stopping active PTYs`)
+    void ptyManager.gracefulShutdown(1500)
+  })
+
   mainWindow.on('close', () => {
     sessionStore.saveWindowBounds(mainWindow.getBounds())
   })

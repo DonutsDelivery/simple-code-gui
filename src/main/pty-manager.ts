@@ -637,7 +637,10 @@ function buildPermissionArgs(
       break
 
     case 'hermes':
-      // Hermes permissions are configured inside Hermes; avoid passing unknown flags.
+      // The user explicitly runs Hermes from this app in YOLO mode. Hermes
+      // documents --yolo as the launch-time bypass for dangerous-command
+      // approval prompts; the in-chat equivalent is /yolo.
+      args.push('--yolo')
       break
 
     case 'grok':
@@ -818,7 +821,8 @@ export class PtyManager {
     autoAcceptTools?: string[],
     permissionMode?: string,
     model?: string,
-    backend?: Backend
+    backend?: Backend,
+    hermesTmuxSessionId?: string
   ): string {
     const id = crypto.randomUUID()
 
@@ -863,17 +867,51 @@ export class PtyManager {
       args.unshift('-c', `projects.${JSON.stringify(cwd)}.trust_level="trusted"`)
     }
 
-    // Hermes defaults to the classic REPL (display.interface: cli), which paints
-    // a full-height frame and spills its bottom padding into xterm scrollback —
-    // pinning the input prompt to the top of the viewport with dozens of blank
-    // lines below it, so conversation context scrolls off-screen while typing.
-    // Force the modern alternate-screen TUI (fixed height, no scrollback padding),
-    // which is what the renderer already assumes Hermes uses (see Terminal.tsx).
+    // Hermes's modern TUI is prompt_toolkit-based. Running it directly inside
+    // node-pty lets cursor-position redraws corrupt xterm's buffer after a
+    // physical wheel scroll. Use a private tmux server as a disposable terminal
+    // boundary. The client-detached hook ensures Hermes cannot keep running if
+    // Electron or its PTY disappears; durable conversation restore still uses
+    // Hermes's own session ID, never the tmux transport.
+    const useTmuxForHermes = backend === 'hermes' && process.platform === 'linux'
+    let exe = findExecutable(backend)
     if (backend === 'hermes') {
-      args.unshift('--tui')
+      if (useTmuxForHermes) {
+        const tmuxSessionId = (hermesTmuxSessionId || sessionId || id).replace(/[^A-Za-z0-9_-]/g, '-')
+        const tmuxSocketName = `ct-hermes-client-${id}`
+        args.unshift(
+          '--',
+          exe,
+          '--tui'
+        )
+        args.push(
+          ';',
+          'set-hook',
+          '-g',
+          'client-detached',
+          'kill-server'
+        )
+        args.unshift(
+          '-L',
+          tmuxSocketName,
+          '-f',
+          '/dev/null',
+          'new-session',
+          '-s',
+          `ct-hermes-${tmuxSessionId}`,
+          '-c',
+          cwd,
+          '-x',
+          '120',
+          '-y',
+          '30'
+        )
+        exe = 'tmux'
+      } else {
+        // Preserve the prior full-screen experience where tmux is unavailable.
+        args.unshift('--tui')
+      }
     }
-
-    const exe = findExecutable(backend)
     console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)
 
     // Expose this PTY's orchestrator session id to the CLI process. The CLI
@@ -1091,8 +1129,11 @@ export class PtyManager {
 
       // First settled resize for resize-sensitive TUIs: stop suppressing output.
       // The resize triggered a clean re-render at the correct size —
-      // send a clear so no garbage from the initial 120×30 render leaks through.
+      // discard the 120×30 snapshot before accepting that re-render. Restoring
+      // those cursor-addressed bytes at the larger size produces real stray
+      // cells, not merely a canvas repaint artifact.
       if (proc.suppressOutput) {
+        proc.outputBuffer.clear()
         proc.suppressOutput = false
         const cb = this.dataCallbacks.get(id)
         if (cb) cb('\x1b[2J\x1b[H')

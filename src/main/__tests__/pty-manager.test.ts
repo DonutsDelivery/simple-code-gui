@@ -263,6 +263,61 @@ describe('PtyManager', () => {
         )
       })
 
+      it('should host Hermes TUI in a tmux session rooted at the project directory', () => {
+        manager.spawn('/test/dir', 'hermes-session', undefined, undefined, undefined, 'hermes')
+
+        expect(pty.spawn).toHaveBeenCalledWith(
+          'tmux',
+          [
+            '-L',
+            'ct-hermes-client-test-uuid-12345',
+            '-f',
+            '/dev/null',
+            'new-session',
+            '-s',
+            'ct-hermes-hermes-session',
+            '-c',
+            '/test/dir',
+            '-x',
+            '120',
+            '-y',
+            '30',
+            '--',
+            'hermes',
+            '--tui',
+            '--resume',
+            'hermes-session',
+            '--yolo',
+            ';',
+            'set-hook',
+            '-g',
+            'client-detached',
+            'kill-server',
+          ],
+          expect.objectContaining({ cwd: '/test/dir' })
+        )
+      })
+
+      it('should use a new private tmux server when restoring a Hermes conversation', () => {
+        manager.spawn('/test/dir', 'hermes-session', undefined, undefined, undefined, 'hermes', 'saved-pty')
+
+        expect(pty.spawn).toHaveBeenCalledWith(
+          'tmux',
+          expect.arrayContaining([
+            '-L',
+            'ct-hermes-client-test-uuid-12345',
+            '-s',
+            'ct-hermes-saved-pty',
+            '--resume',
+            'hermes-session',
+            'client-detached',
+            'kill-server',
+          ]),
+          expect.objectContaining({ cwd: '/test/dir' })
+        )
+        expect(vi.mocked(pty.spawn).mock.calls[0][1]).not.toContain('-A')
+      })
+
       it('should not replace a failed Hermes resume with a blank session', () => {
         manager.spawn('/test/dir', 'hermes-session', undefined, undefined, undefined, 'hermes')
 
@@ -350,8 +405,8 @@ describe('PtyManager', () => {
       expect(mockPtyProcess.resize).not.toHaveBeenCalled()
     })
 
-    it.each(['gemini', 'hermes'])('should use longer debounce for %s during startup', backend => {
-      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, backend as 'gemini' | 'hermes')
+    it.each(['gemini', 'hermes'] as const)('should use a longer startup debounce for %s', (backend) => {
+      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, backend)
 
       manager.resize(id, 200, 50)
 
