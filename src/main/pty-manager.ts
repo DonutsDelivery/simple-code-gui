@@ -910,8 +910,8 @@ export class PtyManager {
       replayBuffer: new ReplayBuffer(),
     }
 
-    // Ink backends: suppress output until the first resize sets the real
-    // terminal dimensions.  This prevents the initial render at 120×30 from
+    // Resize-sensitive TUIs: suppress output until the first resize sets the
+    // real terminal dimensions. This prevents the initial render at 120×30 from
     // showing (and being duplicated when the resize triggers a re-render).
     const isResizeSensitive = RESIZE_SENSITIVE_BACKENDS.has(backend || '')
     if (isResizeSensitive) proc.suppressOutput = true
