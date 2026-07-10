@@ -37,6 +37,8 @@ import {
 } from './inputHandlers.js'
 import type { PtyOperations, UseTerminalSetupOptions } from './types.js'
 
+type BackendType = UseTerminalSetupOptions['backend']
+
 interface InitState {
   disposed: boolean
   webglAddonRef: { current: { dispose: () => void } | null }
@@ -55,6 +57,29 @@ interface InitState {
   pendingWrites: string[]
   firstData: boolean
   replayPending: boolean
+}
+
+function isFullScreenTuiBackend(backend?: BackendType): boolean {
+  return backend === 'hermes' || backend === 'opencode'
+}
+
+function fitTerminalToContainer(
+  terminal: XTerm,
+  fitAddon: FitAddon,
+  ptyOperations: PtyOperations,
+  ptyId: string,
+  syncViewportBackground: () => void
+): { cols: number; rows: number } | undefined {
+  fitAddon.fit()
+  syncViewportBackground()
+  terminal.refresh(0, terminal.rows - 1)
+
+  const dims = fitAddon.proposeDimensions()
+  if (dims && dims.cols > 0 && dims.rows > 0) {
+    ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
+    return dims
+  }
+  return undefined
 }
 
 /**
@@ -271,7 +296,8 @@ function setupEventHandlers(
     options.onUserInput,
     currentLineInputRef,
     inputState,
-    inputSuppressedRef
+    inputSuppressedRef,
+    options.backend
   )
   terminal.onData(dataHandler)
 
@@ -350,8 +376,11 @@ function postOpenSetup(
   }
 
   // Replay buffered content on mount (for HMR recovery)
+  const isFullScreenTui = isFullScreenTuiBackend(options.backend)
   const buffer = getTerminalBuffers().get(ptyId)!
-  if (buffer.length > 0) {
+  fitTerminalToContainer(terminal, fitAddon, ptyOperations, ptyId, syncViewportBackground)
+
+  if (buffer.length > 0 && !isFullScreenTui) {
     options.prePopulateSpokenContent(buffer)
 
     requestAnimationFrame(() => {
@@ -364,11 +393,10 @@ function postOpenSetup(
       scrollDebug('bufferReplay:scrollToBottom', scrollSnapshot(terminal))
       terminal.scrollToBottom()
     })
-  } else if (window.electronAPI?.getPtyReplay) {
+  } else if (!isFullScreenTui && window.electronAPI?.getPtyReplay) {
     // No local cache — this is a (re)mount of a live PTY, e.g. after a
     // workspace switch unmounted the terminal and destroyed its scrollback.
-    // Restore full history from the main process ReplayBuffer (raw VT bytes,
-    // same source the mobile client uses for late attach). Live PTY data is
+    // Restore the main process's serialized xterm snapshot. Live PTY data is
     // queued in pendingWrites until the replay is written so ordering holds.
     state.replayPending = true
     window.electronAPI.getPtyReplay(ptyId).then((replay: string | null) => {
@@ -396,6 +424,10 @@ function postOpenSetup(
     }).catch(() => {
       state.replayPending = false
     })
+  } else if (isFullScreenTui) {
+    // Alternate-screen TUIs own their frame. Do not replay old cursor-addressed
+    // bytes or force a second resize while the first live frame is arriving.
+    terminal.clear()
   }
 
   // Flush any pending writes that arrived before terminal was ready
@@ -429,21 +461,7 @@ function postOpenSetup(
   // Defer fit + refresh to next frame (after WebGL has had a chance to load)
   requestAnimationFrame(() => {
     if (state.disposed) return
-    fitAddon.fit()
-    syncViewportBackground()
-    terminal.refresh(0, terminal.rows - 1)
-    // Force TUI to redraw by sending a transient SIGWINCH with rows-1 then
-    // restoring the correct size. TUIs like Ink (Claude Code) cache terminal
-    // dimensions and skip full redraws when SIGWINCH arrives with unchanged
-    // dimensions (e.g. after switching back to a workspace whose PTY is idle).
-    const dims = fitAddon.proposeDimensions()
-    if (dims && dims.cols > 0 && dims.rows > 0) {
-      ptyOperations.resizePty(ptyId, dims.cols, Math.max(1, dims.rows - 1))
-      requestAnimationFrame(() => {
-        if (state.disposed) return
-        ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
-      })
-    }
+    fitTerminalToContainer(terminal, fitAddon, ptyOperations, ptyId, syncViewportBackground)
   })
 }
 

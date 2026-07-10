@@ -147,30 +147,30 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       setTimeout(doFit, 50)
       setTimeout(doFit, 150)
 
-      // OpenCode and Hermes run full-screen alternate-buffer TUIs that only
-      // repaint on a real SIGWINCH. Returning to a workspace whose PTY already
-      // sits at the tile size produces no dimension change, so the TUI never
-      // redraws and leaves a blank frame (no scrollback to recover, since the
-      // alt screen has none). Force a redraw by shrinking one row then restoring
-      // — but with a real delay between the two resizes: a requestAnimationFrame
-      // gap (~16ms) gets coalesced into a single winsize read, so the TUI sees
-      // only the final (unchanged) size and skips the repaint. ~150ms guarantees
-      // two distinct SIGWINCH events.
-      if (backend === 'opencode' || backend === 'hermes') {
+      // OpenCode runs a full-screen alternate-buffer TUI that only repaints
+      // on a real SIGWINCH. Hermes is intentionally excluded: its initial
+      // screen is actively streamed, and an extra resize during that paint can
+      // leave cursor-addressed cells scattered across the viewport.
+      if (backend === 'opencode') {
         setTimeout(() => {
           if (!fitAddonRef.current || !terminalRef.current) return
+          fitAddonRef.current.fit()
           const dims = fitAddonRef.current.proposeDimensions()
-          if (dims && dims.cols > 0 && dims.rows > 0) {
-            window.electronAPI?.resizePty(ptyId, dims.cols, Math.max(1, dims.rows - 1))
+          if (dims && dims.cols > 0 && dims.rows > 1) {
+            terminalRef.current.resize(dims.cols, dims.rows - 1)
+            window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows - 1)
+            terminalRef.current.refresh(0, terminalRef.current.rows - 1)
             setTimeout(() => {
               if (!terminalRef.current) return
+              terminalRef.current.resize(dims.cols, dims.rows)
               window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
+              terminalRef.current.refresh(0, terminalRef.current.rows - 1)
             }, 150)
           }
         }, 200)
       }
     }
-  }, [isActive, ptyId, containerRef, terminalRef, fitAddonRef, userScrolledUpRef])
+  }, [isActive, ptyId, backend, containerRef, terminalRef, fitAddonRef, userScrolledUpRef])
 
   // Allow keyboard tile-focus navigation to move xterm focus to this terminal
   useEffect(() => {

@@ -67,6 +67,7 @@ describe('PtyManager', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
 
@@ -142,15 +143,37 @@ describe('PtyManager', () => {
         [
           '-r',
           'session-123',
-          '--model',
-          'sonnet',
           '--permission-mode',
           'dontAsk',
           '--allowedTools',
           'Read',
+          '--model',
+          'sonnet',
         ],
         expect.any(Object)
       )
+    })
+
+    describe('headroom routing', () => {
+      it('should route Claude through the Anthropic headroom proxy when enabled', () => {
+        manager.setHeadroomRouting({ enabled: true, port: 8787 })
+
+        manager.spawn('/test/dir', undefined, undefined, undefined, undefined, 'claude')
+
+        const options = vi.mocked(pty.spawn).mock.calls[0][2]
+        expect(options.env?.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8787')
+      })
+
+      it('should not overwrite Hermes MiniMax routing when headroom is enabled', () => {
+        vi.stubEnv('MINIMAX_BASE_URL', 'https://api.minimax.io')
+        manager.setHeadroomRouting({ enabled: true, port: 8787 })
+
+        manager.spawn('/test/dir', undefined, undefined, undefined, undefined, 'hermes')
+
+        const options = vi.mocked(pty.spawn).mock.calls[0][2]
+        expect(options.env?.MINIMAX_BASE_URL).toBe('https://api.minimax.io')
+        vi.unstubAllEnvs()
+      })
     })
 
     describe('backend-specific spawning', () => {
@@ -191,14 +214,16 @@ describe('PtyManager', () => {
         expect(pty.spawn).toHaveBeenCalledWith(
           'codex',
           [
-            '--resume',
-            'session-123',
+            '-c',
+            'projects."/test/dir".trust_level="trusted"',
+            'resume',
             '-a',
             'never',
             '-s',
             'workspace-write',
             '-c',
             'sandbox_workspace_write.network_access=true',
+            'session-123',
           ],
           expect.any(Object)
         )
@@ -236,6 +261,14 @@ describe('PtyManager', () => {
           ['--restore', 'session-123', '--yes'],
           expect.any(Object)
         )
+      })
+
+      it('should not replace a failed Hermes resume with a blank session', () => {
+        manager.spawn('/test/dir', 'hermes-session', undefined, undefined, undefined, 'hermes')
+
+        exitCallback?.({ exitCode: 1 })
+
+        expect(pty.spawn).toHaveBeenCalledTimes(1)
       })
     })
 
@@ -317,12 +350,12 @@ describe('PtyManager', () => {
       expect(mockPtyProcess.resize).not.toHaveBeenCalled()
     })
 
-    it('should use longer debounce for Ink-based backends during startup', () => {
-      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, 'gemini')
+    it.each(['gemini', 'hermes'])('should use longer debounce for %s during startup', backend => {
+      const id = manager.spawn('/test/dir', undefined, undefined, undefined, undefined, backend as 'gemini' | 'hermes')
 
       manager.resize(id, 200, 50)
 
-      // At 60ms - should NOT have fired (Ink startup debounce is 1500ms)
+      // At 60ms - should NOT have fired (startup debounce is 1500ms)
       vi.advanceTimersByTime(60)
       expect(mockPtyProcess.resize).not.toHaveBeenCalled()
 
@@ -742,7 +775,7 @@ describe('buildPermissionArgs (via spawn)', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
-        ['resume', '--last'],
+        ['-c', 'projects."/test".trust_level="trusted"', 'resume', '--last'],
         expect.any(Object)
       )
       expect(manager.getProcess(id)?.sessionId).toBeUndefined()
@@ -768,18 +801,18 @@ describe('buildPermissionArgs (via spawn)', () => {
       expect(pty.spawn).toHaveBeenNthCalledWith(
         1,
         'codex',
-        ['resume', 'ses_stale'],
+        ['-c', 'projects."/test".trust_level="trusted"', 'resume', 'ses_stale'],
         expect.any(Object)
       )
       expect(pty.spawn).toHaveBeenNthCalledWith(
         2,
         'codex',
-        ['resume', '--last'],
+        ['-c', 'projects."/test".trust_level="trusted"', 'resume', '--last'],
         expect.any(Object)
       )
     })
 
-    it('should map acceptEdits to --full-auto', () => {
+    it('should map acceptEdits to no-approval workspace-write mode', () => {
       manager.spawn(
         '/test',
         undefined,
@@ -791,7 +824,14 @@ describe('buildPermissionArgs (via spawn)', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
-        ['--full-auto'],
+        [
+          '-c',
+          'projects."/test".trust_level="trusted"',
+          '-a',
+          'never',
+          '-s',
+          'workspace-write',
+        ],
         expect.any(Object)
       )
     })
@@ -809,6 +849,8 @@ describe('buildPermissionArgs (via spawn)', () => {
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
         [
+          '-c',
+          'projects."/test".trust_level="trusted"',
           '-a',
           'never',
           '-s',
@@ -832,7 +874,7 @@ describe('buildPermissionArgs (via spawn)', () => {
 
       expect(pty.spawn).toHaveBeenCalledWith(
         'codex',
-        ['--yolo'],
+        ['-c', 'projects."/test".trust_level="trusted"', '--yolo'],
         expect.any(Object)
       )
     })

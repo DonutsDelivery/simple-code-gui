@@ -2,6 +2,7 @@ import * as pty from 'node-pty'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+import { execFileSync } from 'child_process'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import {
@@ -11,23 +12,23 @@ import {
 } from './platform'
 import { getPortableBinDirs } from './portable-deps'
 
-// Backends that use Ink (React for CLI) and are sensitive to rapid resize during startup
-const INK_BACKENDS = new Set(['gemini', 'droid'])
+// Full-screen TUIs that are sensitive to rapid resize during startup.
+// Suppressing their initial frame prevents default-size cursor output from
+// being interpreted after the renderer has already fitted to the tile.
+const RESIZE_SENSITIVE_BACKENDS = new Set(['gemini', 'droid', 'hermes'])
 const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
 type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 // Headroom proxy routing. Anthropic-shaped harnesses honor ANTHROPIC_BASE_URL;
 // OpenAI-compatible ones honor OPENAI_BASE_URL. Backends not listed here speak a
-// proprietary/native API the proxy can't compress, so we leave their env alone.
+// proprietary/native API or require backend-specific routing we should not
+// override, so we leave their env alone.
 const HEADROOM_ANTHROPIC_BACKENDS = new Set<Backend>(['claude', 'grok'])
 const HEADROOM_OPENAI_BACKENDS = new Set<Backend>(['codex', 'opencode', 'aider'])
 
 interface HeadroomRouting {
   enabled: boolean
   port: number
-  // Hermes (MiniMax via Anthropic Messages) routes through a dedicated proxy
-  // instance pointed at MiniMax's upstream, via MINIMAX_BASE_URL.
-  minimaxPort: number
 }
 
 // Uses a headless xterm.js terminal to correctly interpret all VT/ANSI sequences
@@ -151,7 +152,7 @@ interface ClaudeProcess {
   lastResizeRows?: number
   outputBuffer: OutputBuffer
   replayBuffer: ReplayBuffer
-  /** Ink backends: suppress data forwarding until the first resize sets the correct terminal size */
+  /** Resize-sensitive TUIs: suppress output until the first settled resize */
   suppressOutput?: boolean
 }
 
@@ -176,12 +177,6 @@ function getEnhancedEnv(
       env.ANTHROPIC_BASE_URL = base
     } else if (HEADROOM_OPENAI_BACKENDS.has(backend)) {
       env.OPENAI_BASE_URL = `${base}/v1`
-    } else if (backend === 'hermes') {
-      // Hermes posts /v1/messages (anthropic_messages transport, pinned via
-      // ~/.hermes/config.yaml api_mode) to MINIMAX_BASE_URL. Point it at the
-      // MiniMax-targeted proxy instance with no path suffix so it lands on the
-      // proxy's /v1/messages route, which forwards to …/anthropic/v1/messages.
-      env.MINIMAX_BASE_URL = `http://127.0.0.1:${headroom.minimaxPort}`
     }
   }
   const enhancedPath = getEnhancedPathWithPortable()
@@ -282,31 +277,49 @@ function findGeminiExecutable(): string {
 
 // Find codex executable - on Windows, npm installs .cmd files
 function findCodexExecutable(): string {
-  if (!isWindows) {
-    return 'codex'
-  }
+  const executableNames = isWindows ? ['codex.cmd', 'codex.exe'] : ['codex']
+  const searchDirs = [
+    ...getPortableBinDirs(),
+    ...getAdditionalPaths(),
+    ...(process.env.PATH || '').split(path.delimiter),
+  ].filter(Boolean)
+  const candidates = [...new Set(searchDirs.flatMap(dir =>
+    executableNames.map(name => path.join(dir, name))
+  ))].filter(candidate => fs.existsSync(candidate))
 
-  // On Windows, check for codex.cmd in portable npm-global first
-  const portableDirs = getPortableBinDirs()
-  for (const dir of portableDirs) {
-    const codexCmd = path.join(dir, 'codex.cmd')
-    if (fs.existsSync(codexCmd)) {
-      console.log('Found Codex at (portable):', codexCmd)
-      return codexCmd
+  let bestCandidate: string | undefined
+  let bestVersion: [number, number, number] | undefined
+  for (const candidate of candidates) {
+    try {
+      const output = execFileSync(candidate, ['--version'], {
+        encoding: 'utf8',
+        env: { ...process.env, PATH: getEnhancedPathWithPortable() },
+        shell: isWindows,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 3000,
+      })
+      const match = String(output).match(/\b(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?\b/)
+      if (!match) continue
+      const version: [number, number, number] = [Number(match[1]), Number(match[2]), Number(match[3])]
+      const isNewer = !bestVersion
+        || version[0] > bestVersion[0]
+        || (version[0] === bestVersion[0] && version[1] > bestVersion[1])
+        || (version[0] === bestVersion[0] && version[1] === bestVersion[1] && version[2] > bestVersion[2])
+      if (isNewer) {
+        bestCandidate = candidate
+        bestVersion = version
+      }
+    } catch {
+      // An unreadable or incompatible candidate is skipped; PATH fallback remains available.
     }
   }
 
-  // Then check for codex.cmd in system npm paths
-  const additionalPaths = getAdditionalPaths()
-  for (const dir of additionalPaths) {
-    const codexCmd = path.join(dir, 'codex.cmd')
-    if (fs.existsSync(codexCmd)) {
-      console.log('Found Codex at:', codexCmd)
-      return codexCmd
-    }
+  if (bestCandidate) {
+    console.log('Found newest Codex at:', bestCandidate, bestVersion?.join('.'))
+    return bestCandidate
   }
 
-  // Fall back to just 'codex' and let PATH resolve it
+  // Let the shell resolve Codex when no candidate can report a version.
   return 'codex'
 }
 
@@ -793,7 +806,7 @@ export class PtyManager {
 
   // Headroom proxy routing applied to newly spawned PTYs. Updated by the app
   // whenever settings change.
-  private headroom: HeadroomRouting = { enabled: false, port: 8787, minimaxPort: 8788 }
+  private headroom: HeadroomRouting = { enabled: false, port: 8787 }
 
   setHeadroomRouting(routing: HeadroomRouting): void {
     this.headroom = routing
@@ -840,6 +853,16 @@ export class PtyManager {
       }
     }
 
+    // Codex >= 0.113 regressed so that --yolo / --dangerously-bypass-approvals-and-sandbox
+    // no longer suppresses the interactive "Do you trust this directory?" prompt
+    // (openai/codex PR #11874, issues #14345/#14547). A spawned session then stalls on
+    // that prompt and looks like permission bypassing isn't applied. Mark the cwd trusted
+    // on the command line so the prompt never appears. JSON.stringify quotes/escapes the
+    // path (handles spaces); -c is global so it must precede the `resume` subcommand.
+    if (backend === 'codex') {
+      args.unshift('-c', `projects.${JSON.stringify(cwd)}.trust_level="trusted"`)
+    }
+
     // Hermes defaults to the classic REPL (display.interface: cli), which paints
     // a full-height frame and spills its bottom padding into xterm scrollback —
     // pinning the input prompt to the top of the viewport with dozens of blank
@@ -853,12 +876,18 @@ export class PtyManager {
     const exe = findExecutable(backend)
     console.log('Spawning', backend, ':', exe, 'in', cwd, 'with args:', args)
 
+    // Expose this PTY's orchestrator session id to the CLI process. The CLI
+    // inherits it to any MCP server it spawns (e.g. orchestrator-mcp.mjs), so a
+    // session can act on itself — e.g. compact_session defaults to this id.
+    const env = getEnhancedEnv(backend, this.headroom)
+    env.ORCHESTRATOR_SESSION_ID = id
+
     const ptyOptions: ExtendedPtyForkOptions = {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
       cwd,
-      env: getEnhancedEnv(backend, this.headroom),
+      env,
       handleFlowControl: true, // Enable XON/XOFF flow control for better backpressure handling
     }
 
@@ -884,8 +913,8 @@ export class PtyManager {
     // Ink backends: suppress output until the first resize sets the real
     // terminal dimensions.  This prevents the initial render at 120×30 from
     // showing (and being duplicated when the resize triggers a re-render).
-    const isInk = INK_BACKENDS.has(backend || '')
-    if (isInk) proc.suppressOutput = true
+    const isResizeSensitive = RESIZE_SENSITIVE_BACKENDS.has(backend || '')
+    if (isResizeSensitive) proc.suppressOutput = true
 
     this.processes.set(id, proc)
 
@@ -911,10 +940,10 @@ export class PtyManager {
       const elapsed = Date.now() - proc.spawnedAt
 
       // If the process exits within 3 seconds with a non-zero code and had a
-      // session resume arg, the session likely no longer exists.  Respawn
-      // without the session ID so the user gets a fresh terminal instead of a
-      // dead tab.
-      if (exitCode !== 0 && elapsed < 3000 && sessionId && !resumeCodexLast) {
+      // session resume arg, some backends can recover by starting a replacement
+      // session. Hermes is deliberately excluded: its resume failure must remain
+      // visible instead of silently turning a restored tab into a blank session.
+      if (exitCode !== 0 && elapsed < 3000 && sessionId && !resumeCodexLast && backend !== 'hermes') {
         const retryMode = backend === 'codex' ? 'with resume --last' : 'without session resume'
         console.log(`[pty-manager] ${backend || 'claude'} exited quickly (${elapsed}ms, code ${exitCode}) — retrying ${retryMode}`)
 
@@ -939,6 +968,11 @@ export class PtyManager {
         } else {
           if (model && model !== 'default') retryArgs.push('--model', model)
           retryArgs.push(...buildPermissionArgs(backend || 'claude', permissionMode, autoAcceptTools))
+        }
+
+        // Mirror the trust override from the initial spawn (see comment above).
+        if (backend === 'codex') {
+          retryArgs.unshift('-c', `projects.${JSON.stringify(cwd)}.trust_level="trusted"`)
         }
 
         const retryShell = pty.spawn(exe, retryArgs, ptyOptions)
@@ -1037,11 +1071,11 @@ export class PtyManager {
     }
 
     const elapsed = Date.now() - proc.spawnedAt
-    const isInkBackend = INK_BACKENDS.has(proc.backend || '')
+    const isResizeSensitiveBackend = RESIZE_SENSITIVE_BACKENDS.has(proc.backend || '')
 
-    // Ink backends re-render on every SIGWINCH.  Coalesce resizes during
-    // startup so only one SIGWINCH reaches the process after it initializes.
-    const debounceMs = isInkBackend && elapsed < 5000 ? 1500 : 50
+    // Resize-sensitive TUIs re-render on every SIGWINCH. Coalesce resizes
+    // during startup so only one SIGWINCH reaches the process after it initializes.
+    const debounceMs = isResizeSensitiveBackend && elapsed < 5000 ? 1500 : 50
 
     proc.resizeTimeout = setTimeout(() => {
       proc.resizeTimeout = undefined
@@ -1055,7 +1089,7 @@ export class PtyManager {
       }
       proc.outputBuffer.resize(cols, rows)
 
-      // First resize for Ink backends: stop suppressing output.
+      // First settled resize for resize-sensitive TUIs: stop suppressing output.
       // The resize triggered a clean re-render at the correct size —
       // send a clear so no garbage from the initial 120×30 render leaks through.
       if (proc.suppressOutput) {
