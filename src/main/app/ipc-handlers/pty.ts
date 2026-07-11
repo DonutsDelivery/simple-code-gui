@@ -164,6 +164,9 @@ export function registerPtyHandlers(
       })
 
       ptyManager.onExit(id, (code) => {
+        if (effectiveBackend === 'hermes') {
+          void hermesBackupManager?.snapshot('backend-exit')
+        }
         try {
           mainWindow?.webContents.send(`pty:exit:${id}`, code)
         } catch (e) {

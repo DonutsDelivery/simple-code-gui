@@ -58,6 +58,10 @@ const sessionStore = new SessionStore()
 const apiServerManager = new ApiServerManager()
 const mobileServer = new MobileServer()
 const hermesBackupManager = new HermesBackupManager(join(app.getPath('userData'), 'backups', 'hermes'))
+hermesBackupManager.setRecoveryContext(
+  join(app.getPath('userData'), 'config', 'workspace.json'),
+  () => ptyManager.listSessions().filter(session => session.backend === 'hermes').map(session => session.cwd),
+)
 
 // PTY tracking
 const ptyToProject = new Map<string, string>()
