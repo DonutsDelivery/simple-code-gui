@@ -11,6 +11,31 @@ interface UseSessionPollingOptions {
 }
 
 export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSessionPollingOptions): void {
+  // A running PTY is authoritative for its own conversation identity. Hermes
+  // can switch that identity from inside the TUI with /resume, so copy it into
+  // workspace state promptly instead of waiting for filesystem discovery.
+  useEffect(() => {
+    const syncLiveSessionIds = async () => {
+      if (openTabs.length === 0) return
+      try {
+        const livePtys = await api.listPtys()
+        const liveById = new Map(livePtys.map(pty => [pty.id, pty]))
+        for (const tab of openTabs) {
+          const live = liveById.get(tab.ptyId)
+          if (live?.sessionId && live.sessionId !== tab.sessionId) {
+            updateTab(tab.id, { sessionId: live.sessionId })
+          }
+        }
+      } catch (e) {
+        console.error('Failed to synchronize live PTY session IDs:', e)
+      }
+    }
+
+    void syncLiveSessionIds()
+    const interval = setInterval(syncLiveSessionIds, 1000)
+    return () => clearInterval(interval)
+  }, [api, openTabs, updateTab])
+
   // Poll for session IDs — two goals:
   // 1. Assign a session to tabs that don't have one yet.
   // 2. Detect when a session changes under a tab (e.g. /reset inside Claude, or the
@@ -52,7 +77,7 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
                 if (!tab.customTitle) updates.title = `${projectName} - ${mostRecent.slug}`
                 updateTab(tab.id, updates)
               }
-            } else if (!sessions.some(session => session.sessionId === tab.sessionId)) {
+            } else if (effectiveBackend !== 'hermes' && !sessions.some(session => session.sessionId === tab.sessionId)) {
               const alreadyOpen = openTabs.some((t) => t.id !== tab.id && t.sessionId === mostRecent.sessionId)
               if (!alreadyOpen) {
                 const updates: Partial<import('../stores/workspace').OpenTab> = { sessionId: mostRecent.sessionId }
@@ -61,7 +86,7 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
                 claimedSessions.add(mostRecent.sessionId)
                 claimedSessions.delete(tab.sessionId)
               }
-            } else if (mostRecent.sessionId !== tab.sessionId && !claimedSessions.has(mostRecent.sessionId)) {
+            } else if (effectiveBackend !== 'hermes' && mostRecent.sessionId !== tab.sessionId && !claimedSessions.has(mostRecent.sessionId)) {
               // Tab has a session but a newer one has appeared (e.g. /reset, external spawn).
               // Only update for projects NOT in workspace.projects (e.g. the meta-project);
               // for registered projects, the user may have deliberately chosen an older session.

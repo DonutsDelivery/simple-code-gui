@@ -19,9 +19,18 @@ vi.mock('node-pty', () => ({
 }))
 
 // Mock fs for executable checking
-vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(false),
-}))
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>()
+  return {
+    ...actual,
+    default: actual,
+    existsSync: vi.fn().mockReturnValue(false),
+    mkdirSync: vi.fn(),
+    readdirSync: vi.fn().mockReturnValue([]),
+    readFileSync: vi.fn(),
+    rmSync: vi.fn(),
+  }
+})
 
 // Mock platform module
 vi.mock('../platform', () => ({
@@ -566,6 +575,32 @@ describe('PtyManager', () => {
 
       expect(proc?.sessionId).toBe('session-abc')
       expect(proc?.backend).toBe('gemini')
+    })
+
+    it('tracks the exact Hermes session selected inside the TUI', () => {
+      const id = manager.spawn(
+        '/test/dir',
+        'stale-session',
+        undefined,
+        undefined,
+        undefined,
+        'hermes'
+      )
+      vi.mocked(fs.readdirSync).mockReturnValue([
+        'hermes-tui-active-session-random.json',
+      ] as any)
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ session_id: 'selected-by-resume' })
+      )
+
+      const live = manager.listSessions().find(session => session.id === id)
+      const spawnOptions = vi.mocked(pty.spawn).mock.calls.at(-1)?.[2]
+
+      expect(live?.sessionId).toBe('selected-by-resume')
+      expect(manager.getProcess(id)?.sessionId).toBe('selected-by-resume')
+      expect(spawnOptions?.env?.TMPDIR).toMatch(
+        /simple-code-gui\/hermes-runtime\/uuid-\d+$/
+      )
     })
   })
 

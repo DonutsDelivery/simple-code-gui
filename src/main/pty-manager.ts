@@ -154,6 +154,8 @@ interface ClaudeProcess {
   replayBuffer: ReplayBuffer
   /** Resize-sensitive TUIs: suppress output until the first settled resize */
   suppressOutput?: boolean
+  /** Per-PTY temp directory containing Hermes's authoritative active-session file. */
+  hermesRuntimeDir?: string
 }
 
 // Extended node-pty options - useConpty is a Windows-specific option not in @types/node-pty
@@ -920,6 +922,17 @@ export class PtyManager {
     const env = getEnhancedEnv(backend, this.headroom)
     env.ORCHESTRATOR_SESSION_ID = id
 
+    // Hermes changes conversation identity inside the TUI when the user runs
+    // /resume. Its launcher reports that identity through a temporary JSON
+    // file. Give each PTY a private temp directory so the file can be mapped
+    // back to exactly one tab without relying on recency or titles.
+    let hermesRuntimeDir: string | undefined
+    if (backend === 'hermes') {
+      hermesRuntimeDir = path.join(os.homedir(), '.cache', 'simple-code-gui', 'hermes-runtime', id)
+      fs.mkdirSync(hermesRuntimeDir, { recursive: true })
+      env.TMPDIR = hermesRuntimeDir
+    }
+
     const ptyOptions: ExtendedPtyForkOptions = {
       name: 'xterm-256color',
       cols: 120,
@@ -946,6 +959,7 @@ export class PtyManager {
       spawnedAt: Date.now(),
       outputBuffer: new OutputBuffer(),
       replayBuffer: new ReplayBuffer(),
+      hermesRuntimeDir,
     }
 
     // Resize-sensitive TUIs: suppress output until the first resize sets the
@@ -1159,6 +1173,14 @@ export class PtyManager {
       }
       proc.disposables.length = 0
       proc.outputBuffer.dispose()
+      if (proc.hermesRuntimeDir) {
+        try {
+          fs.rmSync(proc.hermesRuntimeDir, { recursive: true, force: true })
+        } catch {
+          // Runtime identity files are disposable; stale directories can be
+          // removed on a later launch if the process dies mid-cleanup.
+        }
+      }
     }
     this.processes.delete(id)
     this.dataCallbacks.delete(id)
@@ -1292,6 +1314,7 @@ export class PtyManager {
   listSessions(): Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> {
     const sessions: Array<{ id: string; cwd: string; backend: string; sessionId?: string; spawnedAt: number }> = []
     for (const [id, proc] of this.processes) {
+      this.refreshHermesSessionIdentity(proc)
       sessions.push({
         id,
         cwd: proc.cwd,
@@ -1301,6 +1324,24 @@ export class PtyManager {
       })
     }
     return sessions
+  }
+
+  private refreshHermesSessionIdentity(proc: ClaudeProcess): void {
+    if (proc.backend !== 'hermes' || !proc.hermesRuntimeDir) return
+
+    try {
+      const activeFile = fs.readdirSync(proc.hermesRuntimeDir)
+        .find(name => name.startsWith('hermes-tui-active-session-') && name.endsWith('.json'))
+      if (!activeFile) return
+
+      const payload = JSON.parse(fs.readFileSync(path.join(proc.hermesRuntimeDir, activeFile), 'utf8'))
+      if (typeof payload.session_id === 'string' && payload.session_id.trim()) {
+        proc.sessionId = payload.session_id
+      }
+    } catch {
+      // Hermes may be replacing the file while it switches sessions. Keep the
+      // last confirmed identity and retry on the next renderer poll.
+    }
   }
 
   // Orchestrator API: read recent output from a PTY
