@@ -3,6 +3,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -218,7 +219,18 @@ export class HermesBackupManager {
       try { cpSync(this.workspacePath, join(recoveryDir, 'workspace.json')) } catch { /* best effort */ }
     }
 
-    const projects = [...new Set(this.activeProjectsProvider?.() || [])]
+    const workspaceProjects: string[] = []
+    if (this.workspacePath && existsSync(this.workspacePath)) {
+      try {
+        const saved = JSON.parse(readFileSync(this.workspacePath, 'utf8'))
+        for (const session of saved?.workspace?.sessions || []) {
+          for (const tab of session?.openTabs || []) {
+            if (typeof tab?.projectPath === 'string') workspaceProjects.push(tab.projectPath)
+          }
+        }
+      } catch { /* the copied workspace still preserves malformed input for forensics */ }
+    }
+    const projects = [...new Set([...(this.activeProjectsProvider?.() || []), ...workspaceProjects])]
     for (const project of projects) {
       const projectDir = join(recoveryDir, 'worktrees', basename(project).replace(/[^A-Za-z0-9._-]/g, '_'))
       try {
