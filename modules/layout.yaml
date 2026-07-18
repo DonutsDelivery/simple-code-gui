@@ -99,8 +99,8 @@ features:
       - canvas-panning
     title: Canvas Panning
     type: feature
-    description: Middle-mouse-button horizontal panning across a virtual canvas wider than the viewport.
-      3px threshold before drag starts, suppresses paste during panning.
+    description: Bounded horizontal panning for the existing tiled layout. Middle-button drag starts
+      after a small movement threshold and suppresses middle-click paste only when panning occurs.
     status:
       implementation: implemented
     depends_on: []
