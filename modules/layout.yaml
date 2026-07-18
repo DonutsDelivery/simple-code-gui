@@ -398,6 +398,8 @@ features:
           - canvas-visual-language
         title: Canvas Visual Language
         type: requirement
+        description: The spatial workspace presents a calm, premium visual hierarchy with restrained chrome,
+          semantic zoom, and clear attention states across themes.
         depends_on: []
         implements: []
         relates_to: []
