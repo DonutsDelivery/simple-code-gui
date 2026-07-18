@@ -375,6 +375,12 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: the pointer is over the spatial workspace
+            id: ac-1
+            then: the camera moves in both axes and zoom remains anchored to the intended point without
+              constraining the world to finite bounds
+            when: the user pans or zooms through supported pointer or trackpad gestures
         tags: []
         created: 2026-07-18T10:04:44.965Z
         notes: []
