@@ -45,3 +45,11 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T18:55:07.691Z
+  - _ulid: 01KXVDA65ZYZP5EC7P3RT8DM5Z
+    content: Implemented responsive dense/single layouts in the production TerminalBar menu with
+      viewport bounds, ARIA menu roles, roving focus, Escape focus restoration, and production
+      component tests. Live isolated port 19837 verified two 215px columns and keyboard End/Escape
+      behavior.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T20:05:04.831Z
