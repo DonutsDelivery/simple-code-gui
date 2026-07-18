@@ -5,13 +5,21 @@ title: "Implement: Canvas 2.0 Spatial Workspace"
 type: task
 spec_ref: "@canvas-workspace"
 derivation: auto
-status: in_progress
+status: pending_review
 blocked_by: []
 depends_on: []
 context: []
 priority: 1
 tags: []
 vcs_refs: []
+submission_linkage:
+  review_url: null
+  branch: feat/canvas-2.0
+  captured_at: 2026-07-18T11:21:57.656Z
+  commit: 14481e82c8aa2025d1c93b7f4d0e87e87c8ee7ab
+  remote: null
+  remote_url: null
+  upstream_ref: null
 history:
   - author: DonutsDelivery
     changes:
@@ -23,6 +31,27 @@ history:
         previous: null
     command: task-start
     timestamp: 2026-07-18T10:10:50.559Z
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: pending_review
+        previous: in_progress
+      submission_linkage:
+        new:
+          review_url: null
+          branch: feat/canvas-2.0
+          captured_at: 2026-07-18T11:21:57.656Z
+          commit: 14481e82c8aa2025d1c93b7f4d0e87e87c8ee7ab
+          remote: null
+          remote_url: null
+          upstream_ref: null
+        previous: null
+      submitted_at:
+        new: 2026-07-18T11:21:57.662Z
+        previous: null
+    command: task-submit
+    timestamp: 2026-07-18T11:21:57.662Z
 created_at: 2026-07-18T10:06:53.082Z
 started_at: 2026-07-18T10:10:50.559Z
+submitted_at: 2026-07-18T11:21:57.662Z
 todos: []

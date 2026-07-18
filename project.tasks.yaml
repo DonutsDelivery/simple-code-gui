@@ -22,7 +22,7 @@ tasks:
     title: "Implement: Canvas 2.0 Spatial Workspace"
     type: task
     spec_ref: "@canvas-workspace"
-    status: in_progress
+    status: pending_review
     blocked_by: []
     depends_on: []
     priority: 1
@@ -31,6 +31,7 @@ tasks:
     todos_count: 0
     created_at: 2026-07-18T10:06:53.082Z
     started_at: 2026-07-18T10:10:50.559Z
+    submitted_at: 2026-07-18T11:21:57.662Z
   - _ulid: 01KXTB2VNHQRW9333PA35CFP3A
     slugs:
       - task-spatial-scene-persistence
