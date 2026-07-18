@@ -318,6 +318,20 @@ features:
           sessions
         when: the session is created, closed, resumed, or moved to another workspace
     tags: []
+    requirements:
+      - _ulid: 01KXTAYY6J5XT2Y1N1P485WPQP
+        slugs:
+          - canvas-scene-persistence
+        title: Spatial Scene Persistence
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:44.626Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
