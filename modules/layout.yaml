@@ -448,6 +448,11 @@ features:
             then: the terminal remains visually responsive without repeatedly resizing the underlying session
               until the usable size settles
             when: the gesture is in progress
+          - given: the user repeatedly switches between Tiles, Canvas, and workspaces
+            id: ac-3
+            then: terminal renderers and subscriptions return to the configured active budget without duplicate
+              subscriptions
+            when: views are mounted and unmounted
         tags: []
         created: 2026-07-18T10:04:45.703Z
         notes: []
