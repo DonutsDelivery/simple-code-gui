@@ -381,6 +381,10 @@ features:
             then: the camera moves in both axes and zoom remains anchored to the intended point without
               constraining the world to finite bounds
             when: the user pans or zooms through supported pointer or trackpad gestures
+          - given: nodes are spread across the spatial workspace
+            id: ac-2
+            then: the requested nodes become visible while preserving their world positions
+            when: the user invokes fit all, fit selection, overview navigation, or direct session focus
         tags: []
         created: 2026-07-18T10:04:44.965Z
         notes: []
