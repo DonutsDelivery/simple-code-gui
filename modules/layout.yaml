@@ -510,6 +510,11 @@ features:
             then: an ordered semantic representation exposes their names, relationships, states, and available
               actions without requiring spatial interpretation
             when: the spatial scene contains nodes and groups
+          - given: selection, focus, or an important node state changes
+            id: ac-3
+            then: the change is conveyed without relying on color alone and important changes are announced
+              appropriately
+            when: the change occurs
         tags: []
         created: 2026-07-18T10:04:46.484Z
         notes: []
