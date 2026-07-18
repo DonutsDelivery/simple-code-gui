@@ -5,12 +5,24 @@ title: "Implement: Canvas 2.0 Spatial Workspace"
 type: task
 spec_ref: "@canvas-workspace"
 derivation: auto
-status: pending
+status: in_progress
 blocked_by: []
 depends_on: []
 context: []
 priority: 1
 tags: []
 vcs_refs: []
+history:
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: in_progress
+        previous: pending
+      started_at:
+        new: 2026-07-18T10:10:50.559Z
+        previous: null
+    command: task-start
+    timestamp: 2026-07-18T10:10:50.559Z
 created_at: 2026-07-18T10:06:53.082Z
+started_at: 2026-07-18T10:10:50.559Z
 todos: []
