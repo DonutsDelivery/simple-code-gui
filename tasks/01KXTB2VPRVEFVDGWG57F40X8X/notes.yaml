@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTB2VPRGAWZA5C219TZ68RQ
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Users can move through an unbounded workspace fluidly with pointer, trackpad, keyboard,
+      overview, and direct-focus controls.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given the pointer is over the spatial workspace, when the user pans or zooms through
+      supported pointer or trackpad gestures, then the camera moves in both axes and zoom remains
+      anchored to the intended point without constraining the world to finite bounds
+
+      - ac-2: Given nodes are spread across the spatial workspace, when the user invokes fit all,
+      fit selection, overview navigation, or direct session focus, then the requested nodes become
+      visible while preserving their world positions
+
+      - ac-3: Given the spatial workspace has keyboard focus, when the user navigates directionally
+      or invokes a camera command from the keyboard, then focus and the camera move predictably
+      without sending the command to a terminal
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.144Z
