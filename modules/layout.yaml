@@ -384,6 +384,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:46.096Z
         notes: []
+      - _ulid: 01KXTAZ00MN242D5EYXBZYNZ15
+        slugs:
+          - canvas-accessibility
+        title: Accessible Spatial Workspace
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:46.484Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
