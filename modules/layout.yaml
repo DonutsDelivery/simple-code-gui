@@ -540,6 +540,10 @@ features:
             then: both desktop layouts reflect the changed session membership while surviving spatial geometry
               remains unchanged
             when: the desktop workspace next renders either view
+          - given: the mobile projection is used
+            id: ac-3
+            then: desktop camera, node positions, groups, and tile geometry are preserved
+            when: workspace state is saved
         tags: []
         created: 2026-07-18T10:04:46.897Z
         notes: []
