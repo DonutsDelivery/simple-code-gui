@@ -292,9 +292,13 @@ features:
       - canvas-workspace
     title: Canvas 2.0 Spatial Workspace
     type: feature
+    description: A workspace can present its running sessions as persistent modular nodes on an
+      unbounded spatial surface while retaining the existing tiled view as an independent
+      alternative.
     depends_on: []
     implements: []
-    relates_to: []
+    relates_to:
+      - "@tiled-layout"
     tests: []
     traits: []
     tags: []
