@@ -46,3 +46,12 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T10:18:56.168Z
+  - _ulid: 01KXTCKDBHNHNB0CQRRHR6Z27T
+    content: "Workspace coexistence foundation is integrated: per-workspace active view and Canvas
+      scene, additive transport/session persistence, lazy restoration with camera and PTY-ID
+      remapping, malformed-scene regeneration, future-version preservation with Tiles fallback, and
+      session membership reconciliation across create/remove/resume/move. Focused workspace + scene
+      result: 6 files, 43 tests passed; relevant TypeScript files report no errors."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:33:24.081Z
