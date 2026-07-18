@@ -1,0 +1,16 @@
+_ulid: 01KXV7CR4W38XJ43XYS36ESTRC
+slugs:
+  - task-agent-session-notifications
+title: "Implement: Agent Session Notifications"
+type: task
+spec_ref: "@agent-session-notifications"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on: []
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T18:21:37.308Z
+todos: []

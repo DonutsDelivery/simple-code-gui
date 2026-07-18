@@ -1,0 +1,39 @@
+notes:
+  - _ulid: 01KXV7CR4VCXTP0CEK1BCYVXEB
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Agent sessions explicitly signal when work is complete or user input is required, so people
+      receive distinct audio cues and persistent attention indicators even when the session is
+      hidden.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given an agent session reports that its requested work is complete, when the
+      completion signal is received, then the app plays the configured completion cue once and
+      identifies the emitting session
+
+      - ac-2: Given an agent session cannot continue without a user response, when the input-needed
+      signal is received, then the app plays the configured input-needed cue once and identifies the
+      emitting session
+
+      - ac-3: Given a signal is emitted by a session that is not currently visible, when the app
+      receives the signal, then the emitting tab and its workspace remain visibly marked with the
+      signal severity until that tab is opened
+
+      - ac-4: Given a signal is emitted by a session that is already visible, when the app receives
+      the signal, then the cue plays without leaving an unread attention marker
+
+      - ac-5: Given a project uses any supported agent backend, when the app installs managed
+      harness instructions, then the backend instruction file contains idempotent guidance for
+      emitting completion and input-needed signals without changing surrounding user content
+
+      - ac-6: Given notification sounds are configured independently from spoken voice output, when
+      the user changes notification enablement or volume, then the notification preference persists
+      and does not alter voice output settings
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T18:21:37.308Z
