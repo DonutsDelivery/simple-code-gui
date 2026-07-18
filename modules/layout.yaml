@@ -413,6 +413,8 @@ features:
           - canvas-accessibility
         title: Accessible Spatial Workspace
         type: requirement
+        description: The spatial workspace remains fully operable and understandable without relying on
+          pointer precision or spatial vision.
         depends_on: []
         implements: []
         relates_to: []
