@@ -371,6 +371,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:45.703Z
         notes: []
+      - _ulid: 01KXTAYZMGJ9Q42MXH39F7CFH1
+        slugs:
+          - canvas-visual-language
+        title: Canvas Visual Language
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:46.096Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
