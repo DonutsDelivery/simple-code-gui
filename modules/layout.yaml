@@ -299,6 +299,7 @@ features:
     implements: []
     relates_to:
       - "@tiled-layout"
+      - "@multi-workspace-persistence"
     tests: []
     traits: []
     tags: []
