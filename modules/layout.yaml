@@ -302,6 +302,11 @@ features:
       - "@multi-workspace-persistence"
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: a workspace contains running sessions and saved tile and spatial arrangements
+        id: ac-1
+        then: the same sessions remain running while each view preserves its own arrangement
+        when: the user switches between Tiles and Canvas
     tags: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
