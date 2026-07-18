@@ -338,6 +338,8 @@ features:
           - canvas-scene-persistence
         title: Spatial Scene Persistence
         type: requirement
+        description: Each workspace preserves an independently versioned spatial arrangement, camera,
+          grouping, and presentation state without weakening tile-layout recovery.
         depends_on: []
         implements: []
         relates_to: []
