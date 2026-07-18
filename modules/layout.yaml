@@ -307,6 +307,11 @@ features:
         id: ac-1
         then: the same sessions remain running while each view preserves its own arrangement
         when: the user switches between Tiles and Canvas
+      - given: a workspace was last used in Canvas with positioned nodes
+        id: ac-2
+        then: the workspace returns to its saved view, node arrangement, and camera without losing the tiled
+          arrangement
+        when: the application restarts and restores that workspace
     tags: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
