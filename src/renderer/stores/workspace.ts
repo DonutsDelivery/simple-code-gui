@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import { clearProjectCaches } from '../utils/lruCache'
 import { debugTrace } from '../debug/debugBridge'
+import { removeTabFromLeaf, splitRoot, createLeaf, generateTileId, type TileNode } from '../components/tile-tree'
+import {
+  createEmptyCanvasScene,
+  generateCanvasScene,
+  reconcileCanvasScene,
+  remapSceneTabIds,
+  type CanvasScene,
+  type CanvasTabDescriptor,
+} from '../components/canvas'
 
 export interface ProjectCategory {
   id: string
@@ -38,18 +47,27 @@ export interface OpenTab {
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
+export type WorkspaceView = 'tiles' | 'canvas'
+
+export interface WorkspaceSavedData {
+  openTabs: any[]
+  tileTree: unknown
+  canvasScene?: unknown
+  activeView?: WorkspaceView
+  activeTabId: string | null
+}
+
 export interface WorkspaceSession {
   id: string
   name: string
   openTabs: OpenTab[]
   activeTabId: string | null
-  activeTileTree: any | null
+  activeTileTree: TileNode | null
+  canvasScene: CanvasScene | null
+  preservedCanvasScene?: unknown
+  activeView: WorkspaceView
   // Raw saved data for lazy PTY restoration
-  savedData?: {
-    openTabs: any[]
-    tileTree: any
-    activeTabId: string | null
-  }
+  savedData?: WorkspaceSavedData
   isRestored: boolean
 }
 
@@ -58,6 +76,25 @@ const generateSessionId = (): string =>
 
 const generateCategoryId = (): string =>
   `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+function toCanvasTabs(tabs: OpenTab[]): CanvasTabDescriptor[] {
+  return tabs.map(tab => ({
+    id: tab.id,
+    projectPath: tab.projectPath,
+    title: tab.title,
+  }))
+}
+
+function reconcileSessionScene(
+  scene: CanvasScene | null,
+  tabs: OpenTab[],
+  tileTree?: TileNode | null
+): CanvasScene {
+  const descriptors = toCanvasTabs(tabs)
+  return scene
+    ? reconcileCanvasScene(scene, descriptors)
+    : generateCanvasScene(descriptors, { tileTree })
+}
 
 interface WorkspaceState {
   projects: Project[]
@@ -68,7 +105,9 @@ interface WorkspaceState {
   // Mirrors of the active session (kept in sync for backward compat)
   openTabs: OpenTab[]
   activeTabId: string | null
-  activeTileTree: any | null
+  activeTileTree: TileNode | null
+  activeCanvasScene: CanvasScene | null
+  activeView: WorkspaceView
 
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
@@ -77,8 +116,17 @@ interface WorkspaceState {
   renameSession: (id: string, name: string) => void
   reorderSessions: (id: string, toIndex: number) => void
   switchSession: (id: string) => void
-  setSessionSavedData: (id: string, data: { openTabs: any[]; tileTree: any; activeTabId: string | null }) => void
-  setSessionLiveData: (id: string, openTabs: OpenTab[], tileTree: any | null, activeTabId: string | null) => void
+  moveTabsToSession: (tabIds: string[], toSessionId: string) => void
+  setSessionSavedData: (id: string, data: WorkspaceSavedData) => void
+  setSessionLiveData: (
+    id: string,
+    openTabs: OpenTab[],
+    tileTree: TileNode | null,
+    canvasScene: CanvasScene,
+    activeTabId: string | null,
+    activeView: WorkspaceView,
+    preservedCanvasScene?: unknown
+  ) => void
   markSessionRestored: (id: string) => void
   getAllOpenTabs: () => OpenTab[]
 
@@ -89,7 +137,9 @@ interface WorkspaceState {
   setActiveTab: (id: string) => void
   clearTabs: () => void
   clearAllTabs: () => void
-  setActiveTileTree: (tree: any | null) => void
+  setActiveTileTree: (tree: TileNode | null) => void
+  setActiveCanvasScene: (scene: CanvasScene) => void
+  setActiveView: (view: WorkspaceView) => void
 
   // Project ops
   setProjects: (projects: Project[]) => void
@@ -107,13 +157,27 @@ interface WorkspaceState {
   reorderProjects: (categoryId: string | null, projectPaths: string[]) => void
 }
 
+interface ActiveSessionUpdates {
+  openTabs?: OpenTab[]
+  activeTabId?: string | null
+  activeTileTree?: TileNode | null
+  activeCanvasScene?: CanvasScene | null
+  activeView?: WorkspaceView
+}
+
 function syncToActive(
   state: WorkspaceState,
-  updates: { openTabs?: OpenTab[]; activeTabId?: string | null; activeTileTree?: any | null }
+  updates: ActiveSessionUpdates
 ): Partial<WorkspaceState> {
   const { activeSessionId, sessions } = state
-  const newSessions = sessions.map(s =>
-    s.id === activeSessionId ? { ...s, ...updates } : s
+  const sessionUpdates: Partial<WorkspaceSession> = {}
+  if (updates.openTabs !== undefined) sessionUpdates.openTabs = updates.openTabs
+  if (updates.activeTabId !== undefined) sessionUpdates.activeTabId = updates.activeTabId
+  if (updates.activeTileTree !== undefined) sessionUpdates.activeTileTree = updates.activeTileTree
+  if (updates.activeCanvasScene !== undefined) sessionUpdates.canvasScene = updates.activeCanvasScene
+  if (updates.activeView !== undefined) sessionUpdates.activeView = updates.activeView
+  const newSessions = sessions.map(session =>
+    session.id === activeSessionId ? { ...session, ...sessionUpdates } : session
   )
   return { ...updates, sessions: newSessions }
 }
@@ -126,6 +190,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   openTabs: [],
   activeTabId: null,
   activeTileTree: null,
+  activeCanvasScene: null,
+  activeView: 'tiles',
 
   // -------------------------------------------------------------------------
   // Session management
@@ -139,6 +205,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       openTabs: active?.openTabs ?? [],
       activeTabId: active?.activeTabId ?? null,
       activeTileTree: active?.activeTileTree ?? null,
+      activeCanvasScene: active?.canvasScene ?? null,
+      activeView: active?.activeView ?? 'tiles',
     })
   },
 
@@ -152,6 +220,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       openTabs: [],
       activeTabId: null,
       activeTileTree: null,
+      canvasScene: createEmptyCanvasScene(),
+      activeView: 'tiles',
       isRestored: true,
     }
     set(state => ({
@@ -160,6 +230,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       openTabs: [],
       activeTabId: null,
       activeTileTree: null,
+      activeCanvasScene: createEmptyCanvasScene(),
+      activeView: 'tiles',
     }))
     return id
   },
@@ -175,6 +247,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           openTabs: [],
           activeTabId: null,
           activeTileTree: null,
+          canvasScene: createEmptyCanvasScene(),
+          activeView: 'tiles',
           isRestored: true,
         }
         sessions.push(fallback)
@@ -189,6 +263,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         openTabs: active.openTabs,
         activeTabId: active.activeTabId,
         activeTileTree: active.activeTileTree,
+        activeCanvasScene: active.canvasScene,
+        activeView: active.activeView,
       }
     })
   },
@@ -221,6 +297,78 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         openTabs: session.openTabs,
         activeTabId: session.activeTabId,
         activeTileTree: session.activeTileTree,
+        activeCanvasScene: session.canvasScene,
+        activeView: session.activeView,
+      }
+    })
+  },
+
+  moveTabsToSession: (tabIds, toSessionId) => {
+    set(state => {
+      const { activeSessionId, sessions } = state
+      if (!activeSessionId || activeSessionId === toSessionId || tabIds.length === 0) return state
+      const source = sessions.find(s => s.id === activeSessionId)
+      const target = sessions.find(s => s.id === toSessionId)
+      if (!source || !target) return state
+
+      // Collect the moved tab objects (preserve requested order)
+      const moved = tabIds
+        .map(id => source.openTabs.find(t => t.id === id))
+        .filter((t): t is OpenTab => !!t)
+      if (moved.length === 0) return state
+      const movedIds = moved.map(t => t.id)
+
+      // Remove from source: tabs + tile tree
+      let sourceTree = source.activeTileTree
+      for (const id of movedIds) {
+        sourceTree = sourceTree ? removeTabFromLeaf(sourceTree, id) : null
+      }
+      const sourceTabs = source.openTabs.filter(t => !movedIds.includes(t.id))
+      let sourceActive = source.activeTabId
+      if (sourceActive && movedIds.includes(sourceActive)) {
+        sourceActive = sourceTabs.length ? sourceTabs[sourceTabs.length - 1].id : null
+      }
+
+      // Add to target as a new leaf
+      const newLeaf = createLeaf(generateTileId(), movedIds, movedIds[movedIds.length - 1])
+      const targetTree = target.activeTileTree
+        ? splitRoot(target.activeTileTree, 'horizontal', newLeaf, 'after')
+        : newLeaf
+      const targetTabs = [...target.openTabs, ...moved]
+      const targetActive = movedIds[movedIds.length - 1]
+      const sourceScene = reconcileSessionScene(source.canvasScene, sourceTabs, sourceTree)
+      const targetScene = reconcileSessionScene(target.canvasScene, targetTabs, targetTree)
+
+      const newSessions = sessions.map(s => {
+        if (s.id === source.id) {
+          return {
+            ...s,
+            openTabs: sourceTabs,
+            activeTileTree: sourceTree,
+            canvasScene: sourceScene,
+            activeTabId: sourceActive,
+          }
+        }
+        if (s.id === target.id) {
+          return {
+            ...s,
+            openTabs: targetTabs,
+            activeTileTree: targetTree,
+            canvasScene: targetScene,
+            activeTabId: targetActive,
+            isRestored: true,
+          }
+        }
+        return s
+      })
+
+      // Active session is the source — mirror its updated state to top-level fields
+      return {
+        sessions: newSessions,
+        openTabs: sourceTabs,
+        activeTileTree: sourceTree,
+        activeCanvasScene: sourceScene,
+        activeTabId: sourceActive,
       }
     })
   },
@@ -233,15 +381,32 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }))
   },
 
-  setSessionLiveData: (id, openTabs, tileTree, activeTabId) => {
+  setSessionLiveData: (id, openTabs, tileTree, canvasScene, activeTabId, activeView, preservedCanvasScene) => {
     set(state => {
       const updated = state.sessions.map(s =>
         s.id === id
-          ? { ...s, openTabs, activeTileTree: tileTree, activeTabId, isRestored: true, savedData: undefined }
+          ? {
+            ...s,
+            openTabs,
+            activeTileTree: tileTree,
+            canvasScene,
+            preservedCanvasScene,
+            activeTabId,
+            activeView,
+            isRestored: true,
+            savedData: undefined,
+          }
           : s
       )
       if (state.activeSessionId === id) {
-        return { sessions: updated, openTabs, activeTileTree: tileTree, activeTabId }
+        return {
+          sessions: updated,
+          openTabs,
+          activeTileTree: tileTree,
+          activeCanvasScene: canvasScene,
+          activeTabId,
+          activeView,
+        }
       }
       return { sessions: updated }
     })
@@ -268,7 +433,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   addTab: (tab) => {
     set(state => {
       const newTabs = [...state.openTabs, tab]
-      return syncToActive(state, { openTabs: newTabs, activeTabId: tab.id })
+      const activeCanvasScene = reconcileSessionScene(
+        state.activeCanvasScene,
+        newTabs,
+        state.activeTileTree
+      )
+      return syncToActive(state, {
+        openTabs: newTabs,
+        activeTabId: tab.id,
+        activeCanvasScene,
+      })
     })
   },
 
@@ -282,7 +456,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           ? newTabs[Math.min(idx, newTabs.length - 1)].id
           : null
       }
-      return syncToActive(state, { openTabs: newTabs, activeTabId: newActiveId })
+      const activeCanvasScene = reconcileSessionScene(
+        state.activeCanvasScene,
+        newTabs,
+        state.activeTileTree
+      )
+      return syncToActive(state, {
+        openTabs: newTabs,
+        activeTabId: newActiveId,
+        activeCanvasScene,
+      })
     })
   },
 
@@ -290,10 +473,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set(state => {
       const newTabs = state.openTabs.map(t => t.id === id ? { ...t, ...updates } : t)
       // Handle ID changes (PTY recreation renames the tab key)
-      const newId = (updates as any).id
+      const newId = (updates as Partial<OpenTab>).id
       let newActiveId = state.activeTabId
       if (newId && state.activeTabId === id) newActiveId = newId
-      return syncToActive(state, { openTabs: newTabs, activeTabId: newActiveId })
+      const remappedScene = newId && state.activeCanvasScene
+        ? remapSceneTabIds(state.activeCanvasScene, { [id]: newId })
+        : state.activeCanvasScene
+      const activeCanvasScene = reconcileSessionScene(
+        remappedScene,
+        newTabs,
+        state.activeTileTree
+      )
+      return syncToActive(state, {
+        openTabs: newTabs,
+        activeTabId: newActiveId,
+        activeCanvasScene,
+      })
     })
   },
 
@@ -302,7 +497,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   clearTabs: () => {
-    set(state => syncToActive(state, { openTabs: [], activeTabId: null }))
+    set(state => syncToActive(state, {
+      openTabs: [],
+      activeTabId: null,
+      activeCanvasScene: createEmptyCanvasScene(),
+    }))
   },
 
   clearAllTabs: () => {
@@ -310,17 +509,32 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       openTabs: [],
       activeTabId: null,
       activeTileTree: null,
+      activeCanvasScene: createEmptyCanvasScene(),
       sessions: state.sessions.map(s => ({
         ...s,
         openTabs: [],
         activeTabId: null,
         activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
       }))
     }))
   },
 
   setActiveTileTree: (tree) => {
     set(state => syncToActive(state, { activeTileTree: tree }))
+  },
+
+  setActiveCanvasScene: (scene) => {
+    set(state => ({
+      activeCanvasScene: scene,
+      sessions: state.sessions.map(session => session.id === state.activeSessionId
+        ? { ...session, canvasScene: scene, preservedCanvasScene: undefined }
+        : session),
+    }))
+  },
+
+  setActiveView: (view) => {
+    set(state => syncToActive(state, { activeView: view }))
   },
 
   // -------------------------------------------------------------------------

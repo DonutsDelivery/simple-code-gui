@@ -15,6 +15,8 @@ export function serializeSessionsForSave(
         openTabs: (s.savedData.openTabs ?? []) as OpenTab[],
         activeTabId: s.savedData.activeTabId ?? null,
         tileTree: s.savedData.tileTree ?? undefined,
+        canvasScene: s.savedData.canvasScene,
+        activeView: s.savedData.activeView ?? 'tiles',
       }
     }
     return {
@@ -31,6 +33,8 @@ export function serializeSessionsForSave(
       })) as OpenTab[],
       activeTabId: s.activeTabId,
       tileTree: s.activeTileTree || undefined,
+      canvasScene: s.preservedCanvasScene ?? s.canvasScene ?? undefined,
+      activeView: s.preservedCanvasScene === undefined ? s.activeView : 'tiles',
     }
   })
 }

@@ -4,7 +4,10 @@ import { Sidebar } from '../components/Sidebar'
 import { Terminal } from '../components/terminal/Terminal'
 import { TiledTerminalView } from '../components/tiled/index.js'
 import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
-import { getAllTabIds, createLeaf, createBranch, generateTileId } from '../components/tile-tree'
+import { WorkspaceViewToggle } from '../components/WorkspaceViewToggle'
+import { CanvasWorkspaceView } from '../components/canvas/CanvasWorkspaceView'
+import type { CanvasPoint } from '../components/canvas/scene-model'
+import { getAllTabIds, createLeaf, createBranch, generateTileId, findLeafById, remapTabIds } from '../components/tile-tree'
 import { SettingsModal } from '../components/SettingsModal'
 import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -42,6 +45,8 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     sessions,
     activeSessionId,
     activeTileTree,
+    activeCanvasScene,
+    activeView,
     addProject,
     removeProject,
     updateProject,
@@ -50,12 +55,15 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     updateTab,
     setActiveTab,
     setActiveTileTree,
+    setActiveCanvasScene,
+    setActiveView,
     addSession,
     removeSession,
     renameSession,
     reorderSessions,
     switchSession,
     setSessionSavedData,
+    moveTabsToSession,
   } = useWorkspaceStore()
 
   const { voiceOutputEnabled, setProjectVoice } = useVoice()
@@ -137,9 +145,33 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     setTileTree: setActiveTileTree,
   })
 
+  const handleFocusCanvasTab = useCallback((id: string) => {
+    setActiveTab(id)
+    setLastFocusedTabId(id)
+  }, [setActiveTab, setLastFocusedTabId])
+
   const handleRenameTab = useCallback((id: string, title: string) => {
     updateTab(id, { title, customTitle: true })
   }, [updateTab])
+
+  const handleResumeTab = useCallback(async (id: string) => {
+    const tab = useWorkspaceStore.getState().openTabs.find(candidate => candidate.id === id)
+    if (!tab) return
+
+    const backend = !tab.backend || tab.backend === 'default' ? 'claude' : tab.backend
+    const newPtyId = await api.spawnPty(
+      tab.projectPath,
+      tab.sessionId,
+      undefined,
+      backend
+    )
+
+    updateTab(id, { id: newPtyId, ptyId: newPtyId })
+    if (activeTileTree) {
+      setActiveTileTree(remapTabIds(activeTileTree, new Map([[id, newPtyId]])))
+    }
+    setActiveTab(newPtyId)
+  }, [activeTileTree, api, setActiveTab, setActiveTileTree, updateTab])
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
@@ -215,10 +247,55 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
       await restoreSession(id)
     }
     switchSession(id)
-    // Trigger resize so terminals refit
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
   }, [restoreSession, switchSession])
+
+  // Move a sub-tab or whole tile from the active session into another workspace session
+  const handleMoveTabs = useCallback(async (
+    toSessionId: string,
+    payload: { type: 'subtab'; tabId: string } | { type: 'tile'; tileId: string }
+  ) => {
+    if (toSessionId === useWorkspaceStore.getState().activeSessionId) return
+    let tabIds: string[] = []
+    if (payload.type === 'subtab') {
+      tabIds = [payload.tabId]
+    } else {
+      const tree = useWorkspaceStore.getState().activeTileTree
+      const leaf = tree ? findLeafById(tree, payload.tileId) : null
+      if (!leaf) return
+      tabIds = [...leaf.tabIds]
+    }
+    if (tabIds.length === 0) return
+
+    // Restore the target session if it's lazily loaded so its tile tree exists
+    const target = useWorkspaceStore.getState().sessions.find(s => s.id === toSessionId)
+    if (target && !target.isRestored) {
+      await restoreSession(toSessionId)
+    }
+    moveTabsToSession(tabIds, toSessionId)
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+  }, [restoreSession, moveTabsToSession])
+
+  const handleDropProjectOnCanvas = useCallback(async (projectPath: string, point: CanvasPoint) => {
+    const before = new Set(useWorkspaceStore.getState().openTabs.map(tab => tab.id))
+    await handleOpenSessionAtPosition(
+      projectPath,
+      null,
+      { width: window.innerWidth, height: window.innerHeight }
+    )
+
+    const state = useWorkspaceStore.getState()
+    const addedTab = state.openTabs.find(tab => !before.has(tab.id) && tab.projectPath === projectPath)
+    const scene = state.activeCanvasScene
+    if (!addedTab || !scene) return
+    const node = scene.nodes.find(candidate => candidate.tabIds.includes(addedTab.id))
+    if (!node) return
+    setActiveCanvasScene({
+      ...scene,
+      nodes: scene.nodes.map(candidate => candidate.id === node.id
+        ? { ...candidate, rect: { ...candidate.rect, x: point.x, y: point.y } }
+        : candidate),
+    })
+  }, [handleOpenSessionAtPosition, setActiveCanvasScene])
 
   const handleAddSession = useCallback(() => {
     addSession()
@@ -335,57 +412,70 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                   onRemove={handleRemoveSession}
                   onRename={renameSession}
                   onReorder={reorderSessions}
+                  onMoveTabs={handleMoveTabs}
                 />
-                {openTabs.length > 0 ? (
-                  <ErrorBoundary componentName="TiledTerminalView">
-                    <TiledTerminalView
-                      tabs={openTabs}
-                      projects={projects}
-                      theme={currentTheme}
-                      focusedTabId={lastFocusedTabId}
-                      onCloseTab={handleCloseTab}
-                      onRenameTab={handleRenameTab}
-                      onFocusTab={setLastFocusedTabId}
-                      tileTree={activeTileTree}
-                      onTreeChange={setActiveTileTree}
-                      onOpenSessionAtPosition={handleOpenSessionAtPosition}
-                      onAddTab={handleAddTabToTile}
-                      onUndoCloseTab={canUndoCloseTab ? handleUndoCloseTab : undefined}
-                      api={api}
-                    />
-                  </ErrorBoundary>
-                ) : (
+                <WorkspaceViewToggle value={activeView} onChange={setActiveView} />
+                {activeView === 'tiles' && openTabs.length === 0 && (
                   <div className="empty-state">
                     <h2>Simple Code GUI</h2>
                     <p>Add a project from the sidebar, then click a session to open it</p>
                   </div>
                 )}
+                {sessions
+                  // Keep background PTYs alive, but mount renderers only for the
+                  // active workspace and its selected layout.
+                  .filter(session => session.id === activeSessionId && session.isRestored)
+                  .map(session => {
+                    const isWorkspaceActive = session.id === activeSessionId
+                    return (
+                      <div
+                        key={session.id}
+                        style={isWorkspaceActive
+                          ? { display: 'flex', flex: 1, minHeight: 0, position: 'relative' }
+                          : { position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' }}
+                      >
+                        {session.activeView === 'canvas' && (session.canvasScene ?? activeCanvasScene) ? (
+                          <ErrorBoundary componentName={`CanvasWorkspaceView(${session.id})`}>
+                            <CanvasWorkspaceView
+                              tabs={session.openTabs}
+                              projects={projects}
+                              theme={currentTheme}
+                              scene={(session.canvasScene ?? activeCanvasScene)!}
+                              onSceneChange={setActiveCanvasScene}
+                              focusedTabId={lastFocusedTabId}
+                              onFocusTab={handleFocusCanvasTab}
+                              onCloseTab={handleCloseTab}
+                              onResumeTab={handleResumeTab}
+                              onRenameTab={handleRenameTab}
+                              onDropProject={handleDropProjectOnCanvas}
+                              api={api}
+                              isWorkspaceActive={isWorkspaceActive}
+                            />
+                          </ErrorBoundary>
+                        ) : (
+                          <ErrorBoundary componentName={`TiledTerminalView(${session.id})`}>
+                            <TiledTerminalView
+                              tabs={session.openTabs}
+                              projects={projects}
+                              theme={currentTheme}
+                              focusedTabId={isWorkspaceActive ? lastFocusedTabId : null}
+                              onCloseTab={handleCloseTab}
+                              onRenameTab={handleRenameTab}
+                              onFocusTab={isWorkspaceActive ? setLastFocusedTabId : () => {}}
+                              tileTree={session.activeTileTree}
+                              onTreeChange={isWorkspaceActive ? setActiveTileTree : () => {}}
+                              onOpenSessionAtPosition={isWorkspaceActive ? handleOpenSessionAtPosition : undefined}
+                              onAddTab={isWorkspaceActive ? handleAddTabToTile : undefined}
+                              onUndoCloseTab={isWorkspaceActive && canUndoCloseTab ? handleUndoCloseTab : undefined}
+                              api={api}
+                            />
+                          </ErrorBoundary>
+                        )}
+                      </div>
+                    )
+                  })}
               </>
             )}
-            {/* Background terminals: keep inactive workspace PTYs mounted to preserve xterm/PTY state */}
-            {sessions
-              .filter(s => s.id !== activeSessionId && s.isRestored && s.openTabs.length > 0)
-              .flatMap(s => s.openTabs)
-              .map(tab => (
-                <div
-                  key={tab.id}
-                  style={{ position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' }}
-                >
-                  <ErrorBoundary componentName={`BgTerminal(${tab.id})`}>
-                    <Terminal
-                      ptyId={tab.id}
-                      isActive={false}
-                      theme={currentTheme}
-                      onFocus={() => {}}
-                      projectPath={tab.projectPath}
-                      backend={tab.backend}
-                      api={api}
-                      isMobile={false}
-                    />
-                  </ErrorBoundary>
-                </div>
-              ))
-            }
           </div>
         )}
 

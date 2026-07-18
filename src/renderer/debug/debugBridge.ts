@@ -82,6 +82,13 @@ function getState(): Record<string, unknown> {
       hasSavedData: !!ws.savedData,
       tabCount: ws.openTabs.length,
       activeTabId: ws.activeTabId,
+      activeView: ws.activeView,
+      canvas: ws.canvasScene ? {
+        version: ws.canvasScene.version,
+        camera: ws.canvasScene.camera,
+        nodeCount: ws.canvasScene.nodes.length,
+        groupCount: ws.canvasScene.groups.length,
+      } : null,
       tabs: ws.openTabs.map(t => ({
         id: t.id,
         title: t.title,
@@ -99,6 +106,13 @@ function getState(): Record<string, unknown> {
     })),
     activeTabId: s.activeTabId,
     activeTileTree: s.activeTileTree ?? null,
+    activeView: s.activeView,
+    activeCanvas: s.activeCanvasScene ? {
+      version: s.activeCanvasScene.version,
+      camera: s.activeCanvasScene.camera,
+      nodeCount: s.activeCanvasScene.nodes.length,
+      groupCount: s.activeCanvasScene.groups.length,
+    } : null,
     projectCount: s.projects.length,
     registeredTerminalIds: [...terminals.keys()],
   }

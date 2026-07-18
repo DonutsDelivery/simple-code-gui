@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { serializeSessionsForSave } from '../stores/workspace-persistence'
 import type { WorkspaceSession } from '../stores/workspace'
+import { createEmptyCanvasScene } from '../components/canvas'
 
 const tab = (overrides: Partial<any> = {}) => ({
   id: 'pty-1',
@@ -22,7 +23,9 @@ describe('serializeSessionsForSave', () => {
         name: 'Workspace 1',
         openTabs: [tab()],
         activeTabId: 'pty-1',
-        activeTileTree: { kind: 'leaf', id: 't1', tabIds: ['pty-1'], activeTabId: 'pty-1' },
+        activeTileTree: { kind: 'leaf', id: 't1', tabIds: ['pty-1'], activeTabId: 'pty-1' } as any,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
         isRestored: true,
       },
       {
@@ -31,11 +34,15 @@ describe('serializeSessionsForSave', () => {
         openTabs: [],
         activeTabId: null,
         activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
         savedData: {
           openTabs: [
             { id: 'saved-1', projectPath: '/proj/b', sessionId: 'sess-9', title: 'b', ptyId: 'saved-1' },
           ],
           tileTree: { kind: 'leaf', id: 'saved-tile', tabIds: ['saved-1'], activeTabId: 'saved-1' },
+          canvasScene: { version: 99, future: true },
+          activeView: 'canvas',
           activeTabId: 'saved-1',
         },
         isRestored: false,
@@ -55,6 +62,8 @@ describe('serializeSessionsForSave', () => {
     expect(result[1].openTabs[0].projectPath).toBe('/proj/b')
     expect(result[1].activeTabId).toBe('saved-1')
     expect(result[1].tileTree).toMatchObject({ kind: 'leaf', id: 'saved-tile' })
+    expect(result[1].canvasScene).toEqual({ version: 99, future: true })
+    expect(result[1].activeView).toBe('canvas')
   })
 
   it('serializes restored workspaces from live state', () => {
@@ -65,6 +74,8 @@ describe('serializeSessionsForSave', () => {
         openTabs: [tab({ id: 'live-1', ptyId: 'live-1', projectPath: '/proj/x' })],
         activeTabId: 'live-1',
         activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
         isRestored: true,
       },
     ]
@@ -84,6 +95,8 @@ describe('serializeSessionsForSave', () => {
         openTabs: [],
         activeTabId: null,
         activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
         isRestored: false,
       },
     ]
@@ -95,6 +108,32 @@ describe('serializeSessionsForSave', () => {
     expect(result[0].tileTree).toBeUndefined()
   })
 
+  // AC: @canvas-workspace ac-2
+  // AC: @canvas-scene-persistence ac-1
+  it('serializes independent live Canvas view state', () => {
+    const canvasScene = createEmptyCanvasScene()
+    canvasScene.camera = { x: -320, y: 180, zoom: 0.72 }
+    const sessions: WorkspaceSession[] = [{
+      id: 'ws-canvas',
+      name: 'Canvas',
+      openTabs: [tab()],
+      activeTabId: 'pty-1',
+      activeTileTree: null,
+      canvasScene,
+      activeView: 'canvas',
+      isRestored: true,
+    }]
+
+    const result = serializeSessionsForSave(sessions)
+
+    expect(result[0].activeView).toBe('canvas')
+    expect(result[0].canvasScene).toMatchObject({
+      version: 1,
+      camera: { x: -320, y: 180, zoom: 0.72 },
+    })
+    expect(result[0].tileTree).toBeUndefined()
+  })
+
   it('strips falsy customTitle from live tabs', () => {
     const sessions: WorkspaceSession[] = [
       {
@@ -103,6 +142,8 @@ describe('serializeSessionsForSave', () => {
         openTabs: [tab({ customTitle: false })],
         activeTabId: 'pty-1',
         activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
         isRestored: true,
       },
     ]

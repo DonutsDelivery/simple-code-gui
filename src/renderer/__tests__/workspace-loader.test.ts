@@ -4,8 +4,10 @@ vi.mock('../components/terminal/Terminal', () => ({
   cleanupOrphanedBuffers: vi.fn(),
 }))
 
-import { spawnSessionTabs } from '../hooks/useWorkspaceLoader'
-import type { Api, PtySession } from '../api'
+import { buildRestoredCanvasScene, spawnSessionTabs } from '../hooks/useWorkspaceLoader'
+import { createEmptyCanvasScene } from '../components/canvas'
+import type { Api } from '../api'
+import type { PtySession } from '../api/types'
 
 const projectPath = '/proj/app'
 
@@ -90,5 +92,76 @@ describe('spawnSessionTabs', () => {
       sessionId: undefined,
       backend: 'codex',
     })
+  })
+})
+
+describe('buildRestoredCanvasScene', () => {
+  const liveTab = {
+    id: 'live-pty',
+    ptyId: 'live-pty',
+    projectPath,
+    title: 'app - restored',
+    backend: 'codex' as const,
+  }
+
+  // AC: @canvas-workspace ac-2
+  // AC: @canvas-scene-persistence ac-1
+  it('restores the camera and remaps saved terminal references', () => {
+    const saved = createEmptyCanvasScene()
+    saved.camera = { x: -240, y: 90, zoom: 0.65 }
+    saved.nodes = [{
+      id: 'node-1',
+      tabIds: ['saved-pty'],
+      activeTabId: 'saved-pty',
+      projectPath,
+      rect: { x: -100, y: 40, width: 680, height: 420 },
+      zIndex: 0,
+      presentation: { title: 'app' },
+    }]
+
+    const restored = buildRestoredCanvasScene(
+      saved,
+      'canvas',
+      null,
+      new Map([['saved-pty', 'live-pty']]),
+      [liveTab]
+    )
+
+    expect(restored.activeView).toBe('canvas')
+    expect(restored.scene.camera).toEqual({ x: -240, y: 90, zoom: 0.65 })
+    expect(restored.scene.nodes[0].tabIds).toEqual(['live-pty'])
+    expect(restored.scene.nodes[0].rect).toEqual({ x: -100, y: 40, width: 680, height: 420 })
+  })
+
+  // AC: @canvas-scene-persistence ac-3
+  it('falls back to Tiles and preserves unknown future scene data', () => {
+    const future = { version: 42, nodes: [{ future: true }] }
+
+    const restored = buildRestoredCanvasScene(
+      future,
+      'canvas',
+      null,
+      new Map(),
+      [liveTab]
+    )
+
+    expect(restored.activeView).toBe('tiles')
+    expect(restored.preservedScene).toBe(future)
+    expect(restored.scene.nodes[0].tabIds).toEqual(['live-pty'])
+  })
+
+  // AC: @canvas-scene-persistence ac-2
+  it('regenerates malformed spatial data without losing live sessions', () => {
+    const restored = buildRestoredCanvasScene(
+      { version: 1, nodes: 'broken' },
+      'canvas',
+      null,
+      new Map(),
+      [liveTab]
+    )
+
+    expect(restored.activeView).toBe('canvas')
+    expect(restored.scene.nodes[0].tabIds).toEqual(['live-pty'])
+    expect(restored.preservedScene).toBeUndefined()
   })
 })

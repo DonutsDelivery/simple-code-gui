@@ -136,6 +136,7 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
     // PTY exit handling
     cleanupExit = ptyOperations.onPtyExit(ptyId, (code) => {
       handlePtyExit(code, state.terminal, ptyId, state)
+      options.onPtyExit?.(code)
     })
 
     // Try to initialize terminal immediately, or poll until ready

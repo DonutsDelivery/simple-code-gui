@@ -33,6 +33,16 @@ export interface OpenTab {
   backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 }
 
+export interface SavedWorkspaceSession {
+  id: string
+  name: string
+  openTabs: OpenTab[]
+  activeTabId: string | null
+  tileTree?: any
+  canvasScene?: unknown
+  activeView?: 'tiles' | 'canvas'
+}
+
 export interface Workspace {
   projects: Project[]
   openTabs: OpenTab[]
@@ -41,6 +51,8 @@ export interface Workspace {
   tileLayout?: TileLayout[]
   tileTree?: any
   categories: ProjectCategory[]
+  sessions?: SavedWorkspaceSession[]
+  activeSessionId?: string | null
 }
 
 export interface TileLayout {

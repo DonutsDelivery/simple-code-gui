@@ -15,6 +15,7 @@ export interface UseTerminalSetupOptions {
   onAutoWorkMarker: (cleanChunk: string) => void
   prePopulateSpokenContent: (chunks: string[]) => void
   resetTTSState: () => void
+  onPtyExit?: (code: number) => void
 }
 
 export interface UseTerminalSetupReturn {

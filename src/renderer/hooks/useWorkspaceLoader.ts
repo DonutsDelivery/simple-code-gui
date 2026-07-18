@@ -2,7 +2,15 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Api } from '../api'
 import type { BackendId, PtySession } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { useWorkspaceStore, WorkspaceSession, OpenTab } from '../stores/workspace'
+import { useWorkspaceStore, WorkspaceSession, OpenTab, type WorkspaceView } from '../stores/workspace'
+import {
+  generateCanvasScene,
+  loadCanvasScene,
+  reconcileCanvasScene,
+  remapSceneTabIds,
+  type CanvasScene,
+  type CanvasTabDescriptor,
+} from '../components/canvas'
 import { Theme, getThemeById, applyTheme, themes } from '../themes'
 import { cleanupOrphanedBuffers } from '../components/terminal/Terminal'
 import type { TileNode } from '../components/tile-tree.js'
@@ -29,6 +37,16 @@ interface UseWorkspaceLoaderReturn {
   setCurrentTheme: (theme: Theme) => void
   setSettings: (settings: AppSettings | null) => void
   restoreSession: (sessionId: string) => Promise<void>
+}
+
+interface SavedSessionData {
+  id: string
+  name: string
+  openTabs: any[]
+  activeTabId: string | null
+  tileTree?: any
+  canvasScene?: unknown
+  activeView?: WorkspaceView
 }
 
 const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
@@ -282,6 +300,41 @@ function buildRestoredTree(
   return tree
 }
 
+
+function toCanvasTabDescriptors(tabs: OpenTab[]): CanvasTabDescriptor[] {
+  return tabs.map(tab => ({ id: tab.id, projectPath: tab.projectPath, title: tab.title }))
+}
+
+export interface RestoredCanvasState {
+  scene: CanvasScene
+  activeView: WorkspaceView
+  preservedScene?: unknown
+}
+
+export function buildRestoredCanvasScene(
+  savedCanvasScene: unknown,
+  savedActiveView: WorkspaceView | undefined,
+  tileTree: TileNode | null,
+  idMapping: Map<string, string>,
+  restoredTabs: OpenTab[]
+): RestoredCanvasState {
+  const tabs = toCanvasTabDescriptors(restoredTabs)
+  const generated = generateCanvasScene(tabs, { tileTree })
+  if (savedCanvasScene === undefined || savedCanvasScene === null) {
+    return { scene: generated, activeView: savedActiveView ?? 'tiles' }
+  }
+  const loaded = loadCanvasScene(savedCanvasScene)
+  if (loaded.status === 'future-version') {
+    return { scene: generated, activeView: 'tiles', preservedScene: loaded.data }
+  }
+  if (loaded.status === 'recoverable-error') {
+    console.warn(`Recovering Canvas layout: ${loaded.reason}`)
+    return { scene: generated, activeView: savedActiveView ?? 'tiles' }
+  }
+  const remapped = remapSceneTabIds(loaded.scene, Object.fromEntries(idMapping))
+  return { scene: reconcileCanvasScene(remapped, tabs), activeView: savedActiveView ?? 'tiles' }
+}
+
 export function useWorkspaceLoader({
   api,
   checkInstallation,
@@ -334,12 +387,13 @@ export function useWorkspaceLoader({
 
     const liveTabIds = new Set(restoredTabs.map(t => t.id))
     const tree = buildRestoredTree(savedData.tileTree, null, idMapping, liveTabIds)
+    const canvas = buildRestoredCanvasScene(savedData.canvasScene, savedData.activeView, tree, idMapping, restoredTabs)
 
     const activeTabId = savedData.activeTabId
       ? (idMapping.get(savedData.activeTabId) ?? restoredTabs[0]?.id ?? null)
       : restoredTabs[0]?.id ?? null
 
-    setSessionLiveData(sessionId, restoredTabs, tree, activeTabId)
+    setSessionLiveData(sessionId, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
   }, [api, markSessionRestored, setSessionLiveData])
 
   useEffect(() => {
@@ -384,7 +438,7 @@ export function useWorkspaceLoader({
         }
 
         // Build session list — migrate legacy format if needed
-        let savedSessions: Array<{ id: string; name: string; openTabs: any[]; activeTabId: string | null; tileTree?: any }> = []
+        let savedSessions: SavedSessionData[] = []
         let activeSessionId: string | null = null
 
         if (workspace.sessions && workspace.sessions.length > 0) {
@@ -418,9 +472,13 @@ export function useWorkspaceLoader({
           openTabs: [],
           activeTabId: null,
           activeTileTree: null,
+          canvasScene: null,
+          activeView: s.activeView ?? 'tiles',
           savedData: {
             openTabs: s.openTabs ?? [],
             tileTree: s.tileTree ?? null,
+            canvasScene: s.canvasScene,
+            activeView: s.activeView ?? 'tiles',
             activeTabId: s.activeTabId ?? null,
           },
           isRestored: false,
@@ -437,7 +495,7 @@ export function useWorkspaceLoader({
 
         // Restore the active session eagerly
         const activeSaved = savedSessions.find(s => s.id === activeSessionId)
-        if (activeSaved && activeSaved.openTabs.length > 0) {
+        if (activeSaved) {
           const restoredTabs: OpenTab[] = []
           const { idMapping } = await spawnSessionTabs(
             api,
@@ -451,12 +509,13 @@ export function useWorkspaceLoader({
           const liveTabIds = new Set(restoredTabs.map(t => t.id))
           const legacyLayout = (workspace.sessions ? undefined : workspace.tileLayout)
           const tree = buildRestoredTree(activeSaved.tileTree, legacyLayout, idMapping, liveTabIds)
+          const canvas = buildRestoredCanvasScene(activeSaved.canvasScene, activeSaved.activeView, tree, idMapping, restoredTabs)
 
           const activeTabId = activeSaved.activeTabId
             ? (idMapping.get(activeSaved.activeTabId) ?? restoredTabs[0]?.id ?? null)
             : restoredTabs[0]?.id ?? null
 
-          setSessionLiveData(activeSessionId!, restoredTabs, tree, activeTabId)
+          setSessionLiveData(activeSessionId!, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
           switchSession(activeSessionId!)
         } else {
           markSessionRestored(activeSessionId!)

@@ -9,6 +9,10 @@ interface WorkspaceSwitcherProps {
   onRemove: (id: string) => void
   onRename: (id: string, name: string) => void
   onReorder: (id: string, toIndex: number) => void
+  onMoveTabs: (
+    toSessionId: string,
+    payload: { type: 'subtab'; tabId: string } | { type: 'tile'; tileId: string }
+  ) => void
   onWheel?: (e: React.WheelEvent) => void
 }
 
@@ -18,6 +22,7 @@ interface SessionTabProps {
   isActive: boolean
   isRestoring: boolean
   insertSide: 'before' | 'after' | null
+  isDropTarget: boolean
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -25,6 +30,12 @@ interface SessionTabProps {
   onTabDragOver: (index: number, before: boolean) => void
   onTabDrop: () => void
   onTabDragEnd: () => void
+  onExternalDragOver: (id: string) => void
+  onExternalDragLeave: (id: string) => void
+  onExternalDrop: (
+    id: string,
+    payload: { type: 'subtab'; tabId: string } | { type: 'tile'; tileId: string }
+  ) => void
 }
 
 const SessionTab = memo(function SessionTab({
@@ -33,6 +44,7 @@ const SessionTab = memo(function SessionTab({
   isActive,
   isRestoring,
   insertSide,
+  isDropTarget,
   onSelect,
   onClose,
   onRename,
@@ -40,6 +52,9 @@ const SessionTab = memo(function SessionTab({
   onTabDragOver,
   onTabDrop,
   onTabDragEnd,
+  onExternalDragOver,
+  onExternalDragLeave,
+  onExternalDrop,
 }: SessionTabProps) {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -79,7 +94,7 @@ const SessionTab = memo(function SessionTab({
 
   return (
     <div
-      className={`tab workspace-tab ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}`}
+      className={`tab workspace-tab ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}${isDropTarget ? ' ws-drop-target' : ''}`}
       role="tab"
       aria-selected={isActive}
       tabIndex={0}
@@ -90,15 +105,41 @@ const SessionTab = memo(function SessionTab({
         onTabDragStart(session.id)
       }}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('application/x-workspace-tab')) return
-        e.preventDefault()
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-        onTabDragOver(index, e.clientX < rect.left + rect.width / 2)
+        const types = e.dataTransfer.types
+        if (types.includes('application/x-workspace-tab')) {
+          e.preventDefault()
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+          onTabDragOver(index, e.clientX < rect.left + rect.width / 2)
+          return
+        }
+        // External: a sub-tab or whole tile dragged from the tiled view
+        if (!isActive && (types.includes('application/x-subtab') || types.includes('text/plain'))) {
+          e.preventDefault()
+          onExternalDragOver(session.id)
+        }
       }}
+      onDragLeave={() => onExternalDragLeave(session.id)}
       onDrop={(e) => {
-        if (!e.dataTransfer.types.includes('application/x-workspace-tab')) return
-        e.preventDefault()
-        onTabDrop()
+        const types = e.dataTransfer.types
+        if (types.includes('application/x-workspace-tab')) {
+          e.preventDefault()
+          onTabDrop()
+          return
+        }
+        if (isActive) return
+        if (types.includes('application/x-subtab')) {
+          e.preventDefault()
+          try {
+            const { tabId } = JSON.parse(e.dataTransfer.getData('application/x-subtab'))
+            if (tabId) onExternalDrop(session.id, { type: 'subtab', tabId })
+          } catch { /* ignore malformed payload */ }
+          return
+        }
+        if (types.includes('text/plain')) {
+          e.preventDefault()
+          const tileId = e.dataTransfer.getData('text/plain')
+          if (tileId) onExternalDrop(session.id, { type: 'tile', tileId })
+        }
       }}
       onDragEnd={onTabDragEnd}
       onClick={handleClick}
@@ -155,11 +196,25 @@ export function WorkspaceSwitcher({
   onRemove,
   onRename,
   onReorder,
+  onMoveTabs,
   onWheel,
 }: WorkspaceSwitcherProps) {
   const [restoringIds, setRestoringIds] = useState<Set<string>>(new Set())
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropInsert, setDropInsert] = useState<{ index: number; before: boolean } | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+
+  const handleExternalDragOver = useCallback((id: string) => setDropTargetId(id), [])
+  const handleExternalDragLeave = useCallback((id: string) => {
+    setDropTargetId(prev => (prev === id ? null : prev))
+  }, [])
+  const handleExternalDrop = useCallback((
+    id: string,
+    payload: { type: 'subtab'; tabId: string } | { type: 'tile'; tileId: string }
+  ) => {
+    setDropTargetId(null)
+    onMoveTabs(id, payload)
+  }, [onMoveTabs])
 
   const handleTabDragStart = useCallback((id: string) => setDragId(id), [])
   const handleTabDragOver = useCallback((index: number, before: boolean) => {
@@ -223,10 +278,14 @@ export function WorkspaceSwitcher({
           onSelect={handleSwitch}
           onClose={handleRemove}
           onRename={onRename}
+          isDropTarget={dropTargetId === session.id}
           onTabDragStart={handleTabDragStart}
           onTabDragOver={handleTabDragOver}
           onTabDrop={handleTabDrop}
           onTabDragEnd={handleTabDragEnd}
+          onExternalDragOver={handleExternalDragOver}
+          onExternalDragLeave={handleExternalDragLeave}
+          onExternalDrop={handleExternalDrop}
         />
       ))}
       <button

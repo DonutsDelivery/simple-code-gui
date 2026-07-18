@@ -54,6 +54,8 @@ export interface SavedWorkspaceSession {
   openTabs: OpenTab[]
   activeTabId: string | null
   tileTree?: any
+  canvasScene?: unknown
+  activeView?: 'tiles' | 'canvas'
 }
 
 export interface Workspace {

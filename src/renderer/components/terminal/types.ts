@@ -20,6 +20,7 @@ export interface TerminalProps {
   api?: Api  // API abstraction for PTY operations (uses electronAPI if not provided)
   isMobile?: boolean  // Whether running on mobile (for mobile-specific UI)
   onOpenFileBrowser?: () => void  // Callback to open file browser (mobile only)
+  onPtyExit?: (code: number) => void
 }
 
 // Auto work options passed from menu
