@@ -368,6 +368,8 @@ features:
           - canvas-node-interaction
         title: Modular Node Interaction
         type: requirement
+        description: Sessions behave as modular spatial objects that can be selected, positioned, resized,
+          grouped, layered, and automatically organized.
         depends_on: []
         implements: []
         relates_to: []
