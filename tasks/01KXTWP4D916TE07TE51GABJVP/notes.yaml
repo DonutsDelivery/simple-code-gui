@@ -39,3 +39,10 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T15:15:04.808Z
+  - _ulid: 01KXTXX9F5N12NM4S4XYA6V7EZ
+    content: "Scene v2 foundation complete: separate content objects with exact kind-based schema; v0/v1
+      migration; bounded validation; terminal reconciliation preserves objects; orphan terminals
+      account for object bounds/layering. Verified 37 focused tests and production build."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T15:35:53.573Z
