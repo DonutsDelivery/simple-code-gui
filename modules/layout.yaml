@@ -437,6 +437,12 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: a running terminal node moves outside the active rendering area
+            id: ac-1
+            then: the underlying session continues running and its ordered output is restored when the node
+              becomes active again
+            when: its visual renderer is suspended to conserve resources
         tags: []
         created: 2026-07-18T10:04:45.703Z
         notes: []
