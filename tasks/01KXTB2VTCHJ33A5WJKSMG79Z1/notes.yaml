@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTB2VTC6098HDAQFXHMF910
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      The spatial workspace presents a calm, premium visual hierarchy with restrained chrome,
+      semantic zoom, and clear attention states across themes.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given the spatial workspace contains focused, inactive, waiting, completed, and failed
+      sessions, when the user views the canvas at detail or overview scale, then each important
+      state remains distinguishable through restrained semantic cues while inactive chrome recedes
+
+      - ac-2: Given the camera zooms out until terminal content would be unreadable, when a node
+      crosses an overview threshold, then the node presents a readable title, project context, and
+      status summary instead of a tiny terminal
+
+      - ac-3: Given a user applies a supported theme or requests reduced motion, when the spatial
+      workspace renders and animates, then the visual hierarchy, contrast, and state distinctions
+      remain usable while unnecessary motion is removed
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.260Z
