@@ -370,6 +370,19 @@ features:
         tags: []
         created: 2026-07-18T10:06:28.906Z
         notes: []
+      - _ulid: 01KXTB250YWR7237MPT3JV93FQ
+        slugs:
+          - canvas-independent-layouts
+        title: Keep Spatial and Tile Layouts Independent
+        type: decision
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:06:29.918Z
+        notes: []
     requirements:
       - _ulid: 01KXTAYY6J5XT2Y1N1P485WPQP
         slugs:
