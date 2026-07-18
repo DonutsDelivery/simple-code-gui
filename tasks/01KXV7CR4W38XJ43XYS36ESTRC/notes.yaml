@@ -37,3 +37,12 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T18:21:37.308Z
+  - _ulid: 01KXV7E1466HG3PQNVN64JAW7D
+    content: "Approach: explicit harness tags flow through a central PTY detector into typed
+      desktop/mobile events; a transient tab-keyed attention controller and independent Web Audio
+      settings render across workspace, tiled, and Canvas surfaces. Edge cases: ANSI/chunk splits,
+      TUI redraw dedupe, hidden subtabs, severity precedence, PTY recreation, and settings
+      independence. Tests will cover all 6 ACs before runtime verification."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T18:22:19.270Z
