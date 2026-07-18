@@ -748,6 +748,10 @@ features:
         id: ac-2
         then: commands remain in a single-column layout
         when: the menu opens
+      - given: a terminal menu is open
+        id: ac-3
+        then: focus moves among enabled items, actions activate, and closing restores focus to the trigger
+        when: the user navigates with Arrow, Home, End, Enter, Space, or Escape
     priority: medium
     tags: []
     created: 2026-07-18T18:21:15.305Z
