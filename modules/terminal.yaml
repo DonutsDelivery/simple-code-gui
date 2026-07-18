@@ -219,6 +219,9 @@ features:
     description: Agent sessions explicitly signal when work is complete or user input is required, so
       people receive distinct audio cues and persistent attention indicators even when the session
       is hidden.
+    status:
+      maturity: draft
+      implementation: in_progress
     depends_on: []
     implements: []
     relates_to: []
