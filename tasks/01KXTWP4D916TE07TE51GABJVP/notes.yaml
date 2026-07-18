@@ -46,3 +46,11 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T15:35:53.573Z
+  - _ulid: 01KXTZ5MM5TN0GD43ZBFFRZJ1C
+    content: "Managed Canvas assets complete: constrained userData store, bounded and integrity-checked
+      reads, SHA-256 dedupe, atomic writes/temp cleanup, safe path import, typed IPC results,
+      picker/clipboard/byte import, blob-read contract, and Copy path. Verified 40 focused tests and
+      production build."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T15:57:55.717Z
