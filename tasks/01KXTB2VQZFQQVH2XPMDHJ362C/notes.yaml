@@ -1,0 +1,31 @@
+notes:
+  - _ulid: 01KXTB2VQZ5KHPV093WC4Z0KNG
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Sessions behave as modular spatial objects that can be selected, positioned, resized, grouped,
+      layered, and automatically organized.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given one or more nodes are selected at any supported zoom level or world position,
+      when the user moves or resizes the selection, then the nodes follow the gesture accurately,
+      respect minimum usable size, and keep their final geometry
+
+      - ac-2: Given sessions are related by project, worktree, or task, when the user groups,
+      ungroups, collapses, or renames them, then the relationship is visibly represented and the
+      contained sessions remain available
+
+      - ac-3: Given multiple nodes are selected, when the user arranges them as a row, column, grid,
+      or compact stack, then the nodes adopt the requested orderly arrangement and may subsequently
+      be moved freely
+
+      - ac-4: Given a project or session is dragged from an existing navigation surface, when it is
+      dropped on the spatial workspace, then it opens or moves to the indicated world position
+      without changing unrelated nodes
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.183Z
