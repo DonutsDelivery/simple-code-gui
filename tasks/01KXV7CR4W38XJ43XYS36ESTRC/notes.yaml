@@ -59,3 +59,12 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T19:08:41.834Z
+  - _ulid: 01KXVA920WA80TRCGE791Q9W9H
+    content: "Review revision: detector now accepts only exact standalone signal lines after incremental
+      ANSI normalization, ignores quoted/prose/near-match variants, and latches one total stopping
+      signal per explicit user-input turn (first signal wins). Added behavioral near-match and
+      precedence tests. Reverification: focused 3 files / 82 tests passed; production build passed
+      all bundles."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T19:12:02.076Z
