@@ -535,6 +535,11 @@ features:
             id: ac-1
             then: the same sessions are available in a focused linear presentation without requiring pan or zoom
             when: the workspace is opened from a mobile client
+          - given: a session is created, closed, resumed, or moved from mobile
+            id: ac-2
+            then: both desktop layouts reflect the changed session membership while surviving spatial geometry
+              remains unchanged
+            when: the desktop workspace next renders either view
         tags: []
         created: 2026-07-18T10:04:46.897Z
         notes: []
