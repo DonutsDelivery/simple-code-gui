@@ -410,6 +410,10 @@ features:
             then: the nodes follow the gesture accurately, respect minimum usable size, and keep their final
               geometry
             when: the user moves or resizes the selection
+          - given: sessions are related by project, worktree, or task
+            id: ac-2
+            then: the relationship is visibly represented and the contained sessions remain available
+            when: the user groups, ungroups, collapses, or renames them
         tags: []
         created: 2026-07-18T10:04:45.283Z
         notes: []
