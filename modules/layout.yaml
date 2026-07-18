@@ -331,6 +331,12 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: a scene contains 100 nodes with no more than eight active terminal renderers
+            id: ac-1
+            then: the 95th-percentile frame time is at most 20 milliseconds and pointer-to-visual response is at
+              most 50 milliseconds
+            when: a representative ten-second pan and zoom interaction is measured on the reference machine
         tags: []
         created: 2026-07-18T10:04:47.335Z
         notes: []
