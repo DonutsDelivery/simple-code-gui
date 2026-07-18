@@ -404,6 +404,12 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: one or more nodes are selected at any supported zoom level or world position
+            id: ac-1
+            then: the nodes follow the gesture accurately, respect minimum usable size, and keep their final
+              geometry
+            when: the user moves or resizes the selection
         tags: []
         created: 2026-07-18T10:04:45.283Z
         notes: []
