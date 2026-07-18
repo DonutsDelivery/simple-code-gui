@@ -359,6 +359,9 @@ features:
           - canvas-electron-shell
         title: Retain Electron for Canvas 2.0
         type: decision
+        description: Canvas 2.0 ships first in the existing cross-platform desktop shell so performance can
+          be measured against the mature session, terminal, mobile, update, and packaging behavior
+          before considering a shell migration.
         depends_on: []
         implements: []
         relates_to: []
