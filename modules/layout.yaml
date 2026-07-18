@@ -346,6 +346,10 @@ features:
             id: ac-3
             then: renderer memory is no more than 250 MiB above the one-terminal baseline
             when: memory settles after ordinary use
+          - given: the user completes 20 workspace and view switch cycles
+            id: ac-4
+            then: active terminal renderers return to budget and settled memory growth remains below 10 percent
+            when: the application returns to an idle settled state
         tags: []
         created: 2026-07-18T10:04:47.335Z
         notes: []
