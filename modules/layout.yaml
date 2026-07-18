@@ -358,6 +358,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:45.283Z
         notes: []
+      - _ulid: 01KXTAYZ87K2C57YVVZ1VZ2N8J
+        slugs:
+          - canvas-terminal-lifecycle
+        title: Terminal Rendering Lifecycle
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:45.703Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
