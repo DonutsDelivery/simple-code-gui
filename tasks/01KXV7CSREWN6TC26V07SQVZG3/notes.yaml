@@ -35,3 +35,13 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T18:22:20.120Z
+  - _ulid: 01KXV9A3DB1A60XS2BSMHRXA51
+    content: Implemented all four ACs in shared workspace without committing. Added behavioral tests
+      first, responsive two-column/one-column layouts, viewport clamping and resize/scroll
+      repositioning, menu/menuitem semantics, roving focus, keyboard activation, and trigger focus
+      restoration. Focused TerminalMenu suite passes 4/4; project-wide tsc remains blocked by
+      pre-existing errors outside TerminalMenu (including pty-manager tests and IPC shell option
+      typing).
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T18:55:07.691Z
