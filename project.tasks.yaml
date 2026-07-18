@@ -27,7 +27,7 @@ tasks:
     depends_on: []
     priority: 1
     tags: []
-    notes_count: 4
+    notes_count: 5
     todos_count: 0
     created_at: 2026-07-18T10:06:53.082Z
     started_at: 2026-07-18T10:10:50.559Z

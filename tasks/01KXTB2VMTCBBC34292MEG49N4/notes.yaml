@@ -55,3 +55,13 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T10:33:24.081Z
+  - _ulid: 01KXTDC7K5ZGYFP8GGX81Q6EFV
+    content: "MainApp now mounts exactly one per-workspace layout via an accessible Tiles/Canvas
+      control. Isolated instance 19837 verified: view switching preserves the same PTY ID,
+      background workspaces unmount xterm while PTYs stay alive, each workspace retains an
+      independent active view and Canvas camera, and returning to Workspace 1 restored its 0.8 zoom
+      while Workspace 2 remained at 1.0. Production build passes. Runtime review found a passive
+      wheel-listener console error; fix is in progress before final verification."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:46:57.381Z
