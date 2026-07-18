@@ -37,3 +37,12 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T10:11:04.058Z
+  - _ulid: 01KXTBRXS79DSX84NZYDPD3X9S
+    content: "Scene foundation complete: added versioned model, geometry/camera math, migration
+      validation with future-version preservation, tile/tab projection and reconciliation,
+      visibility/semantic zoom, and mount budgeting. Focused result: 3 Vitest files, 22 tests
+      passed. No Canvas TypeScript errors were reported; global noEmit remains blocked by unrelated
+      pre-existing main-process errors."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:18:56.168Z
