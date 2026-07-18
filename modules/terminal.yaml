@@ -247,6 +247,10 @@ features:
         then: the backend instruction file contains idempotent guidance for emitting completion and
           input-needed signals without changing surrounding user content
         when: the app installs managed harness instructions
+      - given: notification sounds are configured independently from spoken voice output
+        id: ac-6
+        then: the notification preference persists and does not alter voice output settings
+        when: the user changes notification enablement or volume
     priority: high
     tags: []
     created: 2026-07-18T18:20:52.111Z
