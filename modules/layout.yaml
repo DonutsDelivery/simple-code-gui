@@ -347,6 +347,11 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: a workspace has positioned nodes, groups, a camera view, and a separate tile arrangement
+            id: ac-1
+            then: the spatial state and tile arrangement are restored independently and unchanged
+            when: the workspace is saved, switched away from, and later restored
         tags: []
         created: 2026-07-18T10:04:44.626Z
         notes: []
