@@ -388,6 +388,127 @@ features:
         tags: []
         created: 2026-07-18T10:06:29.918Z
         notes: []
+    features:
+      - _ulid: 01KXTWNYJDNXG22AT24HBANGPM
+        slugs:
+          - canvas-content-objects
+        title: Canvas Content Objects
+        type: feature
+        description: A spatial workspace can hold editable notes, managed images, and sketches alongside
+          running terminal sessions, with shared spatial organization and durable per-workspace
+          state.
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        acceptance_criteria:
+          - given: a Canvas workspace contains terminals and non-terminal content
+            id: ac-1
+            then: all selected items follow the requested spatial operation while terminal sessions continue
+              running unchanged
+            when: the user selects, moves, resizes, groups, or arranges mixed items
+          - given: the Canvas surface has keyboard focus
+            id: ac-2
+            then: the camera zooms within its supported range without consuming text intended for a terminal or
+              content editor
+            when: the user invokes the visible zoom controls or the plus and minus shortcuts
+          - given: a workspace contains notes, images, or sketches
+            id: ac-3
+            then: the content, geometry, grouping, and asset references remain unchanged
+            when: the workspace is switched away from, restored after restart, or saved through the mobile
+              projection
+        tags: []
+        requirements:
+          - _ulid: 01KXTWNYSVV2YYMGN3SV4YJXAB
+            slugs:
+              - canvas-notes-images
+            title: Canvas Notes and Images
+            type: requirement
+            description: Users can place plain notes and imported images on Canvas as persistent, accessible
+              spatial objects.
+            depends_on: []
+            implements: []
+            relates_to: []
+            tests: []
+            traits: []
+            acceptance_criteria:
+              - given: the user is viewing Canvas
+                id: ac-1
+                then: the note remains editable text and persists at its chosen position and size
+                when: they add and edit a plain note
+              - given: the user selects, drops, or pastes a supported image
+                id: ac-2
+                then: a managed image object appears at the intended location without embedding the source bytes in
+                  workspace state
+                when: the import succeeds
+              - given: an image object references a missing or unreadable managed asset
+                id: ac-3
+                then: the object remains in the scene with clear replacement and removal actions
+                when: Canvas renders the object
+            tags: []
+            created: 2026-07-18T15:14:24.699Z
+            notes: []
+          - _ulid: 01KXTWNYZFYBDMZDTQ8GJTD6NN
+            slugs:
+              - canvas-managed-assets
+            title: Canvas Managed Assets
+            type: requirement
+            description: Canvas stores imported media as validated app-managed files that agents can access
+              without granting the renderer general filesystem access.
+            depends_on: []
+            implements: []
+            relates_to: []
+            tests: []
+            traits: []
+            acceptance_criteria:
+              - given: the user imports image bytes
+                id: ac-1
+                then: the import is rejected without creating an asset reference or Canvas object
+                when: the bytes are unsupported, malformed, or exceed safety limits
+              - given: a supported image is imported more than once
+                id: ac-2
+                then: the imports resolve to the same opaque content identity
+                when: the managed copies are created
+              - given: a Canvas image or current sketch export exists
+                id: ac-3
+                then: the system clipboard receives the resolved path of that managed asset and no arbitrary path
+                  can be requested
+                when: the user invokes Copy path
+            tags: []
+            created: 2026-07-18T15:14:24.879Z
+            notes: []
+          - _ulid: 01KXTWNZ5TM6GJ7A7ERP7QWS8P
+            slugs:
+              - canvas-sketch-pad
+            title: Canvas Sketch Pad
+            type: requirement
+            description: Users can make quick editable drawings on Canvas and expose an up-to-date PNG to
+              terminal agents.
+            depends_on: []
+            implements: []
+            relates_to: []
+            tests: []
+            traits: []
+            acceptance_criteria:
+              - given: a sketch object is active
+                id: ac-1
+                then: the editable stroke document updates once per completed action and survives workspace
+                  restoration
+                when: the user draws with the pen, erases, or clears it
+              - given: a sketch has changed since its last PNG export
+                id: ac-2
+                then: the latest strokes are exported before the managed PNG path is copied
+                when: the user invokes Copy path
+              - given: PNG export fails or an earlier export is missing
+                id: ac-3
+                then: editable strokes remain available and the user receives a recoverable export state
+                when: the sketch renders
+            tags: []
+            created: 2026-07-18T15:14:25.082Z
+            notes: []
+        created: 2026-07-18T15:14:24.461Z
+        notes: []
     requirements:
       - _ulid: 01KXTAYY6J5XT2Y1N1P485WPQP
         slugs:
