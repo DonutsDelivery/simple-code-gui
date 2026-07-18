@@ -28,3 +28,10 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T18:21:38.957Z
+  - _ulid: 01KXV7E1YR5G9376K8J6V664WQ
+    content: "Approach: reuse TerminalMenu's existing categories and portal, add dense layout metadata,
+      responsive viewport positioning, complete ARIA roles, and roving keyboard focus. Tests cover
+      all 4 ACs including disabled-item skipping and narrow viewport behavior."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T18:22:20.120Z
