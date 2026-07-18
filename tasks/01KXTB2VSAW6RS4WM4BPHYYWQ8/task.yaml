@@ -1,0 +1,17 @@
+_ulid: 01KXTB2VSAW6RS4WM4BPHYYWQ8
+slugs:
+  - task-terminal-rendering-lifecycle
+title: "Implement: Terminal Rendering Lifecycle"
+type: task
+spec_ref: "@canvas-terminal-lifecycle"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on:
+  - "@task-canvas-2-0-spatial-workspace"
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T10:06:53.226Z
+todos: []

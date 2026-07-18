@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTB2VS9M5348FGZNB2525DD
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Spatial terminal nodes remain connected to their running sessions while visible rendering work
+      is limited to what the user can use or is likely to revisit.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a running terminal node moves outside the active rendering area, when its visual
+      renderer is suspended to conserve resources, then the underlying session continues running and
+      its ordered output is restored when the node becomes active again
+
+      - ac-2: Given the user pans, zooms, or continuously resizes a node, when the gesture is in
+      progress, then the terminal remains visually responsive without repeatedly resizing the
+      underlying session until the usable size settles
+
+      - ac-3: Given the user repeatedly switches between Tiles, Canvas, and workspaces, when views
+      are mounted and unmounted, then terminal renderers and subscriptions return to the configured
+      active budget without duplicate subscriptions
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.225Z
