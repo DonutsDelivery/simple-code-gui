@@ -397,6 +397,9 @@ features:
         description: A spatial workspace can hold editable notes, managed images, and sketches alongside
           running terminal sessions, with shared spatial organization and durable per-workspace
           state.
+        status:
+          maturity: draft
+          implementation: in_progress
         depends_on: []
         implements: []
         relates_to: []
