@@ -474,6 +474,11 @@ features:
             then: each important state remains distinguishable through restrained semantic cues while inactive
               chrome recedes
             when: the user views the canvas at detail or overview scale
+          - given: the camera zooms out until terminal content would be unreadable
+            id: ac-2
+            then: the node presents a readable title, project context, and status summary instead of a tiny
+              terminal
+            when: a node crosses an overview threshold
         tags: []
         created: 2026-07-18T10:04:46.096Z
         notes: []
