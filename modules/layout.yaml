@@ -499,6 +499,12 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: a user operates the spatial workspace with a keyboard
+            id: ac-1
+            then: each essential action has a keyboard path with visible focus and is not trapped inside
+              terminal content
+            when: they navigate, select, activate, move, group, or fit nodes
         tags: []
         created: 2026-07-18T10:04:46.484Z
         notes: []
