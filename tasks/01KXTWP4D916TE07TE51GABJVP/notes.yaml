@@ -54,3 +54,14 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T15:57:55.717Z
+  - _ulid: 01KXV28EC9H196C42EX8N0HBB6
+    content: "Implemented scene v2 content objects, managed PNG/JPEG/WebP assets, mixed spatial
+      interactions, discoverable +/- zoom, plain notes, managed images, and editable sketches with
+      current PNG export. Focused verification: 111 Canvas/asset/persistence tests pass; production
+      build passes; isolated Electron restart restored image/sketch/note data and camera,
+      missing-image recovery retained the object, copied sketch export is a valid 960x600 PNG, and
+      renderer console is clean. Full suite remains blocked only by inherited session-store mock
+      initialization and stale theme expectations; tsc has no Canvas-feature errors."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T16:51:53.353Z
