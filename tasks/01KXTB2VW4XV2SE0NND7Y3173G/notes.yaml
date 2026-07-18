@@ -1,0 +1,26 @@
+notes:
+  - _ulid: 01KXTB2VW40CQNV6W60VSBB3SG
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Mobile presents the same workspace sessions through a focused linear interface without
+      requiring two-dimensional canvas navigation.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a desktop workspace has sessions arranged in Tiles and Canvas, when the
+      workspace is opened from a mobile client, then the same sessions are available in a focused
+      linear presentation without requiring pan or zoom
+
+      - ac-2: Given a session is created, closed, resumed, or moved from mobile, when the desktop
+      workspace next renders either view, then both desktop layouts reflect the changed session
+      membership while surviving spatial geometry remains unchanged
+
+      - ac-3: Given the mobile projection is used, when workspace state is saved, then desktop
+      camera, node positions, groups, and tile geometry are preserved
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.316Z

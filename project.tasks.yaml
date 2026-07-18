@@ -120,3 +120,18 @@ tasks:
     notes_count: 1
     todos_count: 0
     created_at: 2026-07-18T10:06:53.291Z
+  - _ulid: 01KXTB2VW4XV2SE0NND7Y3173G
+    slugs:
+      - task-mobile-workspace-projection
+    title: "Implement: Mobile Workspace Projection"
+    type: task
+    spec_ref: "@canvas-mobile-projection"
+    status: pending
+    blocked_by: []
+    depends_on:
+      - "@task-canvas-2-0-spatial-workspace"
+    priority: 1
+    tags: []
+    notes_count: 1
+    todos_count: 0
+    created_at: 2026-07-18T10:06:53.316Z
