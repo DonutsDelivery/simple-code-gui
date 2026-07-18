@@ -397,6 +397,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:46.484Z
         notes: []
+      - _ulid: 01KXTAZ0DH35RP5BG12RWMAYH0
+        slugs:
+          - canvas-mobile-projection
+        title: Mobile Workspace Projection
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:46.897Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
