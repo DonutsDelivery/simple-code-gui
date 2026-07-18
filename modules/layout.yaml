@@ -530,6 +530,11 @@ features:
         relates_to: []
         tests: []
         traits: []
+        acceptance_criteria:
+          - given: a desktop workspace has sessions arranged in Tiles and Canvas
+            id: ac-1
+            then: the same sessions are available in a focused linear presentation without requiring pan or zoom
+            when: the workspace is opened from a mobile client
         tags: []
         created: 2026-07-18T10:04:46.897Z
         notes: []
