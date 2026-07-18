@@ -739,6 +739,11 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: a terminal menu category contains a long command list
+        id: ac-1
+        then: commands are arranged in a compact multi-column layout constrained within the viewport
+        when: the menu opens on a desktop-sized viewport
     priority: medium
     tags: []
     created: 2026-07-18T18:21:15.305Z
