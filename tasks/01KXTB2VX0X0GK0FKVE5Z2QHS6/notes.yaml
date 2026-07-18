@@ -1,0 +1,33 @@
+notes:
+  - _ulid: 01KXTB2VX07KAK1FXWJMAH8ET0
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      The spatial workspace remains responsive and bounded in resource use with large scenes and
+      concurrent terminal output.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a scene contains 100 nodes with no more than eight active terminal renderers,
+      when a representative ten-second pan and zoom interaction is measured on the reference
+      machine, then the 95th-percentile frame time is at most 20 milliseconds and pointer-to-visual
+      response is at most 50 milliseconds
+
+      - ac-2: Given four terminals each produce 100 KiB of output per second, when the user
+      navigates and interacts with the spatial workspace, then the 95th-percentile frame time
+      remains below 33 milliseconds, delivery queues remain bounded, and acknowledged output is not
+      lost
+
+      - ac-3: Given a scene contains 50 nodes with no more than eight active terminal renderers,
+      when memory settles after ordinary use, then renderer memory is no more than 250 MiB above the
+      one-terminal baseline
+
+      - ac-4: Given the user completes 20 workspace and view switch cycles, when the application
+      returns to an idle settled state, then active terminal renderers return to budget and settled
+      memory growth remains below 10 percent
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.344Z

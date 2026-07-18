@@ -1,0 +1,17 @@
+_ulid: 01KXTB2VX0X0GK0FKVE5Z2QHS6
+slugs:
+  - task-canvas-performance-budget
+title: "Implement: Canvas Performance Budget"
+type: task
+spec_ref: "@canvas-performance"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on:
+  - "@task-canvas-2-0-spatial-workspace"
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T10:06:53.344Z
+todos: []
