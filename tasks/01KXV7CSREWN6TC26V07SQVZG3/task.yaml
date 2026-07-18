@@ -5,13 +5,21 @@ title: "Implement: Compact Terminal Command Menus"
 type: task
 spec_ref: "@compact-terminal-command-menus"
 derivation: auto
-status: in_progress
+status: pending_review
 blocked_by: []
 depends_on: []
 context: []
 priority: 2
 tags: []
 vcs_refs: []
+submission_linkage:
+  review_url: null
+  branch: feat/agent-signals
+  captured_at: 2026-07-18T20:05:05.657Z
+  commit: 70f8b1db2dddc8829648dabba31cdd2e4fbdc4f9
+  remote: null
+  remote_url: null
+  upstream_ref: null
 history:
   - author: DonutsDelivery
     changes:
@@ -23,6 +31,27 @@ history:
         previous: null
     command: task-start
     timestamp: 2026-07-18T18:22:18.199Z
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: pending_review
+        previous: in_progress
+      submission_linkage:
+        new:
+          review_url: null
+          branch: feat/agent-signals
+          captured_at: 2026-07-18T20:05:05.657Z
+          commit: 70f8b1db2dddc8829648dabba31cdd2e4fbdc4f9
+          remote: null
+          remote_url: null
+          upstream_ref: null
+        previous: null
+      submitted_at:
+        new: 2026-07-18T20:05:05.662Z
+        previous: null
+    command: task-submit
+    timestamp: 2026-07-18T20:05:05.662Z
 created_at: 2026-07-18T18:21:38.957Z
 started_at: 2026-07-18T18:22:18.199Z
+submitted_at: 2026-07-18T20:05:05.662Z
 todos: []
