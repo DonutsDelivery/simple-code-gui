@@ -1,0 +1,12 @@
+notes:
+  - _ulid: 01KXTB2VY6PA0JSJ8ER96SXHS0
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Canvas 2.0 ships first in the existing cross-platform desktop shell so performance can be
+      measured against the mature session, terminal, mobile, update, and packaging behavior before
+      considering a shell migration.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.382Z

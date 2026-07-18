@@ -1,0 +1,17 @@
+_ulid: 01KXTB2VY7NMHPM4PHP0DHYPJJ
+slugs:
+  - task-retain-electron-for-canvas-2-0
+title: "Implement: Retain Electron for Canvas 2.0"
+type: task
+spec_ref: "@canvas-electron-shell"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on:
+  - "@task-canvas-2-0-spatial-workspace"
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T10:06:53.383Z
+todos: []
