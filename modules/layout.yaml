@@ -727,4 +727,20 @@ features:
         notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
+  - _ulid: 01KXV7C2N8HP5GSBTPYY1WBJ5K
+    slugs:
+      - compact-terminal-command-menus
+    title: Compact Terminal Command Menus
+    type: feature
+    description: Terminal command dropdowns present long command collections compactly while remaining
+      navigable by keyboard, assistive technology, and narrow viewports.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    priority: medium
+    tags: []
+    created: 2026-07-18T18:21:15.305Z
+    notes: []
 notes: []
