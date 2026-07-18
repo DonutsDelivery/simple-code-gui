@@ -113,6 +113,10 @@ features:
         id: ac-1
         then: the tiled viewport pans horizontally without pasting clipboard content
         when: the user drags horizontally with the middle mouse button beyond the movement threshold
+      - given: the user presses and releases the middle mouse button without crossing the movement threshold
+        id: ac-2
+        then: the gesture is not treated as a pan and normal middle-click behavior is preserved
+        when: the pointer interaction ends
     tags: []
     created: 2026-03-08T08:00:18.579Z
     notes: []
