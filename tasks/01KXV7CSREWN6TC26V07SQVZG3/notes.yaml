@@ -1,0 +1,30 @@
+notes:
+  - _ulid: 01KXV7CSRD094RR3S5V8R04ZFY
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Terminal command dropdowns present long command collections compactly while remaining
+      navigable by keyboard, assistive technology, and narrow viewports.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a terminal menu category contains a long command list, when the menu opens on a
+      desktop-sized viewport, then commands are arranged in a compact multi-column layout
+      constrained within the viewport
+
+      - ac-2: Given a terminal menu category contains only a short command list, when the menu
+      opens, then commands remain in a single-column layout
+
+      - ac-3: Given a terminal menu is open, when the user navigates with Arrow, Home, End, Enter,
+      Space, or Escape, then focus moves among enabled items, actions activate, and closing restores
+      focus to the trigger
+
+      - ac-4: Given a terminal menu opens on a narrow or resized viewport, when available space
+      changes, then the menu remains onscreen, collapses to one column when needed, and scrolls
+      internally rather than exceeding the viewport
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T18:21:38.957Z

@@ -1,0 +1,16 @@
+_ulid: 01KXV7CSREWN6TC26V07SQVZG3
+slugs:
+  - task-compact-terminal-command-menus
+title: "Implement: Compact Terminal Command Menus"
+type: task
+spec_ref: "@compact-terminal-command-menus"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on: []
+context: []
+priority: 2
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T18:21:38.957Z
+todos: []
