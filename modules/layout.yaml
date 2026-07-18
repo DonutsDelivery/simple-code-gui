@@ -318,6 +318,20 @@ features:
           sessions
         when: the session is created, closed, resumed, or moved to another workspace
     tags: []
+    constraints:
+      - _ulid: 01KXTAZ0V7DGCH6VBZFF7ZBYZH
+        slugs:
+          - canvas-performance
+        title: Canvas Performance Budget
+        type: constraint
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:47.335Z
+        notes: []
     requirements:
       - _ulid: 01KXTAYY6J5XT2Y1N1P485WPQP
         slugs:
