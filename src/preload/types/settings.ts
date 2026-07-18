@@ -24,6 +24,8 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   voiceSilenceThreshold?: number
   voicePushToTalk?: boolean
+  notificationSoundsEnabled?: boolean
+  notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'

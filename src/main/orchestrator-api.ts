@@ -415,9 +415,9 @@ export class OrchestratorApi {
         }
 
         if (raw) {
-          this.ptyManager.write(id, input)
+          this.ptyManager.writeUserInput(id, input)
         } else {
-          this.ptyManager.write(id, input)
+          this.ptyManager.writeUserInput(id, input)
           await new Promise(resolve => setTimeout(resolve, enterDelay))
           this.ptyManager.write(id, '\r')
         }

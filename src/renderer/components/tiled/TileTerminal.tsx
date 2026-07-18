@@ -222,10 +222,12 @@ export function TileTerminal({
 
   const hasMultipleTabs = tabs.length > 1
   const activeTab = tabs.find(t => t.id === activeSubTabId) || tabs[0]
+  const activeAttention = activeTab ? attentionByTabId[activeTab.id] : undefined
 
   return (
     <div
-      className={`terminal-tile ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''} ${isDropTarget ? 'drop-target' : ''}`}
+      data-agent-visible-tab-id={activeTab?.id}
+      className={`terminal-tile ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''} ${isDropTarget ? 'drop-target' : ''}${activeAttention ? ` has-agent-attention has-agent-attention--${activeAttention}` : ''}`}
       style={{
         position: 'absolute',
         left: `${rect.x / 100 * viewportSize.width + GAP}px`,
@@ -260,7 +262,8 @@ export function TileTerminal({
               {tabs.map((tab, tabIndex) => (
                 <div
                   key={tab.id}
-                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}${draggedSubTab?.tabId === tab.id ? ' subtab-dragging' : ''}${subTabInsert === tabIndex ? ' subtab-insert-before' : ''}${subTabInsert === tabIndex + 1 && tabIndex === tabs.length - 1 ? ' subtab-insert-after' : ''}`}
+                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}${draggedSubTab?.tabId === tab.id ? ' subtab-dragging' : ''}${subTabInsert === tabIndex ? ' subtab-insert-before' : ''}${subTabInsert === tabIndex + 1 && tabIndex === tabs.length - 1 ? ' subtab-insert-after' : ''}`}
+                  aria-label={`${tab.title}${attentionByTabId[tab.id] === 'needs-input' ? ', needs your input' : attentionByTabId[tab.id] === 'completed' ? ', agent completed' : ''}`}
                   draggable
                   onDragStart={(e) => {
                     e.stopPropagation()
@@ -289,6 +292,7 @@ export function TileTerminal({
                       onDoubleClick={(e) => { e.stopPropagation(); startRename(tab.id, tab.title) }}
                     >{tab.title}</span>
                   )}
+                  {attentionByTabId[tab.id] && <span className="agent-attention-dot" aria-hidden="true" />}
                   <button
                     className="subtab-close"
                     draggable={false}
@@ -346,6 +350,7 @@ export function TileTerminal({
                 onDoubleClick={(e) => { e.stopPropagation(); if (activeTab) startRename(activeTab.id, activeTab.title) }}
               >{activeTab?.title}</span>
             )}
+            {activeAttention && <span className="agent-attention-dot" aria-hidden="true" />}
             <div className="tile-header-actions">
               {onAddTab && (
                 <button

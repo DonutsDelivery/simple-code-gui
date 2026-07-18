@@ -1,6 +1,8 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron'
+import type { AgentSessionSignalEvent } from '../../common/agent-session-signal'
 
 type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+
 
 export const ptyHandlers = {
   listPtys: (): Promise<Array<{ id: string; cwd: string; backend: Backend; sessionId?: string; spawnedAt: number }>> =>
@@ -12,7 +14,6 @@ export const ptyHandlers = {
   writePty: (id: string, data: string): void => ipcRenderer.send('pty:write', { id, data }),
 
   resizePty: (id: string, cols: number, rows: number): void => ipcRenderer.send('pty:resize', { id, cols, rows }),
-
   killPty: (id: string): void => ipcRenderer.send('pty:kill', id),
 
   setPtyBackend: (id: string, backend: Backend): Promise<void> =>
@@ -37,6 +38,12 @@ export const ptyHandlers = {
     const handler = (_: IpcRendererEvent, data: { oldId: string; newId: string; backend: Backend }) => callback(data)
     ipcRenderer.on('pty:recreated', handler)
     return () => ipcRenderer.removeListener('pty:recreated', handler)
+  },
+
+  onAgentSessionSignal: (callback: (event: AgentSessionSignalEvent) => void): (() => void) => {
+    const handler = (_: IpcRendererEvent, event: AgentSessionSignalEvent) => callback(event)
+    ipcRenderer.on('pty:agent-session-signal', handler)
+    return () => ipcRenderer.removeListener('pty:agent-session-signal', handler)
   },
 
   setAutoAccept: (id: string, enabled: boolean): void =>

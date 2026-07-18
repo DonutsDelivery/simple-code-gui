@@ -12,6 +12,7 @@ import {
   ExtensionsSettings,
   VoiceInputSettings,
   VoiceOutputSettings,
+  AgentNotificationSettings,
   UninstallTTSSection,
   GlobalInstructionSettings,
   VersionSettings,
@@ -75,6 +76,7 @@ export function SettingsModal({
 
   // Grouped state: voice settings (TTS, whisper status, selected voice/engine)
   const [voice, setVoice] = useState<VoiceSettings>(DEFAULT_VOICE)
+  const [agentNotifications, setAgentNotifications] = useState({ enabled: true, volume: 0.65 })
 
   // Grouped state: XTTS quality settings
   const [xtts, setXtts] = useState<XttsSettings>(DEFAULT_XTTS)
@@ -150,6 +152,10 @@ export function SettingsModal({
           backend: settings.backend || 'default'
         }))
         setGlobalInstructionContent(settings.globalInstructionInjection || '')
+        setAgentNotifications({
+          enabled: settings.notificationSoundsEnabled !== false,
+          volume: Math.max(0, Math.min(1, settings.notificationVolume ?? 0.65)),
+        })
         setHeadroom({
           enabled: settings.headroomEnabled === true,
           port: settings.headroomPort ?? 8787,
@@ -217,10 +223,12 @@ export function SettingsModal({
       autoAcceptTools: general.autoAcceptTools,
       permissionMode: general.permissionMode,
       backend: general.backend,
+      notificationSoundsEnabled: agentNotifications.enabled,
+      notificationVolume: agentNotifications.volume,
       globalInstructionInjection: globalInstructionContent,
       headroomEnabled: headroom.enabled,
       headroomPort: headroom.port,
-      headroomProxyPath: headroom.proxyPath || undefined
+      headroomProxyPath: headroom.proxyPath || undefined,
     }
     await window.electronAPI?.saveSettings(newSettings)
     // Save voice settings including XTTS quality settings and TADA sample
@@ -400,6 +408,12 @@ export function SettingsModal({
 
           <ExtensionsSettings installedExtensions={installedExtensions} />
 
+          <AgentNotificationSettings
+            enabled={agentNotifications.enabled}
+            volume={agentNotifications.volume}
+            onChange={setAgentNotifications}
+          />
+
           <VoiceInputSettings
             whisperStatus={voice.whisperStatus}
             activeWhisperModel={activeWhisperModel}
@@ -470,6 +484,8 @@ export function SettingsModal({
                  autoAcceptTools: general.autoAcceptTools,
                  permissionMode: general.permissionMode,
                  backend: general.backend,
+                 notificationSoundsEnabled: agentNotifications.enabled,
+                 notificationVolume: agentNotifications.volume,
                  globalInstructionInjection: content
                })
              }}

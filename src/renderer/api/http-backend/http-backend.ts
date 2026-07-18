@@ -14,6 +14,7 @@ import {
   PtyDataCallback,
   PtyExitCallback,
   PtyRecreatedCallback,
+  AgentSessionSignalCallback,
   ApiOpenSessionCallback,
   Unsubscribe,
   BackendId
@@ -25,6 +26,7 @@ import { ConnectionManager } from './connection'
 import { PtyWebSocketManager } from './pty-websocket'
 import { PtyApi } from './pty-api'
 import { WorkspaceApi } from './workspace-api'
+import { onAgentSessionSignal } from './agent-session-signals'
 
 export class HttpBackend implements Api {
   voiceGetInstalled?: () => Promise<
@@ -137,6 +139,10 @@ export class HttpBackend implements Api {
 
   onPtyRecreated(callback: PtyRecreatedCallback): Unsubscribe {
     return this.ptyApi.onPtyRecreated(callback)
+  }
+
+  onAgentSessionSignal(callback: AgentSessionSignalCallback): Unsubscribe {
+    return onAgentSessionSignal(callback)
   }
 
   // Session Management

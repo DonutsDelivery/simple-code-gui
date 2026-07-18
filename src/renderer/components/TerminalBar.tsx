@@ -43,6 +43,7 @@ interface MenuCategory {
   id: string
   label: string
   icon: string
+  layout: 'dense' | 'single'
   items: MenuItem[]
 }
 
@@ -72,6 +73,7 @@ export function TerminalBar({
   const barRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownItemRefs = useRef<Array<HTMLButtonElement | null>>([])
   const menuButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   // Auto-accept permission prompts state
@@ -205,12 +207,14 @@ export function TerminalBar({
       id: 'commands',
       label: 'Commands',
       icon: '/',
+      layout: 'dense',
       items: commandItems.filter((item) => !item.id.startsWith('divider')),
     },
     {
       id: 'gsd',
       label: 'GSD',
       icon: '📋',
+      layout: 'dense',
       items: [
         { id: 'gsd:progress', label: 'Check Progress' },
         { id: 'gsd:execute-phase', label: 'Execute Phase' },
@@ -228,6 +232,7 @@ export function TerminalBar({
       id: 'automation',
       label: 'Auto',
       icon: '🤖',
+      layout: 'dense',
       items: [
         { id: 'autowork', label: 'Start Auto Work' },
         { id: 'toggle-context', label: 'With Context', isToggle: true, toggleKey: 'withContext' },
@@ -243,6 +248,7 @@ export function TerminalBar({
       id: 'session',
       label: 'Session',
       icon: '⚡',
+      layout: 'single',
       items: [
         { id: 'summarize', label: 'Summarize Context' },
         { id: 'cancel', label: 'Cancel Request' },
@@ -252,6 +258,7 @@ export function TerminalBar({
       id: 'backend',
       label: 'Backend',
       icon: '🔧',
+      layout: 'dense',
       items: [
         { id: 'claude', label: 'Claude' },
         { id: 'gemini', label: 'Gemini' },
@@ -264,6 +271,12 @@ export function TerminalBar({
       ],
     },
   ]
+
+  const closeMenu = useCallback(() => {
+    const trigger = openMenu ? menuButtonRefs.current[openMenu] : null
+    setOpenMenu(null)
+    requestAnimationFrame(() => trigger?.focus())
+  }, [openMenu])
 
   const handleMenuItemClick = (categoryId: string, item: MenuItem) => {
     if (item.disabled) return
@@ -279,24 +292,24 @@ export function TerminalBar({
 
     if (categoryId === 'backend') {
       onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok')
-      setOpenMenu(null)
+      closeMenu()
       return
     }
 
     if (categoryId === 'gsd') {
       onCommand(`/${item.id}`)
-      setOpenMenu(null)
+      closeMenu()
       return
     }
 
     if (item.id === 'autowork') {
       onCommand('autowork', autoWorkOptions)
-      setOpenMenu(null)
+      closeMenu()
       return
     }
 
     onCommand(item.id)
-    setOpenMenu(null)
+    closeMenu()
   }
 
   const toggleMenu = (categoryId: string) => {
@@ -304,6 +317,37 @@ export function TerminalBar({
   }
 
   const openCategory = menuCategories.find((category) => category.id === openMenu)
+
+  useEffect(() => {
+    if (!openCategory) return
+    dropdownItemRefs.current = []
+    const frame = requestAnimationFrame(() => {
+      dropdownItemRefs.current.find((item) => item && !item.disabled)?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [openCategory?.id])
+
+  const handleDropdownKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMenu()
+      return
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+
+    const enabledItems = dropdownItemRefs.current.filter(
+      (item): item is HTMLButtonElement => Boolean(item && !item.disabled)
+    )
+    if (enabledItems.length === 0) return
+
+    event.preventDefault()
+    const currentIndex = enabledItems.indexOf(document.activeElement as HTMLButtonElement)
+    let nextIndex = 0
+    if (event.key === 'End') nextIndex = enabledItems.length - 1
+    else if (event.key === 'ArrowUp') nextIndex = currentIndex <= 0 ? enabledItems.length - 1 : currentIndex - 1
+    else if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 || currentIndex === enabledItems.length - 1 ? 0 : currentIndex + 1
+    enabledItems[nextIndex]?.focus()
+  }
 
   return (
     <div className="terminal-bar" ref={barRef}>
@@ -413,6 +457,9 @@ export function TerminalBar({
               className={`terminal-bar-btn terminal-bar-btn--menu ${openMenu === category.id ? 'active' : ''}`}
               onClick={() => toggleMenu(category.id)}
               aria-expanded={openMenu === category.id}
+              aria-label={category.label}
+              aria-haspopup="menu"
+              aria-controls={`terminal-bar-menu-${category.id}`}
               ref={(node) => {
                 menuButtonRefs.current[category.id] = node
               }}
@@ -427,8 +474,12 @@ export function TerminalBar({
 
       {openCategory && ReactDOM.createPortal(
         <div
-          className="terminal-bar-dropdown"
+          id={`terminal-bar-menu-${openCategory.id}`}
+          className={`terminal-bar-dropdown terminal-bar-dropdown--${openCategory.layout}`}
           ref={dropdownRef}
+          role="menu"
+          aria-label={openCategory.label}
+          onKeyDown={handleDropdownKeyDown}
           style={{
             top: menuPosition.top,
             left: menuPosition.left,
@@ -436,7 +487,7 @@ export function TerminalBar({
             pointerEvents: menuPosition.visible ? 'auto' : 'none'
           }}
         >
-          {openCategory.items.map((item) => {
+          {openCategory.items.map((item, index) => {
             const isToggle = item.isToggle && item.toggleKey
             const isChecked = isToggle ? autoWorkOptions[item.toggleKey!] : false
 
@@ -446,6 +497,10 @@ export function TerminalBar({
                 className={`terminal-bar-dropdown-item ${item.disabled ? 'disabled' : ''} ${isToggle ? 'toggle-item' : ''} ${isChecked ? 'checked' : ''} ${openCategory.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
                 onClick={() => handleMenuItemClick(openCategory.id, item)}
                 disabled={item.disabled}
+                ref={(node) => { dropdownItemRefs.current[index] = node }}
+                role={isToggle ? 'menuitemcheckbox' : openCategory.id === 'backend' ? 'menuitemradio' : 'menuitem'}
+                aria-checked={isToggle ? Boolean(isChecked) : openCategory.id === 'backend' ? item.id === currentBackend : undefined}
+                tabIndex={index === openCategory.items.findIndex((candidate) => !candidate.disabled) ? 0 : -1}
               >
                 {isToggle && (
                   <span className="terminal-bar-toggle-indicator">{isChecked ? '✓' : '○'}</span>

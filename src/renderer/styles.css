@@ -1265,6 +1265,58 @@ html, body, #root {
   background: color-mix(in srgb, var(--accent, #4a9eff) 18%, transparent);
 }
 
+.has-agent-attention--completed {
+  --agent-attention-color: #74c69d;
+  --agent-attention-soft: rgba(116, 198, 157, 0.16);
+}
+
+.has-agent-attention--needs-input {
+  --agent-attention-color: #f0a868;
+  --agent-attention-soft: rgba(240, 168, 104, 0.19);
+}
+
+.workspace-tab.has-agent-attention,
+.tile-subtab.has-agent-attention {
+  color: var(--agent-attention-color);
+  box-shadow: inset 0 -2px 0 var(--agent-attention-color);
+  background: var(--agent-attention-soft);
+}
+
+.terminal-tile.has-agent-attention {
+  box-shadow: inset 0 0 0 1px var(--agent-attention-color), 0 0 18px var(--agent-attention-soft);
+}
+
+.agent-attention-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: var(--agent-attention-color);
+  box-shadow: 0 0 0 3px var(--agent-attention-soft);
+  animation: agent-attention-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes agent-attention-pulse {
+  50% { opacity: 0.58; transform: scale(0.86); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-attention-dot { animation: none; }
+}
+
+.agent-notification-settings__tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agent-notification-settings__tests .btn-secondary {
+  min-width: 112px;
+}
+
 /* ============================================
    Terminal Container
    ============================================ */
@@ -6525,6 +6577,17 @@ html, body, #root {
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
   z-index: 200;
   padding: 4px;
+}
+
+.terminal-bar-dropdown--dense {
+  width: min(440px, calc(100vw - 16px));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 480px) {
+  .terminal-bar-dropdown--dense {
+    display: grid;
+  }
 }
 
 .terminal-bar-menu-wrapper:last-child .terminal-bar-dropdown {

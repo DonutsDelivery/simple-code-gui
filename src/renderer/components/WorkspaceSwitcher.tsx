@@ -1,5 +1,18 @@
 import React, { useState, useRef, useCallback, memo } from 'react'
-import { WorkspaceSession } from '../stores/workspace'
+import { useWorkspaceStore, type AgentAttentionKind, type WorkspaceSession } from '../stores/workspace'
+
+export function getWorkspaceAttention(
+  session: WorkspaceSession,
+  attentionByTabId: Record<string, AgentAttentionKind>,
+): AgentAttentionKind | null {
+  let completed = false
+  for (const tab of session.openTabs) {
+    const attention = attentionByTabId[tab.id]
+    if (attention === 'needs-input') return attention
+    if (attention === 'completed') completed = true
+  }
+  return completed ? 'completed' : null
+}
 
 interface WorkspaceSwitcherProps {
   sessions: WorkspaceSession[]
@@ -23,6 +36,7 @@ interface SessionTabProps {
   isRestoring: boolean
   insertSide: 'before' | 'after' | null
   isDropTarget: boolean
+  attention: AgentAttentionKind | null
   onSelect: (id: string) => void
   onClose: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -45,6 +59,7 @@ const SessionTab = memo(function SessionTab({
   isRestoring,
   insertSide,
   isDropTarget,
+  attention,
   onSelect,
   onClose,
   onRename,
@@ -94,8 +109,9 @@ const SessionTab = memo(function SessionTab({
 
   return (
     <div
-      className={`tab workspace-tab ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}${isDropTarget ? ' ws-drop-target' : ''}`}
+      className={`tab workspace-tab ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${attention ? ` has-agent-attention has-agent-attention--${attention}` : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}${isDropTarget ? ' ws-drop-target' : ''}`}
       role="tab"
+      aria-label={`${session.name}${attention === 'needs-input' ? ', needs your input' : attention === 'completed' ? ', agent completed' : ''}`}
       aria-selected={isActive}
       tabIndex={0}
       draggable={!editing}
@@ -171,6 +187,7 @@ const SessionTab = memo(function SessionTab({
           onDoubleClick={(e) => { e.stopPropagation(); startRename(e) }}
         >
           {isRestoring ? '⟳ ' : ''}{session.name}
+          {attention && <span className="agent-attention-dot" aria-hidden="true" />}
           {tabCount > 0 && (
             <span className="workspace-tab-count">{tabCount}</span>
           )}
@@ -199,6 +216,7 @@ export function WorkspaceSwitcher({
   onMoveTabs,
   onWheel,
 }: WorkspaceSwitcherProps) {
+  const attentionByTabId = useWorkspaceStore(state => state.attentionByTabId)
   const [restoringIds, setRestoringIds] = useState<Set<string>>(new Set())
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropInsert, setDropInsert] = useState<{ index: number; before: boolean } | null>(null)
@@ -270,6 +288,7 @@ export function WorkspaceSwitcher({
           index={index}
           isActive={session.id === activeSessionId}
           isRestoring={restoringCleared.has(session.id)}
+          attention={getWorkspaceAttention(session, attentionByTabId)}
           insertSide={
             dropInsert && dropInsert.index === index
               ? (dropInsert.before ? 'before' : 'after')

@@ -11,6 +11,8 @@ import {
   getAdditionalPaths,
 } from './platform'
 import { getPortableBinDirs } from './portable-deps'
+import { AgentSessionSignalDetector } from './agent-session-signal-detector'
+import type { AgentSessionSignalEvent } from '../common/agent-session-signal'
 
 // Full-screen TUIs that are sensitive to rapid resize during startup.
 // Suppressing their initial frame prevents default-size cursor output from
@@ -151,6 +153,7 @@ interface ClaudeProcess {
   lastResizeCols?: number
   lastResizeRows?: number
   outputBuffer: OutputBuffer
+  signalDetector: AgentSessionSignalDetector
   replayBuffer: ReplayBuffer
   /** Resize-sensitive TUIs: suppress output until the first settled resize */
   suppressOutput?: boolean
@@ -803,6 +806,7 @@ export class PtyManager {
   private processes: Map<string, ClaudeProcess> = new Map()
   private dataCallbacks: Map<string, (data: string) => void> = new Map()
   private exitCallbacks: Map<string, (code: number) => void> = new Map()
+  private agentSessionSignalListeners = new Set<(event: AgentSessionSignalEvent) => void>()
   // Multi-subscriber listeners (additive, do not clobber the primary callback).
   // Used by the mobile server to attach to PTYs already owned by the desktop
   // renderer without disrupting the desktop's data feed.
@@ -958,6 +962,7 @@ export class PtyManager {
       disposables: [],
       spawnedAt: Date.now(),
       outputBuffer: new OutputBuffer(),
+      signalDetector: new AgentSessionSignalDetector(),
       replayBuffer: new ReplayBuffer(),
       hermesRuntimeDir,
     }
@@ -973,6 +978,7 @@ export class PtyManager {
     // Store disposables from onData/onExit for proper cleanup
     const dataDisposable = shell.onData(data => {
       proc.outputBuffer.append(data)
+      this.detectAgentSessionSignals(proc, data)
       if (proc.suppressOutput) return // swallow until first resize
       proc.replayBuffer.append(data)
       const callback = this.dataCallbacks.get(id)
@@ -1037,12 +1043,14 @@ export class PtyManager {
           disposables: [],
           spawnedAt: Date.now(),
           outputBuffer: new OutputBuffer(),
+          signalDetector: new AgentSessionSignalDetector(),
           replayBuffer: new ReplayBuffer(),
         }
         this.processes.set(id, retryProc)
 
         const retryDataDisp = retryShell.onData(data => {
           retryProc.outputBuffer.append(data)
+          this.detectAgentSessionSignals(retryProc, data)
           retryProc.replayBuffer.append(data)
           const cb = this.dataCallbacks.get(id)
           if (cb) cb(data)
@@ -1085,6 +1093,25 @@ export class PtyManager {
     proc.disposables.push(exitDisposable)
 
     return id
+  }
+
+
+  private detectAgentSessionSignals(proc: ClaudeProcess, data: string): void {
+    for (const type of proc.signalDetector.push(data)) {
+      const event: AgentSessionSignalEvent = { ptyId: proc.id, type }
+      for (const listener of this.agentSessionSignalListeners) {
+        try {
+          listener(event)
+        } catch (error) {
+          console.error('[pty-manager] agent session signal listener threw:', error)
+        }
+      }
+    }
+  }
+
+  writeUserInput(id: string, data: string): void {
+    this.processes.get(id)?.signalDetector.resetForUserInput()
+    this.write(id, data)
   }
 
   write(id: string, data: string): void {
@@ -1250,6 +1277,12 @@ export class PtyManager {
 
   getProcess(id: string): ClaudeProcess | undefined {
     return this.processes.get(id)
+  }
+
+
+  onAgentSessionSignal(callback: (event: AgentSessionSignalEvent) => void): () => void {
+    this.agentSessionSignalListeners.add(callback)
+    return () => this.agentSessionSignalListeners.delete(callback)
   }
 
   onData(id: string, callback: (data: string) => void): void {

@@ -48,6 +48,7 @@ export interface OpenTab {
 }
 
 export type WorkspaceView = 'tiles' | 'canvas'
+export type AgentAttentionKind = 'completed' | 'needs-input'
 
 export interface WorkspaceSavedData {
   openTabs: any[]
@@ -108,6 +109,7 @@ interface WorkspaceState {
   activeTileTree: TileNode | null
   activeCanvasScene: CanvasScene | null
   activeView: WorkspaceView
+  attentionByTabId: Record<string, AgentAttentionKind>
 
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
@@ -140,6 +142,9 @@ interface WorkspaceState {
   setActiveTileTree: (tree: TileNode | null) => void
   setActiveCanvasScene: (scene: CanvasScene) => void
   setActiveView: (view: WorkspaceView) => void
+  markTabAttention: (id: string, kind: AgentAttentionKind) => void
+  clearTabAttention: (id: string) => void
+  clearTabAttentionMany: (ids: string[]) => void
 
   // Project ops
   setProjects: (projects: Project[]) => void
@@ -192,6 +197,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeTileTree: null,
   activeCanvasScene: null,
   activeView: 'tiles',
+  attentionByTabId: {},
 
   // -------------------------------------------------------------------------
   // Session management
@@ -207,6 +213,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeTileTree: active?.activeTileTree ?? null,
       activeCanvasScene: active?.canvasScene ?? null,
       activeView: active?.activeView ?? 'tiles',
+      attentionByTabId: {},
     })
   },
 
@@ -257,6 +264,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? sessions[sessions.length - 1].id
         : state.activeSessionId
       const active = sessions.find(s => s.id === newActiveId) ?? sessions[0]
+      const removedTabIds = new Set(state.sessions.find(session => session.id === id)?.openTabs.map(tab => tab.id) ?? [])
+      const attentionByTabId = Object.fromEntries(
+        Object.entries(state.attentionByTabId).filter(([tabId]) => !removedTabIds.has(tabId))
+      )
       return {
         sessions,
         activeSessionId: active.id,
@@ -265,6 +276,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeTileTree: active.activeTileTree,
         activeCanvasScene: active.canvasScene,
         activeView: active.activeView,
+        attentionByTabId,
       }
     })
   },
@@ -461,11 +473,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         newTabs,
         state.activeTileTree
       )
-      return syncToActive(state, {
+      const synced = syncToActive(state, {
         openTabs: newTabs,
         activeTabId: newActiveId,
         activeCanvasScene,
       })
+      const { [id]: _removedAttention, ...attentionByTabId } = state.attentionByTabId
+      return { ...synced, attentionByTabId }
     })
   },
 
@@ -484,11 +498,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         newTabs,
         state.activeTileTree
       )
-      return syncToActive(state, {
+      const synced = syncToActive(state, {
         openTabs: newTabs,
         activeTabId: newActiveId,
         activeCanvasScene,
       })
+      if (!newId || newId === id || !state.attentionByTabId[id]) return synced
+      const { [id]: remappedAttention, ...remainingAttention } = state.attentionByTabId
+      return { ...synced, attentionByTabId: { ...remainingAttention, [newId]: remappedAttention } }
     })
   },
 
@@ -497,11 +514,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   clearTabs: () => {
-    set(state => syncToActive(state, {
-      openTabs: [],
-      activeTabId: null,
-      activeCanvasScene: createEmptyCanvasScene(),
-    }))
+    set(state => {
+      const removedIds = new Set(state.openTabs.map(tab => tab.id))
+      const attentionByTabId = Object.fromEntries(
+        Object.entries(state.attentionByTabId).filter(([id]) => !removedIds.has(id))
+      )
+      return {
+        ...syncToActive(state, {
+          openTabs: [],
+          activeTabId: null,
+          activeCanvasScene: createEmptyCanvasScene(),
+        }),
+        attentionByTabId,
+      }
+    })
   },
 
   clearAllTabs: () => {
@@ -510,6 +536,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeTabId: null,
       activeTileTree: null,
       activeCanvasScene: createEmptyCanvasScene(),
+      attentionByTabId: {},
       sessions: state.sessions.map(s => ({
         ...s,
         openTabs: [],
@@ -535,6 +562,35 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   setActiveView: (view) => {
     set(state => syncToActive(state, { activeView: view }))
+  },
+
+  markTabAttention: (id, kind) => {
+    set(state => {
+      const current = state.attentionByTabId[id]
+      if (current === 'needs-input' || current === kind) return state
+      return { attentionByTabId: { ...state.attentionByTabId, [id]: kind } }
+    })
+  },
+
+  clearTabAttention: (id) => {
+    set(state => {
+      if (!state.attentionByTabId[id]) return state
+      const { [id]: _cleared, ...attentionByTabId } = state.attentionByTabId
+      return { attentionByTabId }
+    })
+  },
+
+  clearTabAttentionMany: (ids) => {
+    if (ids.length === 0) return
+    set(state => {
+      const remove = new Set(ids)
+      const attentionByTabId = Object.fromEntries(
+        Object.entries(state.attentionByTabId).filter(([id]) => !remove.has(id))
+      )
+      return Object.keys(attentionByTabId).length === Object.keys(state.attentionByTabId).length
+        ? state
+        : { attentionByTabId }
+    })
   },
 
   // -------------------------------------------------------------------------

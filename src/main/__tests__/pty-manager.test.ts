@@ -590,17 +590,81 @@ describe('PtyManager', () => {
         'hermes-tui-active-session-random.json',
       ] as any)
       vi.mocked(fs.readFileSync).mockReturnValue(
-        JSON.stringify({ session_id: 'selected-by-resume' })
+        JSON.stringify({ session_id: '20260715_120000_abcdef' })
       )
 
       const live = manager.listSessions().find(session => session.id === id)
       const spawnOptions = vi.mocked(pty.spawn).mock.calls.at(-1)?.[2]
 
-      expect(live?.sessionId).toBe('selected-by-resume')
-      expect(manager.getProcess(id)?.sessionId).toBe('selected-by-resume')
+      expect(live?.sessionId).toBe('20260715_120000_abcdef')
+      expect(manager.getProcess(id)?.sessionId).toBe('20260715_120000_abcdef')
       expect(spawnOptions?.env?.TMPDIR).toMatch(
         /simple-code-gui\/hermes-runtime\/uuid-\d+$/
       )
+    })
+
+    it('does not replace a durable Hermes session with a transient live id', () => {
+      const id = manager.spawn(
+        '/test/dir',
+        '20260715_110000_abcdef',
+        undefined,
+        undefined,
+        undefined,
+        'hermes'
+      )
+      vi.mocked(fs.readdirSync).mockReturnValue([
+        'hermes-tui-active-session-random.json',
+      ] as any)
+      vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ session_id: 'cce5d617' }))
+
+      const live = manager.listSessions().find(session => session.id === id)
+
+      expect(live?.sessionId).toBe('20260715_110000_abcdef')
+      expect(manager.getProcess(id)?.sessionId).toBe('20260715_110000_abcdef')
+    })
+  })
+
+  describe('agent session signals', () => {
+    // AC: @agent-session-notifications ac-1
+    it('identifies the PTY that emitted a completion signal and deduplicates redraws', () => {
+      const id = manager.spawn('/test/dir')
+      const listener = vi.fn()
+      manager.onAgentSessionSignal(listener)
+
+      dataCallback?.('<claude-terminal-signal type="complete" />\r\n')
+      dataCallback?.('\x1b[1A<claude-terminal-signal type="complete" />\r\n')
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
+    })
+
+    // AC: @agent-session-notifications ac-2
+    it('resets signal deduplication only for explicitly marked real user input', () => {
+      const id = manager.spawn('/test/dir')
+      const listener = vi.fn()
+      manager.onAgentSessionSignal(listener)
+
+      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+      manager.write(id, 'programmatic input')
+      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+      manager.writeUserInput(id, 'real user input')
+      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+
+      expect(listener).toHaveBeenCalledTimes(2)
+      expect(listener).toHaveBeenLastCalledWith({ ptyId: id, type: 'input-needed' })
+    })
+
+    // AC: @agent-session-notifications ac-1
+    it('detects signals from the replacement PTY after a quick resume retry', () => {
+      const id = manager.spawn('/test/dir', 'stale-session')
+      const listener = vi.fn()
+      manager.onAgentSessionSignal(listener)
+
+      exitCallback?.({ exitCode: 1 })
+      dataCallback?.('<claude-terminal-signal type="complete" />\r\n')
+
+      expect(pty.spawn).toHaveBeenCalledTimes(2)
+      expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
     })
   })
 

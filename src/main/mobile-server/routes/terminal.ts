@@ -5,6 +5,8 @@
 import { Express, Request, Response } from 'express'
 import { WebSocket } from 'ws'
 import type { SessionStore } from '../../session-store'
+import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions'
+import type { AIBackend } from '../../ipc/instruction-files'
 import { resolveMobileSpawnSettings } from './spawn-settings'
 import { validateWithinProjectRoots } from '../../mobile-security'
 import { getProjectRoots } from '../utils'
@@ -48,6 +50,7 @@ export function setupTerminalRoutes(
         model
       )
 
+      installAgentSessionSignalInstructions(safeSpawnCwd, spawnSettings.backend as AIBackend)
       const ptyId = await ptyManager.spawn(
         safeSpawnCwd,
         sessionId,
@@ -76,7 +79,8 @@ export function setupTerminalRoutes(
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
-      ptyManager.write(ptyId, data)
+      if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(ptyId, data)
+      else ptyManager.write(ptyId, data)
       res.json({ success: true })
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' })

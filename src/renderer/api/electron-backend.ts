@@ -15,6 +15,7 @@ import {
   PtyDataCallback,
   PtyExitCallback,
   PtyRecreatedCallback,
+  AgentSessionSignalCallback,
   ApiOpenSessionCallback,
   OrchestratorSessionCreatedCallback,
   Unsubscribe,
@@ -35,9 +36,10 @@ declare global {
       killPty: (id: string) => void
       writePty: (id: string, data: string) => void
       resizePty: (id: string, cols: number, rows: number) => void
-      onPtyData: (id: string, callback: (data: string) => void) => () => void
+      onPtyData: (id: string, callback: PtyDataCallback) => () => void
       onPtyExit: (id: string, callback: (code: number) => void) => () => void
-      onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void) => () => void
+      onPtyRecreated: (callback: PtyRecreatedCallback) => () => void
+      onAgentSessionSignal: (callback: AgentSessionSignalCallback) => () => void
       setPtyBackend: (id: string, backend: BackendId) => Promise<void>
       getPtyReplay?: (id: string) => Promise<string | null>
       setAutoAccept?: (id: string, enabled: boolean) => void
@@ -224,6 +226,11 @@ export class ElectronBackend implements ExtendedApi {
   onPtyRecreated(callback: PtyRecreatedCallback): Unsubscribe {
     this.checkApi()
     return window.electronAPI!.onPtyRecreated(callback)
+  }
+
+  onAgentSessionSignal(callback: AgentSessionSignalCallback): Unsubscribe {
+    this.checkApi()
+    return window.electronAPI!.onAgentSessionSignal(callback)
   }
 
   setPtyBackend(id: string, backend: BackendId): Promise<void> {

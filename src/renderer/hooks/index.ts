@@ -17,4 +17,5 @@ export {
 export { useWorkspaceLoader } from './useWorkspaceLoader'
 export { useSessionPolling } from './useSessionPolling'
 export { useApiListeners } from './useApiListeners'
+export { useAgentNotifications } from './useAgentNotifications'
 export { useProjectHandlers } from './useProjectHandlers'

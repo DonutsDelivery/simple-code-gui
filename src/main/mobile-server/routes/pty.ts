@@ -8,6 +8,8 @@ import { validateWithinProjectRoots } from '../../mobile-security'
 import { log, getProjectRoots } from '../utils'
 import { LocalPty } from '../types'
 import type { SessionStore } from '../../session-store'
+import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions'
+import type { AIBackend } from '../../ipc/instruction-files'
 import { resolveMobileSpawnSettings } from './spawn-settings'
 
 // L3: cap how many backends a mobile client can spawn so a runaway/abusive
@@ -91,6 +93,7 @@ export function setupPtyRoutes(
         autoAcceptTools: spawnSettings.autoAcceptTools
       })
 
+      installAgentSessionSignalInstructions(safeProjectPath, spawnSettings.backend as AIBackend)
       const ptyId = ptyManager.spawn(
         safeProjectPath,
         sessionId,
@@ -150,7 +153,8 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
-      ptyManager.write(id, data)
+      if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(id, data)
+      else ptyManager.write(id, data)
       log('PTY write', { ptyId: id, dataLength: data.length })
       res.json({ success: true })
     } catch (error) {

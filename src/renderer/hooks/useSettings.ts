@@ -26,6 +26,8 @@ export interface AppSettings {
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  notificationSoundsEnabled?: boolean
+  notificationVolume?: number
 }
 
 interface UseSettingsReturn {

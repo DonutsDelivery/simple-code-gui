@@ -24,6 +24,10 @@ import {
 } from '../mobile-security'
 
 import { MobileServerConfig, LocalPty, PendingFile, DEFAULT_PORT } from './types'
+import type {
+  AgentSessionSignalEvent,
+  AgentSessionSignalMessage
+} from '../../common/agent-session-signal'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
 import {
   issueDeviceToken,
@@ -74,6 +78,7 @@ export class MobileServer {
   private ptyDataBuffer: Map<string, string[]> = new Map()
 
   private ptyManager: any = null
+  private unsubscribeAgentSessionSignals: (() => void) | null = null
   private sessionStore: any = null
   private voiceManager: any = null
 
@@ -241,7 +246,26 @@ export class MobileServer {
 
   // Service handlers
   setPtyManager(manager: any): void {
+    this.unsubscribeAgentSessionSignals?.()
+    this.unsubscribeAgentSessionSignals = null
     this.ptyManager = manager
+
+    if (typeof manager?.onAgentSessionSignal === 'function') {
+      this.unsubscribeAgentSessionSignals = manager.onAgentSessionSignal(
+        (signal: AgentSessionSignalEvent) => {
+          const event: AgentSessionSignalMessage = {
+            type: 'agent-session-signal',
+            signal
+          }
+          const message = JSON.stringify(event)
+          for (const client of this.connectedClients) {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(message)
+            }
+          }
+        }
+      )
+    }
   }
 
   setSessionStore(store: any): void {

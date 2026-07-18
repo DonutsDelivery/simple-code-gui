@@ -199,10 +199,12 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
   const cardTitle = tab?.title ?? node.presentation.title ?? 'Terminal'
   const subtitle = node.presentation.subtitle ?? project?.name ?? tab?.projectPath ?? 'Session'
   const status = statusLabel(node)
+  const activeAttention = attentionByTabId[node.activeTabId]
 
   return (
     <article
-      className={`canvas-node canvas-node--${detail}${selected ? ' is-selected' : ''}${focused ? ' is-focused' : ''}${mounted ? ' is-mounted' : ' is-suspended'}`}
+      data-agent-visible-tab-id={mounted ? node.activeTabId : undefined}
+      className={`canvas-node canvas-node--${detail}${selected ? ' is-selected' : ''}${focused ? ' is-focused' : ''}${mounted ? ' is-mounted' : ' is-suspended'}${activeAttention ? ` has-agent-attention has-agent-attention--${activeAttention}` : ''}`}
       style={{
         left: node.rect.x,
         top: node.rect.y,
@@ -220,6 +222,7 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
     >
       <header className="canvas-node__header" onPointerDown={onMoveStart}>
         <span className="canvas-node__mark" aria-hidden="true" />
+        {activeAttention && <span className="agent-attention-dot" aria-hidden="true" />}
         <span className="canvas-node__identity">
           {editing && tab ? (
             <input
@@ -312,10 +315,14 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
             <button
               key={candidate.id}
               type="button"
-              className={candidate.id === node.activeTabId ? 'is-active' : ''}
+              className={`${candidate.id === node.activeTabId ? 'is-active' : ''}${attentionByTabId[candidate.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[candidate.id]}` : ''}`}
+              aria-label={`${candidate.title}${attentionByTabId[candidate.id] === 'needs-input' ? ', needs your input' : attentionByTabId[candidate.id] === 'completed' ? ', agent completed' : ''}`}
               onPointerDown={event => event.stopPropagation()}
               onClick={() => onActivate(candidate.id)}
-            >{candidate.title}</button>
+            >
+              {candidate.title}
+              {attentionByTabId[candidate.id] && <span className="agent-attention-dot" aria-hidden="true" />}
+            </button>
           ))}
         </div>
       )}

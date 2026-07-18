@@ -12,6 +12,11 @@ import { PendingFile, LocalPty } from './types'
 // client can't exhaust sockets/file descriptors by opening connections in a loop.
 const MAX_WS_CONNECTIONS = 64
 
+function writeUserInput(ptyManager: any, ptyId: string, data: string): void {
+  if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(ptyId, data)
+  else ptyManager.write(ptyId, data)
+}
+
 function totalWsConnections(deps: WebSocketManagerDeps): number {
   let ptyStreamSockets = 0
   for (const set of deps.getPtyStreams().values()) ptyStreamSockets += set.size
@@ -213,7 +218,7 @@ function handlePtyStreamUpgrade(
         switch (msg.type) {
           case 'input':
             if (msg.data && ptyManager) {
-              ptyManager.write(ptyId, msg.data)
+              writeUserInput(ptyManager, ptyId, msg.data)
             }
             break
 
@@ -277,7 +282,7 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
 
     case 'write':
       if (msg.ptyId && msg.data && ptyManager) {
-        ptyManager.write(msg.ptyId, msg.data)
+        writeUserInput(ptyManager, msg.ptyId, msg.data)
       }
       break
 

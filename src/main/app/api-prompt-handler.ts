@@ -53,7 +53,7 @@ export function setupApiPromptHandler(
     if (sessionMode === 'existing') {
       for (const [ptyId, path] of ptyToProject) {
         if (path === projectPath) {
-          ptyManager.write(ptyId, prompt)
+          ptyManager.writeUserInput(ptyId, prompt)
           setTimeout(() => ptyManager.write(ptyId, '\r'), 300)
           return { success: true, message: 'Prompt sent to existing terminal' }
         }

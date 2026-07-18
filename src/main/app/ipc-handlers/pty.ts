@@ -8,6 +8,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { installTaskInstructions } from '../../ipc/kspec-handlers.js'
 import { installSelfCompactionInstructions } from '../../ipc/self-compaction-instructions.js'
+import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions.js'
 import type { AIBackend } from '../../ipc/instruction-files.js'
 import type { HermesBackupManager } from '../../hermes-backup-manager.js'
 
@@ -97,6 +98,10 @@ function maybeRespondToCursorPositionRequest(
   }
 }
 
+export function isTerminalDeviceResponse(data: string): boolean {
+  return /^(?:\x1b\[\??\d+(?:;\d+)*R)+$/.test(data)
+}
+
 export function registerPtyHandlers(
   ptyManager: PtyManager,
   sessionStore: SessionStore,
@@ -106,6 +111,17 @@ export function registerPtyHandlers(
   getMainWindow: () => BrowserWindow | null,
   hermesBackupManager?: HermesBackupManager,
 ): void {
+  ptyManager.onAgentSessionSignal(signal => {
+    try {
+      const currentWindow = getMainWindow()
+      if (currentWindow && !currentWindow.isDestroyed() && !currentWindow.webContents.isDestroyed()) {
+        currentWindow.webContents.send('pty:agent-session-signal', signal)
+      }
+    } catch {
+      // A signal may race BrowserWindow destruction during quit.
+    }
+  })
+
   ipcMain.handle('pty:list', () => ptyManager.listSessions())
 
   // Serialized screen snapshot for restoring scrollback on terminal remount.
@@ -136,7 +152,10 @@ export function registerPtyHandlers(
 
       // Ensure the self-compaction block is present before the CLI launches and
       // reads its instruction file (covers projects added after startup).
-      try { installSelfCompactionInstructions(cwd, effectiveBackend as AIBackend) } catch { /* non-fatal */ }
+      try {
+        installSelfCompactionInstructions(cwd, effectiveBackend as AIBackend)
+        installAgentSessionSignalInstructions(cwd, effectiveBackend as AIBackend)
+      } catch { /* non-fatal */ }
 
       if (effectiveBackend === 'hermes' && hermesBackupManager) {
         await hermesBackupManager.snapshot('pre-launch')
@@ -189,7 +208,7 @@ export function registerPtyHandlers(
         setTimeout(() => {
           // Verify PTY still exists before writing (race condition guard)
           if (ptyManager.getProcess(id)) {
-            ptyManager.write(id, pending.prompt + '\n')
+            ptyManager.writeUserInput(id, pending.prompt + '\n')
             pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
           } else {
             pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
@@ -210,7 +229,10 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.on('pty:write', (_, { id, data }: { id: string; data: string }) => ptyManager.write(id, data))
+  ipcMain.on('pty:write', (_, { id, data }: { id: string; data: string }) => {
+    if (isTerminalDeviceResponse(data)) ptyManager.write(id, data)
+    else ptyManager.writeUserInput(id, data)
+  })
   ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; rows: number }) => ptyManager.resize(id, cols, rows))
   ipcMain.on('pty:kill', (_, id: string) => {
     const backend = ptyToBackend.get(id)
@@ -228,11 +250,16 @@ export function registerPtyHandlers(
 
     const { cwd, sessionId, backend: oldBackend } = process
     const effectiveSessionId = oldBackend !== newBackend ? undefined : sessionId
+    const projectPath = ptyToProject.get(oldId)
+
+    if (projectPath) {
+      installSelfCompactionInstructions(projectPath, newBackend as AIBackend)
+      installAgentSessionSignalInstructions(projectPath, newBackend as AIBackend)
+    }
 
     ptyManager.kill(oldId)
     const newId = ptyManager.spawn(cwd, effectiveSessionId, undefined, undefined, undefined, newBackend)
 
-    const projectPath = ptyToProject.get(oldId)
     if (projectPath) {
       ptyToProject.set(newId, projectPath)
       ptyToProject.delete(oldId)
@@ -268,7 +295,6 @@ export function registerPtyHandlers(
     // Refresh instruction file for the new backend so it gets kspec/beads context
     if (projectPath) {
       try {
-        installSelfCompactionInstructions(projectPath, newBackend as AIBackend)
         const hasKspec = existsSync(join(projectPath, '.kspec'))
         const hasBeads = existsSync(join(projectPath, '.beads'))
         if (hasKspec || hasBeads) {

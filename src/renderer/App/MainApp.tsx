@@ -24,6 +24,7 @@ import {
   useWorkspaceLoader,
   useSessionPolling,
   useApiListeners,
+  useAgentNotifications,
   useProjectHandlers,
 } from '../hooks'
 import type { Api } from '../api'
@@ -120,6 +121,8 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     setTileTree: setActiveTileTree,
     openTabs,
   })
+
+  useAgentNotifications({ api, settings, isMobile })
 
   const {
     handleAddProject,
@@ -364,9 +367,10 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
 
         {/* Mobile: each terminal as its own slide */}
         {isMobile && openTabs.map((tab) => (
-          <div key={tab.id} className="mobile-terminal-slide">
-            <div className="mobile-slide-header">
+          <div key={tab.id} className={`mobile-terminal-slide${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}`}>
+            <div className="mobile-slide-header" aria-label={`${tab.title}${attentionByTabId[tab.id] === 'needs-input' ? ', needs your input' : attentionByTabId[tab.id] === 'completed' ? ', agent completed' : ''}`}>
               <span className="mobile-slide-title">{tab.title}</span>
+              {attentionByTabId[tab.id] && <span className="agent-attention-dot" aria-hidden="true" />}
               <button className="mobile-slide-close" onClick={() => handleCloseTab(tab.id)}>×</button>
             </div>
             <div className="mobile-slide-content">

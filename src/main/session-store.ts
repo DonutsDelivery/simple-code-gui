@@ -104,6 +104,8 @@ export interface Settings {
   voiceSpeed?: number
   voiceSkipOnNew?: boolean
   voiceSilenceThreshold?: number
+  notificationSoundsEnabled?: boolean
+  notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
@@ -268,11 +270,23 @@ export class SessionStore {
   }
 
   getSettings(): Settings {
-    return this.data.settings ?? { defaultProjectDir: '', theme: 'default', backend: 'default', globalInstructionInjection: '' }
+    return {
+      defaultProjectDir: '',
+      theme: 'default',
+      backend: 'default',
+      globalInstructionInjection: '',
+      notificationSoundsEnabled: true,
+      notificationVolume: 0.65,
+      ...this.data.settings,
+    }
   }
 
   saveSettings(settings: Settings): void {
-    this.data.settings = settings
+    this.data.settings = {
+      ...settings,
+      notificationSoundsEnabled: settings.notificationSoundsEnabled !== false,
+      notificationVolume: Math.max(0, Math.min(1, settings.notificationVolume ?? 0.65)),
+    }
     this.save()
   }
 }

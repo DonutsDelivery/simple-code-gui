@@ -6,6 +6,12 @@
  */
 
 import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
+import type { AgentSessionSignalEvent } from '../../common/agent-session-signal.js'
+export type {
+  AgentSessionSignalEvent,
+  AgentSessionSignalMessage,
+  AgentSessionSignalType
+} from '../../common/agent-session-signal.js'
 
 // ============================================================================
 // Connection State Types
@@ -62,6 +68,8 @@ export interface Settings {
   voiceSkipOnNew?: boolean
   voiceSilenceThreshold?: number
   voicePushToTalk?: boolean
+  notificationSoundsEnabled?: boolean
+  notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
   backend?: BackendSelection
@@ -193,6 +201,7 @@ export type Unsubscribe = () => void
 export type PtyDataCallback = (data: string) => void
 export type PtyExitCallback = (code: number) => void
 export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void
+export type AgentSessionSignalCallback = (event: AgentSessionSignalEvent) => void
 
 export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 export type BackendSelection = 'default' | BackendId
@@ -352,7 +361,12 @@ export interface Api {
   /**
    * Subscribe to PTY recreated events (backend switching)
    */
-  onPtyRecreated: (callback: (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void) => Unsubscribe
+  onPtyRecreated: (callback: PtyRecreatedCallback) => Unsubscribe
+
+  /**
+   * Subscribe to explicit agent completion and input-needed signals.
+   */
+  onAgentSessionSignal: (callback: AgentSessionSignalCallback) => Unsubscribe
 
   // ==========================================================================
   // TTS (Text-to-Speech)

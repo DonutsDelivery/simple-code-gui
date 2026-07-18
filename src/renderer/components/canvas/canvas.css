@@ -164,6 +164,7 @@
   transition: border-color 110ms ease, box-shadow 110ms ease, background 110ms ease;
 }
 .canvas-node:hover { border-color: var(--canvas-node-border-hover); background: var(--canvas-node-raised); }
+.canvas-node.has-agent-attention { border-color: var(--agent-attention-color); box-shadow: 0 0 0 1px var(--agent-attention-soft), 0 18px 56px rgba(0, 0, 0, 0.46), 0 0 24px var(--agent-attention-soft); }
 .canvas-node.is-selected { border-color: var(--canvas-selection); box-shadow: 0 0 0 1px var(--canvas-selection-soft), var(--canvas-depth-focus); }
 .canvas-node.is-focused { outline: 2px solid var(--canvas-focus-ring); outline-offset: 3px; }
 .canvas-node--identity { min-width: 0; min-height: 0; }
