@@ -479,6 +479,11 @@ features:
             then: the node presents a readable title, project context, and status summary instead of a tiny
               terminal
             when: a node crosses an overview threshold
+          - given: a user applies a supported theme or requests reduced motion
+            id: ac-3
+            then: the visual hierarchy, contrast, and state distinctions remain usable while unnecessary motion
+              is removed
+            when: the spatial workspace renders and animates
         tags: []
         created: 2026-07-18T10:04:46.096Z
         notes: []
