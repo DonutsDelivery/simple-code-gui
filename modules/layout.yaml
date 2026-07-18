@@ -332,6 +332,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:44.626Z
         notes: []
+      - _ulid: 01KXTAYYH5ZD16R3JY70BECR72
+        slugs:
+          - canvas-navigation
+        title: Spatial Navigation
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:44.965Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
