@@ -428,6 +428,8 @@ features:
           - canvas-mobile-projection
         title: Mobile Workspace Projection
         type: requirement
+        description: Mobile presents the same workspace sessions through a focused linear interface without
+          requiring two-dimensional canvas navigation.
         depends_on: []
         implements: []
         relates_to: []
