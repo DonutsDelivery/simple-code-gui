@@ -25,3 +25,15 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T10:06:53.082Z
+  - _ulid: 01KXTBAGQTA6F32FDM2W31NSZV
+    content: "Approach: keep Electron/React/xterm and add Canvas as an independent per-workspace view
+      sharing PTYs with Tiles. Build a typed scene model first, then persistence/view integration,
+      interaction and virtualization, premium visual/accessibility, and isolated performance
+      verification. Reuse the existing PTY replay, tile projection, workspace lazy restore, theme
+      tokens, and debug harness. Edge cases include malformed/future scene versions, inactive
+      workspace saves, PTY ID remapping, offscreen terminal suspension, negative world coordinates,
+      and switching views without duplicate subscriptions. Tests will annotate the Canvas feature
+      and child requirement ACs."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:11:04.058Z
