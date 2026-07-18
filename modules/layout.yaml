@@ -356,6 +356,10 @@ features:
             id: ac-2
             then: the sessions and tiled layout remain available and a safe spatial arrangement is generated
             when: the workspace is restored
+          - given: saved spatial data was produced by an unsupported newer version
+            id: ac-3
+            then: the app falls back to Tiles and preserves the unsupported spatial data without overwriting it
+            when: the workspace is opened
         tags: []
         created: 2026-07-18T10:04:44.626Z
         notes: []
