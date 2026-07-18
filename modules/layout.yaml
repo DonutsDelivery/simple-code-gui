@@ -353,6 +353,8 @@ features:
           - canvas-navigation
         title: Spatial Navigation
         type: requirement
+        description: Users can move through an unbounded workspace fluidly with pointer, trackpad, keyboard,
+          overview, and direct-focus controls.
         depends_on: []
         implements: []
         relates_to: []
