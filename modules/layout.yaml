@@ -287,4 +287,17 @@ features:
     tags: []
     created: 2026-06-10T03:19:21.965Z
     notes: []
+  - _ulid: 01KXTAY155X1YG3EQCGXGEB0R0
+    slugs:
+      - canvas-workspace
+    title: Canvas 2.0 Spatial Workspace
+    type: feature
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-07-18T10:04:14.885Z
+    notes: []
 notes: []
