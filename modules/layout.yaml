@@ -353,6 +353,20 @@ features:
         tags: []
         created: 2026-07-18T10:04:47.335Z
         notes: []
+    decisions:
+      - _ulid: 01KXTB2419S7AZKHRQCBVBCQNJ
+        slugs:
+          - canvas-electron-shell
+        title: Retain Electron for Canvas 2.0
+        type: decision
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:06:28.906Z
+        notes: []
     requirements:
       - _ulid: 01KXTAYY6J5XT2Y1N1P485WPQP
         slugs:
