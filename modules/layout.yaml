@@ -414,6 +414,10 @@ features:
             id: ac-2
             then: the relationship is visibly represented and the contained sessions remain available
             when: the user groups, ungroups, collapses, or renames them
+          - given: multiple nodes are selected
+            id: ac-3
+            then: the nodes adopt the requested orderly arrangement and may subsequently be moved freely
+            when: the user arranges them as a row, column, grid, or compact stack
         tags: []
         created: 2026-07-18T10:04:45.283Z
         notes: []
