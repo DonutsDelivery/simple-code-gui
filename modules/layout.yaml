@@ -383,6 +383,8 @@ features:
           - canvas-terminal-lifecycle
         title: Terminal Rendering Lifecycle
         type: requirement
+        description: Spatial terminal nodes remain connected to their running sessions while visible
+          rendering work is limited to what the user can use or is likely to revisit.
         depends_on: []
         implements: []
         relates_to: []
