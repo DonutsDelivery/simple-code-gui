@@ -16,3 +16,17 @@ tasks:
     started_at: 2026-03-10T04:51:22.344Z
     submitted_at: 2026-03-10T04:55:11.621Z
     automation: eligible
+  - _ulid: 01KXTB2VMTCBBC34292MEG49N4
+    slugs:
+      - task-canvas-2-0-spatial-workspace
+    title: "Implement: Canvas 2.0 Spatial Workspace"
+    type: task
+    spec_ref: "@canvas-workspace"
+    status: pending
+    blocked_by: []
+    depends_on: []
+    priority: 1
+    tags: []
+    notes_count: 1
+    todos_count: 0
+    created_at: 2026-07-18T10:06:53.082Z

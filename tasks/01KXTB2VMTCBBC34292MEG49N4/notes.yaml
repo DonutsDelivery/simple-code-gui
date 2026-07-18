@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTB2VMSVDY0X4TJ0KWKFS4Z
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      A workspace can present its running sessions as persistent modular nodes on an unbounded
+      spatial surface while retaining the existing tiled view as an independent alternative.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a workspace contains running sessions and saved tile and spatial arrangements,
+      when the user switches between Tiles and Canvas, then the same sessions remain running while
+      each view preserves its own arrangement
+
+      - ac-2: Given a workspace was last used in Canvas with positioned nodes, when the application
+      restarts and restores that workspace, then the workspace returns to its saved view, node
+      arrangement, and camera without losing the tiled arrangement
+
+      - ac-3: Given a session belongs to a workspace with both views available, when the session is
+      created, closed, resumed, or moved to another workspace, then both views reflect the same
+      session membership without duplicating or restarting unaffected sessions
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.082Z
