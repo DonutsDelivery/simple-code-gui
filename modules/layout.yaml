@@ -375,6 +375,8 @@ features:
           - canvas-independent-layouts
         title: Keep Spatial and Tile Layouts Independent
         type: decision
+        description: The spatial arrangement and tiled split arrangement are separate projections of shared
+          workspace sessions so each interaction model can evolve and recover independently.
         depends_on: []
         implements: []
         relates_to: []
