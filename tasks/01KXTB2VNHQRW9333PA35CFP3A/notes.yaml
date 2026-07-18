@@ -1,0 +1,26 @@
+notes:
+  - _ulid: 01KXTB2VNHFC63XH2CZ9WMTNN3
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      Each workspace preserves an independently versioned spatial arrangement, camera, grouping, and
+      presentation state without weakening tile-layout recovery.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a workspace has positioned nodes, groups, a camera view, and a separate tile
+      arrangement, when the workspace is saved, switched away from, and later restored, then the
+      spatial state and tile arrangement are restored independently and unchanged
+
+      - ac-2: Given saved spatial data is missing or malformed, when the workspace is restored, then
+      the sessions and tiled layout remain available and a safe spatial arrangement is generated
+
+      - ac-3: Given saved spatial data was produced by an unsupported newer version, when the
+      workspace is opened, then the app falls back to Tiles and preserves the unsupported spatial
+      data without overwriting it
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.105Z
