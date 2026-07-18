@@ -65,3 +65,15 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T10:46:57.381Z
+  - _ulid: 01KXTFBJ5R0AMW4H7CJTM13V8Z
+    content: "Canvas 2.0 implementation and verification complete. Focused staged snapshot: 9 files / 49
+      tests pass and production build passes. Isolated instance 19837 verified non-passive wheel
+      handling with a clean renderer console, independent per-workspace Canvas view/camera
+      persistence across restart, PTY ID remapping without duplication, bounded eight-xterm
+      mounting, stable memory across 20 switches, and 100-node pan p95 18.07 ms. Full staged suite
+      passes 135/137 tests; only inherited session-store fs-mock initialization and two stale
+      default-theme assertions remain. kspec schema/references pass; validation exits only for the
+      inherited @claude author reference and unrelated orphan/completeness warnings."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T11:21:32.600Z
