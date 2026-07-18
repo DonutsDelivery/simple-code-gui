@@ -25,3 +25,17 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T15:14:30.440Z
+  - _ulid: 01KXTWQ5Z8FBFECWTXJ8K8SPZ1
+    content: "Approach: extend scene v2 with a separate objects collection so PTY reconciliation and
+      xterm budgets remain terminal-only; reuse existing camera/geometry/group helpers through a
+      shared spatial-item layer. Store validated PNG/JPEG/WebP copies in a constrained main-process
+      asset manager and persist opaque IDs only. Notes commit on idle/blur; sketches persist
+      editable strokes and derive a current managed PNG before Copy path. Edge cases: v1 migration,
+      malformed/future scenes, missing assets, stale async sketch exports, input shortcut
+      suppression, lazy workspaces, and mobile preservation. Test plan: behavioral coverage for
+      every feature/child AC plus asset security and isolated restart/runtime verification. Branch
+      starts from the existing Canvas 2.0 commit because this feature depends on it; inherited
+      dirty-tree changes remain untouched."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T15:15:04.808Z
