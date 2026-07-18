@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTB2VVAJ3WB81NP1DZS1YBY
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      The spatial workspace remains fully operable and understandable without relying on pointer
+      precision or spatial vision.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a user operates the spatial workspace with a keyboard, when they navigate,
+      select, activate, move, group, or fit nodes, then each essential action has a keyboard path
+      with visible focus and is not trapped inside terminal content
+
+      - ac-2: Given a user navigates with assistive technology, when the spatial scene contains
+      nodes and groups, then an ordered semantic representation exposes their names, relationships,
+      states, and available actions without requiring spatial interpretation
+
+      - ac-3: Given selection, focus, or an important node state changes, when the change occurs,
+      then the change is conveyed without relying on color alone and important changes are announced
+      appropriately
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.290Z

@@ -1,0 +1,17 @@
+_ulid: 01KXTB2VVBBJRQ78ZCJTWDRK61
+slugs:
+  - task-accessible-spatial-workspace
+title: "Implement: Accessible Spatial Workspace"
+type: task
+spec_ref: "@canvas-accessibility"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on:
+  - "@task-canvas-2-0-spatial-workspace"
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T10:06:53.291Z
+todos: []
