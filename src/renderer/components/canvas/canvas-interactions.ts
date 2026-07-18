@@ -1,5 +1,5 @@
 import { getRectBounds } from './scene-geometry'
-import type { CanvasGroup, CanvasRect, CanvasScene, CanvasTerminalNode } from './scene-model'
+import type { CanvasGroup, CanvasRect, CanvasScene, CanvasSpatialItem } from './scene-model'
 
 export type CanvasArrangeMode = 'row' | 'column' | 'grid' | 'stack'
 export type SpatialDirection = 'left' | 'right' | 'up' | 'down'
@@ -11,8 +11,12 @@ function center(rect: CanvasRect): { x: number; y: number } {
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
 }
 
+function sceneItems(scene: CanvasScene): CanvasSpatialItem[] {
+  return [...scene.nodes, ...scene.objects]
+}
+
 export function findSpatialNeighbor(
-  nodes: CanvasTerminalNode[],
+  nodes: CanvasSpatialItem[],
   currentId: string | null,
   direction: SpatialDirection
 ): string | null {
@@ -31,7 +35,7 @@ export function findSpatialNeighbor(
   })
 
   candidates.sort((a, b) => {
-    const score = (node: CanvasTerminalNode): number => {
+    const score = (node: CanvasSpatialItem): number => {
       const point = center(node.rect)
       const primary = direction === 'left' || direction === 'right'
         ? Math.abs(point.x - origin.x)
@@ -51,7 +55,7 @@ export function arrangeCanvasNodes(
   selectedIds: ReadonlySet<string>,
   mode: CanvasArrangeMode
 ): CanvasScene {
-  const selected = scene.nodes.filter(node => selectedIds.has(node.id))
+  const selected = sceneItems(scene).filter(node => selectedIds.has(node.id))
   if (selected.length < 2) return scene
   const bounds = getRectBounds(selected.map(node => node.rect))
   if (!bounds) return scene
@@ -89,6 +93,10 @@ export function arrangeCanvasNodes(
       const position = positions.get(node.id)
       return position ? { ...node, rect: { ...node.rect, ...position } } : node
     }),
+    objects: scene.objects.map(object => {
+      const position = positions.get(object.id)
+      return position ? { ...object, rect: { ...object.rect, ...position } } : object
+    }),
   }
 }
 
@@ -98,7 +106,7 @@ export function groupCanvasNodes(
   groupId: string,
   title = 'Group'
 ): CanvasScene {
-  const selected = scene.nodes.filter(node => selectedIds.has(node.id))
+  const selected = sceneItems(scene).filter(node => selectedIds.has(node.id))
   const bounds = getRectBounds(selected.map(node => node.rect))
   if (selected.length < 2 || !bounds) return scene
   const frameZ = Math.min(0, ...selected.map(node => node.zIndex)) - 1
@@ -118,15 +126,17 @@ export function groupCanvasNodes(
     ...scene,
     groups: [...scene.groups, group],
     nodes: scene.nodes.map(node => selectedIds.has(node.id) ? { ...node, groupId } : node),
+    objects: scene.objects.map(object => selectedIds.has(object.id) ? { ...object, groupId } : object),
   }
 }
 
 export function ungroupCanvasNodes(scene: CanvasScene, selectedIds: ReadonlySet<string>): CanvasScene {
-  const groupIds = new Set(scene.nodes.filter(node => selectedIds.has(node.id)).map(node => node.groupId).filter(Boolean))
+  const groupIds = new Set(sceneItems(scene).filter(item => selectedIds.has(item.id)).map(item => item.groupId).filter(Boolean))
   if (groupIds.size === 0) return scene
   return {
     ...scene,
     groups: scene.groups.filter(group => !groupIds.has(group.id)),
     nodes: scene.nodes.map(node => node.groupId && groupIds.has(node.groupId) ? { ...node, groupId: undefined } : node),
+    objects: scene.objects.map(object => object.groupId && groupIds.has(object.groupId) ? { ...object, groupId: undefined } : object),
   }
 }

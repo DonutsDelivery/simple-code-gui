@@ -2,18 +2,12 @@ import { createHash, randomUUID } from 'crypto'
 import { constants } from 'fs'
 import { lstat, mkdir, open, readdir, rename, rm, writeFile, type FileHandle } from 'fs/promises'
 import { join } from 'path'
+import type { CanvasAssetErrorCode, CanvasAssetMetadata } from '../common/canvas-assets.js'
 
 const MAX_ENCODED_BYTES = 20 * 1024 * 1024
 const MAX_EDGE = 16_384
 const MAX_AREA = 40_000_000
 const ASSET_ID_PATTERN = /^[a-f0-9]{64}\.(?:png|jpg|webp)$/
-
-export type CanvasAssetErrorCode =
-  | 'invalid_format'
-  | 'too_large'
-  | 'decode_failed'
-  | 'not_found'
-  | 'invalid_id'
 
 export class CanvasAssetError extends Error {
   constructor(
@@ -31,24 +25,20 @@ export interface ImageDimensions {
   height: number
 }
 
-export type ImageDecoder = (bytes: Buffer) => ImageDimensions | Promise<ImageDimensions>
+export type ImageDecoder = (
+  bytes: Buffer,
+  format: ImageFormat,
+  encodedDimensions: ImageDimensions | null,
+) => ImageDimensions | Promise<ImageDimensions>
 export type ClipboardPathWriter = (path: string) => void | Promise<void>
-
-export interface CanvasAsset {
-  id: string
-  mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
-  width: number
-  height: number
-  byteLength: number
-}
 
 interface ImageFormat {
   extension: 'png' | 'jpg' | 'webp'
-  mimeType: CanvasAsset['mimeType']
+  mimeType: CanvasAssetMetadata['mimeType']
 }
 
 export class CanvasAssetManager {
-  private readonly inFlightImports = new Map<string, Promise<CanvasAsset>>()
+  private readonly inFlightImports = new Map<string, Promise<CanvasAssetMetadata>>()
   private initialization: Promise<void> | null = null
 
   constructor(
@@ -57,7 +47,7 @@ export class CanvasAssetManager {
     private readonly clipboardWriter: ClipboardPathWriter,
   ) {}
 
-  async importBytes(input: Uint8Array): Promise<CanvasAsset> {
+  async importBytes(input: Uint8Array): Promise<CanvasAssetMetadata> {
     if (input.byteLength > MAX_ENCODED_BYTES) {
       throw new CanvasAssetError('too_large', 'Image exceeds the 20 MiB encoded size limit')
     }
@@ -79,7 +69,7 @@ export class CanvasAssetManager {
     return operation
   }
 
-  async importPath(selectedPath: string): Promise<CanvasAsset> {
+  async importPath(selectedPath: string): Promise<CanvasAssetMetadata> {
     let pathInfo
     try {
       pathInfo = await lstat(selectedPath)
@@ -187,13 +177,13 @@ export class CanvasAssetManager {
     return join(this.assetRoot, id)
   }
 
-  private async finishImport(bytes: Buffer, format: ImageFormat, digest: string): Promise<CanvasAsset> {
+  private async finishImport(bytes: Buffer, format: ImageFormat, digest: string): Promise<CanvasAssetMetadata> {
     const preflight = readEncodedDimensions(bytes, format)
     if (preflight) validateDimensions(preflight)
 
     let dimensions
     try {
-      dimensions = await this.decoder(bytes)
+      dimensions = await this.decoder(bytes, format, preflight)
     } catch (error) {
       throw new CanvasAssetError('decode_failed', 'Image could not be decoded', { cause: error })
     }

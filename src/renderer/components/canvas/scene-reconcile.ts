@@ -111,10 +111,17 @@ export function placeOrphanTabs(
 
   const gap = options.gap ?? 48
   const columns = Math.max(1, options.columns ?? Math.ceil(Math.sqrt(orphans.length)))
-  const bounds = getRectBounds(scene.nodes.map(node => node.rect))
+  const bounds = getRectBounds([
+    ...scene.nodes.map(node => node.rect),
+    ...scene.objects.map(object => object.rect),
+  ])
   const originX = bounds ? bounds.x + bounds.width + gap : 0
   const originY = bounds?.y ?? 0
-  const zStart = scene.nodes.reduce((max, node) => Math.max(max, node.zIndex), -1) + 1
+  const zStart = [
+    ...scene.nodes.map(node => node.zIndex),
+    ...scene.objects.map(object => object.zIndex),
+    ...scene.groups.map(group => group.zIndex),
+  ].reduce((max, zIndex) => Math.max(max, zIndex), -1) + 1
   const nodes: CanvasTerminalNode[] = orphans.map((tab, index) => ({
     id: `tab:${tab.id}`,
     tabIds: [tab.id],
@@ -152,6 +159,7 @@ export function reconcileCanvasScene(
 export function getSceneBounds(scene: CanvasScene): CanvasRect | null {
   return getRectBounds([
     ...scene.nodes.map(node => node.rect),
+    ...scene.objects.map(object => object.rect),
     ...scene.groups.map(group => group.rect),
   ])
 }

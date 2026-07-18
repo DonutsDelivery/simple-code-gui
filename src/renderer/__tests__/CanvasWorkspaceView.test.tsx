@@ -82,7 +82,7 @@ describe('CanvasWorkspaceView', () => {
 
     expect(screen.getByRole('application', { name: /spatial terminal canvas/i })).toHaveAttribute('tabindex', '0')
     expect(screen.getByRole('toolbar', { name: 'Canvas controls' })).toBeInTheDocument()
-    expect(screen.getByRole('listbox', { name: 'Terminal nodes' })).toHaveAttribute('aria-multiselectable', 'true')
+    expect(screen.getByRole('listbox', { name: 'Canvas items' })).toHaveAttribute('aria-multiselectable', 'true')
     expect(screen.getByRole('option', { name: /Alpha terminal, Running/i })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Beta terminal, Needs input/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /canvas minimap/i })).toBeInTheDocument()
@@ -99,7 +99,7 @@ describe('CanvasWorkspaceView', () => {
 
     expect(container.querySelector('[data-node-id="node-a"]')).toHaveAttribute('aria-selected', 'true')
     expect(container.querySelector('[data-node-id="node-b"]')).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('toolbar', { name: 'Arrange selected terminals' })).toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: 'Arrange selected Canvas items' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Row' }))
     await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
   })
@@ -126,11 +126,24 @@ describe('CanvasWorkspaceView', () => {
     surface.focus()
 
     fireEvent.keyDown(surface, { key: 'ArrowRight' })
-    expect(document.querySelector('.canvas-live-region')).toHaveTextContent('Alpha focused. 1 terminal selected.')
+    expect(document.querySelector('.canvas-live-region')).toHaveTextContent('Alpha focused. 1 item selected.')
 
     fireEvent.keyDown(surface, { key: 'ArrowRight', shiftKey: true })
     await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
     expect((onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene).nodes[0].rect.x).toBe(20)
+  })
+
+  // AC: @canvas-terminal-lifecycle ac-3
+  it('persists a Canvas card sub-tab before focusing it', async () => {
+    const multiTab = sceneWithNodes()
+    multiTab.nodes = [{ ...multiTab.nodes[0], tabIds: ['tab-a', 'tab-b'], activeTabId: 'tab-a' }]
+    const { onSceneChange, onFocusTab } = renderCanvas({ scene: multiTab })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Beta terminal' }))
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    expect((onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene).nodes[0].activeTabId).toBe('tab-b')
+    expect(onFocusTab).toHaveBeenCalledWith('tab-b')
+    await waitFor(() => expect(screen.getByTestId('mounted-terminal')).toHaveTextContent('Terminal tab-b'))
   })
 
   // AC: @canvas-terminal-lifecycle ac-3
@@ -228,6 +241,110 @@ describe('CanvasWorkspaceView', () => {
     Object.defineProperty(projectDrop, 'dataTransfer', { value: projectTransfer })
     fireEvent(surface, projectDrop)
     expect(onDropProject).toHaveBeenCalledWith('/beta', { x: 200, y: 140 })
+  })
+
+  // AC: @canvas-content-objects ac-2
+  // AC: @canvas-notes-images ac-1
+  // AC: @canvas-sketch-pad ac-1
+  it('adds centered notes, images, and sketch pads from the Canvas toolbar', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    const pickCanvasAsset = vi.fn().mockResolvedValue({
+      ok: true,
+      value: {
+        id: `${'a'.repeat(64)}.png`,
+        mimeType: 'image/png',
+        width: 800,
+        height: 400,
+        byteLength: 1024,
+      },
+    })
+    const { onSceneChange } = renderCanvas({ api: { pickCanvasAsset } as never })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Note' }))
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    let next = onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene
+    expect(next.objects[0]).toMatchObject({ kind: 'text', rect: { width: 320, height: 220 } })
+
+    onSceneChange.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Sketch' }))
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    next = onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene
+    expect(next.objects.find(object => object.kind === 'sketch')).toMatchObject({
+      kind: 'sketch',
+      documentSize: { width: 960, height: 600 },
+      strokes: [],
+      revision: 0,
+    })
+
+    onSceneChange.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Image' }))
+    await waitFor(() => expect(pickCanvasAsset).toHaveBeenCalled())
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    next = onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene
+    expect(next.objects.find(object => object.kind === 'image')).toMatchObject({
+      kind: 'image',
+      intrinsicWidth: 800,
+      intrinsicHeight: 400,
+      rect: { width: 520, height: 260 },
+    })
+  })
+
+  // AC: @canvas-content-objects ac-1
+  // AC: @canvas-notes-images ac-1
+  it('renders, moves, and deletes content without closing terminal nodes', async () => {
+    const mixed = sceneWithNodes()
+    mixed.objects = [{
+      id: 'note-a',
+      kind: 'text',
+      text: 'Release checklist',
+      rect: { x: 200, y: 520, width: 320, height: 220 },
+      zIndex: 3,
+    }]
+    const { container, onSceneChange } = renderCanvas({ scene: mixed })
+    const note = screen.getByRole('option', { name: /text, Release checklist/i })
+    const header = note.querySelector<HTMLElement>('.canvas-content__header')!
+
+    fireEvent.pointerDown(header, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 30 })
+    fireEvent.pointerUp(window)
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    expect((onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene).objects[0].rect).toMatchObject({ x: 240, y: 540 })
+
+    fireEvent.pointerDown(container.querySelector<HTMLElement>('[data-node-id="note-a"]')!, { button: 0 })
+    const surface = screen.getByRole('application', { name: /spatial terminal canvas/i })
+    surface.focus()
+    onSceneChange.mockClear()
+    fireEvent.keyDown(surface, { key: 'Delete' })
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    const removed = onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene
+    expect(removed.objects).toEqual([])
+    expect(removed.nodes).toHaveLength(2)
+  })
+
+  // AC: @canvas-content-objects ac-2
+  it('zooms with plus and minus shortcuts without consuming editor input', async () => {
+    const grouped = sceneWithNodes()
+    grouped.groups = [{
+      id: 'group',
+      title: 'Group',
+      rect: { x: -20, y: -20, width: 1500, height: 480 },
+      zIndex: 0,
+      collapsed: false,
+    }]
+    const { onSceneChange } = renderCanvas({ scene: grouped })
+    const surface = screen.getByRole('application', { name: /spatial terminal canvas/i })
+    surface.focus()
+
+    fireEvent.keyDown(surface, { key: '=', code: 'Equal' })
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    expect((onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene).camera.zoom).toBe(1.25)
+
+    fireEvent.doubleClick(screen.getByTitle('Double-click to rename group'))
+    const editor = screen.getByRole('textbox', { name: 'Group title' })
+    onSceneChange.mockClear()
+    fireEvent.keyDown(editor, { key: '-', code: 'Minus' })
+    expect(onSceneChange).not.toHaveBeenCalled()
+    expect(editor).toHaveValue('Group')
   })
 
   // AC: @canvas-navigation ac-1

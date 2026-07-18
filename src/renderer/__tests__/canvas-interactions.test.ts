@@ -50,6 +50,34 @@ describe('canvas interactions', () => {
     ])
   })
 
+  // AC: @canvas-content-objects ac-1
+  it('arranges, groups, navigates, and ungroups mixed terminals and content', () => {
+    const scene = createEmptyCanvasScene()
+    scene.nodes = [node('terminal', { x: 100, y: 80, width: 360, height: 220 })]
+    scene.objects = [{
+      id: 'note',
+      kind: 'text',
+      text: 'Plan',
+      rect: { x: 600, y: 360, width: 240, height: 160 },
+      zIndex: 1,
+    }]
+    const selection = new Set(['terminal', 'note'])
+
+    expect(findSpatialNeighbor([...scene.nodes, ...scene.objects], 'terminal', 'right')).toBe('note')
+    const arranged = arrangeCanvasNodes(scene, selection, 'row')
+    expect(arranged.nodes[0].rect).toMatchObject({ x: 100, y: 80 })
+    expect(arranged.objects[0].rect).toMatchObject({ x: 496, y: 80 })
+
+    const grouped = groupCanvasNodes(arranged, selection, 'mixed', 'Mixed items')
+    expect(grouped.nodes[0].groupId).toBe('mixed')
+    expect(grouped.objects[0].groupId).toBe('mixed')
+
+    const ungrouped = ungroupCanvasNodes(grouped, new Set(['note']))
+    expect(ungrouped.groups).toEqual([])
+    expect(ungrouped.nodes[0].groupId).toBeUndefined()
+    expect(ungrouped.objects[0].groupId).toBeUndefined()
+  })
+
   // AC: @canvas-node-interaction ac-2
   it('groups and ungroups selected nodes', () => {
     const scene = createEmptyCanvasScene()

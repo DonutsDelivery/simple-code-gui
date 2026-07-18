@@ -41,7 +41,8 @@ describe('canvas scene visibility', () => {
   })
 
   // AC: @canvas-terminal-lifecycle ac-3
-  it('builds a deterministic bounded mount plan with visible nodes first', () => {
+  // AC: @canvas-content-objects ac-1
+  it('builds a deterministic terminal-only bounded mount plan with visible nodes first', () => {
     const scene = createEmptyCanvasScene()
     scene.nodes = [
       node('overscan-near', { x: 520, y: 100, width: 100, height: 100 }, 5),
@@ -49,6 +50,13 @@ describe('canvas scene visibility', () => {
       node('visible-center', { x: 200, y: 100, width: 100, height: 100 }),
       node('far', { x: 1000, y: 100, width: 100, height: 100 }),
     ]
+    scene.objects = [{
+      id: 'visible-note',
+      kind: 'text',
+      text: 'No PTY to mount',
+      rect: { x: 100, y: 100, width: 100, height: 100 },
+      zIndex: 10,
+    }]
     const plan = planCanvasNodeMounts(scene, scene.camera, { width: 500, height: 300 }, {
       maxMounted: 2,
       overscanScreenPixels: 200,

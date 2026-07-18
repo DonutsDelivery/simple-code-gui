@@ -110,9 +110,17 @@ describe('serializeSessionsForSave', () => {
 
   // AC: @canvas-workspace ac-2
   // AC: @canvas-scene-persistence ac-1
+  // AC: @canvas-content-objects ac-3
   it('serializes independent live Canvas view state', () => {
     const canvasScene = createEmptyCanvasScene()
     canvasScene.camera = { x: -320, y: 180, zoom: 0.72 }
+    canvasScene.objects.push({
+      id: 'note-a',
+      kind: 'text',
+      text: 'Persist me',
+      rect: { x: 10, y: 20, width: 240, height: 160 },
+      zIndex: 1,
+    })
     const sessions: WorkspaceSession[] = [{
       id: 'ws-canvas',
       name: 'Canvas',
@@ -128,8 +136,9 @@ describe('serializeSessionsForSave', () => {
 
     expect(result[0].activeView).toBe('canvas')
     expect(result[0].canvasScene).toMatchObject({
-      version: 1,
+      version: 2,
       camera: { x: -320, y: 180, zoom: 0.72 },
+      objects: [canvasScene.objects[0]],
     })
     expect(result[0].tileTree).toBeUndefined()
   })

@@ -3,8 +3,16 @@ import type { Workspace, Session } from './workspace.js'
 import type { BeadsTask, BeadsCloseResult } from './beads.js'
 import type { VoiceSettings } from './voice.js'
 import type { Extension } from './extension.js'
+import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
 
 export interface ElectronAPI {
+  // Canvas assets (desktop only)
+  pickCanvasAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+  importCanvasAssetBytes: (bytes: Uint8Array) => Promise<CanvasAssetResult<CanvasAssetMetadata>>
+  importCanvasClipboardAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+  readCanvasAsset: (id: string) => Promise<CanvasAssetResult<CanvasAssetBytes>>
+  copyCanvasAssetPath: (id: string) => Promise<CanvasAssetResult<true>>
+
   // Workspace
   getWorkspace: () => Promise<Workspace>
   saveWorkspace: (workspace: Workspace) => Promise<void>

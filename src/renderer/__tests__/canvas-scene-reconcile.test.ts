@@ -4,6 +4,7 @@ import {
   createEmptyCanvasScene,
   filterStaleSceneTabs,
   generateCanvasScene,
+  getSceneBounds,
   placeOrphanTabs,
   reconcileCanvasScene,
   remapSceneTabIds,
@@ -23,6 +24,7 @@ describe('canvas scene generation', () => {
     ]
 
     const scene = generateCanvasScene(tabs, { tileTree: tree, tileBounds: { x: 10, y: 20, width: 1000, height: 600 } })
+    expect(scene.objects).toEqual([])
     expect(scene.nodes).toHaveLength(2)
     expect(scene.nodes[0]).toMatchObject({
       id: 'tile:left',
@@ -61,6 +63,87 @@ describe('canvas scene generation', () => {
 })
 
 describe('canvas scene reconciliation', () => {
+  // AC: @canvas-content-objects ac-1
+  // AC: @canvas-content-objects ac-3
+  it('keeps content objects unchanged while reconciling terminal tabs', () => {
+    const scene = generateCanvasScene([{ id: 'a' }])
+    const object = {
+      id: 'note-a',
+      kind: 'text' as const,
+      title: 'Note',
+      text: 'Persistent content',
+      rect: { x: -400, y: 600, width: 240, height: 160 },
+      zIndex: 8,
+      groupId: 'group-a',
+    }
+    scene.groups.push({
+      id: 'group-a',
+      title: 'Content',
+      rect: { x: -420, y: 580, width: 280, height: 200 },
+      zIndex: 7,
+      collapsed: false,
+    })
+    scene.objects.push(object)
+
+    const reconciled = reconcileCanvasScene(scene, [{ id: 'renamed' }, { id: 'new' }], {
+      tabIdRemap: { a: 'renamed' },
+    })
+    expect(reconciled.objects).toEqual([object])
+    expect(reconciled.objects[0]).toBe(object)
+    expect(reconciled.nodes.flatMap(node => node.tabIds)).toEqual(['renamed', 'new'])
+  })
+
+  it('includes content objects in scene bounds', () => {
+    const scene = createEmptyCanvasScene()
+    scene.nodes.push({
+      id: 'node-a',
+      tabIds: ['a'],
+      activeTabId: 'a',
+      rect: { x: 0, y: 0, width: 100, height: 100 },
+      zIndex: 0,
+      presentation: {},
+    })
+    scene.objects.push({
+      id: 'image-a',
+      kind: 'image',
+      assetId: 'asset-a',
+      intrinsicWidth: 600,
+      intrinsicHeight: 240,
+      rect: { x: -50, y: 80, width: 300, height: 120 },
+      zIndex: 1,
+    })
+
+    expect(getSceneBounds(scene)).toEqual({ x: -50, y: 0, width: 300, height: 200 })
+  })
+
+  // AC: @canvas-content-objects ac-1
+  // AC: @canvas-content-objects ac-3
+  it('places orphan terminals beyond existing content objects', () => {
+    const scene = createEmptyCanvasScene()
+    scene.objects.push({
+      id: 'note-a',
+      kind: 'text',
+      text: 'Keep this space clear',
+      rect: { x: 100, y: 60, width: 320, height: 180 },
+      zIndex: 9,
+    })
+    scene.groups.push({
+      id: 'group-a',
+      title: 'Foreground group',
+      rect: { x: 0, y: 0, width: 50, height: 50 },
+      zIndex: 15,
+      collapsed: false,
+    })
+
+    const reconciled = placeOrphanTabs(scene, [{ id: 'new' }], { gap: 20 })
+
+    expect(reconciled.objects).toBe(scene.objects)
+    expect(reconciled.nodes[0]).toMatchObject({
+      rect: { x: 440, y: 60 },
+      zIndex: 16,
+    })
+  })
+
   it('remaps tab ids, deduplicates collisions, and repairs the active tab', () => {
     const scene = generateCanvasScene([{ id: 'a' }, { id: 'b' }])
     scene.nodes[0].tabIds = ['a', 'alias']

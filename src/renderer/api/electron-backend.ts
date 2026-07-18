@@ -21,6 +21,7 @@ import {
   PtySession
 } from './types'
 import type { BackendId } from './types'
+import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
 
 /**
  * Type declaration for the global electronAPI
@@ -49,6 +50,11 @@ declare global {
       // Workspace Management
       getWorkspace: () => Promise<Workspace>
       saveWorkspace: (workspace: Workspace) => Promise<void>
+      pickCanvasAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+      importCanvasAssetBytes: (bytes: Uint8Array) => Promise<CanvasAssetResult<CanvasAssetMetadata>>
+      importCanvasClipboardAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+      readCanvasAsset: (id: string) => Promise<CanvasAssetResult<CanvasAssetBytes>>
+      copyCanvasAssetPath: (id: string) => Promise<CanvasAssetResult<true>>
 
       // Settings Management
       getSettings: () => Promise<Settings>
@@ -254,6 +260,27 @@ export class ElectronBackend implements ExtendedApi {
   async saveWorkspace(workspace: Workspace): Promise<void> {
     this.checkApi()
     return window.electronAPI!.saveWorkspace(workspace)
+  }
+
+  async pickCanvasAsset(): Promise<CanvasAssetResult<CanvasAssetMetadata | null>> {
+    this.checkApi()
+    return window.electronAPI!.pickCanvasAsset()
+  }
+  async importCanvasAssetBytes(bytes: Uint8Array): Promise<CanvasAssetResult<CanvasAssetMetadata>> {
+    this.checkApi()
+    return window.electronAPI!.importCanvasAssetBytes(bytes)
+  }
+  async importCanvasClipboardAsset(): Promise<CanvasAssetResult<CanvasAssetMetadata | null>> {
+    this.checkApi()
+    return window.electronAPI!.importCanvasClipboardAsset()
+  }
+  async readCanvasAsset(id: string): Promise<CanvasAssetResult<CanvasAssetBytes>> {
+    this.checkApi()
+    return window.electronAPI!.readCanvasAsset(id)
+  }
+  async copyCanvasAssetPath(id: string): Promise<CanvasAssetResult<true>> {
+    this.checkApi()
+    return window.electronAPI!.copyCanvasAssetPath(id)
   }
 
   // ==========================================================================

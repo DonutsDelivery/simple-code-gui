@@ -31,6 +31,7 @@ import { createApplicationMenu } from './app/menu.js'
 import { createWindow } from './app/window.js'
 import { setupApiPromptHandler } from './app/api-prompt-handler.js'
 import { registerWorkspaceHandlers } from './app/ipc-handlers/workspace.js'
+import { registerCanvasAssetHandlers } from './app/ipc-handlers/canvas-assets.js'
 import { registerPtyHandlers } from './app/ipc-handlers/pty.js'
 import { registerServerHandlers } from './app/ipc-handlers/servers.js'
 import { registerSettingsHandlers } from './app/ipc-handlers/settings.js'
@@ -127,6 +128,7 @@ registerGsdHandlers()
 registerKspecHandlers()
 registerGlobalInstructionHandlers()
 registerWorkspaceHandlers(sessionStore, getMainWindow)
+registerCanvasAssetHandlers(join(app.getPath('userData'), 'canvas-assets'), getMainWindow)
 registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow, hermesBackupManager)
 registerServerHandlers(apiServerManager, mobileServer, sessionStore)
 registerSettingsHandlers(sessionStore, getMainWindow, (settings) => syncHeadroom(settings))

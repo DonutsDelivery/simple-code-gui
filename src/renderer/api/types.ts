@@ -5,6 +5,8 @@
  * by both Electron IPC (desktop) and HTTP/WebSocket (web/mobile) backends.
  */
 
+import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
+
 // ============================================================================
 // Connection State Types
 // ============================================================================
@@ -248,6 +250,13 @@ export interface Api {
    * @param workspace Workspace data to save
    */
   saveWorkspace: (workspace: Workspace) => Promise<void>
+
+  // Desktop-only managed Canvas assets. HTTP/mobile backends leave these absent.
+  pickCanvasAsset?: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+  importCanvasAssetBytes?: (bytes: Uint8Array) => Promise<CanvasAssetResult<CanvasAssetMetadata>>
+  importCanvasClipboardAsset?: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
+  readCanvasAsset?: (id: string) => Promise<CanvasAssetResult<CanvasAssetBytes>>
+  copyCanvasAssetPath?: (id: string) => Promise<CanvasAssetResult<true>>
 
   // ==========================================================================
   // Settings Management
