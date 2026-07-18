@@ -108,6 +108,11 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: the tiled layout extends beyond the visible area
+        id: ac-1
+        then: the tiled viewport pans horizontally without pasting clipboard content
+        when: the user drags horizontally with the middle mouse button beyond the movement threshold
     tags: []
     created: 2026-03-08T08:00:18.579Z
     notes: []
