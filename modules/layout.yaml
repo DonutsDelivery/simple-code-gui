@@ -443,6 +443,11 @@ features:
             then: the underlying session continues running and its ordered output is restored when the node
               becomes active again
             when: its visual renderer is suspended to conserve resources
+          - given: the user pans, zooms, or continuously resizes a node
+            id: ac-2
+            then: the terminal remains visually responsive without repeatedly resizing the underlying session
+              until the usable size settles
+            when: the gesture is in progress
         tags: []
         created: 2026-07-18T10:04:45.703Z
         notes: []
