@@ -3,217 +3,229 @@ slugs:
   - terminal
 title: Terminal Management
 type: module
+description: Core PTY session management, multi-backend CLI support, and terminal lifecycle
 status:
   maturity: draft
   implementation: not_started
-description: Core PTY session management, multi-backend CLI support, and terminal lifecycle
-tags:
-  - core
 depends_on: []
 implements: []
 relates_to: []
 tests: []
 traits: []
-notes: []
-features:
-  - _ulid: 01KK67BPRJVNKGYEGMA7EPB4TY
-    slugs:
-      - pty-lifecycle
-    title: PTY Session Lifecycle
-    type: feature
-    tags: []
-    description: Spawn, manage, resize, and terminate PTY processes running AI CLI backends. Ring buffer
-      captures last 200 lines with ANSI stripping.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-03-08T08:00:01.811Z
-    acceptance_criteria:
-      - id: ac-1
-        given: user opens a project
-        when: a terminal session is spawned
-        then: a PTY process is created with node-pty using the resolved backend executable, correct cwd, and
-          xterm-256color terminal type
-      - id: ac-2
-        given: a PTY session is running
-        when: terminal output is produced
-        then: output is captured in a 200-line ring buffer with ANSI codes stripped and relayed to renderer
-          via IPC
-      - id: ac-3
-        given: a PTY session is running
-        when: the user closes the tab or app exits
-        then: the PTY process is terminated and all listeners are cleaned up
-      - id: ac-4
-        given: PTY sessions are running an AI CLI backend that persists conversation
-          turns to a session file
-        when: the app is quit
-        then: each backend receives a graceful termination signal (SIGTERM/SIGHUP) and is given
-          a brief window to flush its session file to disk before any SIGKILL fallback,
-          so resumed sessions are not missing the most recent turn(s)
-    status:
-      maturity: draft
-      implementation: implemented
-  - _ulid: 01KK67BRJR4864JXD28BE8HNK2
-    slugs:
-      - multi-backend
-    title: Multi-Backend Support
-    type: feature
-    tags: []
-    description: Support multiple AI CLI backends (Claude, Gemini, Codex, OpenCode, Aider) with
-      backend-specific argument mapping for permissions, session resumption, and tool acceptance.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-03-08T08:00:03.672Z
-    acceptance_criteria:
-      - id: ac-1
-        given: a project has backend set to gemini
-        when: a session is spawned
-        then: the gemini CLI executable is located and launched with Gemini-specific flags for approval mode
-          and allowed tools
-      - id: ac-2
-        given: a backend has permission mode configured
-        when: a session is spawned
-        then: "backend-specific CLI flags are applied: Claude uses --permission-mode, Gemini uses
-          --approval-mode, Codex uses --full-auto, Aider uses --yes"
-    status:
-      implementation: implemented
-  - _ulid: 01KK67BTQMCZXZ3WPE6KE4K8FF
-    slugs:
-      - session-discovery
-    title: Session Discovery
-    type: feature
-    tags: []
-    description: Discover previous sessions from Claude (~/.claude/projects/), OpenCode
-      (.opencode/opencode.db via SQLite), and other backends to enable session resumption.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-03-08T08:00:05.876Z
-    status:
-      maturity: draft
-      implementation: in_progress
-  - _ulid: 01KK67BWF9SHA4CYVW2K38CWKK
-    slugs:
-      - backend-switching
-    title: Runtime Backend Switching
-    type: feature
-    tags: []
-    description: Switch the AI backend of a running terminal session without closing the tile. Kills old
-      PTY, spawns new one with same cwd, preserves session ID when backends match.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-03-08T08:00:07.658Z
-    status:
-      implementation: implemented
-  - _ulid: 01KQXX0JMZ8TPYXDFF3V5DZ061
-    slugs:
-      - mobile-live-attach
-    title: Mobile Live Session Attach
-    type: feature
-    tags: []
-    description: When the mobile client opens a session that is already running on the
-      desktop, it attaches to the desktop's live PTY (subscribes to its byte stream
-      and writes back to the same process) instead of spawning a parallel
-      `--resume` process. Parallel resumes branch the conversation because each
-      fork writes turns to the backend's session file independently, so the
-      desktop sees a stale view after the phone has interacted.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-05-06T00:00:00.000Z
-    acceptance_criteria:
-      - id: ac-1
-        given: a session is running on the desktop with sessionId X for project P
-        when: the mobile client opens that same session (P, X)
-        then: the mobile client attaches to the existing PTY (no new `--resume`
-          process is spawned) and receives a replay of recent output so its
-          terminal renders the current screen
-      - id: ac-2
-        given: the mobile client is attached to a desktop-owned PTY
-        when: the user types on the desktop
-        then: the keystrokes and output are visible on the mobile client in real
-          time, and vice versa, because both clients are subscribed to the
-          same PTY byte stream
-      - id: ac-3
-        given: the mobile client is attached to a desktop-owned PTY
-        when: the user closes the tab on the mobile client
-        then: only the mobile WebSocket subscription is torn down — the
-          underlying PTY process is NOT killed, and the desktop session
-          continues uninterrupted
-      - id: ac-4
-        given: the mobile client is attached to a desktop-owned PTY
-        when: the mobile client sends a resize message
-        then: the resize is dropped (the PTY dimensions are owned by the
-          spawning client) so the desktop's terminal is not garbled
-    status:
-      maturity: draft
-      implementation: implemented
-  - _ulid: 01KK67BXW9RQP8D62KHVSF3CW9
-    slugs:
-      - cli-install
-    title: CLI Tool Installation
-    type: feature
-    tags: []
-    description: Check, install, and manage AI CLI tools (Claude, Gemini, Codex, OpenCode, Aider) with
-      portable Node.js/Python support for offline-first workflows.
-    depends_on: []
-    implements: []
-    relates_to: []
-    tests: []
-    traits: []
-    notes: []
-    created: 2026-03-08T08:00:09.097Z
-    status:
-      implementation: implemented
+tags:
+  - core
 constraints:
   - _ulid: 01KK67F1A0FJC86K6NECKWHRA3
     slugs:
       - context-bridge
     title: Context Bridge Isolation
     type: constraint
-    tags: []
     description: All main process capabilities exposed to renderer through Electron contextBridge. No
       direct ipcRenderer access in renderer code.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:01:50.912Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67F39FMSKW6S55K009Q60A
     slugs:
       - no-shell-injection
     title: Shell Injection Prevention
     type: constraint
-    tags: []
     description: All subprocess spawning uses spawn() with argument arrays, never exec() with string
       interpolation. Task IDs validated with strict regex.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:01:52.944Z
+    notes: []
+features:
+  - _ulid: 01KK67BPRJVNKGYEGMA7EPB4TY
+    slugs:
+      - pty-lifecycle
+    title: PTY Session Lifecycle
+    type: feature
+    description: Spawn, manage, resize, and terminate PTY processes running AI CLI backends. Ring buffer
+      captures last 200 lines with ANSI stripping.
+    status:
+      maturity: draft
+      implementation: implemented
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    acceptance_criteria:
+      - given: user opens a project
+        id: ac-1
+        then: a PTY process is created with node-pty using the resolved backend executable, correct cwd, and
+          xterm-256color terminal type
+        when: a terminal session is spawned
+      - given: a PTY session is running
+        id: ac-2
+        then: output is captured in a 200-line ring buffer with ANSI codes stripped and relayed to renderer
+          via IPC
+        when: terminal output is produced
+      - given: a PTY session is running
+        id: ac-3
+        then: the PTY process is terminated and all listeners are cleaned up
+        when: the user closes the tab or app exits
+      - given: PTY sessions are running an AI CLI backend that persists conversation turns to a session file
+        id: ac-4
+        then: each backend receives a graceful termination signal (SIGTERM/SIGHUP) and is given a brief
+          window to flush its session file to disk before any SIGKILL fallback, so resumed sessions
+          are not missing the most recent turn(s)
+        when: the app is quit
+    tags: []
+    created: 2026-03-08T08:00:01.811Z
+    notes: []
+  - _ulid: 01KK67BRJR4864JXD28BE8HNK2
+    slugs:
+      - multi-backend
+    title: Multi-Backend Support
+    type: feature
+    description: Support multiple AI CLI backends (Claude, Gemini, Codex, OpenCode, Aider) with
+      backend-specific argument mapping for permissions, session resumption, and tool acceptance.
     status:
       implementation: implemented
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    acceptance_criteria:
+      - given: a project has backend set to gemini
+        id: ac-1
+        then: the gemini CLI executable is located and launched with Gemini-specific flags for approval mode
+          and allowed tools
+        when: a session is spawned
+      - given: a backend has permission mode configured
+        id: ac-2
+        then: "backend-specific CLI flags are applied: Claude uses --permission-mode, Gemini uses
+          --approval-mode, Codex uses --full-auto, Aider uses --yes"
+        when: a session is spawned
+    tags: []
+    created: 2026-03-08T08:00:03.672Z
+    notes: []
+  - _ulid: 01KK67BTQMCZXZ3WPE6KE4K8FF
+    slugs:
+      - session-discovery
+    title: Session Discovery
+    type: feature
+    description: Discover previous sessions from Claude (~/.claude/projects/), OpenCode
+      (.opencode/opencode.db via SQLite), and other backends to enable session resumption.
+    status:
+      maturity: draft
+      implementation: in_progress
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-03-08T08:00:05.876Z
+    notes: []
+  - _ulid: 01KK67BWF9SHA4CYVW2K38CWKK
+    slugs:
+      - backend-switching
+    title: Runtime Backend Switching
+    type: feature
+    description: Switch the AI backend of a running terminal session without closing the tile. Kills old
+      PTY, spawns new one with same cwd, preserves session ID when backends match.
+    status:
+      implementation: implemented
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-03-08T08:00:07.658Z
+    notes: []
+  - _ulid: 01KQXX0JMZ8TPYXDFF3V5DZ061
+    slugs:
+      - mobile-live-attach
+    title: Mobile Live Session Attach
+    type: feature
+    description: When the mobile client opens a session that is already running on the desktop, it
+      attaches to the desktop's live PTY (subscribes to its byte stream and writes back to the same
+      process) instead of spawning a parallel `--resume` process. Parallel resumes branch the
+      conversation because each fork writes turns to the backend's session file independently, so
+      the desktop sees a stale view after the phone has interacted.
+    status:
+      maturity: draft
+      implementation: implemented
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    acceptance_criteria:
+      - given: a session is running on the desktop with sessionId X for project P
+        id: ac-1
+        then: the mobile client attaches to the existing PTY (no new `--resume` process is spawned) and
+          receives a replay of recent output so its terminal renders the current screen
+        when: the mobile client opens that same session (P, X)
+      - given: the mobile client is attached to a desktop-owned PTY
+        id: ac-2
+        then: the keystrokes and output are visible on the mobile client in real time, and vice versa,
+          because both clients are subscribed to the same PTY byte stream
+        when: the user types on the desktop
+      - given: the mobile client is attached to a desktop-owned PTY
+        id: ac-3
+        then: only the mobile WebSocket subscription is torn down — the underlying PTY process is NOT
+          killed, and the desktop session continues uninterrupted
+        when: the user closes the tab on the mobile client
+      - given: the mobile client is attached to a desktop-owned PTY
+        id: ac-4
+        then: the resize is dropped (the PTY dimensions are owned by the spawning client) so the desktop's
+          terminal is not garbled
+        when: the mobile client sends a resize message
+    tags: []
+    created: 2026-05-06T00:00:00.000Z
+    notes: []
+  - _ulid: 01KK67BXW9RQP8D62KHVSF3CW9
+    slugs:
+      - cli-install
+    title: CLI Tool Installation
+    type: feature
+    description: Check, install, and manage AI CLI tools (Claude, Gemini, Codex, OpenCode, Aider) with
+      portable Node.js/Python support for offline-first workflows.
+    status:
+      implementation: implemented
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    tags: []
+    created: 2026-03-08T08:00:09.097Z
+    notes: []
+  - _ulid: 01KXV7BC0E7XY9NH18WSD7NG42
+    slugs:
+      - agent-session-notifications
+    title: Agent Session Notifications
+    type: feature
+    description: Agent sessions explicitly signal when work is complete or user input is required, so
+      people receive distinct audio cues and persistent attention indicators even when the session
+      is hidden.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    priority: high
+    tags: []
+    created: 2026-07-18T18:20:52.111Z
+    notes: []
+notes: []
