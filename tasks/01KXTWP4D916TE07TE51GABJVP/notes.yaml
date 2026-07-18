@@ -1,0 +1,27 @@
+notes:
+  - _ulid: 01KXTWP4D8JHPZ1N43J4RMY1P1
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      A spatial workspace can hold editable notes, managed images, and sketches alongside running
+      terminal sessions, with shared spatial organization and durable per-workspace state.
+
+
+
+      Acceptance Criteria:
+
+      - ac-1: Given a Canvas workspace contains terminals and non-terminal content, when the user
+      selects, moves, resizes, groups, or arranges mixed items, then all selected items follow the
+      requested spatial operation while terminal sessions continue running unchanged
+
+      - ac-2: Given the Canvas surface has keyboard focus, when the user invokes the visible zoom
+      controls or the plus and minus shortcuts, then the camera zooms within its supported range
+      without consuming text intended for a terminal or content editor
+
+      - ac-3: Given a workspace contains notes, images, or sketches, when the workspace is switched
+      away from, restored after restart, or saved through the mobile projection, then the content,
+      geometry, grouping, and asset references remain unchanged
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T15:14:30.440Z
