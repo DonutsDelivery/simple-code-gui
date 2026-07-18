@@ -744,6 +744,10 @@ features:
         id: ac-1
         then: commands are arranged in a compact multi-column layout constrained within the viewport
         when: the menu opens on a desktop-sized viewport
+      - given: a terminal menu category contains only a short command list
+        id: ac-2
+        then: commands remain in a single-column layout
+        when: the menu opens
     priority: medium
     tags: []
     created: 2026-07-18T18:21:15.305Z
