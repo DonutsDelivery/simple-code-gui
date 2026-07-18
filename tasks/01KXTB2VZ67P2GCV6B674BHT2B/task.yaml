@@ -1,0 +1,17 @@
+_ulid: 01KXTB2VZ67P2GCV6B674BHT2B
+slugs:
+  - task-keep-spatial-and-tile-layouts-independent
+title: "Implement: Keep Spatial and Tile Layouts Independent"
+type: task
+spec_ref: "@canvas-independent-layouts"
+derivation: auto
+status: pending
+blocked_by: []
+depends_on:
+  - "@task-canvas-2-0-spatial-workspace"
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-18T10:06:53.414Z
+todos: []

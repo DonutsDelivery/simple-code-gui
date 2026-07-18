@@ -1,0 +1,11 @@
+notes:
+  - _ulid: 01KXTB2VZ6K0QZNNH4ET0RN3YP
+    content: >-
+      Implementation notes (auto-generated from spec):
+
+
+      The spatial arrangement and tiled split arrangement are separate projections of shared
+      workspace sessions so each interaction model can evolve and recover independently.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-18T10:06:53.414Z
