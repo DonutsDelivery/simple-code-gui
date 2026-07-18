@@ -505,6 +505,11 @@ features:
             then: each essential action has a keyboard path with visible focus and is not trapped inside
               terminal content
             when: they navigate, select, activate, move, group, or fit nodes
+          - given: a user navigates with assistive technology
+            id: ac-2
+            then: an ordered semantic representation exposes their names, relationships, states, and available
+              actions without requiring spatial interpretation
+            when: the spatial scene contains nodes and groups
         tags: []
         created: 2026-07-18T10:04:46.484Z
         notes: []
