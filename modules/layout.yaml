@@ -312,6 +312,11 @@ features:
         then: the workspace returns to its saved view, node arrangement, and camera without losing the tiled
           arrangement
         when: the application restarts and restores that workspace
+      - given: a session belongs to a workspace with both views available
+        id: ac-3
+        then: both views reflect the same session membership without duplicating or restarting unaffected
+          sessions
+        when: the session is created, closed, resumed, or moved to another workspace
     tags: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
