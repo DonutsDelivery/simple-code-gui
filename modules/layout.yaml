@@ -295,6 +295,9 @@ features:
     description: A workspace can present its running sessions as persistent modular nodes on an
       unbounded spatial surface while retaining the existing tiled view as an independent
       alternative.
+    status:
+      maturity: draft
+      implementation: in_progress
     depends_on: []
     implements: []
     relates_to:
