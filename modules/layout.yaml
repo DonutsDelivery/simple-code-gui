@@ -342,6 +342,10 @@ features:
             then: the 95th-percentile frame time remains below 33 milliseconds, delivery queues remain bounded,
               and acknowledged output is not lost
             when: the user navigates and interacts with the spatial workspace
+          - given: a scene contains 50 nodes with no more than eight active terminal renderers
+            id: ac-3
+            then: renderer memory is no more than 250 MiB above the one-terminal baseline
+            when: memory settles after ordinary use
         tags: []
         created: 2026-07-18T10:04:47.335Z
         notes: []
