@@ -752,6 +752,11 @@ features:
         id: ac-3
         then: focus moves among enabled items, actions activate, and closing restores focus to the trigger
         when: the user navigates with Arrow, Home, End, Enter, Space, or Escape
+      - given: a terminal menu opens on a narrow or resized viewport
+        id: ac-4
+        then: the menu remains onscreen, collapses to one column when needed, and scrolls internally rather
+          than exceeding the viewport
+        when: available space changes
     priority: medium
     tags: []
     created: 2026-07-18T18:21:15.305Z
