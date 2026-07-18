@@ -345,6 +345,19 @@ features:
         tags: []
         created: 2026-07-18T10:04:44.965Z
         notes: []
+      - _ulid: 01KXTAYYV3TGAWTKXYJ49N02TR
+        slugs:
+          - canvas-node-interaction
+        title: Modular Node Interaction
+        type: requirement
+        depends_on: []
+        implements: []
+        relates_to: []
+        tests: []
+        traits: []
+        tags: []
+        created: 2026-07-18T10:04:45.283Z
+        notes: []
     created: 2026-07-18T10:04:14.885Z
     notes: []
 notes: []
