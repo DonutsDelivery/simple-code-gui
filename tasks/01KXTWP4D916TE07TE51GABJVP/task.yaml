@@ -5,13 +5,21 @@ title: Implement Canvas notes, images, sketches, and zoom controls
 type: task
 spec_ref: "@canvas-content-objects"
 derivation: auto
-status: in_progress
+status: pending_review
 blocked_by: []
 depends_on: []
 context: []
 priority: 2
 tags: []
 vcs_refs: []
+submission_linkage:
+  review_url: null
+  branch: dispatch/task/task-canvas-content-objects/01kxtwp4
+  captured_at: 2026-07-18T16:56:14.309Z
+  commit: 70f8b1db2dddc8829648dabba31cdd2e4fbdc4f9
+  remote: null
+  remote_url: null
+  upstream_ref: null
 history:
   - author: DonutsDelivery
     changes:
@@ -23,6 +31,27 @@ history:
         previous: null
     command: task-start
     timestamp: 2026-07-18T15:14:52.766Z
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: pending_review
+        previous: in_progress
+      submission_linkage:
+        new:
+          review_url: null
+          branch: dispatch/task/task-canvas-content-objects/01kxtwp4
+          captured_at: 2026-07-18T16:56:14.309Z
+          commit: 70f8b1db2dddc8829648dabba31cdd2e4fbdc4f9
+          remote: null
+          remote_url: null
+          upstream_ref: null
+        previous: null
+      submitted_at:
+        new: 2026-07-18T16:56:14.315Z
+        previous: null
+    command: task-submit
+    timestamp: 2026-07-18T16:56:14.315Z
 created_at: 2026-07-18T15:14:30.441Z
 started_at: 2026-07-18T15:14:52.766Z
+submitted_at: 2026-07-18T16:56:14.315Z
 todos: []
