@@ -77,3 +77,15 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-18T20:05:04.474Z
+  - _ulid: 01KXW6PGHXWEMP3G8AVMEJTE1F
+    content: "Fix cycle: addressed eight confirmed review findings. Added instance-owned authenticated
+      HTTP signal WebSocket delivery; API-backed merged settings persistence; real mobile visibility
+      markers and observer-driven acknowledgement; shallow tab-topology replay; Canvas attention
+      selector isolation; orchestrator pre-spawn instruction installation; multi-byte ESC parsing
+      and post-latch short-circuiting; and MobileServer signal unsubscription. Focused regression
+      tests and production build pass. Full suite remains at 280/282 with inherited session-store
+      mock and themes failures; kspec validate remains blocked by the existing missing @claude
+      author reference."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-19T03:28:43.069Z
