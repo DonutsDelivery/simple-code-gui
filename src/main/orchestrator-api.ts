@@ -8,6 +8,8 @@ import type { PtyManager } from './pty-manager.js'
 import type { SessionStore } from './session-store.js'
 import { validateWithinProjectRoots } from './mobile-security/index.js'
 import { DebugApi } from './debug-api.js'
+import { installAgentSessionSignalInstructions } from './ipc/agent-session-signal-instructions.js'
+import type { AIBackend } from './ipc/instruction-files.js'
 
 const ORCHESTRATOR_PORT = 19836
 
@@ -291,6 +293,7 @@ export class OrchestratorApi {
         const autoAcceptTools = project?.autoAcceptTools ?? globalSettings.autoAcceptTools
         const permissionMode = project?.permissionMode ?? globalSettings.permissionMode
 
+        installAgentSessionSignalInstructions(cwd, effectiveBackend as AIBackend)
         const id = this.ptyManager.spawn(cwd, undefined, autoAcceptTools, permissionMode, effectiveModel, effectiveBackend)
         this.ptyToProject.set(id, cwd)
         this.ptyToBackend.set(id, effectiveBackend)

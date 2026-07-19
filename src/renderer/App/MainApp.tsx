@@ -38,6 +38,7 @@ export interface MainAppProps {
 }
 
 export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.ReactElement {
+  const isMobile = !isElectron
   const {
     projects,
     openTabs,
@@ -48,6 +49,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     activeTileTree,
     activeCanvasScene,
     activeView,
+    attentionByTabId,
     addProject,
     removeProject,
     updateProject,
@@ -335,8 +337,6 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     )
   }
 
-  const isMobile = !isElectron
-
   return (
     <div className="app">
       <TitleBar />
@@ -367,7 +367,11 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
 
         {/* Mobile: each terminal as its own slide */}
         {isMobile && openTabs.map((tab) => (
-          <div key={tab.id} className={`mobile-terminal-slide${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}`}>
+          <div
+            key={tab.id}
+            data-agent-visible-tab-id={tab.id}
+            className={`mobile-terminal-slide${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}`}
+          >
             <div className="mobile-slide-header" aria-label={`${tab.title}${attentionByTabId[tab.id] === 'needs-input' ? ', needs your input' : attentionByTabId[tab.id] === 'completed' ? ', agent completed' : ''}`}>
               <span className="mobile-slide-title">{tab.title}</span>
               {attentionByTabId[tab.id] && <span className="agent-attention-dot" aria-hidden="true" />}
@@ -485,6 +489,8 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
 
         <SettingsModal
           isOpen={settingsOpen}
+          api={api}
+          settings={settings}
           onClose={closeSettings}
           onThemeChange={setCurrentTheme}
           onSaved={(newSettings) => setSettings(newSettings)}

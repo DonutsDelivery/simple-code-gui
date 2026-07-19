@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { Theme } from '../themes'
+import type { Settings } from '../api/types'
 import { VoiceBrowserModal } from './VoiceBrowserModal'
 import { useVoice } from '../contexts/VoiceContext'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -54,6 +55,8 @@ function migrateThemeCustomization(saved: unknown): ThemeCustomization {
 
 export function SettingsModal({
   isOpen,
+  api,
+  settings,
   onClose,
   onThemeChange,
   onSaved,
@@ -139,28 +142,33 @@ export function SettingsModal({
     }
   }
 
+  function applyBaseSettings(loaded: Settings): void {
+    setGeneral(prev => ({
+      ...prev,
+      defaultProjectDir: loaded.defaultProjectDir || '',
+      selectedTheme: loaded.theme || 'default',
+      themeCustomization: migrateThemeCustomization(loaded.themeCustomization),
+      autoAcceptTools: loaded.autoAcceptTools || [],
+      permissionMode: loaded.permissionMode || 'default',
+      backend: loaded.backend || 'default'
+    }))
+    setGlobalInstructionContent(loaded.globalInstructionInjection || '')
+    setAgentNotifications({
+      enabled: loaded.notificationSoundsEnabled !== false,
+      volume: Math.max(0, Math.min(1, loaded.notificationVolume ?? 0.65)),
+    })
+    setHeadroom({
+      enabled: loaded.headroomEnabled === true,
+      port: loaded.headroomPort ?? 8787,
+      proxyPath: loaded.headroomProxyPath || ''
+    })
+  }
+
   useEffect(() => {
     if (isOpen) {
-      window.electronAPI?.getSettings?.()?.then((settings) => {
-        setGeneral(prev => ({
-          ...prev,
-          defaultProjectDir: settings.defaultProjectDir || '',
-          selectedTheme: settings.theme || 'default',
-          themeCustomization: migrateThemeCustomization(settings.themeCustomization),
-          autoAcceptTools: settings.autoAcceptTools || [],
-          permissionMode: settings.permissionMode || 'default',
-          backend: settings.backend || 'default'
-        }))
-        setGlobalInstructionContent(settings.globalInstructionInjection || '')
-        setAgentNotifications({
-          enabled: settings.notificationSoundsEnabled !== false,
-          volume: Math.max(0, Math.min(1, settings.notificationVolume ?? 0.65)),
-        })
-        setHeadroom({
-          enabled: settings.headroomEnabled === true,
-          port: settings.headroomPort ?? 8787,
-          proxyPath: settings.headroomProxyPath || ''
-        })
+      if (settings) applyBaseSettings(settings)
+      else void api.getSettings().then(applyBaseSettings).catch(error => {
+        console.error('Failed to load settings:', error)
       })
 
       window.electronAPI?.headroomGetStatus?.()?.then(setHeadroomStatus)?.catch(() => {})
@@ -207,7 +215,7 @@ export function SettingsModal({
     } else {
       setUI(prev => ({ ...prev, playingPreview: null, previewLoading: null }))
     }
-  }, [isOpen])
+  }, [isOpen, api, settings])
 
   // Live Headroom proxy status updates pushed from the main process.
   useEffect(() => {
@@ -215,8 +223,9 @@ export function SettingsModal({
     return () => unsubscribe?.()
   }, [])
 
-  async function handleSave(): Promise<void> {
-    const newSettings = {
+  function buildSettings(base: Settings, overrides: Partial<Settings> = {}): Settings {
+    return {
+      ...base,
       defaultProjectDir: general.defaultProjectDir,
       theme: general.selectedTheme,
       themeCustomization: general.themeCustomization,
@@ -229,8 +238,20 @@ export function SettingsModal({
       headroomEnabled: headroom.enabled,
       headroomPort: headroom.port,
       headroomProxyPath: headroom.proxyPath || undefined,
+      ...overrides,
     }
-    await window.electronAPI?.saveSettings(newSettings)
+  }
+
+  async function saveSettings(overrides: Partial<Settings> = {}): Promise<Settings> {
+    const base = settings ?? await api.getSettings()
+    const merged = buildSettings(base, overrides)
+    await api.saveSettings(merged)
+    onSaved?.(merged)
+    return merged
+  }
+
+  async function handleSave(): Promise<void> {
+    await saveSettings()
     // Save voice settings including XTTS quality settings and TADA sample
     await window.electronAPI?.voiceApplySettings?.({
       ttsVoice: voice.selectedVoice,
@@ -242,7 +263,6 @@ export function SettingsModal({
       xttsRepetitionPenalty: xtts.repetitionPenalty,
       tadaVoiceSample: voice.tadaVoiceSample
     })
-    onSaved?.(newSettings)
     onClose()
   }
 
@@ -477,17 +497,7 @@ export function SettingsModal({
              savedContent={globalInstructionContent}
              onSaved={(content) => {
                setGlobalInstructionContent(content)
-               window.electronAPI?.saveSettings({
-                 defaultProjectDir: general.defaultProjectDir,
-                 theme: general.selectedTheme,
-                 themeCustomization: general.themeCustomization,
-                 autoAcceptTools: general.autoAcceptTools,
-                 permissionMode: general.permissionMode,
-                 backend: general.backend,
-                 notificationSoundsEnabled: agentNotifications.enabled,
-                 notificationVolume: agentNotifications.volume,
-                 globalInstructionInjection: content
-               })
+               void saveSettings({ globalInstructionInjection: content })
              }}
              isApplying={globalInstructionApplying}
              setIsApplying={setGlobalInstructionApplying}

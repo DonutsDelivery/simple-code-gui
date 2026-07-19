@@ -1,4 +1,5 @@
 import type { Theme } from '../../themes'
+import type { Api, Settings } from '../../api/types'
 type WhisperModelSize = 'tiny.en' | 'base.en' | 'small.en' | 'medium.en' | 'large-v3'
 
 // Whisper models available
@@ -172,9 +173,11 @@ export interface UpdateStatus {
 
 export interface SettingsModalProps {
   isOpen: boolean
+  api: Api
+  settings: Settings | null
   onClose: () => void
   onThemeChange: (theme: Theme) => void
-  onSaved?: (settings: { defaultProjectDir: string; theme: string; themeCustomization?: ThemeCustomization; autoAcceptTools?: string[]; permissionMode?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => void
+  onSaved?: (settings: Settings) => void
   appVersion?: string
   updateStatus?: UpdateStatus
   onDownloadUpdate?: () => void

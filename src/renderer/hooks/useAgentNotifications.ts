@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { AgentSessionSignalEvent } from '../../common/agent-session-signal'
 import type { Api } from '../api'
 import { useWorkspaceStore, type AgentAttentionKind } from '../stores/workspace'
@@ -13,7 +14,9 @@ interface UseAgentNotificationsOptions {
 }
 
 export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotificationsOptions): void {
-  const sessions = useWorkspaceStore(state => state.sessions)
+  const tabTopology = useWorkspaceStore(useShallow(
+    state => state.sessions.map(session => session.openTabs),
+  ))
   const activeSessionId = useWorkspaceStore(state => state.activeSessionId)
   const pendingSignals = useRef(new Map<string, AgentSessionSignalEvent>())
 
@@ -28,7 +31,7 @@ export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotif
     }
 
     const logical = getVisibleTabIds(state.sessions, state.activeSessionId, isMobile)
-    const visible = isMobile ? logical : getActuallyVisibleTabIds(logical)
+    const visible = getActuallyVisibleTabIds(logical)
     if (visible.has(tabId)) state.clearTabAttention(tabId)
     else state.markTabAttention(tabId, kind)
     return true
@@ -45,23 +48,59 @@ export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotif
     for (const [ptyId, event] of pendingSignals.current) {
       if (handleSignal(event)) pendingSignals.current.delete(ptyId)
     }
+  }, [tabTopology, isMobile, settings?.notificationSoundsEnabled, settings?.notificationVolume])
 
+  useEffect(() => {
     const clearVisibleAttention = (): void => {
-      const logical = getVisibleTabIds(
-        useWorkspaceStore.getState().sessions,
-        useWorkspaceStore.getState().activeSessionId,
-        isMobile,
-      )
-      const visible = isMobile ? logical : getActuallyVisibleTabIds(logical)
-      useWorkspaceStore.getState().clearTabAttentionMany([...visible])
+      const state = useWorkspaceStore.getState()
+      const logical = getVisibleTabIds(state.sessions, state.activeSessionId, isMobile)
+      const visible = getActuallyVisibleTabIds(logical)
+      state.clearTabAttentionMany([...visible])
     }
 
+    const observedElements = new Set<Element>()
+    const intersectionObserver = typeof IntersectionObserver === 'undefined'
+      ? null
+      : new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) clearVisibleAttention()
+      })
+
+    const observeVisibleTabElements = (): void => {
+      if (!intersectionObserver) return
+      for (const element of document.querySelectorAll('[data-agent-visible-tab-id]')) {
+        if (observedElements.has(element)) continue
+        observedElements.add(element)
+        intersectionObserver.observe(element)
+      }
+      for (const element of observedElements) {
+        if (element.isConnected) continue
+        intersectionObserver.unobserve(element)
+        observedElements.delete(element)
+      }
+    }
+
+    const mutationObserver = !intersectionObserver || !document.body
+      ? null
+      : new MutationObserver(() => {
+        observeVisibleTabElements()
+        clearVisibleAttention()
+      })
+
     clearVisibleAttention()
+    observeVisibleTabElements()
+    mutationObserver?.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-agent-visible-tab-id'],
+    })
     document.addEventListener('visibilitychange', clearVisibleAttention)
     window.addEventListener('focus', clearVisibleAttention)
     return () => {
+      mutationObserver?.disconnect()
+      intersectionObserver?.disconnect()
       document.removeEventListener('visibilitychange', clearVisibleAttention)
       window.removeEventListener('focus', clearVisibleAttention)
     }
-  }, [sessions, activeSessionId, isMobile])
+  }, [activeSessionId, isMobile])
 }

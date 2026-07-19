@@ -244,28 +244,36 @@ export class MobileServer {
     wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions, this.ptyDataBuffer)
   }
 
+  private subscribeAgentSessionSignals(): void {
+    if (
+      this.unsubscribeAgentSessionSignals
+      || typeof this.ptyManager?.onAgentSessionSignal !== 'function'
+    ) {
+      return
+    }
+
+    this.unsubscribeAgentSessionSignals = this.ptyManager.onAgentSessionSignal(
+      (signal: AgentSessionSignalEvent) => {
+        const event: AgentSessionSignalMessage = {
+          type: 'agent-session-signal',
+          signal
+        }
+        const message = JSON.stringify(event)
+        for (const client of this.connectedClients) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(message)
+          }
+        }
+      }
+    )
+  }
+
   // Service handlers
   setPtyManager(manager: any): void {
     this.unsubscribeAgentSessionSignals?.()
     this.unsubscribeAgentSessionSignals = null
     this.ptyManager = manager
-
-    if (typeof manager?.onAgentSessionSignal === 'function') {
-      this.unsubscribeAgentSessionSignals = manager.onAgentSessionSignal(
-        (signal: AgentSessionSignalEvent) => {
-          const event: AgentSessionSignalMessage = {
-            type: 'agent-session-signal',
-            signal
-          }
-          const message = JSON.stringify(event)
-          for (const client of this.connectedClients) {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(message)
-            }
-          }
-        }
-      )
-    }
+    this.subscribeAgentSessionSignals()
   }
 
   setSessionStore(store: any): void {
@@ -394,6 +402,7 @@ export class MobileServer {
   }
 
   async start(): Promise<void> {
+    this.subscribeAgentSessionSignals()
     try {
       // Get TLS certificate (generates on first run)
       if (this.useTls) {
@@ -445,6 +454,9 @@ export class MobileServer {
 
   stop(): void {
     stopNonceCleanup()
+
+    this.unsubscribeAgentSessionSignals?.()
+    this.unsubscribeAgentSessionSignals = null
 
     if (this.rateLimitCleanupInterval) {
       clearInterval(this.rateLimitCleanupInterval)

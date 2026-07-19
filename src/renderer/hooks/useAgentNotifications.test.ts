@@ -24,9 +24,14 @@ function session(id: string, tabId: string): WorkspaceSession {
 describe('useAgentNotifications', () => {
   beforeEach(() => {
     vi.mocked(playAgentNotificationSound).mockClear()
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
     useWorkspaceStore.getState().initSessions([session('one', 'visible'), session('two', 'hidden')], 'one')
   })
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+  })
 
   // AC: @agent-session-notifications ac-3
   // AC: @agent-session-notifications ac-4
@@ -85,5 +90,92 @@ describe('useAgentNotifications', () => {
     act(() => listener?.({ ptyId: 'pty-hidden', type: 'complete' }))
     expect(playAgentNotificationSound).not.toHaveBeenCalled()
     expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ hidden: 'completed' })
+  })
+
+  // AC: @agent-session-notifications ac-3
+  it('keeps attention when the selected mobile tab signals while the document is hidden', () => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+    let listener: ((event: { ptyId: string; type: 'complete' }) => void) | undefined
+    const api = { onAgentSessionSignal: (callback: typeof listener) => { listener = callback; return vi.fn() } } as any
+    renderHook(() => useAgentNotifications({
+      api,
+      settings: { defaultProjectDir: '', theme: 'default' },
+      isMobile: true,
+    }))
+
+    act(() => listener?.({ ptyId: 'pty-visible', type: 'complete' }))
+
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ visible: 'completed' })
+  })
+
+  // AC: @agent-session-notifications ac-3
+  it('acknowledges attention when a rendered terminal is retagged in the viewport', () => {
+    let notifyIntersection: ((entries: Array<{ isIntersecting: boolean }>) => void) | undefined
+    let notifyMutation: (() => void) | undefined
+    class TestIntersectionObserver {
+      constructor(callback: typeof notifyIntersection) { notifyIntersection = callback }
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
+    }
+    class TestMutationObserver {
+      constructor(callback: typeof notifyMutation) { notifyMutation = callback }
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+    vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
+    vi.stubGlobal('MutationObserver', TestMutationObserver)
+    const marker = document.createElement('div')
+    marker.dataset.agentVisibleTabId = 'hidden'
+    marker.getBoundingClientRect = () => ({
+      width: 100,
+      height: 100,
+      left: -200,
+      right: -100,
+      top: 0,
+      bottom: 100,
+    } as DOMRect)
+    document.body.append(marker)
+    useWorkspaceStore.getState().markTabAttention('visible', 'completed')
+
+    renderHook(() => useAgentNotifications({
+      api: { onAgentSessionSignal: () => vi.fn() } as any,
+      settings: { defaultProjectDir: '', theme: 'default' },
+      isMobile: true,
+    }))
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ visible: 'completed' })
+
+    marker.dataset.agentVisibleTabId = 'visible'
+    marker.getBoundingClientRect = () => ({
+      width: 100,
+      height: 100,
+      left: 0,
+      right: 100,
+      top: 0,
+      bottom: 100,
+    } as DOMRect)
+    act(() => notifyMutation?.())
+
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({})
+  })
+
+  // AC: @agent-session-notifications ac-3
+  it('does not rerun visibility acknowledgement for Canvas-only scene updates', () => {
+    const clearVisible = vi.spyOn(useWorkspaceStore.getState(), 'clearTabAttentionMany')
+    renderHook(() => useAgentNotifications({
+      api: { onAgentSessionSignal: () => vi.fn() } as any,
+      settings: { defaultProjectDir: '', theme: 'default' },
+      isMobile: false,
+    }))
+    const initialCalls = clearVisible.mock.calls.length
+
+    act(() => {
+      useWorkspaceStore.getState().setActiveCanvasScene({
+        ...createEmptyCanvasScene(),
+        camera: { x: 25, y: 40, zoom: 1 },
+      })
+    })
+
+    expect(clearVisible).toHaveBeenCalledTimes(initialCalls)
   })
 })

@@ -26,7 +26,7 @@ import { ConnectionManager } from './connection'
 import { PtyWebSocketManager } from './pty-websocket'
 import { PtyApi } from './pty-api'
 import { WorkspaceApi } from './workspace-api'
-import { onAgentSessionSignal } from './agent-session-signals'
+import { AgentSessionSignalConnection } from './agent-session-signals'
 
 export class HttpBackend implements Api {
   voiceGetInstalled?: () => Promise<
@@ -52,6 +52,7 @@ export class HttpBackend implements Api {
   private port: number
   private connection: ConnectionManager
   private wsManager: PtyWebSocketManager
+  private agentSignals: AgentSessionSignalConnection
   private ptyApi: PtyApi
   private workspaceApi: WorkspaceApi
 
@@ -89,6 +90,7 @@ export class HttpBackend implements Api {
     // Initialize managers
     this.connection = new ConnectionManager(baseUrl, config.token)
     this.wsManager = new PtyWebSocketManager(wsBaseUrl, config.token)
+    this.agentSignals = new AgentSessionSignalConnection(wsBaseUrl, config.token)
     this.ptyApi = new PtyApi(this.connection, this.wsManager)
     this.workspaceApi = new WorkspaceApi(this.connection)
   }
@@ -142,7 +144,7 @@ export class HttpBackend implements Api {
   }
 
   onAgentSessionSignal(callback: AgentSessionSignalCallback): Unsubscribe {
-    return onAgentSessionSignal(callback)
+    return this.agentSignals.subscribe(callback)
   }
 
   // Session Management
@@ -232,6 +234,7 @@ export class HttpBackend implements Api {
   }
 
   disconnect(): void {
+    this.agentSignals.disconnect()
     this.wsManager.disconnectAll()
     this.connection.setConnectionState('disconnected')
   }

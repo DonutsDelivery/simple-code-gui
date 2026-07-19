@@ -6,7 +6,7 @@ const SIGNAL_LINES = new Map<string, AgentSessionSignalType>([
 ])
 const MAX_PENDING_LINE = 2048
 
-type AnsiState = 'text' | 'escape' | 'csi' | 'string' | 'string-escape'
+type AnsiState = 'text' | 'escape' | 'escape-intermediate' | 'csi' | 'string' | 'string-escape'
 
 /**
  * Incrementally finds managed session signal lines in raw PTY output.
@@ -24,7 +24,12 @@ export class AgentSessionSignalDetector {
 
   push(chunk: string): AgentSessionSignalType[] {
     this.detectedSignals = []
-    for (const char of chunk) this.consumeCharacter(char)
+    if (this.signalEmittedSinceUserInput) return this.detectedSignals
+
+    for (const char of chunk) {
+      this.consumeCharacter(char)
+      if (this.signalEmittedSinceUserInput) break
+    }
     return this.detectedSignals
   }
 
@@ -49,7 +54,11 @@ export class AgentSessionSignalDetector {
           this.csiParameters = ''
           this.ansiState = 'csi'
         } else if (char === ']' || char === 'P' || char === '^' || char === '_') this.ansiState = 'string'
+        else if (char >= ' ' && char <= '/') this.ansiState = 'escape-intermediate'
         else this.ansiState = 'text'
+        return
+      case 'escape-intermediate':
+        if (char < ' ' || char > '/') this.ansiState = 'text'
         return
       case 'csi':
         if (char >= '@' && char <= '~') {

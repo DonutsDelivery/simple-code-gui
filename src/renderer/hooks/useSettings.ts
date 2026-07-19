@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Theme, getThemeById, applyTheme, themes } from '../themes'
+import type { Settings } from '../api/types'
 
 export interface TerminalColorsCustomization {
   black?: string
@@ -19,16 +20,7 @@ export interface ThemeCustomization {
   terminalColors: TerminalColorsCustomization | null
 }
 
-export interface AppSettings {
-  defaultProjectDir: string
-  theme: string
-  themeCustomization?: ThemeCustomization | null
-  autoAcceptTools?: string[]
-  permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
-  notificationSoundsEnabled?: boolean
-  notificationVolume?: number
-}
+export type AppSettings = Settings
 
 interface UseSettingsReturn {
   settings: AppSettings | null

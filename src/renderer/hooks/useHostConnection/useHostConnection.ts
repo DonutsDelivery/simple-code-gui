@@ -3,10 +3,6 @@
 // ============================================
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type {
-  AgentSessionSignalMessage
-} from '../../../common/agent-session-signal.js'
-import { emitAgentSessionSignal } from '../../api/http-backend/agent-session-signals.js'
 
 import type {
   HostConfig,
@@ -123,11 +119,6 @@ export function useHostConnection(): UseHostConnectionReturn {
           clearTimeout(pongTimerRef.current)
           pongTimerRef.current = null
         }
-        return
-      }
-
-      if (data.type === 'agent-session-signal' && data.signal) {
-        emitAgentSessionSignal((data as AgentSessionSignalMessage).signal)
         return
       }
 

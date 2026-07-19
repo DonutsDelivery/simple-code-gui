@@ -58,6 +58,20 @@ describe('AgentSessionSignalDetector', () => {
 
   // AC: @agent-session-notifications ac-1
   // AC: @agent-session-notifications ac-2
+  it('ignores split multi-byte ESC decorations around exact signal lines', () => {
+    const detector = new AgentSessionSignalDetector()
+
+    expect(detector.push('\x1b(')).toEqual([])
+    expect(detector.push(`B${COMPLETE_TAG}\n`)).toEqual(['complete'])
+
+    detector.resetForUserInput()
+
+    expect(detector.push('\x1b#')).toEqual([])
+    expect(detector.push(`8${INPUT_NEEDED_TAG}\n`)).toEqual(['input-needed'])
+  })
+
+  // AC: @agent-session-notifications ac-1
+  // AC: @agent-session-notifications ac-2
   it('latches the first stopping signal until explicit real user input reset', () => {
     const detector = new AgentSessionSignalDetector()
 

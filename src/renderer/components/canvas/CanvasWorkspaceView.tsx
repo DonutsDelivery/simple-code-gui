@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { ErrorBoundary } from '../ErrorBoundary.js'
 import type { Api } from '../../api/types.js'
 import type { CanvasAssetMetadata } from '../../../common/canvas-assets.js'
 import type { Theme } from '../../themes.js'
+import { useWorkspaceStore } from '../../stores/workspace.js'
 import type { OpenTab, Project } from '../tiled/types.js'
 import {
   fitBounds,
@@ -171,6 +173,9 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
   onResumeTab?: (id: string) => Promise<void>
   onRenameTab: (id: string, title: string) => void
 }): React.ReactElement {
+  const attentionByTabId = useWorkspaceStore(useShallow(state => Object.fromEntries(
+    tabs.map(candidate => [candidate.id, state.attentionByTabId[candidate.id]]),
+  )))
   const [exitCode, setExitCode] = useState<number | null>(null)
   const [resuming, setResuming] = useState(false)
   const [editing, setEditing] = useState(false)
