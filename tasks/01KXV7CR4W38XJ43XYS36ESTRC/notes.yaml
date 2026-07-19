@@ -89,3 +89,12 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-19T03:28:43.069Z
+  - _ulid: 01KXW84J9AKK2W4FMG3WGS289T
+    content: "Final review pass caught and fixed three follow-on lifecycle cases before commit: mobile
+      off/on now resubscribes signal forwarding, Canvas/mobile marker retags immediately acknowledge
+      visible attention, and the dedicated HTTP signal socket now uses ping/pong liveness detection
+      with timeout-driven reconnect. Exact staged snapshot: 33 focused regressions pass, production
+      build passes, and no feature-file TypeScript errors remain."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-19T03:53:52.170Z
