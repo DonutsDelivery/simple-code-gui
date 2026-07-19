@@ -98,3 +98,9 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-19T03:53:52.170Z
+  - _ulid: 01KXW858YMPPHTCPHA95Q7T251
+    content: Fix commit aa4580e completes the review findings. Task remains pending_review; kspec
+      correctly rejected a duplicate submit transition because it was already pending_review.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-19T03:54:15.380Z
