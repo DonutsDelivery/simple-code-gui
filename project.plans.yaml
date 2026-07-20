@@ -1,0 +1,69 @@
+kynetic_plans: "1.0"
+plans:
+  - _ulid: 01KXYRGA3WE760ZG8BTNMRM7P3
+    slugs:
+      - plan-retire-gsd-integration
+    title: Retire GSD Integration
+    content: >
+      # Retire GSD Integration
+
+
+      ## Specs
+
+
+      ```yaml
+
+      - title: GSD Integration Retirement
+        slug: gsd-integration-retirement
+        type: feature
+        parent: "@extensions"
+        description: |
+          Claude Terminal does not provide dedicated Get Shit Done integration. Generic extension support remains available without promoting or managing GSD specially, and existing user-owned GSD data remains untouched.
+        acceptance_criteria:
+          - id: ac-1
+            given: |
+              a user opens Claude Terminal
+            when: |
+              they inspect application integrations, status surfaces, and command menus
+            then: |
+              no dedicated GSD installation, progress, status, or command surface is available
+          - id: ac-2
+            given: |
+              the built-in extension catalog is available
+            when: |
+              a user browses its promoted extensions
+            then: |
+              Get Shit Done is not included, while ordinary generic extensions remain available
+          - id: ac-3
+            given: |
+              a user has existing GSD project files, commands, extension records, caches, or preferences
+            when: |
+              they use a Claude Terminal version without dedicated GSD integration
+            then: |
+              Claude Terminal does not migrate, filter, or delete that existing user-owned data
+        implementation_notes: |
+          Remove only GSD-specific IPC, preload and HTTP contracts, sidebar UI, command-menu entries, cache/style declarations, and the built-in registry item. Preserve generic extension machinery and unrelated working-tree changes. Verify with AC-linked menu and registry tests, the full test suite, production build, source scan, and isolated UI checks.
+      ```
+
+
+      ## Tasks
+
+
+      derive_from_specs: true
+
+
+      ## Implementation Notes
+
+
+      This is a surgical retirement. Do not edit generated bundles manually and do not clean up
+      user-level or project-level GSD artifacts.
+    status: approved
+    approved_at: null
+    branch: null
+    derived_specs: []
+    derived_tasks: []
+    module_ref: "@extensions"
+    source_path: /tmp/gsd-integration-retirement-plan.md
+    created_at: 2026-07-20T03:18:23.100Z
+    completed_at: null
+    notes: []
