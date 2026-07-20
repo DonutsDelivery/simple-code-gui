@@ -592,18 +592,9 @@ export function CanvasWorkspaceView({
     if (!surface) return
     const handleWheel = (event: WheelEvent): void => {
       event.preventDefault()
-      if (event.ctrlKey || event.metaKey) {
-        const cursor = eventPoint(event, surface)
-        const factor = Math.exp(-event.deltaY * 0.002)
-        setCamera(zoomAtScreenPoint(sceneRef.current.camera, sceneRef.current.camera.zoom * factor, cursor))
-        return
-      }
-      const camera = sceneRef.current.camera
-      setCamera({
-        ...camera,
-        x: camera.x + event.deltaX / camera.zoom,
-        y: camera.y + event.deltaY / camera.zoom,
-      })
+      const cursor = eventPoint(event, surface)
+      const factor = Math.exp(-event.deltaY * 0.002)
+      setCamera(zoomAtScreenPoint(sceneRef.current.camera, sceneRef.current.camera.zoom * factor, cursor))
     }
     surface.addEventListener('wheel', handleWheel, { passive: false })
     return () => surface.removeEventListener('wheel', handleWheel)
@@ -1218,7 +1209,7 @@ export function CanvasWorkspaceView({
           <div className="canvas-empty">
             <strong>Drop a project, image, or start a note</strong>
             <span><kbd>Space</kbd> drag to pan</span>
-            <span><kbd>Ctrl</kbd> scroll or <kbd>+</kbd>/<kbd>−</kbd> to zoom</span>
+            <span>Scroll or <kbd>+</kbd>/<kbd>−</kbd> to zoom</span>
           </div>
         )}
 

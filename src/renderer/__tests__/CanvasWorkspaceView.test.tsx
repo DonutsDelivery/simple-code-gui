@@ -368,14 +368,17 @@ describe('CanvasWorkspaceView', () => {
   })
 
   // AC: @canvas-navigation ac-1
-  it('zooms around the cursor with modified wheel input', async () => {
+  it('zooms around the cursor with plain wheel input', async () => {
     const { onSceneChange } = renderCanvas()
     const surface = screen.getByRole('application', { name: /spatial terminal canvas/i })
-    const wheel = new WheelEvent('wheel', { ctrlKey: true, deltaY: -100, clientX: 400, clientY: 300, bubbles: true, cancelable: true })
+    const wheel = new WheelEvent('wheel', { deltaY: -100, clientX: 400, clientY: 300, bubbles: true, cancelable: true })
     expect(fireEvent(surface, wheel)).toBe(false)
     expect(wheel.defaultPrevented).toBe(true)
 
     await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
-    expect(onSceneChange.mock.calls.at(-1)?.[0].camera.zoom).toBeGreaterThan(1)
+    const camera = onSceneChange.mock.calls.at(-1)?.[0].camera
+    expect(camera.zoom).toBeGreaterThan(1)
+    expect(camera.x).toBeGreaterThan(0)
+    expect(camera.y).toBeGreaterThan(0)
   })
 })
