@@ -962,7 +962,7 @@ export class PtyManager {
       disposables: [],
       spawnedAt: Date.now(),
       outputBuffer: new OutputBuffer(),
-      signalDetector: new AgentSessionSignalDetector(),
+      signalDetector: new AgentSessionSignalDetector(cwd),
       replayBuffer: new ReplayBuffer(),
       hermesRuntimeDir,
     }
@@ -1043,7 +1043,7 @@ export class PtyManager {
           disposables: [],
           spawnedAt: Date.now(),
           outputBuffer: new OutputBuffer(),
-          signalDetector: new AgentSessionSignalDetector(),
+          signalDetector: new AgentSessionSignalDetector(cwd),
           replayBuffer: new ReplayBuffer(),
         }
         this.processes.set(id, retryProc)

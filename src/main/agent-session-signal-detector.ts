@@ -1,9 +1,6 @@
 import type { AgentSessionSignalType } from '../common/agent-session-signal'
+import { formatAgentSessionSignal } from './agent-session-signal-protocol'
 
-const SIGNAL_LINES = new Map<string, AgentSessionSignalType>([
-  ['<claude-terminal-signal type="complete" />', 'complete'],
-  ['<claude-terminal-signal type="input-needed" />', 'input-needed'],
-])
 const MAX_PENDING_LINE = 2048
 
 type AnsiState = 'text' | 'escape' | 'escape-intermediate' | 'csi' | 'string' | 'string-escape'
@@ -14,6 +11,7 @@ type AnsiState = 'text' | 'escape' | 'escape-intermediate' | 'csi' | 'string' | 
  * sequences and signal lines may span arbitrary node-pty chunks.
  */
 export class AgentSessionSignalDetector {
+  private readonly signalLines: Map<string, AgentSessionSignalType>
   private ansiState: AnsiState = 'text'
   private csiParameters = ''
   private textColumn = 1
@@ -21,6 +19,13 @@ export class AgentSessionSignalDetector {
   private lineOverflowed = false
   private signalEmittedSinceUserInput = false
   private detectedSignals: AgentSessionSignalType[] = []
+
+  constructor(projectPath: string) {
+    this.signalLines = new Map([
+      [formatAgentSessionSignal(projectPath, 'complete'), 'complete'],
+      [formatAgentSessionSignal(projectPath, 'input-needed'), 'input-needed'],
+    ])
+  }
 
   push(chunk: string): AgentSessionSignalType[] {
     this.detectedSignals = []
@@ -121,7 +126,8 @@ export class AgentSessionSignalDetector {
     if (!this.lineOverflowed && !this.signalEmittedSinceUserInput) {
       const line = this.pendingLine.trim()
       const signalLine = line.startsWith('● ') ? line.slice(2).trimStart() : line
-      const signal = SIGNAL_LINES.get(signalLine)
+      const normalizedSignalLine = signalLine.replace(/[ \t]+/g, ' ')
+      const signal = this.signalLines.get(normalizedSignalLine)
       if (signal) {
         this.signalEmittedSinceUserInput = true
         this.detectedSignals.push(signal)

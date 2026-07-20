@@ -1,3 +1,4 @@
+import { getAgentSessionSignalKey } from '../agent-session-signal-protocol'
 import {
   ensureAiderConfig,
   readInstructionFile,
@@ -8,30 +9,49 @@ import {
 const AGENT_SESSION_SIGNALS_START = '<!-- AGENT_SESSION_SIGNALS_START -->'
 const AGENT_SESSION_SIGNALS_END = '<!-- AGENT_SESSION_SIGNALS_END -->'
 
-const AGENT_SESSION_SIGNAL_INSTRUCTIONS = `${AGENT_SESSION_SIGNALS_START}
+function getAgentSessionSignalInstructions(projectPath: string): string {
+  const key = getAgentSessionSignalKey(projectPath)
+  const splitIndex = Math.floor(key.length / 2)
+  const firstKeyHalf = key.slice(0, splitIndex)
+  const secondKeyHalf = key.slice(splitIndex)
+
+  return `${AGENT_SESSION_SIGNALS_START}
 ## Agent Session Signals (Claude Terminal)
 
-When you finish the work the user requested, emit this exact tag on its own line:
+Signals are final-response metadata. Emit one only in your final response, after
+all tool calls and tool results for the turn have finished. Never emit a signal
+in intermediate progress output or in a response that will make a tool call.
+Never use a tool or shell command to emit a signal. Do not quote or reproduce a
+signal in a code block.
 
-<claude-terminal-signal type="complete" />
+Build the signal key by joining these two parts without spaces:
 
-When you cannot continue without the user answering a question, emit this exact
-tag on its own line immediately before asking the blocking question:
+Signal key first half: \`${firstKeyHalf}\`
+Signal key second half: \`${secondKeyHalf}\`
 
-<claude-terminal-signal type="input-needed" />
+Use this exact template on its own line, replacing {KEY} with the joined key and
+{CODE} with c for complete or i for input-needed:
 
-Emit only one signal for a given state. Do not repeat it in a code block or quote,
-and do not emit the input-needed signal for optional follow-up questions. These
-managed tags are read by Claude Terminal; keep all surrounding user-authored
-instructions unchanged.
+<ct-signal k="{KEY}" t="{CODE}" />
+
+Use complete only when the requested work is finished. Put the complete signal
+at the end of the final response. Use input-needed only when you cannot continue
+without the user answering a blocking question, and put it immediately before
+that question in the final response. Do not use input-needed for optional
+follow-up questions. Emit only one signal for a given state.
+
+These managed instructions are read by Claude Terminal. Keep all surrounding
+user-authored instructions unchanged.
 ${AGENT_SESSION_SIGNALS_END}
 `
+}
 
 export function installAgentSessionSignalInstructions(
   projectPath: string,
   aiBackend: AIBackend = 'claude',
 ): boolean {
   try {
+    const managedInstructions = getAgentSessionSignalInstructions(projectPath)
     const originalContent = readInstructionFile(projectPath, aiBackend)
     let nextContent: string
     const startIndex = originalContent.indexOf(AGENT_SESSION_SIGNALS_START)
@@ -47,11 +67,11 @@ export function installAgentSessionSignalInstructions(
         endExclusive += 1
       }
       nextContent = originalContent.slice(0, startIndex)
-        + AGENT_SESSION_SIGNAL_INSTRUCTIONS
+        + managedInstructions
         + originalContent.slice(endExclusive)
     } else {
       const separator = originalContent.length === 0 ? '' : '\n\n'
-      nextContent = originalContent + separator + AGENT_SESSION_SIGNAL_INSTRUCTIONS
+      nextContent = originalContent + separator + managedInstructions
     }
 
     if (nextContent !== originalContent) {

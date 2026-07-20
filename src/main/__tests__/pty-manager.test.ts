@@ -46,6 +46,7 @@ vi.mock('../portable-deps', () => ({
   getPortableBinDirs: vi.fn().mockReturnValue([]),
 }))
 
+import { formatAgentSessionSignal } from '../agent-session-signal-protocol'
 import { PtyManager } from '../pty-manager'
 import * as pty from 'node-pty'
 import * as fs from 'fs'
@@ -625,14 +626,22 @@ describe('PtyManager', () => {
   })
 
   describe('agent session signals', () => {
+    const projectPath = '/test/dir'
+    const completeSignal = formatAgentSessionSignal(projectPath, 'complete')
+    const inputNeededSignal = formatAgentSessionSignal(projectPath, 'input-needed')
+
     // AC: @agent-session-notifications ac-1
-    it('identifies the PTY that emitted a completion signal and deduplicates redraws', () => {
-      const id = manager.spawn('/test/dir')
+    // AC: @agent-session-notifications ac-7
+    it('ignores tool output before identifying the PTY final completion signal once', () => {
+      const id = manager.spawn(projectPath)
       const listener = vi.fn()
       manager.onAgentSessionSignal(listener)
 
-      dataCallback?.('<claude-terminal-signal type="complete" />\r\n')
-      dataCallback?.('\x1b[1A<claude-terminal-signal type="complete" />\r\n')
+      dataCallback?.('tool result:\r\n  <claude-terminal-signal type="complete" />\r\n')
+      expect(listener).not.toHaveBeenCalled()
+
+      dataCallback?.(`${completeSignal}\r\n`)
+      dataCallback?.(`\x1b[1A${completeSignal}\r\n`)
 
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
@@ -640,15 +649,15 @@ describe('PtyManager', () => {
 
     // AC: @agent-session-notifications ac-2
     it('resets signal deduplication only for explicitly marked real user input', () => {
-      const id = manager.spawn('/test/dir')
+      const id = manager.spawn(projectPath)
       const listener = vi.fn()
       manager.onAgentSessionSignal(listener)
 
-      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+      dataCallback?.(`${inputNeededSignal}\r\n`)
       manager.write(id, 'programmatic input')
-      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+      dataCallback?.(`${inputNeededSignal}\r\n`)
       manager.writeUserInput(id, 'real user input')
-      dataCallback?.('<claude-terminal-signal type="input-needed" />\r\n')
+      dataCallback?.(`${inputNeededSignal}\r\n`)
 
       expect(listener).toHaveBeenCalledTimes(2)
       expect(listener).toHaveBeenLastCalledWith({ ptyId: id, type: 'input-needed' })
@@ -656,12 +665,12 @@ describe('PtyManager', () => {
 
     // AC: @agent-session-notifications ac-1
     it('detects signals from the replacement PTY after a quick resume retry', () => {
-      const id = manager.spawn('/test/dir', 'stale-session')
+      const id = manager.spawn(projectPath, 'stale-session')
       const listener = vi.fn()
       manager.onAgentSessionSignal(listener)
 
       exitCallback?.({ exitCode: 1 })
-      dataCallback?.('<claude-terminal-signal type="complete" />\r\n')
+      dataCallback?.(`${completeSignal}\r\n`)
 
       expect(pty.spawn).toHaveBeenCalledTimes(2)
       expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
