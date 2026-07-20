@@ -132,3 +132,13 @@ notes:
     supersedes: null
     author: "@claude"
     created_at: 2026-07-20T05:28:32.197Z
+  - _ulid: 01KXZ09BRF4SRMFE5DHHHXK8B9
+    content: "Regression fix committed as 7a5a1c1. Focused signal suites pass (3 files), production
+      build passes, and isolated port 19837 verified: legacy tool output produced no attention;
+      compact final response produced one completed marker on a hidden tab; opening the tab cleared
+      it; renderer console had no errors. Full-suite and kspec validation remain blocked only by the
+      pre-existing session-store fs mock, stale theme expectations, and missing @claude author
+      references already recorded on this task."
+    supersedes: null
+    author: "@claude"
+    created_at: 2026-07-20T05:34:24.016Z
