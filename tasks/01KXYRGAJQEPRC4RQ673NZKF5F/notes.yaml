@@ -7,3 +7,14 @@ notes:
       test suite, production build, source scan, and isolated UI checks.
     author: DonutsDelivery
     created_at: 2026-07-20T03:18:23.575Z
+  - _ulid: 01KXYRJ3NDPR4W3S0H3W1WTN3R
+    content: "Approach: surgically remove GSD-specific backend, bridge, HTTP, sidebar/menu, cache/style,
+      and built-in registry surfaces while preserving generic extension handling and all user-owned
+      data. Tests first: AC-1 negative rendered-menu assertions plus ordinary-menu behavior; AC-2
+      registry contents assertion; AC-3 verified by absence of cleanup/migration code and documented
+      as an N/A behavioral fixture because removal introduces no data-touching execution path.
+      Existing working tree is heavily modified, so no rebase/reset is safe; preserve all unrelated
+      hunks and review per-file diffs."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-20T03:19:22.029Z
