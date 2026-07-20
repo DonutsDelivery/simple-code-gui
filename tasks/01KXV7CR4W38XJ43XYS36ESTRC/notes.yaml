@@ -114,3 +114,12 @@ notes:
     supersedes: null
     author: "@claude"
     created_at: 2026-07-20T05:05:57.703Z
+  - _ulid: 01KXYZCZ30JV4Q13RVSS4FE6AQ
+    content: Isolated verification exposed terminal wrapping of the verbose project-keyed signal,
+      preventing the valid final response from being detected in a narrow PTY. Switched the wire
+      format to a compact project-scoped tag with a 10-character base64url discriminator and
+      one-character state code; it remains unreplayable from managed instructions and no longer
+      exceeds the legacy signal length.
+    supersedes: null
+    author: "@claude"
+    created_at: 2026-07-20T05:18:53.536Z
