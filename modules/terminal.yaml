@@ -248,8 +248,8 @@ features:
         when: the app receives the signal
       - given: a project uses any supported agent backend
         id: ac-5
-        then: the backend instruction file contains idempotent guidance for emitting completion and
-          input-needed signals without changing surrounding user content
+        then: the backend instruction file contains idempotent guidance that reserves completion and
+          input-needed signals for final responses without changing surrounding user content
         when: the app installs managed harness instructions
       - given: notification sounds are configured independently from spoken voice output
         id: ac-6
