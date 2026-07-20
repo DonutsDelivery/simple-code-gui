@@ -325,6 +325,10 @@ features:
         then: the Tiles and Canvas selector remains visible in the workspace bar without covering the view
           controls
         when: the user opens or closes controls near the upper-right of the workspace
+      - given: a Canvas workspace contains a terminal beneath the pointer
+        id: ac-5
+        then: the canvas moves without pasting clipboard contents into the terminal
+        when: the user pans with the middle mouse button
     tags: []
     constraints:
       - _ulid: 01KXTAZ0V7DGCH6VBZFF7ZBYZH
