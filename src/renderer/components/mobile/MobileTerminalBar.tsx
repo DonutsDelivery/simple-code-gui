@@ -132,22 +132,6 @@ export function MobileTerminalBar({
       items: commandItems.filter(item => !item.id.startsWith('divider')),
     },
     {
-      id: 'gsd',
-      label: 'GSD',
-      icon: '📋',
-      items: [
-        { id: 'gsd:progress', label: 'Check Progress' },
-        { id: 'gsd:execute-phase', label: 'Execute Phase' },
-        { id: 'gsd:plan-phase', label: 'Plan Phase' },
-        { id: 'gsd:new-project', label: 'New Project' },
-        { id: 'gsd:map-codebase', label: 'Map Codebase' },
-        { id: 'gsd:create-roadmap', label: 'Create Roadmap' },
-        { id: 'gsd:resume-work', label: 'Resume Work' },
-        { id: 'gsd:pause-work', label: 'Pause Work' },
-        { id: 'gsd:help', label: 'Help' },
-      ],
-    },
-    {
       id: 'session',
       label: 'Session',
       icon: '⚡',
@@ -182,11 +166,6 @@ export function MobileTerminalBar({
       return
     }
 
-    if (categoryId === 'gsd') {
-      onCommand(`/${item.id}`)
-      setOpenMenu(null)
-      return
-    }
 
     if (categoryId === 'commands') {
       onCommand(item.id)

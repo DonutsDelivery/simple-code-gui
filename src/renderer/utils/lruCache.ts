@@ -90,7 +90,6 @@ const MAX_CACHED_PROJECTS = 50
 
 export const tasksCache = new LRUCache<string, unknown[]>(MAX_CACHED_PROJECTS)
 export const beadsStatusCache = new LRUCache<string, { installed: boolean; initialized: boolean }>(MAX_CACHED_PROJECTS)
-export const gsdStatusCache = new LRUCache<string, unknown>(MAX_CACHED_PROJECTS)
 
 /**
  * Clear all cached data for a specific project path.
@@ -99,5 +98,4 @@ export const gsdStatusCache = new LRUCache<string, unknown>(MAX_CACHED_PROJECTS)
 export function clearProjectCaches(projectPath: string): void {
   tasksCache.delete(projectPath)
   beadsStatusCache.delete(projectPath)
-  gsdStatusCache.delete(projectPath)
 }

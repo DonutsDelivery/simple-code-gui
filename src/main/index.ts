@@ -21,7 +21,6 @@ import {
   registerExtensionHandlers,
   registerWindowHandlers,
   cleanupClipboardTempFiles,
-  registerGsdHandlers,
   registerKspecHandlers,
   registerGlobalInstructionHandlers,
 } from './ipc/index.js'
@@ -124,7 +123,6 @@ registerBeadsHandlers(getMainWindow)
 registerVoiceHandlers(getMainWindow)
 registerExtensionHandlers()
 registerWindowHandlers(getMainWindow)
-registerGsdHandlers()
 registerKspecHandlers()
 registerGlobalInstructionHandlers()
 registerWorkspaceHandlers(sessionStore, getMainWindow)

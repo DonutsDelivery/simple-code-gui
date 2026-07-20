@@ -3,7 +3,6 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import { homedir } from 'os'
 import { isWindows, getEnhancedPathWithPortable, setPortableBinDirs } from '../platform'
 import {
   getPortableBinDirs,
@@ -126,12 +125,6 @@ async function checkPipInstalled(): Promise<boolean> {
   return execAsync('pip --version', getExecOptions())
     .then(() => true)
     .catch(() => false)
-}
-
-function checkGSDInstalled(): boolean {
-  const gsdCommandsDir = join(homedir(), '.claude', 'commands', 'gsd')
-  const gsdMarkerFile = join(gsdCommandsDir, 'new-project.md')
-  return existsSync(gsdMarkerFile)
 }
 
 export function registerCliHandlers(getMainWindow: () => BrowserWindow | null) {
@@ -313,28 +306,6 @@ export function registerCliHandlers(getMainWindow: () => BrowserWindow | null) {
     return { success: false, error: 'Grok Build is installed externally. Install it so either `grok` or `agent` is available on PATH.' }
   })
 
-  ipcMain.handle('gsd:check', async () => {
-    const installed = checkGSDInstalled()
-    const npmInstalled = await checkNpmInstalled()
-    return { installed, npmInstalled }
-  })
-
-  ipcMain.handle('gsd:install', async () => {
-    try {
-      getMainWindow()?.webContents.send('install:progress', { type: 'gsd', status: 'Installing Get Shit Done...', percent: 10 })
-      getMainWindow()?.webContents.send('install:progress', { type: 'gsd', status: 'Running GSD installer...', percent: 30 })
-      await execAsync(`npx --yes get-shit-done-cc --global`, { ...getExecOptions(), timeout: 300000 })
-      getMainWindow()?.webContents.send('install:progress', { type: 'gsd', status: 'Verifying installation...', percent: 90 })
-      const installed = checkGSDInstalled()
-      getMainWindow()?.webContents.send('install:progress', { type: 'gsd', status: installed ? 'Installed!' : 'Failed', percent: 100 })
-      return {
-        success: installed,
-        error: installed ? undefined : 'Installation completed but GSD commands not found. Try running: npx get-shit-done-cc'
-      }
-    } catch (e: any) {
-      return { success: false, error: e.message }
-    }
-  })
 
   ipcMain.handle('python:install', async () => {
     try {

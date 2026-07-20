@@ -211,24 +211,6 @@ export function TerminalBar({
       items: commandItems.filter((item) => !item.id.startsWith('divider')),
     },
     {
-      id: 'gsd',
-      label: 'GSD',
-      icon: '📋',
-      layout: 'dense',
-      items: [
-        { id: 'gsd:progress', label: 'Check Progress' },
-        { id: 'gsd:execute-phase', label: 'Execute Phase' },
-        { id: 'gsd:plan-phase', label: 'Plan Phase' },
-        { id: 'gsd:new-project', label: 'New Project' },
-        { id: 'gsd:map-codebase', label: 'Map Codebase' },
-        { id: 'gsd:create-roadmap', label: 'Create Roadmap' },
-        { id: 'gsd:resume-work', label: 'Resume Work' },
-        { id: 'gsd:pause-work', label: 'Pause Work' },
-        { id: 'gsd:update', label: 'Update GSD' },
-        { id: 'gsd:help', label: 'Help' },
-      ],
-    },
-    {
       id: 'automation',
       label: 'Auto',
       icon: '🤖',
@@ -296,11 +278,6 @@ export function TerminalBar({
       return
     }
 
-    if (categoryId === 'gsd') {
-      onCommand(`/${item.id}`)
-      closeMenu()
-      return
-    }
 
     if (item.id === 'autowork') {
       onCommand('autowork', autoWorkOptions)

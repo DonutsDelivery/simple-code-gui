@@ -18,7 +18,6 @@ import type {
   Session,
   BeadsTask,
   BeadsCloseResult,
-  GSDProgress,
   VoiceSettings
 } from './types.js'
 
@@ -243,18 +242,6 @@ export class HttpApiClient {
   }
 
   // ===========================================================================
-  // GSD API
-  // ===========================================================================
-
-  gsdProjectCheck(cwd: string): Promise<{ initialized: boolean }> {
-    return misc.gsdProjectCheck(this.config, cwd)
-  }
-
-  gsdGetProgress(cwd: string): Promise<{ success: boolean; data?: GSDProgress; error?: string }> {
-    return misc.gsdGetProgress(this.config, cwd)
-  }
-
-  // ===========================================================================
   // Voice API
   // ===========================================================================
 
@@ -322,13 +309,7 @@ export class HttpApiClient {
     return misc.onInstallProgress(callback)
   }
 
-  gsdCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
-    return misc.gsdCheck()
-  }
 
-  gsdInstall(): Promise<{ success: boolean; error?: string }> {
-    return misc.gsdInstall()
-  }
 
   beadsInstall(): Promise<{ success: boolean; error?: string }> {
     return misc.beadsInstall()

@@ -22,6 +22,15 @@ describe('TerminalBar command menus', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
   })
 
+  // AC: @gsd-integration-retirement ac-1
+  it('does not expose a dedicated GSD command menu', () => {
+    renderBar()
+
+    expect(screen.queryByRole('button', { name: 'GSD' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Commands' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Session' })).toBeInTheDocument()
+  })
+
   // AC: @compact-terminal-command-menus ac-1
   // AC: @compact-terminal-command-menus ac-2
   it('uses dense layouts only for long production menu categories', async () => {

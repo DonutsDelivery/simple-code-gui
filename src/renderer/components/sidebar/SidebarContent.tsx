@@ -1,7 +1,6 @@
 import React from 'react'
 import { Project, useWorkspaceStore } from '../../stores/workspace.js'
 import { BeadsPanel } from '../BeadsPanel.js'
-import { GSDStatus } from '../GSDStatus.js'
 import { ExtensionBrowser } from '../ExtensionBrowser.js'
 import { ClaudeMdEditor } from '../ClaudeMdEditor.js'
 import {
@@ -295,15 +294,6 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
         currentTabPtyId={focusedTabPtyId}
       />
 
-      <GSDStatus
-        projectPath={beadsProjectPath}
-        onCommand={(cmd) => {
-          if (focusedTabPtyId) {
-            window.electronAPI?.writePty(focusedTabPtyId, cmd)
-            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
-          }
-        }}
-      />
 
       {voiceOutputEnabled && (
         <VoiceOptionsPanel

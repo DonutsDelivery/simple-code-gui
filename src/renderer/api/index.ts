@@ -111,8 +111,7 @@ export {
 export type {
   ApiClient,
   BeadsTask,
-  BeadsCloseResult,
-  GSDProgress
+  BeadsCloseResult
 } from './httpClient'
 
 export {

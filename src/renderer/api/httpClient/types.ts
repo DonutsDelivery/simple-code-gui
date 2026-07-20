@@ -175,23 +175,6 @@ export interface BeadsCloseResult {
 }
 
 // =============================================================================
-// GSD Types
-// =============================================================================
-
-export interface GSDProgress {
-  initialized: boolean
-  currentPhase: string | null
-  currentPhaseNumber: number | null
-  totalPhases: number
-  completedPhases: number
-  phases: Array<{
-    number: number
-    title: string
-    completed: boolean
-  }>
-}
-
-// =============================================================================
 // API Response Types
 // =============================================================================
 
@@ -270,9 +253,6 @@ export interface ApiClient {
   beadsStart(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
   beadsUpdate(cwd: string, taskId: string, status?: string, title?: string, description?: string, priority?: number): Promise<{ success: boolean; error?: string }>
 
-  // GSD
-  gsdProjectCheck(cwd: string): Promise<{ initialized: boolean }>
-  gsdGetProgress(cwd: string): Promise<{ success: boolean; data?: GSDProgress; error?: string }>
 
   // CLI Status
   claudeCheck(): Promise<{ installed: boolean; npmInstalled: boolean; gitBashInstalled: boolean }>

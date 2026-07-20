@@ -66,22 +66,6 @@ export interface ElectronAPI {
   grokCheck: () => Promise<{ installed: boolean }>
   grokInstall: () => Promise<{ success: boolean; error?: string }>
 
-  // Get Shit Done (GSD) - Claude Code workflow addon
-  gsdCheck: () => Promise<{ installed: boolean; npmInstalled: boolean }>
-  gsdInstall: () => Promise<{ success: boolean; error?: string }>
-  gsdProjectCheck: (cwd: string) => Promise<{ initialized: boolean }>
-  gsdGetProgress: (cwd: string) => Promise<{
-    success: boolean
-    data?: {
-      initialized: boolean
-      currentPhase: string | null
-      currentPhaseNumber: number | null
-      totalPhases: number
-      completedPhases: number
-      phases: Array<{ number: number; title: string; completed: boolean }>
-    }
-    error?: string
-  }>
 
   // Beads
   beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>

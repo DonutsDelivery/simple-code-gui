@@ -41,9 +41,4 @@ export const cliHandlers = {
   grokCheck: () => ipcRenderer.invoke('grok:check'),
   grokInstall: () => ipcRenderer.invoke('grok:install'),
 
-  // Get Shit Done (GSD) - Claude Code workflow addon
-  gsdCheck: () => ipcRenderer.invoke('gsd:check'),
-  gsdInstall: () => ipcRenderer.invoke('gsd:install'),
-  gsdProjectCheck: (cwd: string) => ipcRenderer.invoke('gsd:projectCheck', cwd),
-  gsdGetProgress: (cwd: string) => ipcRenderer.invoke('gsd:getProgress', cwd)
 }

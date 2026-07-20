@@ -13,15 +13,6 @@ export const BUILTIN_REGISTRY: Registry = {
   version: 1,
   skills: [
     {
-      id: 'get-shit-done',
-      name: 'Get Shit Done (GSD)',
-      description: 'Autonomous task execution framework with planning, codebase mapping, and guided execution',
-      type: 'skill',
-      repo: 'https://github.com/glittercowboy/get-shit-done',
-      commands: ['/gsd:plan', '/gsd:execute', '/gsd:status', '/gsd:map-codebase'],
-      tags: ['workflow', 'autonomous', 'planning', 'tasks']
-    },
-    {
       id: 'claudemcp-memory',
       name: 'Claude Memory',
       description: 'Persistent memory and knowledge base for Claude conversations',

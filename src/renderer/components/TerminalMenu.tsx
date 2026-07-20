@@ -91,25 +91,6 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
       items: commandItems,
     },
     {
-      id: 'gsd',
-      label: 'GSD',
-      items: [
-        { id: 'gsd-progress', label: 'Check Progress' },
-        { id: 'gsd-execute', label: 'Execute Phase' },
-        { id: 'gsd-plan', label: 'Plan Phase' },
-        { id: 'divider-gsd-1', label: '─────────────' },
-        { id: 'gsd-new-project', label: 'New Project' },
-        { id: 'gsd-map-codebase', label: 'Map Codebase' },
-        { id: 'gsd-roadmap', label: 'Create Roadmap' },
-        { id: 'divider-gsd-2', label: '─────────────' },
-        { id: 'gsd-resume', label: 'Resume Work' },
-        { id: 'gsd-pause', label: 'Pause Work' },
-        { id: 'divider-gsd-3', label: '─────────────' },
-        { id: 'gsd-update', label: 'Update GSD' },
-        { id: 'gsd-help', label: 'Help' },
-      ],
-    },
-    {
       id: 'automation',
       label: 'Automation',
       items: [
@@ -197,24 +178,6 @@ export function TerminalMenu({ ptyId, onCommand, currentBackend, onBackendChange
       return
     }
 
-    if (categoryId === 'gsd') {
-      const gsdCommands: Record<string, string> = {
-        'gsd-progress': 'gsd:progress',
-        'gsd-execute': 'gsd:execute-phase',
-        'gsd-plan': 'gsd:plan-phase',
-        'gsd-new-project': 'gsd:new-project',
-        'gsd-map-codebase': 'gsd:map-codebase',
-        'gsd-roadmap': 'gsd:create-roadmap',
-        'gsd-resume': 'gsd:resume-work',
-        'gsd-pause': 'gsd:pause-work',
-        'gsd-update': 'gsd:update',
-        'gsd-help': 'gsd:help',
-      }
-      const cmd = gsdCommands[item.id]
-      if (cmd) onCommand(`/${cmd}`)
-      setOpenDropdown(null)
-      return
-    }
 
     if (item.isToggle && item.toggleKey) {
       // Toggle the option without closing dropdown

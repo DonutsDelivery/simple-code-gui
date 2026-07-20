@@ -1,12 +1,12 @@
 /**
  * Miscellaneous API
  *
- * CLI checks, GSD, Voice, and stub methods for unsupported operations.
+ * CLI checks, Voice, and stub methods for unsupported operations.
  */
 
 import { HostConfig } from '../hostConfig.js'
 import { get, post } from './http-helpers.js'
-import type { VoiceSettings, GSDProgress, BeadsTask, BackendId } from './types.js'
+import type { VoiceSettings, BeadsTask, BackendId } from './types.js'
 
 // =============================================================================
 // CLI Status API
@@ -55,36 +55,6 @@ export function grokCheck(
   config: HostConfig
 ): Promise<{ installed: boolean }> {
   return get<{ installed: boolean }>(config, '/settings/cli/grok')
-}
-
-// =============================================================================
-// GSD API
-// =============================================================================
-
-export function gsdProjectCheck(
-  config: HostConfig,
-  cwd: string
-): Promise<{ initialized: boolean }> {
-  return get<{ initialized: boolean }>(
-    config,
-    `/projects/gsd/check?cwd=${encodeURIComponent(cwd)}`
-  )
-}
-
-export async function gsdGetProgress(
-  config: HostConfig,
-  cwd: string
-): Promise<{ success: boolean; data?: GSDProgress; error?: string }> {
-  try {
-    const data = await get<GSDProgress>(
-      config,
-      `/projects/gsd/progress?cwd=${encodeURIComponent(cwd)}`
-    )
-    return { success: true, data }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
-  }
 }
 
 // =============================================================================
@@ -206,14 +176,7 @@ export function onInstallProgress(
   return () => {}
 }
 
-// GSD installation
-export function gsdCheck(): Promise<{ installed: boolean; npmInstalled: boolean }> {
-  return Promise.resolve({ installed: false, npmInstalled: false })
-}
 
-export function gsdInstall(): Promise<{ success: boolean; error?: string }> {
-  return Promise.resolve({ success: false, error: 'Installation not available via HTTP' })
-}
 
 // Beads installation and watch
 export function beadsInstall(): Promise<{ success: boolean; error?: string }> {
