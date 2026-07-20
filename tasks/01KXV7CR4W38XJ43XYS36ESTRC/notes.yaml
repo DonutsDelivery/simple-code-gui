@@ -123,3 +123,12 @@ notes:
     supersedes: null
     author: "@claude"
     created_at: 2026-07-20T05:18:53.536Z
+  - _ulid: 01KXYZYM65PTF28X5ZKFNPAED5
+    content: A second isolated pass found hidden terminals can render the compact final tag with
+      cursor-inserted horizontal padding before the closing delimiter. The detector now collapses
+      horizontal whitespace only within a completed candidate line before exact project-key lookup;
+      wrong-project, template, legacy, embedded-prose, and extra-attribute candidates remain
+      rejected. Added a regression test for the padded final line.
+    supersedes: null
+    author: "@claude"
+    created_at: 2026-07-20T05:28:32.197Z
