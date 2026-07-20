@@ -228,10 +228,10 @@ features:
     tests: []
     traits: []
     acceptance_criteria:
-      - given: an agent session reports that its requested work is complete
+      - given: an agent has finished the requested work and all tool activity for the turn
         id: ac-1
         then: the app plays the configured completion cue once and identifies the emitting session
-        when: the completion signal is received
+        when: the agent sends its final response
       - given: an agent session cannot continue without a user response
         id: ac-2
         then: the app plays the configured input-needed cue once and identifies the emitting session
