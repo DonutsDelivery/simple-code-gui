@@ -100,6 +100,9 @@ features:
       Claude Terminal does not provide dedicated Get Shit Done integration. Generic extension
       support remains available without promoting or managing GSD specially, and existing user-owned
       GSD data remains untouched.
+    status:
+      maturity: draft
+      implementation: in_progress
     depends_on: []
     implements: []
     relates_to: []
