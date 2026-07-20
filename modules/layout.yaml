@@ -320,6 +320,11 @@ features:
         then: both views reflect the same session membership without duplicating or restarting unaffected
           sessions
         when: the session is created, closed, resumed, or moved to another workspace
+      - given: a workspace is shown in either Tiles or Canvas view
+        id: ac-4
+        then: the Tiles and Canvas selector remains visible in the workspace bar without covering the view
+          controls
+        when: the user opens or closes controls near the upper-right of the workspace
     tags: []
     constraints:
       - _ulid: 01KXTAZ0V7DGCH6VBZFF7ZBYZH
