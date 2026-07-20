@@ -7,13 +7,21 @@ spec_ref: "@gsd-integration-retirement"
 derivation: auto
 plan_ref: "@plan-retire-gsd-integration"
 origin: derived
-status: in_progress
+status: pending_review
 blocked_by: []
 depends_on: []
 context: []
 priority: 3
 tags: []
 vcs_refs: []
+submission_linkage:
+  review_url: null
+  branch: feat/agent-signals
+  captured_at: 2026-07-20T03:37:22.549Z
+  commit: e8db34e1e8dd3942b21b259b4fbd7a82aa0f0158
+  remote: null
+  remote_url: null
+  upstream_ref: null
 history:
   - author: DonutsDelivery
     changes:
@@ -25,6 +33,27 @@ history:
         previous: null
     command: task-start
     timestamp: 2026-07-20T03:19:02.956Z
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: pending_review
+        previous: in_progress
+      submission_linkage:
+        new:
+          review_url: null
+          branch: feat/agent-signals
+          captured_at: 2026-07-20T03:37:22.549Z
+          commit: e8db34e1e8dd3942b21b259b4fbd7a82aa0f0158
+          remote: null
+          remote_url: null
+          upstream_ref: null
+        previous: null
+      submitted_at:
+        new: 2026-07-20T03:37:22.554Z
+        previous: null
+    command: task-submit
+    timestamp: 2026-07-20T03:37:22.554Z
 created_at: 2026-07-20T03:18:23.575Z
 started_at: 2026-07-20T03:19:02.955Z
+submitted_at: 2026-07-20T03:37:22.554Z
 todos: []
