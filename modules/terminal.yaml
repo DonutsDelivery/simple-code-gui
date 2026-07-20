@@ -232,10 +232,11 @@ features:
         id: ac-1
         then: the app plays the configured completion cue once and identifies the emitting session
         when: the agent sends its final response
-      - given: an agent session cannot continue without a user response
+      - given: an agent cannot continue without a user response and all tool activity for the turn has
+          stopped
         id: ac-2
         then: the app plays the configured input-needed cue once and identifies the emitting session
-        when: the input-needed signal is received
+        when: the agent sends its final blocking question
       - given: a signal is emitted by a session that is not currently visible
         id: ac-3
         then: the emitting tab and its workspace remain visibly marked with the signal severity until that
