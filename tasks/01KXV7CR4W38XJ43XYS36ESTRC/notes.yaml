@@ -104,3 +104,13 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-19T03:54:15.380Z
+  - _ulid: 01KXYYN9E6PCFE66TJMQ8SC7AJ
+    content: "Regression fix approach: preserve the cross-backend PTY protocol but project-scope
+      accepted signal lines so copied managed instructions and legacy/tool output cannot trigger.
+      Tighten managed guidance so signals are final-response-only after all tool activity. Tests
+      cover invalid candidates remaining non-latching, instruction replay, and a later valid final
+      signal. Continuing on the task's linked feat/agent-signals branch; preserving unrelated
+      working-tree changes."
+    supersedes: null
+    author: "@claude"
+    created_at: 2026-07-20T05:05:57.703Z
