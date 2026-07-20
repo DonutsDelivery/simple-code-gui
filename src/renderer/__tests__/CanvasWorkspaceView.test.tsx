@@ -347,6 +347,26 @@ describe('CanvasWorkspaceView', () => {
     expect(editor).toHaveValue('Group')
   })
 
+  // AC: @canvas-workspace ac-5
+  it('pans with the middle button without allowing terminal paste', async () => {
+    const { onSceneChange } = renderCanvas()
+    const terminal = screen.getAllByTestId('mounted-terminal')[0]
+    const terminalAuxClick = vi.fn()
+    terminal.addEventListener('auxclick', terminalAuxClick)
+
+    const auxClick = new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true })
+    expect(fireEvent(terminal, auxClick)).toBe(false)
+    expect(auxClick.defaultPrevented).toBe(true)
+    expect(terminalAuxClick).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(terminal, { button: 1, clientX: 20, clientY: 20 })
+    fireEvent.pointerMove(window, { clientX: 80, clientY: 50 })
+    fireEvent.pointerUp(window, { button: 1 })
+
+    await waitFor(() => expect(onSceneChange).toHaveBeenCalled())
+    expect((onSceneChange.mock.calls.at(-1)?.[0] as CanvasScene).camera).toMatchObject({ x: -60, y: -30 })
+  })
+
   // AC: @canvas-navigation ac-1
   it('zooms around the cursor with modified wheel input', async () => {
     const { onSceneChange } = renderCanvas()

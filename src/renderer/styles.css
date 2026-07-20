@@ -1164,17 +1164,29 @@ html, body, #root {
    Workspace Switcher
    ============================================ */
 
+.workspace-top-bar {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 44px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .workspace-switcher {
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: center;
+  background: transparent;
+  border-bottom: 0;
 }
 
 .workspace-view-toggle {
-  position: absolute;
-  top: 52px;
-  right: 14px;
-  z-index: 40;
+  flex: 0 0 auto;
+  align-self: center;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  margin: 5px 8px 5px 4px;
   padding: 3px;
   background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
   border: 1px solid var(--border-subtle);

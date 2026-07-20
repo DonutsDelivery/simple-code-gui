@@ -412,17 +412,19 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
               />
             ) : (
               <>
-                <WorkspaceSwitcher
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  onSwitch={handleSwitchSession}
-                  onAdd={handleAddSession}
-                  onRemove={handleRemoveSession}
-                  onRename={renameSession}
-                  onReorder={reorderSessions}
-                  onMoveTabs={handleMoveTabs}
-                />
-                <WorkspaceViewToggle value={activeView} onChange={setActiveView} />
+                <div className="workspace-top-bar">
+                  <WorkspaceSwitcher
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    onSwitch={handleSwitchSession}
+                    onAdd={handleAddSession}
+                    onRemove={handleRemoveSession}
+                    onRename={renameSession}
+                    onReorder={reorderSessions}
+                    onMoveTabs={handleMoveTabs}
+                  />
+                  <WorkspaceViewToggle value={activeView} onChange={setActiveView} />
+                </div>
                 {activeView === 'tiles' && openTabs.length === 0 && (
                   <div className="empty-state">
                     <h2>Simple Code GUI</h2>

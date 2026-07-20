@@ -838,6 +838,12 @@ export function CanvasWorkspaceView({
     setGestureTick(value => value + 1)
   }
 
+  const handleSurfaceAuxClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (event.button !== 1) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   const handleCanvasDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
     const types = event.dataTransfer.types
     if (types.includes('application/x-sidebar-project') ||
@@ -1081,6 +1087,7 @@ export function CanvasWorkspaceView({
         aria-label="Spatial terminal canvas with content objects. Use arrow keys to move between items."
         tabIndex={0}
         onPointerDown={handleSurfacePointerDown}
+        onAuxClickCapture={handleSurfaceAuxClick}
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}
         onPaste={handleCanvasPaste}
