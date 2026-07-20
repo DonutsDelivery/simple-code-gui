@@ -18,3 +18,16 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-20T03:19:22.029Z
+  - _ulid: 01KXYSJ79ZJ7ZB9JQ42M423TZ9
+    content: "Implemented complete dedicated GSD integration retirement while preserving generic
+      extension records and user data. Removed installer/status IPC, preload/HTTP contracts, sidebar
+      widget, desktop/legacy/mobile menus, cache/styles, and built-in registry promotion.
+      Verification: 6 focused AC tests pass; npm run build passes; production src scan has no GSD
+      references; isolated app port 19837 shows no .gsd-status or GSD controls, Commands opens with
+      standard commands, Session renders Summarize Context/Cancel Request, and renderer error
+      console is empty. Full npm test: 39 files/286 tests pass; 2 unrelated pre-existing failures
+      remain (session-store fs mock default export and themes expecting Claude Orange while
+      implementation returns Dark)."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-20T03:36:54.335Z
