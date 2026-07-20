@@ -57,13 +57,19 @@ plans:
 
       This is a surgical retirement. Do not edit generated bundles manually and do not clean up
       user-level or project-level GSD artifacts.
-    status: approved
+    status: active
     approved_at: null
-    branch: null
-    derived_specs: []
-    derived_tasks: []
+    derived_specs:
+      - "@gsd-integration-retirement"
+    derived_tasks:
+      - "@implement-gsd-integration-retirement"
     module_ref: "@extensions"
     source_path: /tmp/gsd-integration-retirement-plan.md
     created_at: 2026-07-20T03:18:23.100Z
     completed_at: null
-    notes: []
+    notes:
+      - _ulid: 01KXYRGAK83JC9AWAP1C5N2GWP
+        content: This is a surgical retirement. Do not edit generated bundles manually and do not clean up
+          user-level or project-level GSD artifacts.
+        author: DonutsDelivery
+        created_at: 2026-07-20T03:18:23.592Z

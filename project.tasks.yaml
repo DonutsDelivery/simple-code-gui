@@ -230,3 +230,18 @@ tasks:
     created_at: 2026-07-18T18:21:38.957Z
     started_at: 2026-07-18T18:22:18.199Z
     submitted_at: 2026-07-18T20:05:05.662Z
+  - _ulid: 01KXYRGAJQEPRC4RQ673NZKF5F
+    slugs:
+      - implement-gsd-integration-retirement
+    title: Implement GSD Integration Retirement
+    type: task
+    spec_ref: "@gsd-integration-retirement"
+    plan_ref: "@plan-retire-gsd-integration"
+    status: pending
+    blocked_by: []
+    depends_on: []
+    priority: 3
+    tags: []
+    notes_count: 1
+    todos_count: 0
+    created_at: 2026-07-20T03:18:23.575Z

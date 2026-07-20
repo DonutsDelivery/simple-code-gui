@@ -1,0 +1,9 @@
+notes:
+  - _ulid: 01KXYRGAJQ6FSBY2MH3SMFXGNC
+    content: >
+      Remove only GSD-specific IPC, preload and HTTP contracts, sidebar UI, command-menu entries,
+      cache/style declarations, and the built-in registry item. Preserve generic extension machinery
+      and unrelated working-tree changes. Verify with AC-linked menu and registry tests, the full
+      test suite, production build, source scan, and isolated UI checks.
+    author: DonutsDelivery
+    created_at: 2026-07-20T03:18:23.575Z

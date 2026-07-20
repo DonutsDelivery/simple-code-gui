@@ -3,92 +3,131 @@ slugs:
   - extensions
 title: Extensions & Configuration
 type: module
+description: Extension/MCP registry, installation, per-project configuration, settings management, and theming
 status:
   maturity: draft
   implementation: not_started
-description: Extension/MCP registry, installation, per-project configuration, settings management, and theming
-tags:
-  - feature
 depends_on: []
 implements: []
 relates_to: []
 tests: []
 traits: []
-notes: []
+tags:
+  - feature
 features:
   - _ulid: 01KK67DNJESNZBF88T9JBHHZ5W
     slugs:
       - ext-registry
     title: Extension Registry
     type: feature
-    tags: []
     description: Fetch, browse, and install extensions (skills, MCPs, agents) from registry or custom
       URLs. Global and per-project extension scoping with enable/disable controls.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:01:06.126Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67DQ85HYPGA16RS2R2WB1K
     slugs:
       - settings
     title: Settings & Theming
     type: feature
-    tags: []
     description: "Global and per-project settings: default directory, theme with custom colors,
       auto-accept tools, permission modes, backend selection. Persisted to JSON with atomic writes
       and backup."
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:01:07.846Z
-    status:
-      implementation: implemented
+    notes: []
   - _ulid: 01KK67DSGPZC2E734KX4377R9S
     slugs:
       - workspace-persist
     title: Workspace Persistence
     type: feature
-    tags: []
     description: Persist projects, open tabs, tile layout, categories, and view mode to workspace.json.
       Atomic saves with temp file + rename, backup restoration, and data migration from old app
       names.
+    status:
+      maturity: draft
+      implementation: in_progress
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
-    created: 2026-03-08T08:01:10.166Z
     acceptance_criteria:
-      - id: ac-1
-        given: workspace data has been modified
-        when: saveWorkspace is called
+      - given: workspace data has been modified
+        id: ac-1
         then: data is written atomically via temp file + rename with backup, and validated before finalizing
-    status:
-      maturity: draft
-      implementation: in_progress
+        when: saveWorkspace is called
+    tags: []
+    created: 2026-03-08T08:01:10.166Z
+    notes: []
   - _ulid: 01KK67DTW3HCHEA5G8TSNDK5FX
     slugs:
       - auto-update
     title: Auto-Update
     type: feature
-    tags: []
     description: Check for, download, and install app updates via electron-updater. Status events
       relayed to renderer for progress UI.
+    status:
+      implementation: implemented
     depends_on: []
     implements: []
     relates_to: []
     tests: []
     traits: []
-    notes: []
+    tags: []
     created: 2026-03-08T08:01:11.556Z
-    status:
-      implementation: implemented
+    notes: []
+  - _ulid: 01KXYRGAJAHJDCCS5P69462FG0
+    slugs:
+      - gsd-integration-retirement
+    title: GSD Integration Retirement
+    type: feature
+    description: >
+      Claude Terminal does not provide dedicated Get Shit Done integration. Generic extension
+      support remains available without promoting or managing GSD specially, and existing user-owned
+      GSD data remains untouched.
+    depends_on: []
+    implements: []
+    relates_to: []
+    tests: []
+    traits: []
+    acceptance_criteria:
+      - given: |
+          a user opens Claude Terminal
+        id: ac-1
+        then: |
+          no dedicated GSD installation, progress, status, or command surface is available
+        when: |
+          they inspect application integrations, status surfaces, and command menus
+      - given: |
+          the built-in extension catalog is available
+        id: ac-2
+        then: |
+          Get Shit Done is not included, while ordinary generic extensions remain available
+        when: |
+          a user browses its promoted extensions
+      - given: |
+          a user has existing GSD project files, commands, extension records, caches, or preferences
+        id: ac-3
+        then: |
+          Claude Terminal does not migrate, filter, or delete that existing user-owned data
+        when: |
+          they use a Claude Terminal version without dedicated GSD integration
+    tags: []
+    created: 2026-07-20T03:18:23.562Z
+    notes: []
+notes: []

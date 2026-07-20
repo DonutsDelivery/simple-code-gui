@@ -1,0 +1,18 @@
+_ulid: 01KXYRGAJQEPRC4RQ673NZKF5F
+slugs:
+  - implement-gsd-integration-retirement
+title: Implement GSD Integration Retirement
+type: task
+spec_ref: "@gsd-integration-retirement"
+derivation: auto
+plan_ref: "@plan-retire-gsd-integration"
+origin: derived
+status: pending
+blocked_by: []
+depends_on: []
+context: []
+priority: 3
+tags: []
+vcs_refs: []
+created_at: 2026-07-20T03:18:23.575Z
+todos: []
