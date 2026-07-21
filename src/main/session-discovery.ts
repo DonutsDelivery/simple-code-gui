@@ -1,5 +1,5 @@
-import { createReadStream, existsSync, readFileSync } from 'fs'
-import { readdir, readFile, stat, writeFile } from 'fs/promises'
+import { createReadStream, existsSync } from 'fs'
+import { readdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execFile } from 'child_process'
@@ -77,57 +77,113 @@ interface SessionsIndex {
   originalPath: string
 }
 
+let indexRepairTempCounter = 0
+
 async function repairSessionsIndex(
   projectPath: string,
   projectSessionsDir: string,
   discovered: SessionWithIndexData[]
 ): Promise<void> {
   const indexPath = join(projectSessionsDir, 'sessions-index.json')
+  const readIndexSource = async (): Promise<string | null> => {
+    try {
+      return await readFile(indexPath, 'utf-8')
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw e
+    }
+  }
+
+  let source: string | null
+  try {
+    source = await readIndexSource()
+  } catch (e) {
+    console.error('[SessionDiscovery] Failed to read sessions-index.json:', e)
+    return
+  }
 
   let existing: SessionsIndex = { version: 1, entries: [], originalPath: projectPath }
-  try {
-    if (existsSync(indexPath)) {
-      existing = JSON.parse(readFileSync(indexPath, 'utf-8'))
+  if (source !== null) {
+    try {
+      const parsed = JSON.parse(source) as SessionsIndex
+      if (Array.isArray(parsed.entries)) existing = parsed
+    } catch {
+      // Start fresh if corrupt
     }
-  } catch {
-    // Start fresh if corrupt
   }
 
   // Remove stale entries (JSONL file no longer exists)
   const liveEntries = existing.entries.filter(e => existsSync(e.fullPath))
   const removedCount = existing.entries.length - liveEntries.length
+  const discoveredById = new Map(discovered.map(session => [session.sessionId, session]))
+  let refreshedCount = 0
 
-  const existingIds = new Set(liveEntries.map(e => e.sessionId))
-  const newEntries: SessionIndexEntry[] = []
+  const mergedEntries = liveEntries.map(entry => {
+    const session = discoveredById.get(entry.sessionId)
+    if (!session) return entry
 
-  for (const s of discovered) {
-    if (!existingIds.has(s.sessionId)) {
-      newEntries.push({
-        sessionId: s.sessionId,
-        fullPath: s.fullPath,
-        fileMtime: s.lastModified,
-        firstPrompt: s.firstPrompt,
-        summary: s.slug,
-        messageCount: s.messageCount,
-        created: s.created,
-        modified: s.modified,
-        gitBranch: '',
-        projectPath,
-        isSidechain: false,
-      })
+    if (
+      entry.fileMtime === session.lastModified
+      && entry.modified === session.modified
+      && entry.messageCount === session.messageCount
+    ) {
+      return entry
     }
+
+    refreshedCount++
+    return {
+      ...entry,
+      fileMtime: session.lastModified,
+      modified: session.modified,
+      messageCount: session.messageCount,
+    }
+  })
+
+  const existingIds = new Set(liveEntries.map(entry => entry.sessionId))
+  const newEntries: SessionIndexEntry[] = discovered
+    .filter(session => !existingIds.has(session.sessionId))
+    .map(session => ({
+      sessionId: session.sessionId,
+      fullPath: session.fullPath,
+      fileMtime: session.lastModified,
+      firstPrompt: session.firstPrompt,
+      summary: session.slug,
+      messageCount: session.messageCount,
+      created: session.created,
+      modified: session.modified,
+      gitBranch: '',
+      projectPath,
+      isSidechain: false,
+    }))
+
+  const next: SessionsIndex = {
+    ...existing,
+    entries: [...mergedEntries, ...newEntries].sort((a, b) =>
+      a.fileMtime - b.fileMtime || a.sessionId.localeCompare(b.sessionId)
+    ),
   }
 
-  if (newEntries.length === 0 && removedCount === 0) return
+  if (JSON.stringify(next) === JSON.stringify(existing)) return
 
-  existing.entries = [...liveEntries, ...newEntries]
+  const tempPath = `${indexPath}.${process.pid}.${indexRepairTempCounter++}.tmp`
   try {
-    await writeFile(indexPath, JSON.stringify(existing, null, 2), 'utf-8')
+    await writeFile(tempPath, JSON.stringify(next, null, 2), { encoding: 'utf-8', mode: 0o600 })
+
+    // Do not replace metadata Claude Code changed while this repair was prepared.
+    if (await readIndexSource() !== source) {
+      await unlink(tempPath)
+      return
+    }
+
+    await rename(tempPath, indexPath)
     if (newEntries.length > 0)
       console.log(`[SessionDiscovery] Added ${newEntries.length} session(s) to index for ${projectPath}`)
+    if (refreshedCount > 0)
+      console.log(`[SessionDiscovery] Refreshed ${refreshedCount} session(s) in index for ${projectPath}`)
     if (removedCount > 0)
       console.log(`[SessionDiscovery] Removed ${removedCount} stale session(s) from index for ${projectPath}`)
   } catch (e) {
+    await unlink(tempPath).catch(() => {})
     console.error('[SessionDiscovery] Failed to update sessions-index.json:', e)
   }
 }
