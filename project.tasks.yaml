@@ -270,14 +270,15 @@ tasks:
     title: Aggregate owned Claude worktree sessions
     type: bug
     spec_ref: "@session-discovery"
-    status: pending
+    status: in_progress
     blocked_by: []
     depends_on: []
     priority: 1
     tags: []
-    notes_count: 0
+    notes_count: 1
     todos_count: 0
     created_at: 2026-07-21T10:10:38.797Z
+    started_at: 2026-07-21T10:10:48.841Z
     automation: manual_only
   - _ulid: 01KY22FX49TCPDXS2QT08G863P
     slugs:
@@ -285,12 +286,13 @@ tasks:
     title: Fix Canvas terminal input ownership
     type: bug
     spec_ref: "@canvas-navigation"
-    status: pending
+    status: in_progress
     blocked_by: []
     depends_on: []
     priority: 1
     tags: []
-    notes_count: 0
+    notes_count: 1
     todos_count: 0
     created_at: 2026-07-21T10:10:38.857Z
+    started_at: 2026-07-21T10:10:48.950Z
     automation: manual_only

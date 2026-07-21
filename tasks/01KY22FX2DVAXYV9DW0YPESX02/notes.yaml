@@ -1,1 +1,8 @@
-notes: []
+notes:
+  - _ulid: 01KY22G6YGSKWYQDPMFDW94666
+    content: Confirmed real missing tutorial session 67db8deb-ab99-43a1-badd-0130a5ac9d8a is intact
+      under the owned video-tutorial-expansion worktree store; root discovery probes only exact root
+      stores and renderer resume paths discard cwd in several branches.
+    supersedes: null
+    author: "@primary-dev"
+    created_at: 2026-07-21T10:10:48.913Z

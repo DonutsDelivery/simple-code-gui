@@ -557,6 +557,9 @@ features:
         type: requirement
         description: Users can move through an unbounded workspace fluidly with pointer, trackpad, keyboard,
           overview, and direct-focus controls.
+        status:
+          maturity: draft
+          implementation: in_progress
         depends_on: []
         implements: []
         relates_to: []

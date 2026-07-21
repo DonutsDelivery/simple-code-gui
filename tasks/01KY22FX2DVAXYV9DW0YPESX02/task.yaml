@@ -8,13 +8,25 @@ description: Include owned worktree sessions in root discovery and preserve thei
 spec_ref: "@session-discovery"
 meta_ref: null
 plan_ref: null
-status: pending
+status: in_progress
 blocked_by: []
 depends_on: []
 context: []
 priority: 1
 tags: []
 vcs_refs: []
+history:
+  - author: "@claude"
+    changes:
+      status:
+        new: in_progress
+        previous: pending
+      started_at:
+        new: 2026-07-21T10:10:48.841Z
+        previous: null
+    command: task-start
+    timestamp: 2026-07-21T10:10:48.841Z
 created_at: 2026-07-21T10:10:38.797Z
+started_at: 2026-07-21T10:10:48.841Z
 todos: []
 automation: manual_only

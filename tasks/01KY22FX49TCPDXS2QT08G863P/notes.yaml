@@ -1,1 +1,8 @@
-notes: []
+notes:
+  - _ulid: 01KY22G71QWSCFMPQM1WN7HMAC
+    content: Confirmed Canvas capture steals descendant Escape before xterm and focuses the full
+      surface. Linux middle-button paste can occur on mousedown before the existing auxclick guard,
+      so Canvas must intercept middle mousedown in capture while retaining pointer-based pan.
+    supersedes: null
+    author: "@primary-dev"
+    created_at: 2026-07-21T10:10:49.015Z
