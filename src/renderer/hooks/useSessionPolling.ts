@@ -63,7 +63,11 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
       try {
         await Promise.all(openTabs.map(async (tab) => {
           try {
-            const sessions = await discoverSessionsForTab(tab)
+            const discovered = await discoverSessionsForTab(tab)
+            const tabCwd = tab.projectPath.replace(/[/\\]+$/, '')
+            const sessions = discovered.filter(session =>
+              (session.cwd || tab.projectPath).replace(/[/\\]+$/, '') === tabCwd
+            )
             if (sessions.length === 0) return
 
             const mostRecent = sessions[0]

@@ -23,7 +23,7 @@ function savedTab(overrides: Partial<any> = {}) {
   }
 }
 
-function createApi(discoveredSessions: Array<{ sessionId: string; slug: string }> = []) {
+function createApi(discoveredSessions: Array<{ sessionId: string; slug: string; cwd?: string }> = []) {
   return {
     ttsInstallInstructions: vi.fn().mockResolvedValue(undefined),
     discoverSessions: vi.fn().mockResolvedValue(discoveredSessions),
@@ -32,8 +32,10 @@ function createApi(discoveredSessions: Array<{ sessionId: string; slug: string }
 }
 
 describe('spawnSessionTabs', () => {
-  it('uses the most recent discovered session when a saved session id is stale', async () => {
-    const api = createApi([{ sessionId: 'most-recent', slug: 'latest' }])
+  // AC: @session-discovery ac-3
+  it('uses the discovered worktree cwd when a saved session id is stale', async () => {
+    const worktreePath = `${projectPath}/.claude/worktrees/latest`
+    const api = createApi([{ sessionId: 'most-recent', slug: 'latest', cwd: worktreePath }])
     const addedTabs: any[] = []
 
     const result = await spawnSessionTabs(
@@ -44,9 +46,26 @@ describe('spawnSessionTabs', () => {
       (tab) => addedTabs.push(tab)
     )
 
-    expect(api.spawnPty).toHaveBeenCalledWith(projectPath, 'most-recent', undefined, 'codex')
-    expect(result.restoredTabs[0].sessionId).toBe('most-recent')
+    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex')
+    expect(result.restoredTabs[0]).toMatchObject({ sessionId: 'most-recent', projectPath: worktreePath })
     expect(addedTabs[0].sessionId).toBe('most-recent')
+  })
+
+  // AC: @session-discovery ac-3
+  it('uses the discovered worktree cwd when the saved tab has no session id', async () => {
+    const worktreePath = `${projectPath}/.claude/worktrees/latest`
+    const api = createApi([{ sessionId: 'most-recent', slug: 'latest', cwd: worktreePath }])
+
+    const result = await spawnSessionTabs(
+      api,
+      [savedTab({ sessionId: undefined })],
+      [{ path: projectPath, backend: 'codex' }],
+      null,
+      () => {}
+    )
+
+    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex')
+    expect(result.restoredTabs[0]).toMatchObject({ sessionId: 'most-recent', projectPath: worktreePath })
   })
 
   it('falls back to Codex resume-last when a stale saved session id has no discovered replacement', async () => {

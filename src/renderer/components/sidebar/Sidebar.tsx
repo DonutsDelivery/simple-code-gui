@@ -95,8 +95,8 @@ export function Sidebar({
         dropTarget={state.dropTarget}
         editInputRef={state.editInputRef}
         onToggleExpand={(e) => callbacks.handleProjectToggleExpand(e, project.path)}
-        onOpenSession={(sessionId, slug, isNewSession) =>
-          callbacks.handleProjectOpenSession(project.path, sessionId, slug, isNewSession)
+        onOpenSession={(sessionId, slug, isNewSession, resumeCwd) =>
+          callbacks.handleProjectOpenSession(project.path, sessionId, slug, isNewSession, resumeCwd)
         }
         onRunExecutable={() => callbacks.handleProjectRunExecutable(project.path)}
         onCloseProjectTabs={() => callbacks.handleProjectCloseProjectTabs(project.path)}

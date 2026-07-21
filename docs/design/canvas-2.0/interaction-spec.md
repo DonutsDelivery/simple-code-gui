@@ -121,12 +121,11 @@ Group labels become more prominent as nodes simplify. At overview scale the user
 
 ## Camera and navigation
 
-- Middle drag or Space + primary drag: pan freely in both axes.
-- Wheel/trackpad: pan.
-- Ctrl/Cmd + wheel: cursor-anchored zoom.
+- Middle drag or Space + primary drag: pan freely in both axes without triggering terminal paste.
+- Wheel/trackpad: cursor-anchored zoom.
 - `0`: fit all; `Shift+0`: reset to 100%; `F`: fit selection.
 - Arrow keys on Canvas: spatially focus nearest node.
-- Enter: activate focused terminal; Escape: return focus to Canvas.
+- Enter on Canvas: activate the focused terminal. Once a terminal or editor owns focus, Escape and other unmodified keys remain terminal/editor input.
 - Search/jump (`Ctrl/Cmd+K`) finds sessions, projects, worktrees, and groups.
 - Minimap click/drag changes camera; viewport is rendered as a thin copper rectangle.
 - Camera controls: minus, percentage, plus, fit-all. They collapse to percentage when idle.
@@ -175,7 +174,7 @@ The empty Canvas should teach the spatial model without becoming a landing page:
 ```text
 Drop a project or start a session
 
-N  New session     Space-drag  Pan     Ctrl-scroll  Zoom
+N  New session     Space-drag  Pan     Scroll  Zoom
 ```
 
 A faint crosshair marks the camera origin. No illustration or oversized marketing copy.
@@ -213,7 +212,7 @@ Mobile retains focused full-screen terminal slides and an ordered session list. 
 - Important status changes use polite announcements; failures and required input are assertive only when user action is blocked.
 - Resize handles have enlarged invisible hit targets.
 - Contrast targets: 4.5:1 text, 3:1 meaningful non-text boundaries and focus.
-- Terminal activation and Escape behavior prevent keyboard traps.
+- Terminal activation preserves terminal key ownership; Canvas shortcuts apply only while the Canvas surface itself is focused.
 
 ## Implementation acceptance snapshots
 

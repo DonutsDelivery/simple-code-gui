@@ -17,7 +17,7 @@ interface ProjectItemProps {
   dropTarget: DropTarget | null
   editInputRef: React.RefObject<HTMLInputElement | null>
   onToggleExpand: (e: React.MouseEvent) => void
-  onOpenSession: (sessionId?: string, slug?: string, isNewSession?: boolean) => void
+  onOpenSession: (sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => void
   onRunExecutable: () => void
   onCloseProjectTabs: () => void
   onContextMenu: (e: React.MouseEvent) => void
@@ -162,7 +162,7 @@ export const ProjectItem = React.memo(function ProjectItem({
               className={`session-item ${index === 0 ? 'most-recent' : ''}`}
               onClick={(e) => {
                 e.stopPropagation()
-                onOpenSession(session.sessionId, session.slug)
+                onOpenSession(session.sessionId, session.slug, undefined, session.cwd)
               }}
               title={`Session ID: ${session.sessionId}`}
             >

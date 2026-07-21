@@ -6,10 +6,20 @@ import { createEmptyCanvasScene, type CanvasScene } from '../components/canvas'
 import { CanvasWorkspaceView } from '../components/canvas/CanvasWorkspaceView'
 
 vi.mock('../components/Terminal', () => ({
-  Terminal: ({ ptyId }: { ptyId: string }) => <div data-testid="mounted-terminal">Terminal {ptyId}</div>,
+  Terminal: ({ ptyId }: { ptyId: string }) => (
+    <div data-testid="mounted-terminal">
+      Terminal {ptyId}
+      <textarea aria-label={`Terminal input ${ptyId}`} />
+    </div>
+  ),
 }))
 vi.mock('../components/Terminal.js', () => ({
-  Terminal: ({ ptyId }: { ptyId: string }) => <div data-testid="mounted-terminal">Terminal {ptyId}</div>,
+  Terminal: ({ ptyId }: { ptyId: string }) => (
+    <div data-testid="mounted-terminal">
+      Terminal {ptyId}
+      <textarea aria-label={`Terminal input ${ptyId}`} />
+    </div>
+  ),
 }))
 
 function sceneWithNodes(): CanvasScene {
@@ -116,6 +126,23 @@ describe('CanvasWorkspaceView', () => {
     expect(container.querySelector('[data-node-id="node-b"]')).toHaveClass('is-focused')
     fireEvent.keyDown(surface, { key: 'Enter' })
     expect(onFocusTab).toHaveBeenCalledWith('tab-b')
+  })
+
+  // AC: @canvas-navigation ac-4
+  it('leaves Escape owned by a focused terminal descendant', () => {
+    renderCanvas()
+    const surface = screen.getByRole('application', { name: /spatial terminal canvas/i })
+    const terminalInput = screen.getByRole('textbox', { name: 'Terminal input tab-a' })
+    const onKeyDown = vi.fn()
+    terminalInput.addEventListener('keydown', onKeyDown)
+    terminalInput.focus()
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    expect(terminalInput.dispatchEvent(escape)).toBe(true)
+    expect(onKeyDown).toHaveBeenCalledOnce()
+    expect(escape.defaultPrevented).toBe(false)
+    expect(terminalInput).toHaveFocus()
+    expect(surface).not.toHaveFocus()
   })
 
   // AC: @canvas-accessibility ac-1
@@ -351,8 +378,15 @@ describe('CanvasWorkspaceView', () => {
   it('pans with the middle button without allowing terminal paste', async () => {
     const { onSceneChange } = renderCanvas()
     const terminal = screen.getAllByTestId('mounted-terminal')[0]
+    const terminalMouseDown = vi.fn()
     const terminalAuxClick = vi.fn()
+    terminal.addEventListener('mousedown', terminalMouseDown)
     terminal.addEventListener('auxclick', terminalAuxClick)
+
+    const mouseDown = new MouseEvent('mousedown', { button: 1, bubbles: true, cancelable: true })
+    expect(fireEvent(terminal, mouseDown)).toBe(false)
+    expect(mouseDown.defaultPrevented).toBe(true)
+    expect(terminalMouseDown).not.toHaveBeenCalled()
 
     const auxClick = new MouseEvent('auxclick', { button: 1, bubbles: true, cancelable: true })
     expect(fireEvent(terminal, auxClick)).toBe(false)

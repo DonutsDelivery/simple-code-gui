@@ -10,7 +10,8 @@ export interface ProjectItemCallbacks {
     projectPath: string,
     sessionId?: string,
     slug?: string,
-    isNewSession?: boolean
+    isNewSession?: boolean,
+    resumeCwd?: string
   ) => void
   handleProjectRunExecutable: (projectPath: string) => Promise<void>
   handleProjectCloseProjectTabs: (projectPath: string) => void
@@ -59,8 +60,8 @@ export function useProjectItemCallbacks(
   )
 
   const handleProjectOpenSession = useCallback(
-    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean) => {
-      handleOpenSession(projectPath, sessionId, slug, isNewSession)
+    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => {
+      handleOpenSession(projectPath, sessionId, slug, isNewSession, resumeCwd)
     },
     [handleOpenSession]
   )

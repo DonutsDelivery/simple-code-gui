@@ -829,6 +829,12 @@ export function CanvasWorkspaceView({
     setGestureTick(value => value + 1)
   }
 
+  const handleSurfaceMouseDownCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (event.button !== 1) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   const handleSurfaceAuxClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (event.button !== 1) return
     event.preventDefault()
@@ -945,16 +951,7 @@ export function CanvasWorkspaceView({
   }, [onFocusTab, publishScene])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const target = event.target as HTMLElement
-    const insideContentEditor = Boolean(target.closest('[data-canvas-editor="true"]'))
-    if (insideContentEditor) return
-    if (event.key === 'Escape' && target !== event.currentTarget) {
-      event.preventDefault()
-      event.stopPropagation()
-      surfaceRef.current?.focus()
-      return
-    }
-    if (target !== event.currentTarget) return
+    if (event.target !== event.currentTarget) return
     if (event.code === 'Space') {
       spaceHeldRef.current = true
       event.preventDefault()
@@ -1078,6 +1075,7 @@ export function CanvasWorkspaceView({
         aria-label="Spatial terminal canvas with content objects. Use arrow keys to move between items."
         tabIndex={0}
         onPointerDown={handleSurfacePointerDown}
+        onMouseDownCapture={handleSurfaceMouseDownCapture}
         onAuxClickCapture={handleSurfaceAuxClick}
         onDragOver={handleCanvasDragOver}
         onDrop={handleCanvasDrop}

@@ -31,7 +31,8 @@ export interface SidebarState {
     projectPath: string,
     sessionId?: string,
     slug?: string,
-    isNewSession?: boolean
+    isNewSession?: boolean,
+    resumeCwd?: string
   ) => void
 
   // Drag and drop

@@ -40,7 +40,7 @@ interface ClosedTabInfo {
 interface UseProjectHandlersReturn {
   handleAddProject: () => Promise<void>
   handleAddProjectsFromParent: () => Promise<void>
-  handleOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => Promise<void>
+  handleOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => Promise<void>
   handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null) => Promise<void>
   handleAddTabToTile: (projectPath: string, tileId: string) => Promise<void>
   handleCloseTab: (tabId: string) => void
@@ -101,7 +101,7 @@ export function useProjectHandlers({
     }
   }, [api, addProject, projects])
 
-  const handleOpenSession = useCallback(async (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => {
+  const handleOpenSession = useCallback(async (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => {
     // Check if this session is already open
     if (sessionId) {
       const existingTab = openTabs.find(tab => tab.sessionId === sessionId)
@@ -133,6 +133,7 @@ export function useProjectHandlers({
           }
           sessionId = mostRecent.sessionId
           slug = mostRecent.slug
+          resumeCwd = mostRecent.cwd || projectPath
         }
       } catch (e) {
         console.error('Failed to discover sessions for project:', e)
@@ -143,9 +144,10 @@ export function useProjectHandlers({
     const title = slug ? `${projectName} - ${slug}` : `${projectName} - New`
 
     try {
-      await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
+      const workingPath = resumeCwd || projectPath
+      await api.ttsInstallInstructions?.(workingPath, effectiveBackend)
 
-      const ptyId = await api.spawnPty(projectPath, sessionId, undefined, effectiveBackend)
+      const ptyId = await api.spawnPty(workingPath, sessionId, undefined, effectiveBackend)
 
       // Add leaf to tree — single operation, no race condition
       const currentTree = tileTreeRef.current
@@ -154,7 +156,7 @@ export function useProjectHandlers({
 
       addTab({
         id: ptyId,
-        projectPath,
+        projectPath: workingPath,
         sessionId,
         title,
         ptyId,

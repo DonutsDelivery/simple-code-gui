@@ -24,7 +24,7 @@ export interface SidebarProps {
   onAddProject: () => void
   onAddProjectsFromParent: () => void
   onRemoveProject: (path: string) => void
-  onOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean) => void
+  onOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => void
   onSwitchToTab: (tabId: string) => void
   onOpenSettings: () => void
   onOpenMakeProject: () => void

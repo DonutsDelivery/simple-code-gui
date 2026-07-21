@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'fs'
-import { readdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'fs/promises'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { homedir } from 'os'
 import { execFile } from 'child_process'
 import { getEnhancedPathWithPortable } from './platform'
@@ -13,7 +13,7 @@ export interface DiscoveredSession {
   fileSize: number
 }
 
-export type SessionBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+export type SessionBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
 
 // Message types that indicate actual conversation content (not just summaries)
 const CONVERSATION_TYPES = ['user', 'assistant']
@@ -123,7 +123,9 @@ async function repairSessionsIndex(
     if (!session) return entry
 
     if (
-      entry.fileMtime === session.lastModified
+      entry.fullPath === session.fullPath
+      && entry.projectPath === session.cwd
+      && entry.fileMtime === session.lastModified
       && entry.modified === session.modified
       && entry.messageCount === session.messageCount
     ) {
@@ -133,6 +135,8 @@ async function repairSessionsIndex(
     refreshedCount++
     return {
       ...entry,
+      fullPath: session.fullPath,
+      projectPath: session.cwd,
       fileMtime: session.lastModified,
       modified: session.modified,
       messageCount: session.messageCount,
@@ -152,7 +156,7 @@ async function repairSessionsIndex(
       created: session.created,
       modified: session.modified,
       gitBranch: '',
-      projectPath,
+      projectPath: session.cwd || projectPath,
       isSidechain: false,
     }))
 
@@ -188,24 +192,48 @@ async function repairSessionsIndex(
   }
 }
 
+function isOwnedClaudeSessionCwd(projectPath: string, cwd: string): boolean {
+  const root = resolve(projectPath)
+  const actual = resolve(cwd)
+  if (actual === root) return true
+
+  const worktreesRoot = resolve(root, '.claude', 'worktrees')
+  const worktreeRelative = relative(worktreesRoot, actual)
+  return worktreeRelative !== ''
+    && worktreeRelative !== '..'
+    && !worktreeRelative.startsWith(`..${sep}`)
+    && !isAbsolute(worktreeRelative)
+}
+
 async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSession[]> {
   const claudeDir = join(homedir(), '.claude', 'projects')
+  const exactStoreNames = new Set([
+    encodeProjectPath(projectPath),
+    encodeProjectPathLegacy(projectPath),
+  ])
+  const worktreeStorePrefixes = [...new Set([
+    `${encodeProjectPath(join(projectPath, '.claude', 'worktrees'))}-`,
+    `${encodeProjectPathLegacy(join(projectPath, '.claude', 'worktrees'))}-`,
+  ])]
 
-  // Check both current and legacy encoding schemes to find all sessions
-  const candidateDirs = [
-    join(claudeDir, encodeProjectPath(projectPath)),
-    join(claudeDir, encodeProjectPathLegacy(projectPath))
-  ]
-  // Deduplicate (they may produce the same result for paths without spaces)
-  const uniqueDirs = [...new Set(candidateDirs)].filter(dir => existsSync(dir))
-
-  if (uniqueDirs.length === 0) {
+  let stores: Array<{ path: string; isRoot: boolean }>
+  try {
+    const entries = await readdir(claudeDir, { withFileTypes: true })
+    stores = entries
+      .filter(entry => entry.isDirectory())
+      .filter(entry => exactStoreNames.has(entry.name) || worktreeStorePrefixes.some(prefix => entry.name.startsWith(prefix)))
+      .map(entry => ({ path: join(claudeDir, entry.name), isRoot: exactStoreNames.has(entry.name) }))
+      .sort((a, b) => a.path.localeCompare(b.path))
+  } catch {
     return []
   }
 
+  if (stores.length === 0) return []
+
   const sessions = new Map<string, SessionWithIndexData>()
 
-  for (const projectSessionsDir of uniqueDirs) {
+  for (const store of stores) {
+    const projectSessionsDir = store.path
     try {
       const files = await readdir(projectSessionsDir)
 
@@ -226,7 +254,8 @@ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSe
 
               // Look for slug and check if session has actual conversation
               let slug = sessionId.slice(0, 8)
-              let cwd = projectPath
+              let recordedCwd = ''
+              let hasForeignCwd = false
               let hasConversation = false
               let parseErrors = 0
               let firstPrompt = ''
@@ -237,7 +266,10 @@ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSe
                 try {
                   const data = JSON.parse(line)
                   if (data.slug) slug = data.slug
-                  if (data.cwd) cwd = data.cwd
+                  if (data.cwd) {
+                    recordedCwd = String(data.cwd)
+                    if (!isOwnedClaudeSessionCwd(projectPath, recordedCwd)) hasForeignCwd = true
+                  }
                   if (data.type && CONVERSATION_TYPES.includes(data.type)) {
                     hasConversation = true
                     messageCount++
@@ -265,7 +297,8 @@ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSe
                 console.warn(`Session ${file}: ${parseErrors}/${lines.length} lines failed to parse`)
               }
 
-              if (!hasConversation) {
+              const cwd = recordedCwd || (store.isRoot ? projectPath : '')
+              if (!hasConversation || !cwd || hasForeignCwd) {
                 return null
               }
 
@@ -288,17 +321,26 @@ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSe
           })
       )
 
-      // Deduplicate by sessionId (same session may appear in both dirs)
-      const dirSessions: SessionWithIndexData[] = []
-      for (const result of results) {
-        if (result && !sessions.has(result.sessionId)) {
-          sessions.set(result.sessionId, result)
-          dirSessions.push(result)
-        }
+      const dirSessions = results.filter((result): result is SessionWithIndexData => result !== null)
+
+      // Worktree indexes remain local; root indexes are repaired after global deduplication.
+      if (!store.isRoot) {
+        const indexProjectPath = [...dirSessions]
+          .sort((a, b) => a.fullPath.localeCompare(b.fullPath))[0]?.cwd ?? projectPath
+        await repairSessionsIndex(indexProjectPath, projectSessionsDir, dirSessions)
       }
 
-      // Keep sessions-index.json in sync so Claude's /resume shows real sessions
-      await repairSessionsIndex(projectPath, projectSessionsDir, dirSessions)
+      // A session may have a stale root copy and a newer worktree copy.
+      for (const result of dirSessions) {
+        const current = sessions.get(result.sessionId)
+        if (
+          !current
+          || result.lastModified > current.lastModified
+          || (result.lastModified === current.lastModified && result.fullPath.localeCompare(current.fullPath) < 0)
+        ) {
+          sessions.set(result.sessionId, result)
+        }
+      }
     } catch (e) {
       console.error('Failed to read sessions directory:', e)
     }
@@ -306,7 +348,21 @@ async function discoverClaudeSessions(projectPath: string): Promise<DiscoveredSe
 
   // Sort by most recent first
   const sorted = [...sessions.values()]
-  sorted.sort((a, b) => b.lastModified - a.lastModified)
+  sorted.sort((a, b) =>
+    b.lastModified - a.lastModified || a.fullPath.localeCompare(b.fullPath)
+  )
+
+  // Mirror owned worktree entries into the root index so native /resume can
+  // surface them without switching to Claude Code's all-projects view.
+  const rootIndexDirs = stores.filter(store => store.isRoot).map(store => store.path)
+  if (sorted.length > 0 && rootIndexDirs.length === 0) {
+    const rootIndexDir = join(claudeDir, encodeProjectPath(projectPath))
+    await mkdir(rootIndexDir, { recursive: true })
+    rootIndexDirs.push(rootIndexDir)
+  }
+  for (const rootIndexDir of rootIndexDirs) {
+    await repairSessionsIndex(projectPath, rootIndexDir, sorted)
+  }
 
   return sorted
 }
@@ -523,7 +579,11 @@ async function discoverCodexSessions(projectPath: string): Promise<DiscoveredSes
   return results
 }
 
-export async function discoverSessions(projectPath: string, backend: SessionBackend = 'claude'): Promise<DiscoveredSession[]> {
+export async function discoverSessions(
+  projectPath: string,
+  backend: SessionBackend = 'claude',
+  _exactSessionId?: string
+): Promise<DiscoveredSession[]> {
   if (backend === 'opencode') {
     return await discoverOpenCodeSessions(projectPath)
   }

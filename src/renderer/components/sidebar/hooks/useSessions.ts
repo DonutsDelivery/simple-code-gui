@@ -11,7 +11,8 @@ interface UseSessionsOptions {
     sessionId?: string,
     slug?: string,
     initialPrompt?: string,
-    forceNewSession?: boolean
+    forceNewSession?: boolean,
+    resumeCwd?: string
   ) => void
   onSwitchToTab: (tabId: string) => void
 }
@@ -26,7 +27,8 @@ interface UseSessionsReturn {
     projectPath: string,
     sessionId?: string,
     slug?: string,
-    isNewSession?: boolean
+    isNewSession?: boolean,
+    resumeCwd?: string
   ) => void
 }
 
@@ -93,7 +95,7 @@ export function useSessions({
 
       if (projectSessions.length > 0) {
         const mostRecent = projectSessions[0]
-        onOpenSession(projectPath, mostRecent.sessionId, mostRecent.slug)
+        onOpenSession(projectPath, mostRecent.sessionId, mostRecent.slug, undefined, undefined, mostRecent.cwd)
       } else {
         onOpenSession(projectPath, undefined, undefined, undefined, false)
       }
@@ -102,9 +104,10 @@ export function useSessions({
   )
 
   const handleOpenSession = useCallback(
-    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean) => {
+    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => {
       if (sessionId) {
-        onOpenSession(projectPath, sessionId, slug)
+        const discoveredCwd = resumeCwd ?? sessions[projectPath]?.find(session => session.sessionId === sessionId)?.cwd
+        onOpenSession(projectPath, sessionId, slug, undefined, undefined, discoveredCwd)
       } else if (isNewSession) {
         // Explicit "New Session" click - always create a new session
         onOpenSession(projectPath, undefined, undefined, undefined, true)
@@ -112,7 +115,7 @@ export function useSessions({
         openMostRecentSession(projectPath)
       }
     },
-    [onOpenSession, openMostRecentSession]
+    [onOpenSession, openMostRecentSession, sessions]
   )
 
   return {

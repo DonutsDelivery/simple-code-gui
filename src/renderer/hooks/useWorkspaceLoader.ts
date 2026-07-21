@@ -64,12 +64,13 @@ export async function spawnSessionTabs(
   const livePtysById = new Map(livePtys.map(pty => [pty.id, pty]))
 
   const usedSessionIds = new Set<string>()
-  const sessionsCache = new Map<string, { list: { sessionId: string; slug: string }[]; nextIndex: number }>()
+  const sessionsCache = new Map<string, { list: { sessionId: string; slug: string; cwd?: string }[]; nextIndex: number }>()
 
   for (const savedTab of savedTabs) {
     try {
       const projectName = savedTab.projectPath.split(/[/\\]/).pop() || savedTab.projectPath
       let titleToRestore = savedTab.title || `${projectName} - New`
+      let projectPathToRestore = savedTab.projectPath
 
       const projectForTab = projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
       const savedBackend = savedTab.backend && savedTab.backend !== 'default'
@@ -105,7 +106,7 @@ export async function spawnSessionTabs(
 
         // Extract slug from saved title (format: "projectName - slug")
         const savedSlug = savedTab.title?.replace(/^.*?-\s*/, '')?.trim() || ''
-        function matchBySlug(): { sessionId: string; slug: string } | null {
+        function matchBySlug(): { sessionId: string; slug: string; cwd?: string } | null {
           if (!savedSlug) return null
           for (const s of list) {
             if (s.slug === savedSlug && !usedSessionIds.has(s.sessionId)) return s
@@ -124,6 +125,7 @@ export async function spawnSessionTabs(
           if (preferMostRecent) {
             sessionIdToRestore = mostRecent!.sessionId
             sessionIdForSpawn = sessionIdToRestore
+            projectPathToRestore = mostRecent!.cwd || savedTab.projectPath
             if (!savedTab.customTitle) {
               titleToRestore = `${projectName} - ${mostRecent!.slug}`
             }
@@ -131,6 +133,7 @@ export async function spawnSessionTabs(
           } else if (savedMatch && !usedSessionIds.has(savedMatch.sessionId)) {
             sessionIdToRestore = savedMatch.sessionId
             sessionIdForSpawn = sessionIdToRestore
+            projectPathToRestore = savedMatch.cwd || savedTab.projectPath
             if (!savedTab.customTitle) {
               titleToRestore = `${projectName} - ${savedMatch.slug}`
             }
@@ -145,6 +148,7 @@ export async function spawnSessionTabs(
             if (slugMatch) {
               sessionIdToRestore = slugMatch.sessionId
               sessionIdForSpawn = sessionIdToRestore
+              projectPathToRestore = slugMatch.cwd || savedTab.projectPath
               if (!savedTab.customTitle) {
                 titleToRestore = `${projectName} - ${slugMatch.slug}`
               }
@@ -154,6 +158,7 @@ export async function spawnSessionTabs(
                 if (!usedSessionIds.has(candidate.sessionId)) {
                   sessionIdToRestore = candidate.sessionId
                   sessionIdForSpawn = sessionIdToRestore
+                  projectPathToRestore = candidate.cwd || savedTab.projectPath
                   if (!savedTab.customTitle) {
                     titleToRestore = `${projectName} - ${candidate.slug}`
                   }
@@ -172,6 +177,7 @@ export async function spawnSessionTabs(
             if (!usedSessionIds.has(candidate.sessionId)) {
               sessionIdToRestore = candidate.sessionId
               sessionIdForSpawn = sessionIdToRestore
+              projectPathToRestore = candidate.cwd || savedTab.projectPath
               if (!savedTab.customTitle) {
                 titleToRestore = `${projectName} - ${candidate.slug}`
               }
@@ -185,7 +191,7 @@ export async function spawnSessionTabs(
       const ptyId = attachedPty
         ? attachedPty.id
         : await api.spawnPty(
-          savedTab.projectPath,
+          projectPathToRestore,
           sessionIdForSpawn,
           undefined,
           effectiveBackend
@@ -197,7 +203,7 @@ export async function spawnSessionTabs(
 
       const tab: OpenTab = {
         id: ptyId,
-        projectPath: savedTab.projectPath,
+        projectPath: projectPathToRestore,
         sessionId: sessionIdToRestore,
         title: titleToRestore,
         customTitle: savedTab.customTitle || undefined,

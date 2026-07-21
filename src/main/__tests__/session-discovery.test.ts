@@ -12,7 +12,127 @@ afterEach(async () => {
   await Promise.all(tempHomes.splice(0).map(home => rm(home, { recursive: true, force: true })))
 })
 
-describe('Claude session discovery index repair', () => {
+describe('Claude session discovery', () => {
+  it('discovers a session after Claude moves it into an owned worktree store', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'claude-terminal-claude-'))
+    tempHomes.push(home)
+    vi.stubEnv('HOME', home)
+
+    const sessionId = '91ba3b3d-ba17-4872-b332-98d09f2a097c'
+    const worktreePath = '/proj/app/.claude/worktrees/grid'
+    const worktreeStore = join(home, '.claude', 'projects', '-proj-app--claude-worktrees-grid')
+    await mkdir(worktreeStore, { recursive: true })
+    await writeFile(join(worktreeStore, `${sessionId}.jsonl`), [
+      JSON.stringify({
+        type: 'user',
+        cwd: worktreePath,
+        sessionId,
+        timestamp: '2026-07-17T12:00:00.000Z',
+        message: { role: 'user', content: 'Fix the grid end to end' },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        cwd: worktreePath,
+        sessionId,
+        slug: 'grid-workflow',
+        timestamp: '2026-07-17T12:01:00.000Z',
+        message: { role: 'assistant', content: 'Working on it' },
+      }),
+    ].join('\n'))
+
+    await expect(discoverSessions(projectPath, 'claude-codex')).resolves.toMatchObject([
+      { sessionId, slug: 'grid-workflow', cwd: worktreePath },
+    ])
+    await expect(discoverSessions(projectPath, 'claude-codex', sessionId)).resolves.toMatchObject([
+      { sessionId, slug: 'grid-workflow', cwd: worktreePath },
+    ])
+  })
+
+  // AC: @session-discovery ac-3
+  it('aggregates only owned worktree sessions and keeps their actual cwd', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'claude-terminal-claude-'))
+    tempHomes.push(home)
+    vi.stubEnv('HOME', home)
+
+    const projectsDir = join(home, '.claude', 'projects')
+    const rootStore = join(projectsDir, '-proj-app')
+    const worktreeStore = join(projectsDir, '-proj-app--claude-worktrees-tutorial')
+    const legacyWorktreeStore = join(projectsDir, 'proj-app--claude-worktrees-legacy')
+    const collisionStore = join(projectsDir, '-proj-app--claude-worktrees-collision')
+    const missingCwdStore = join(projectsDir, '-proj-app--claude-worktrees-missing')
+    const siblingStore = join(projectsDir, '-proj-application--claude-worktrees-other')
+    const worktreePath = '/proj/app/.claude/worktrees/tutorial'
+    const legacyWorktreePath = '/proj/app/.claude/worktrees/legacy'
+    const rootSessionId = '11111111-1111-4111-8111-111111111111'
+    const movedSessionId = '22222222-2222-4222-8222-222222222222'
+    const foreignSessionId = '33333333-3333-4333-8333-333333333333'
+    const missingCwdSessionId = '44444444-4444-4444-8444-444444444444'
+    const legacySessionId = '55555555-5555-4555-8555-555555555555'
+
+    async function writeSession(
+      store: string,
+      sessionId: string,
+      cwd: string | undefined,
+      modified: string
+    ): Promise<void> {
+      await mkdir(store, { recursive: true })
+      const identity = cwd ? { cwd } : {}
+      const filePath = join(store, `${sessionId}.jsonl`)
+      await writeFile(filePath, [
+        JSON.stringify({
+          ...identity,
+          type: 'user',
+          sessionId,
+          timestamp: modified,
+          message: { role: 'user', content: `Session ${sessionId}` },
+        }),
+        JSON.stringify({
+          ...identity,
+          type: 'assistant',
+          sessionId,
+          timestamp: modified,
+          message: { role: 'assistant', content: 'Working' },
+        }),
+      ].join('\n'))
+      const stamp = new Date(modified)
+      await utimes(filePath, stamp, stamp)
+    }
+
+    await writeSession(rootStore, rootSessionId, projectPath, '2026-07-20T10:00:00.000Z')
+    await writeSession(rootStore, movedSessionId, projectPath, '2026-07-19T10:00:00.000Z')
+    await writeSession(worktreeStore, movedSessionId, worktreePath, '2026-07-21T13:00:00.000Z')
+    await writeSession(legacyWorktreeStore, legacySessionId, legacyWorktreePath, '2026-07-21T12:00:00.000Z')
+    await writeSession(collisionStore, foreignSessionId, '/proj/application/.claude/worktrees/foreign', '2026-07-22T10:00:00.000Z')
+    await writeSession(missingCwdStore, missingCwdSessionId, undefined, '2026-07-23T10:00:00.000Z')
+    await writeSession(siblingStore, foreignSessionId, '/proj/application/.claude/worktrees/other', '2026-07-24T10:00:00.000Z')
+
+    const discovered = await discoverSessions(projectPath)
+    expect(discovered.map(session => session.sessionId)).toEqual([
+      movedSessionId,
+      legacySessionId,
+      rootSessionId,
+    ])
+    expect(discovered[0]).toMatchObject({ sessionId: movedSessionId, cwd: worktreePath })
+    expect(discovered[1]).toMatchObject({ sessionId: legacySessionId, cwd: legacyWorktreePath })
+
+    const rootIndex = JSON.parse(await readFile(join(rootStore, 'sessions-index.json'), 'utf-8'))
+    expect(rootIndex.entries.find((entry: { sessionId: string }) => entry.sessionId === movedSessionId)).toMatchObject({
+      fullPath: join(worktreeStore, `${movedSessionId}.jsonl`),
+      projectPath: worktreePath,
+    })
+    expect(rootIndex.entries.map((entry: { sessionId: string }) => entry.sessionId)).toEqual([
+      rootSessionId,
+      legacySessionId,
+      movedSessionId,
+    ])
+
+    const worktreeIndex = JSON.parse(await readFile(join(worktreeStore, 'sessions-index.json'), 'utf-8'))
+    expect(worktreeIndex.originalPath).toBe(worktreePath)
+    expect(worktreeIndex.entries).toEqual([
+      expect.objectContaining({ sessionId: movedSessionId, projectPath: worktreePath }),
+    ])
+  })
+
   // AC: @session-discovery ac-1
   // AC: @session-discovery ac-2
   it('refreshes stale index activity while preserving native session metadata', async () => {
