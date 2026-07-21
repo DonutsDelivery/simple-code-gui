@@ -14,3 +14,10 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-21T10:39:06.050Z
+  - _ulid: 01KY24PHCKCWJAZ5MRCXBWFJCM
+    content: Committed as 3ee239d. Isolated Chromium verification confirmed descendant Escape was not
+      prevented or refocused, wheel changed zoom, and middle mousedown was blocked before xterm
+      while pointer movement panned the camera.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-21T10:49:13.363Z
