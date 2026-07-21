@@ -143,6 +143,11 @@ features:
         then: the index contains exactly the live resumable sessions in deterministic activity order so the
           native resume picker can surface recent sessions
         when: session discovery synchronizes the project sessions index
+      - given: a root project has Claude Code sessions stored in its owned worktree directories
+        id: ac-3
+        then: owned worktree sessions appear in global activity order with their actual working directories
+          while foreign and prefix-collision stores remain excluded
+        when: the user discovers or resumes sessions from the root project
     tags: []
     created: 2026-03-08T08:00:05.876Z
     notes: []

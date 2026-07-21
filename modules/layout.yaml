@@ -576,6 +576,10 @@ features:
             id: ac-3
             then: focus and the camera move predictably without sending the command to a terminal
             when: the user navigates directionally or invokes a camera command from the keyboard
+          - given: keyboard focus is inside an embedded terminal or another interactive Canvas descendant
+            id: ac-4
+            then: the focused child receives the key and Canvas does not change focus or selection
+            when: the user enters Escape or another unmodified key
         tags: []
         created: 2026-07-18T10:04:44.965Z
         notes: []

@@ -1,0 +1,20 @@
+_ulid: 01KY22FX2DVAXYV9DW0YPESX02
+slugs:
+  - aggregate-claude-worktree-sessions
+title: Aggregate owned Claude worktree sessions
+type: bug
+description: Include owned worktree sessions in root discovery and preserve their cwd through resume
+  and restore flows.
+spec_ref: "@session-discovery"
+meta_ref: null
+plan_ref: null
+status: pending
+blocked_by: []
+depends_on: []
+context: []
+priority: 1
+tags: []
+vcs_refs: []
+created_at: 2026-07-21T10:10:38.797Z
+todos: []
+automation: manual_only
