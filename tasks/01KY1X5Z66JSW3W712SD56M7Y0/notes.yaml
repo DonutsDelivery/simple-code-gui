@@ -1,1 +1,8 @@
-notes: []
+notes:
+  - _ulid: 01KY1X6JK328R3APA77CTNMGVZ
+    content: "Confirmed root cause: all active top-level custom ChatGPT 5.6 harness transcripts are
+      indexed, but repairSessionsIndex never refreshes existing fileMtime, modified, or messageCount
+      fields. Current session index reports 5 messages versus 157 transcript records."
+    supersedes: null
+    author: "@primary-dev"
+    created_at: 2026-07-21T08:38:10.275Z

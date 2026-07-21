@@ -8,13 +8,25 @@ description: Keep existing Claude Code sessions-index entries current for custom
 spec_ref: "@session-discovery"
 meta_ref: null
 plan_ref: null
-status: pending
+status: in_progress
 blocked_by: []
 depends_on: []
 context: []
 priority: 2
 tags: []
 vcs_refs: []
+history:
+  - author: "@claude"
+    changes:
+      status:
+        new: in_progress
+        previous: pending
+      started_at:
+        new: 2026-07-21T08:38:10.184Z
+        previous: null
+    command: task-start
+    timestamp: 2026-07-21T08:38:10.184Z
 created_at: 2026-07-21T08:37:50.406Z
+started_at: 2026-07-21T08:38:10.184Z
 todos: []
 automation: manual_only
