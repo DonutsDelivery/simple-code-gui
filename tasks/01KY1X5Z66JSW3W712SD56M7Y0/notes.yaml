@@ -6,3 +6,14 @@ notes:
     supersedes: null
     author: "@primary-dev"
     created_at: 2026-07-21T08:38:10.275Z
+  - _ulid: 01KY1XRGYXY83EA7F7751W2E88
+    content: Implemented in commit 51689800. Existing index entries now refresh authoritative activity
+      fields while preserving native/unknown metadata; writes are no-op aware, atomic, and abandon
+      replacement if Claude Code changes the source index concurrently. Focused session-discovery
+      tests pass (3/3), production build passes, and isolated gpt-5.6-sol harness verification
+      showed the newest seeded session first in native /resume with no renderer errors. Full suite
+      remains blocked by unrelated pre-existing session-store fs mock import failure and two stale
+      theme-name expectations.
+    supersedes: null
+    author: "@primary-dev"
+    created_at: 2026-07-21T08:47:58.429Z
