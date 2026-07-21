@@ -15,3 +15,10 @@ notes:
     supersedes: null
     author: DonutsDelivery
     created_at: 2026-07-21T10:39:05.626Z
+  - _ulid: 01KY24PGYQJZ4F46HCDY82YP6W
+    content: "Committed as 3ee239d. Final focused staged-snapshot verification: 28/28 tests passed;
+      working-tree production build passed. Full suite remains at 297/299 with only known unrelated
+      session-store mock and theme-name failures."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-21T10:49:12.919Z
