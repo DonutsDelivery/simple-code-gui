@@ -6,3 +6,12 @@ notes:
     supersedes: null
     author: "@primary-dev"
     created_at: 2026-07-21T10:10:48.913Z
+  - _ulid: 01KY243ZWTPHJKV66PXMN9R0TY
+    content: Implemented owned current/legacy worktree store aggregation, cwd ownership checks,
+      deterministic duplicate selection, root index mirroring for native /resume, and actual-cwd
+      propagation through open/restore/polling flows. Verified 36 focused tests, production build,
+      and isolated native /resume showing an automatically mirrored worktree session under the root
+      project.
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-21T10:39:05.626Z
