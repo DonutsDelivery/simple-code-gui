@@ -661,7 +661,15 @@ features:
             when: views are mounted and unmounted
         tags: []
         created: 2026-07-18T10:04:45.703Z
-        notes: []
+        notes:
+          - _ulid: 01KY28NTR29AMK6C0P86RM4DYY
+            content: "Follow-up: terminalInit truthy replay currently acknowledges queued live writes without
+              rendering them. Fix separately with an explicit snapshot/live sequence boundary or
+              pause/snapshot/subscribe handshake; blindly appending all queued bytes can duplicate
+              data already represented in the snapshot."
+            supersedes: null
+            author: claude
+            created_at: 2026-07-21T11:58:44.482Z
       - _ulid: 01KXTAYZMGJ9Q42MXH39F7CFH1
         slugs:
           - canvas-visual-language
