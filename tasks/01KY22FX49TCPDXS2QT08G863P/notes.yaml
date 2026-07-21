@@ -6,3 +6,11 @@ notes:
     supersedes: null
     author: "@primary-dev"
     created_at: 2026-07-21T10:10:49.015Z
+  - _ulid: 01KY2440A20FAERHTCZM2XV2QZ
+    content: "Canvas keyboard capture now ignores descendant targets; middle mousedown is cancelled in
+      capture phase while pointer panning remains active. Verified focused Canvas tests and isolated
+      runtime: Escape stayed with xterm, wheel zoomed, and middle mousedown was prevented before
+      xterm while the camera panned."
+    supersedes: null
+    author: DonutsDelivery
+    created_at: 2026-07-21T10:39:06.050Z
