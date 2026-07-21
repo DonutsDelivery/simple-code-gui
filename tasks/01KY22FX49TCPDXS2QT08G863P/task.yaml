@@ -7,13 +7,21 @@ description: Let embedded terminals own Escape and prevent Linux middle-button p
 spec_ref: "@canvas-navigation"
 meta_ref: null
 plan_ref: null
-status: in_progress
+status: pending_review
 blocked_by: []
 depends_on: []
 context: []
 priority: 1
 tags: []
 vcs_refs: []
+submission_linkage:
+  review_url: null
+  branch: feat/agent-signals
+  captured_at: 2026-07-21T10:49:14.420Z
+  commit: 3ee239d6dbfb9b9b8a4b6afd15e3d71e86047eb7
+  remote: null
+  remote_url: null
+  upstream_ref: null
 history:
   - author: "@claude"
     changes:
@@ -25,7 +33,28 @@ history:
         previous: null
     command: task-start
     timestamp: 2026-07-21T10:10:48.950Z
+  - author: DonutsDelivery
+    changes:
+      status:
+        new: pending_review
+        previous: in_progress
+      submission_linkage:
+        new:
+          review_url: null
+          branch: feat/agent-signals
+          captured_at: 2026-07-21T10:49:14.420Z
+          commit: 3ee239d6dbfb9b9b8a4b6afd15e3d71e86047eb7
+          remote: null
+          remote_url: null
+          upstream_ref: null
+        previous: null
+      submitted_at:
+        new: 2026-07-21T10:49:14.427Z
+        previous: null
+    command: task-submit
+    timestamp: 2026-07-21T10:49:14.427Z
 created_at: 2026-07-21T10:10:38.857Z
 started_at: 2026-07-21T10:10:48.950Z
+submitted_at: 2026-07-21T10:49:14.427Z
 todos: []
 automation: manual_only

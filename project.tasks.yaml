@@ -287,7 +287,7 @@ tasks:
     title: Fix Canvas terminal input ownership
     type: bug
     spec_ref: "@canvas-navigation"
-    status: in_progress
+    status: pending_review
     blocked_by: []
     depends_on: []
     priority: 1
@@ -296,4 +296,5 @@ tasks:
     todos_count: 0
     created_at: 2026-07-21T10:10:38.857Z
     started_at: 2026-07-21T10:10:48.950Z
+    submitted_at: 2026-07-21T10:49:14.427Z
     automation: manual_only
