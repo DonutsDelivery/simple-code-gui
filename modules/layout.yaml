@@ -197,9 +197,21 @@ features:
         then: the switcher order updates with an insertion indicator during the drag, and the new order
           persists across app restart
         when: they drag a workspace tab to a new position
+      - given: a restored workspace has running terminals and the user switches to another workspace
+        id: ac-5
+        then: the same PTY and terminal renderer remain attached, all output is visible once and in order,
+          and no duplicate subscription is created
+        when: terminal output is produced before or while the restored workspace is inactive and the user
+          switches back
     tags: []
     created: 2026-05-05T00:00:00.000Z
-    notes: []
+    notes:
+      - _ulid: 01KY28A7JAQJ75CZHAKAKPHXT4
+        content: Added ac-5 to specify in-process terminal output continuity across workspace switches;
+          application restart and semantic CLI resume remain separate contracts.
+        supersedes: null
+        author: claude
+        created_at: 2026-07-21T11:52:24.394Z
   - _ulid: 01KTQRN97DKGSS8RFJJMRB17P6
     slugs:
       - tile-keyboard-shortcuts
