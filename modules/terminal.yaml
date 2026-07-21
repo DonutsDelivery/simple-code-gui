@@ -132,6 +132,17 @@ features:
     relates_to: []
     tests: []
     traits: []
+    acceptance_criteria:
+      - given: a top-level Claude Code session already has an entry in the project sessions index
+        id: ac-1
+        then: the index reflects the current activity time and message count while preserving Claude Code
+          native display metadata
+        when: session discovery observes newer transcript activity
+      - given: top-level resumable session transcripts have been added, updated, or deleted
+        id: ac-2
+        then: the index contains exactly the live resumable sessions in deterministic activity order so the
+          native resume picker can surface recent sessions
+        when: session discovery synchronizes the project sessions index
     tags: []
     created: 2026-03-08T08:00:05.876Z
     notes: []

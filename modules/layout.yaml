@@ -565,7 +565,7 @@ features:
         acceptance_criteria:
           - given: the pointer is over the spatial workspace
             id: ac-1
-            then: the camera moves in both axes and zoom remains anchored to the intended point without
+            then: wheel input zooms around the pointer, while pan gestures move the camera in both axes without
               constraining the world to finite bounds
             when: the user pans or zooms through supported pointer or trackpad gestures
           - given: nodes are spread across the spatial workspace
