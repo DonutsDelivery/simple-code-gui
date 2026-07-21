@@ -432,9 +432,9 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                   </div>
                 )}
                 {sessions
-                  // Keep background PTYs alive, but mount renderers only for the
-                  // active workspace and its selected layout.
-                  .filter(session => session.id === activeSessionId && session.isRestored)
+                  // Preserve xterm scrollback and subscriptions after a workspace
+                  // has been restored; inactive workspaces remain hidden below.
+                  .filter(session => session.isRestored)
                   .map(session => {
                     const isWorkspaceActive = session.id === activeSessionId
                     return (
