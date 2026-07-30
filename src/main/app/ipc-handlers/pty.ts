@@ -7,7 +7,7 @@ import { appendFileSync, existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { installTaskInstructions } from '../../ipc/kspec-handlers.js'
-import { installSelfCompactionInstructions } from '../../ipc/self-compaction-instructions.js'
+import { removeAllSelfCompactionInstructions } from '../../ipc/self-compaction-instructions.js'
 import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions.js'
 import type { AIBackend } from '../../ipc/instruction-files.js'
 import type { HermesBackupManager } from '../../hermes-backup-manager.js'
@@ -150,10 +150,10 @@ export function registerPtyHandlers(
       const autoAcceptTools = project?.autoAcceptTools ?? globalSettings.autoAcceptTools
       const permissionMode = project?.permissionMode ?? globalSettings.permissionMode
 
-      // Ensure the self-compaction block is present before the CLI launches and
-      // reads its instruction file (covers projects added after startup).
+      // Remove retired orchestrator-driven self-compaction guidance before the
+      // CLI reads any backend-specific instruction file.
       try {
-        installSelfCompactionInstructions(cwd, effectiveBackend as AIBackend)
+        removeAllSelfCompactionInstructions(cwd)
         installAgentSessionSignalInstructions(cwd, effectiveBackend as AIBackend)
       } catch { /* non-fatal */ }
 
@@ -253,7 +253,7 @@ export function registerPtyHandlers(
     const projectPath = ptyToProject.get(oldId)
 
     if (projectPath) {
-      installSelfCompactionInstructions(projectPath, newBackend as AIBackend)
+      removeAllSelfCompactionInstructions(projectPath)
       installAgentSessionSignalInstructions(projectPath, newBackend as AIBackend)
     }
 

@@ -8,7 +8,7 @@ import { SessionStore } from './session-store.js'
 import { ApiServerManager } from './api-server.js'
 import { OrchestratorApi } from './orchestrator-api.js'
 import { registerOrchestratorMcp } from './orchestrator-mcp-registration.js'
-import { installSelfCompactionInstructions } from './ipc/self-compaction-instructions.js'
+import { removeAllSelfCompactionInstructions } from './ipc/self-compaction-instructions.js'
 import { MobileServer } from './mobile-server.js'
 import { voiceManager } from './voice-manager.js'
 import { setPortableBinDirs } from './platform.js'
@@ -216,10 +216,8 @@ app.whenReady().then(() => {
     console.error('[Startup] Failed to refresh task instructions:', e)
   }
 
-  // Inject self-compaction instructions into every project's instruction file so
-  // sessions know to compact themselves via the orchestrator `compact_session`
-  // tool when they finish a task with remaining work. Always-on (not gated on a
-  // task backend), since the orchestrator MCP is registered for all sessions.
+  // Remove retired orchestrator-driven self-compaction guidance. Context
+  // management belongs to the active backend, not the orchestrator MCP.
   try {
     const projects = sessionStore.getWorkspace().projects || []
     const globalBackend = sessionStore.getSettings().backend
@@ -231,11 +229,11 @@ app.whenReady().then(() => {
           : (globalBackend && globalBackend !== 'default'
             ? globalBackend
             : 'claude')) as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
-        installSelfCompactionInstructions(project.path, aiBackend)
+        removeAllSelfCompactionInstructions(project.path)
       } catch { /* skip individual project errors */ }
     }
   } catch (e) {
-    console.error('[Startup] Failed to inject self-compaction instructions:', e)
+    console.error('[Startup] Failed to remove retired self-compaction instructions:', e)
   }
 
   // Start orchestrator API for MCP-based session control
