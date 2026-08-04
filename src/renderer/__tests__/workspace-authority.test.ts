@@ -3,9 +3,11 @@ import { createEmptyCanvasScene } from '../components/canvas'
 import { useWorkspaceStore, type WorkspaceSession } from '../stores/workspace'
 
 const existingSession: WorkspaceSession = {
+  serverId: 'server-old',
+  authoritySessionId: 'workspace-old',
   id: 'workspace-old',
   name: 'Old workspace',
-  openTabs: [{ id: 'old-pty', ptyId: 'old-pty', projectPath: '/old', title: 'Old' }],
+  openTabs: [{ serverId: 'server-old', id: 'old-pty', ptyId: 'old-pty', projectPath: '/old', title: 'Old' }],
   activeTabId: 'old-pty',
   activeTileTree: null,
   canvasScene: createEmptyCanvasScene(),
@@ -16,7 +18,7 @@ const existingSession: WorkspaceSession = {
 describe('authoritative workspace cache', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({
-      projects: [{ path: '/old', name: 'Old' }],
+      projects: [{ serverId: 'server-old', path: '/old', name: 'Old' }],
       categories: [],
       sessions: [existingSession],
       activeSessionId: existingSession.id,
@@ -30,7 +32,7 @@ describe('authoritative workspace cache', () => {
   })
 
   it('replaces renderer workspace state with the server snapshot without spawning local state', () => {
-    useWorkspaceStore.getState().applyAuthoritativeWorkspace({
+    useWorkspaceStore.getState().applyAuthoritativeWorkspace('server-a', {
       projects: [{ path: '/repo', name: 'Canonical' }],
       categories: [{ id: 'cat', name: 'Server', collapsed: false, order: 0 }],
       sessions: [{
@@ -52,11 +54,15 @@ describe('authoritative workspace cache', () => {
     })
 
     const state = useWorkspaceStore.getState()
-    expect(state.projects).toEqual([{ path: '/repo', name: 'Canonical' }])
-    expect(state.sessions).toHaveLength(1)
-    expect(state.activeSessionId).toBe('workspace-server')
-    expect(state.openTabs[0]).toMatchObject({ id: 'new-pty', ptyId: 'new-pty', sessionId: 'agent-1' })
-    expect(state.activeTileTree).toMatchObject({ id: 'tile-1' })
-    expect(state.attentionByTabId).toEqual({ 'new-pty': 'needs-input' })
+    expect(state.projects).toEqual([
+      { serverId: 'server-old', path: '/old', name: 'Old' },
+      { serverId: 'server-a', path: '/repo', name: 'Canonical' },
+    ])
+    expect(state.sessions).toHaveLength(2)
+    expect(state.activeSessionId).toBe('workspace-old')
+    expect(state.openTabs[0]).toMatchObject({ serverId: 'server-old', id: 'old-pty' })
+    expect(state.sessions[1].id).toBe('server-a\0workspace-server')
+    expect(state.sessions[1].openTabs[0]).toMatchObject({ serverId: 'server-a', id: 'new-pty', sessionId: 'agent-1' })
+    expect(state.attentionByTabId).toEqual({ 'old-pty': 'completed', 'new-pty': 'needs-input' })
   })
 })

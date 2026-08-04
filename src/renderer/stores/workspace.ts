@@ -13,6 +13,7 @@ import {
 import type { HarnessSelection, Workspace as AuthoritativeWorkspace } from '../api/types'
 
 export interface ProjectCategory {
+  serverId: string
   id: string
   name: string
   collapsed: boolean
@@ -67,6 +68,8 @@ export interface WorkspaceSavedData {
 }
 
 export interface WorkspaceSession {
+  serverId: string
+  authoritySessionId: string
   id: string
   name: string
   openTabs: OpenTab[]
@@ -118,11 +121,11 @@ interface WorkspaceState {
   activeCanvasScene: CanvasScene | null
   activeView: WorkspaceView
   attentionByTabId: Record<string, AgentAttentionKind>
-  applyAuthoritativeWorkspace: (workspace: AuthoritativeWorkspace) => void
+  applyAuthoritativeWorkspace: (serverId: string, workspace: AuthoritativeWorkspace) => void
 
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
-  addSession: (name?: string) => string
+  addSession: (serverId: string, name?: string) => string
   removeSession: (id: string) => void
   renameSession: (id: string, name: string) => void
   reorderSessions: (id: string, toIndex: number) => void
@@ -163,7 +166,7 @@ interface WorkspaceState {
 
   // Category ops
   setCategories: (categories: ProjectCategory[]) => void
-  addCategory: (name: string) => string
+  addCategory: (serverId: string, name: string) => string
   updateCategory: (id: string, updates: Partial<ProjectCategory>) => void
   removeCategory: (id: string) => void
   reorderCategories: (ids: string[]) => void
@@ -196,6 +199,10 @@ function syncToActive(
   return { ...updates, sessions: newSessions }
 }
 
+export function serverResourceKey(serverId: string, resourceId: string): string {
+  return `${serverId}\0${resourceId}`
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   projects: [],
   categories: [],
@@ -208,11 +215,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeView: 'tiles',
   attentionByTabId: {},
 
-  applyAuthoritativeWorkspace: (workspace) => {
+  applyAuthoritativeWorkspace: (serverId, workspace) => {
     set((state) => {
       const sessions: WorkspaceSession[] = (workspace.sessions ?? []).map((saved) => {
         const openTabs: OpenTab[] = saved.openTabs.map(tab => ({
           ...tab,
+          serverId,
           ptyId: tab.ptyId || tab.id,
           harnessId: tab.harnessId ?? tab.backend,
         }))
@@ -229,7 +237,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           }
         }
         return {
-          id: saved.id,
+          serverId,
+          authoritySessionId: saved.id,
+          id: serverResourceKey(serverId, saved.id),
           name: saved.name,
           openTabs,
           activeTabId: saved.activeTabId,
@@ -240,16 +250,37 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           isRestored: true,
         }
       })
-      const activeSessionId = workspace.activeSessionId
-        && sessions.some(session => session.id === workspace.activeSessionId)
-        ? workspace.activeSessionId
+      const authoritativeActiveId = workspace.activeSessionId
+        ? serverResourceKey(serverId, workspace.activeSessionId)
+        : null
+      const serverActiveId = authoritativeActiveId && sessions.some(session => session.id === authoritativeActiveId)
+        ? authoritativeActiveId
         : sessions[0]?.id ?? null
-      const active = sessions.find(session => session.id === activeSessionId) ?? null
-      const liveTabIds = new Set(sessions.flatMap(session => session.openTabs.map(tab => tab.id)))
+      const siblingSessions = state.sessions.filter(session => session.serverId !== serverId)
+      const mergedSessions = [...siblingSessions, ...sessions]
+      const activeSessionId = state.activeSessionId && mergedSessions.some(session => session.id === state.activeSessionId)
+        ? state.activeSessionId
+        : serverActiveId
+      const active = mergedSessions.find(session => session.id === activeSessionId) ?? null
+      const liveTabIds = new Set(mergedSessions.flatMap(session => session.openTabs.map(tab => tab.id)))
       return {
-        projects: workspace.projects,
-        categories: workspace.categories ?? [],
-        sessions,
+        projects: [
+          ...state.projects.filter(project => project.serverId !== serverId),
+          ...workspace.projects.map(project => ({
+            ...project,
+            serverId,
+            categoryId: project.categoryId ? serverResourceKey(serverId, project.categoryId) : undefined,
+          })),
+        ],
+        categories: [
+          ...state.categories.filter(category => category.serverId !== serverId),
+          ...(workspace.categories ?? []).map(category => ({
+            ...category,
+            serverId,
+            id: serverResourceKey(serverId, category.id),
+          })),
+        ],
+        sessions: mergedSessions,
         activeSessionId,
         openTabs: active?.openTabs ?? [],
         activeTabId: active?.activeTabId ?? null,
@@ -281,11 +312,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     })
   },
 
-  addSession: (name) => {
+  addSession: (serverId, name) => {
     const id = generateSessionId()
     const { sessions } = get()
     const label = name ?? `Workspace ${sessions.length + 1}`
     const newSession: WorkspaceSession = {
+      serverId,
+      authoritySessionId: id,
       id,
       name: label,
       openTabs: [],
@@ -309,10 +342,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   removeSession: (id) => {
     set(state => {
+      const removedSession = state.sessions.find(session => session.id === id)
       const sessions = state.sessions.filter(s => s.id !== id)
       if (sessions.length === 0) {
         // Always keep at least one session
         const fallback: WorkspaceSession = {
+          serverId: removedSession?.serverId ?? state.projects[0]?.serverId ?? 'unbound',
+          authoritySessionId: generateSessionId(),
           id: generateSessionId(),
           name: 'Workspace 1',
           openTabs: [],
@@ -665,19 +701,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   addProject: (project) => {
     const { projects } = get()
-    if (!projects.find(p => p.path === project.path)) {
+    if (!projects.find(p => p.serverId === project.serverId && p.path === project.path)) {
       set({ projects: [...projects, project] })
     }
   },
 
   removeProject: (path) => {
-    set(state => ({ projects: state.projects.filter(p => p.path !== path) }))
+    set(state => {
+      const matches = state.projects.filter(project => project.path === path)
+      if (matches.length !== 1) return state
+      const target = matches[0]
+      return { projects: state.projects.filter(project => project !== target) }
+    })
   },
 
   updateProject: (path, updates) => {
-    set(state => ({
-      projects: state.projects.map(p => p.path === path ? { ...p, ...updates } : p)
-    }))
+    set(state => {
+      const matches = state.projects.filter(project => project.path === path)
+      if (matches.length !== 1) return state
+      const target = matches[0]
+      return { projects: state.projects.map(project => project === target ? { ...project, ...updates } : project) }
+    })
   },
 
   // -------------------------------------------------------------------------
@@ -686,11 +730,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   setCategories: (categories) => set({ categories }),
 
-  addCategory: (name) => {
-    const id = generateCategoryId()
+  addCategory: (serverId, name) => {
+    const id = serverResourceKey(serverId, generateCategoryId())
     set(state => {
       const maxOrder = state.categories.reduce((m, c) => Math.max(m, c.order), -1)
-      return { categories: [...state.categories, { id, name, collapsed: false, order: maxOrder + 1 }] }
+      return { categories: [...state.categories, { serverId, id, name, collapsed: false, order: maxOrder + 1 }] }
     })
     return id
   },

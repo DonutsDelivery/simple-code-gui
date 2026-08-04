@@ -111,6 +111,7 @@ function MockTerminal({ ptyId, api }: { ptyId: string; api: Api }): React.ReactE
 
 function tab(id: string): OpenTab {
   return {
+    serverId: 'server-a',
     id,
     ptyId: id,
     projectPath: `/projects/${id}`,
@@ -122,6 +123,8 @@ function tab(id: string): OpenTab {
 function workspace(id: string): WorkspaceSession {
   const openTab = tab(id)
   return {
+    serverId: 'server-a',
+    authoritySessionId: `workspace-${id}`,
     id: `workspace-${id}`,
     name: id,
     openTabs: [openTab],
@@ -146,6 +149,7 @@ describe('MainApp restored workspace lifecycle', () => {
   it('keeps restored terminals mounted and subscribed while their workspace is inactive', () => {
     const listeners = new Map<string, (data: string) => void>()
     const api = {
+      getServerProtocol: () => ({ serverId: 'server-a', capabilities: { workspaceWrite: true } }),
       saveWorkspace: vi.fn(),
       onPtyData: vi.fn((id: string, listener: (data: string) => void) => {
         listeners.set(id, listener)
@@ -153,7 +157,7 @@ describe('MainApp restored workspace lifecycle', () => {
       }),
     } as unknown as Api
 
-    render(<MainApp api={api} isElectron />)
+    render(<MainApp api={api} serverId="server-a" isElectron />)
 
     expect(terminalLifecycle.mounts).toEqual(new Map([['a', 1], ['b', 1]]))
     expect(screen.getByTestId('workspace-a-view').parentElement).not.toHaveStyle({ visibility: 'hidden' })

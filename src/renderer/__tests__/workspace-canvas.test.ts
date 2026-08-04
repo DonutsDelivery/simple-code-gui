@@ -4,12 +4,14 @@ import { createLeaf } from '../components/tile-tree'
 import { useWorkspaceStore, type OpenTab, type WorkspaceSession } from '../stores/workspace'
 
 function tab(id: string, projectPath = '/project'): OpenTab {
-  return { id, ptyId: id, projectPath, title: id, backend: 'claude' }
+  return { serverId: 'server-a', id, ptyId: id, projectPath, title: id, backend: 'claude' }
 }
 
 function session(id: string, tabs: OpenTab[] = []): WorkspaceSession {
   const canvasScene = createEmptyCanvasScene()
   return {
+    serverId: 'server-a',
+    authoritySessionId: id,
     id,
     name: id,
     openTabs: tabs,

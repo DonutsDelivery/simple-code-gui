@@ -19,6 +19,7 @@ export interface OpenTab {
 }
 
 export interface SidebarProps {
+  serverId: string
   projects: Project[]
   openTabs: OpenTab[]
   activeTabId: string | null

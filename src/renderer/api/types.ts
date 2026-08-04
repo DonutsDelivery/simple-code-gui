@@ -132,6 +132,8 @@ export interface Project {
  * Open tab representing an active terminal session
  */
 export interface OpenTab {
+  /** Renderer federation owner; omitted from legacy single-server snapshots. */
+  serverId?: string
   id: string
   projectPath: string
   agentSessionId?: string

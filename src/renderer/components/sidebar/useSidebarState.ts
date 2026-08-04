@@ -109,6 +109,7 @@ export interface SidebarState {
 }
 
 export interface UseSidebarStateParams {
+  serverId: string
   projects: Project[]
   openTabs: OpenTab[]
   activeTabId: string | null
@@ -119,7 +120,7 @@ export interface UseSidebarStateParams {
 }
 
 export function useSidebarState(params: UseSidebarStateParams): SidebarState {
-  const { projects, openTabs, activeTabId, lastFocusedTabId, onOpenSession, onSwitchToTab, onUpdateProject } = params
+  const { serverId, projects, openTabs, activeTabId, lastFocusedTabId, onOpenSession, onSwitchToTab, onUpdateProject } = params
 
   // Voice context
   const { volume, setVolume, speed, setSpeed, skipOnNew, setSkipOnNew, voiceOutputEnabled } =
@@ -128,6 +129,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
   // Workspace store
   const categories = useWorkspaceStore((state) => state.categories)
   const addCategory = useWorkspaceStore((state) => state.addCategory)
+  const addCategoryForServer = React.useCallback((name: string) => addCategory(serverId, name), [addCategory, serverId])
   const updateCategory = useWorkspaceStore((state) => state.updateCategory)
   const removeCategory = useWorkspaceStore((state) => state.removeCategory)
   const reorderCategories = useWorkspaceStore((state) => state.reorderCategories)
@@ -257,7 +259,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
 
     // Workspace store
     categories,
-    addCategory,
+    addCategory: addCategoryForServer,
     updateCategory,
     removeCategory,
     reorderCategories,

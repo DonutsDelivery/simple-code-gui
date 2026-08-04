@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Api } from '../api'
 import type { BackendId, PtySession } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { useWorkspaceStore, WorkspaceSession, OpenTab, type WorkspaceView } from '../stores/workspace'
+import { useWorkspaceStore, WorkspaceSession, OpenTab, serverResourceKey, type WorkspaceView } from '../stores/workspace'
 import {
   generateCanvasScene,
   loadCanvasScene,
@@ -430,12 +430,16 @@ export function useWorkspaceLoader({
         }
         clearAllTabs()
 
-        const workspace = await loadAuthoritativeWorkspace(api)
         const serverId = api.getServerProtocol?.()?.serverId
         if (!serverId) throw new Error('Cannot load a workspace without a stable server identity')
+        const workspace = await loadAuthoritativeWorkspace(api, serverId)
 
         if (workspace.projects) {
-          const serverProjects = workspace.projects.map(project => ({ ...project, serverId }))
+          const serverProjects = workspace.projects.map(project => ({
+            ...project,
+            serverId,
+            categoryId: project.categoryId ? serverResourceKey(serverId, project.categoryId) : undefined,
+          }))
           setProjects(serverProjects)
           projectsRef.current = serverProjects
           for (const project of serverProjects) {
@@ -449,7 +453,11 @@ export function useWorkspaceLoader({
         }
 
         if (workspace.categories) {
-          setCategories(workspace.categories)
+          setCategories(workspace.categories.map(category => ({
+            ...category,
+            serverId,
+            id: serverResourceKey(serverId, category.id),
+          })))
         }
 
         // Build session list — migrate legacy format if needed
@@ -482,7 +490,9 @@ export function useWorkspaceLoader({
 
         // Build WorkspaceSession objects; set savedData for inactive sessions
         const sessions: WorkspaceSession[] = savedSessions.map(s => ({
-          id: s.id,
+          serverId,
+          authoritySessionId: s.id,
+          id: serverResourceKey(serverId, s.id),
           name: s.name,
           openTabs: [],
           activeTabId: null,
@@ -490,7 +500,7 @@ export function useWorkspaceLoader({
           canvasScene: null,
           activeView: s.activeView ?? 'tiles',
           savedData: {
-            openTabs: s.openTabs ?? [],
+            openTabs: (s.openTabs ?? []).map(tab => ({ ...tab, serverId })),
             tileTree: s.tileTree ?? null,
             canvasScene: s.canvasScene,
             activeView: s.activeView ?? 'tiles',
@@ -499,11 +509,12 @@ export function useWorkspaceLoader({
           isRestored: false,
         }))
 
-        initSessions(sessions, activeSessionId)
+        const activeClientSessionId = activeSessionId ? serverResourceKey(serverId, activeSessionId) : null
+        initSessions(sessions, activeClientSessionId)
 
         // Store savedData for each inactive session
         for (const s of sessions) {
-          if (s.id !== activeSessionId) {
+          if (s.id !== activeClientSessionId) {
             setSessionSavedData(s.id, s.savedData!)
           }
         }
@@ -531,10 +542,10 @@ export function useWorkspaceLoader({
             ? (idMapping.get(activeSaved.activeTabId) ?? restoredTabs[0]?.id ?? null)
             : restoredTabs[0]?.id ?? null
 
-          setSessionLiveData(activeSessionId!, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
-          switchSession(activeSessionId!)
+          setSessionLiveData(activeClientSessionId!, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
+          switchSession(activeClientSessionId!)
         } else {
-          markSessionRestored(activeSessionId!)
+          markSessionRestored(activeClientSessionId!)
         }
 
         // Clean up orphaned terminal buffers

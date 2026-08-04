@@ -13,6 +13,7 @@ import { createEmptyCanvasScene } from '../components/canvas'
 import type { Api, Workspace } from '../api/types'
 
 const tab = (overrides: Partial<any> = {}) => ({
+  serverId: 'server-a',
   id: 'pty-1',
   projectPath: '/proj/a',
   sessionId: 'sess-1',
@@ -30,6 +31,7 @@ describe('serializeSessionsForSave', () => {
   it('preserves savedData for inactive (unrestored) workspaces', () => {
     const sessions: WorkspaceSession[] = [
       {
+        serverId: 'server-a', authoritySessionId: 'ws-active',
         id: 'ws-active',
         name: 'Workspace 1',
         openTabs: [tab()],
@@ -40,6 +42,7 @@ describe('serializeSessionsForSave', () => {
         isRestored: true,
       },
       {
+        serverId: 'server-a', authoritySessionId: 'ws-inactive',
         id: 'ws-inactive',
         name: 'Workspace 2',
         openTabs: [],
@@ -49,7 +52,7 @@ describe('serializeSessionsForSave', () => {
         activeView: 'tiles',
         savedData: {
           openTabs: [
-            { id: 'saved-1', projectPath: '/proj/b', sessionId: 'sess-9', title: 'b', ptyId: 'saved-1' },
+            { serverId: 'server-a', id: 'saved-1', projectPath: '/proj/b', sessionId: 'sess-9', title: 'b', ptyId: 'saved-1' },
           ],
           tileTree: { kind: 'leaf', id: 'saved-tile', tabIds: ['saved-1'], activeTabId: 'saved-1' },
           canvasScene: { version: 99, future: true },
@@ -60,7 +63,7 @@ describe('serializeSessionsForSave', () => {
       },
     ]
 
-    const result = serializeSessionsForSave(sessions)
+    const result = serializeSessionsForSave(sessions, 'server-a')
 
     expect(result).toHaveLength(2)
     expect(result[0].id).toBe('ws-active')
@@ -80,6 +83,7 @@ describe('serializeSessionsForSave', () => {
   it('serializes restored workspaces from live state', () => {
     const sessions: WorkspaceSession[] = [
       {
+        serverId: 'server-a', authoritySessionId: 'ws-1',
         id: 'ws-1',
         name: 'Workspace 1',
         openTabs: [tab({ id: 'live-1', ptyId: 'live-1', projectPath: '/proj/x' })],
@@ -91,7 +95,7 @@ describe('serializeSessionsForSave', () => {
       },
     ]
 
-    const result = serializeSessionsForSave(sessions)
+    const result = serializeSessionsForSave(sessions, 'server-a')
 
     expect(result[0].openTabs).toHaveLength(1)
     expect(result[0].openTabs[0].projectPath).toBe('/proj/x')
@@ -101,6 +105,7 @@ describe('serializeSessionsForSave', () => {
   it('falls back to empty when an unrestored session has no savedData', () => {
     const sessions: WorkspaceSession[] = [
       {
+        serverId: 'server-a', authoritySessionId: 'ws-empty',
         id: 'ws-empty',
         name: 'Empty',
         openTabs: [],
@@ -112,7 +117,7 @@ describe('serializeSessionsForSave', () => {
       },
     ]
 
-    const result = serializeSessionsForSave(sessions)
+    const result = serializeSessionsForSave(sessions, 'server-a')
 
     expect(result[0].openTabs).toEqual([])
     expect(result[0].activeTabId).toBeNull()
@@ -133,6 +138,7 @@ describe('serializeSessionsForSave', () => {
       zIndex: 1,
     })
     const sessions: WorkspaceSession[] = [{
+      serverId: 'server-a', authoritySessionId: 'ws-canvas',
       id: 'ws-canvas',
       name: 'Canvas',
       openTabs: [tab()],
@@ -143,7 +149,7 @@ describe('serializeSessionsForSave', () => {
       isRestored: true,
     }]
 
-    const result = serializeSessionsForSave(sessions)
+    const result = serializeSessionsForSave(sessions, 'server-a')
 
     expect(result[0].activeView).toBe('canvas')
     expect(result[0].canvasScene).toMatchObject({
@@ -157,6 +163,7 @@ describe('serializeSessionsForSave', () => {
   it('strips falsy customTitle from live tabs', () => {
     const sessions: WorkspaceSession[] = [
       {
+        serverId: 'server-a', authoritySessionId: 'ws-1',
         id: 'ws-1',
         name: 'Workspace 1',
         openTabs: [tab({ customTitle: false })],
@@ -168,13 +175,17 @@ describe('serializeSessionsForSave', () => {
       },
     ]
 
-    const result = serializeSessionsForSave(sessions)
+    const result = serializeSessionsForSave(sessions, 'server-a')
     expect((result[0].openTabs[0] as any).customTitle).toBeUndefined()
   })
 })
 
 describe('authoritative workspace persistence', () => {
   const workspace: Workspace = { projects: [], categories: [], sessions: [], activeSessionId: null }
+  const identifiedApi = (serverId: string, implementation: object): Api => ({
+    getServerProtocol: () => ({ serverId }) as any,
+    ...implementation,
+  }) as unknown as Api
 
   it('serializes local saves using the revision returned by the prior command', async () => {
     let revision = 0
@@ -184,18 +195,18 @@ describe('authoritative workspace persistence', () => {
       result: { success: true },
       replayed: false,
     }))
-    const api = {
+    const api = identifiedApi('server-a', {
       getEnvironmentSnapshot: vi.fn(async () => ({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })),
       executeEnvironmentCommand,
-    } as unknown as Api
+    })
 
     await Promise.all([
-      saveAuthoritativeWorkspace(api, workspace),
-      saveAuthoritativeWorkspace(api, workspace),
+      saveAuthoritativeWorkspace(api, 'server-a', workspace),
+      saveAuthoritativeWorkspace(api, 'server-a', workspace),
     ])
 
     expect(executeEnvironmentCommand.mock.calls.map(([command]) => command.expectedRevision)).toEqual([0, 1])
-    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 2 })
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 2 })
   })
 
   it('does not replay a stale full-workspace payload over a newer snapshot', async () => {
@@ -203,12 +214,12 @@ describe('authoritative workspace persistence', () => {
       .mockResolvedValueOnce({ serverId: 'server-a', revision: 4, workspace, sessions: [], ptys: [] })
       .mockResolvedValueOnce({ serverId: 'server-a', revision: 5, workspace, sessions: [], ptys: [] })
     const executeEnvironmentCommand = vi.fn().mockRejectedValue(new Error('Expected revision 4, current revision is 5'))
-    const api = { getEnvironmentSnapshot, executeEnvironmentCommand } as unknown as Api
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
 
-    await expect(saveAuthoritativeWorkspace(api, workspace)).rejects.toThrow('current revision is 5')
+    await expect(saveAuthoritativeWorkspace(api, 'server-a', workspace)).rejects.toThrow('current revision is 5')
 
     expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1)
-    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 5 })
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 5 })
   })
 
   it('applies the next broadcast snapshot and catches up across an event gap', async () => {
@@ -224,34 +235,34 @@ describe('authoritative workspace persistence', () => {
         event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'three', result: {}, snapshot: revisionThree },
       }],
     }))
-    const api = { getEnvironmentEvents } as unknown as Api
+    const api = identifiedApi('server-a', { getEnvironmentEvents })
 
-    await expect(resolveAuthoritativeEnvironmentEvent(api, {
+    await expect(resolveAuthoritativeEnvironmentEvent(api, 'server-a', {
       serverId: 'server-a', revision: 1, eventId: 'server-a:1', occurredAt: 1,
       event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'one', result: {}, snapshot: revisionOne },
     })).resolves.toEqual(revisionOne)
-    await expect(resolveAuthoritativeEnvironmentEvent(api, {
+    await expect(resolveAuthoritativeEnvironmentEvent(api, 'server-a', {
       serverId: 'server-a', revision: 3, eventId: 'server-a:3', occurredAt: 3,
       event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'three', result: {}, snapshot: revisionThree },
     })).resolves.toEqual(revisionThree)
 
     expect(getEnvironmentEvents).toHaveBeenCalledWith(1)
-    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 3 })
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 3 })
   })
 
   it('cancels a queued full-workspace save when another client advances authority', async () => {
     let rejectFirst!: (reason: Error) => void
     const executeEnvironmentCommand = vi.fn(() => new Promise((_resolve, reject) => { rejectFirst = reject }))
-    const api = {
+    const api = identifiedApi('server-a', {
       getEnvironmentSnapshot: vi.fn(async () => ({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })),
       executeEnvironmentCommand,
-    } as unknown as Api
+    })
     cacheEnvironmentSnapshot(await api.getEnvironmentSnapshot!())
 
-    const first = saveAuthoritativeWorkspace(api, workspace)
+    const first = saveAuthoritativeWorkspace(api, 'server-a', workspace)
     await vi.waitFor(() => expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1))
-    const queued = saveAuthoritativeWorkspace(api, { ...workspace, activeSessionId: 'stale-local' })
-    await resolveAuthoritativeEnvironmentEvent(api, {
+    const queued = saveAuthoritativeWorkspace(api, 'server-a', { ...workspace, activeSessionId: 'stale-local' })
+    await resolveAuthoritativeEnvironmentEvent(api, 'server-a', {
       serverId: 'server-a', revision: 1, eventId: 'server-a:1', occurredAt: 1,
       event: {
         type: 'replace-workspace', clientId: 'client-b', commandId: 'remote', result: {},
@@ -263,5 +274,42 @@ describe('authoritative workspace persistence', () => {
     await expect(first).rejects.toThrow('revision conflict')
     await expect(queued).rejects.toBeInstanceOf(EnvironmentCacheInvalidatedError)
     expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps revisions and save queues isolated between simultaneous servers', async () => {
+    let resolveServerA!: (response: any) => void
+    const executeServerA = vi.fn(() => new Promise(resolve => { resolveServerA = resolve }))
+    const executeServerB = vi.fn().mockResolvedValue({
+      serverId: 'server-b', revision: 8, result: { success: true }, replayed: false,
+    })
+    const apiA = identifiedApi('server-a', {
+      getEnvironmentSnapshot: vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 2, workspace, sessions: [], ptys: [] }),
+      executeEnvironmentCommand: executeServerA,
+    })
+    const apiB = identifiedApi('server-b', {
+      getEnvironmentSnapshot: vi.fn().mockResolvedValue({ serverId: 'server-b', revision: 7, workspace, sessions: [], ptys: [] }),
+      executeEnvironmentCommand: executeServerB,
+    })
+
+    const saveA = saveAuthoritativeWorkspace(apiA, 'server-a', workspace)
+    await vi.waitFor(() => expect(executeServerA).toHaveBeenCalledTimes(1))
+    const saveB = saveAuthoritativeWorkspace(apiB, 'server-b', workspace)
+    await expect(saveB).resolves.toBeUndefined()
+
+    expect(executeServerA.mock.calls[0][0]).toMatchObject({ serverId: 'server-a', expectedRevision: 2 })
+    expect(executeServerB.mock.calls[0][0]).toMatchObject({ serverId: 'server-b', expectedRevision: 7 })
+    expect(getEnvironmentCursor('server-b')).toEqual({ serverId: 'server-b', revision: 8 })
+
+    resolveServerA({ serverId: 'server-a', revision: 3, result: { success: true }, replayed: false })
+    await expect(saveA).resolves.toBeUndefined()
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 3 })
+  })
+
+  it('rejects an API that presents a different server identity', async () => {
+    const wrongApi = identifiedApi('server-b', {
+      getEnvironmentSnapshot: vi.fn().mockResolvedValue({ serverId: 'server-b', revision: 0, workspace, sessions: [], ptys: [] }),
+    })
+    expect(() => saveAuthoritativeWorkspace(wrongApi, 'server-a', workspace))
+      .toThrow('expected server-a')
   })
 })

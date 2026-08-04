@@ -880,14 +880,18 @@ interface ConnectionRegistry {
   - Canvas/Tiles terminal API selection from each tab's `serverId`;
   - new-session routing with separate explicit `serverId` and `harnessId` while preserving the original session.
 - Verified at handoff: 58/58 test files and 345/345 tests passed, production build passed, and `git diff --check` passed.
+- Subsequent CP8 routing increment:
+  - partitioned environment revision cursors, save queues, invalidation epochs, snapshots, and command identity checks by `serverId`;
+  - authoritative workspace application now replaces only one server partition and preserves sibling-server projects, categories, sessions, active layout, and cached attention state;
+  - renderer workspace/session/category IDs now use server-scoped composite keys while server persistence converts back to authority-local IDs;
+  - workspace serialization sends only the selected server's projects, categories, tabs, sessions, and active session;
+  - focused multi-server queue/revision/identity tests and full **58/58 files, 347/347 tests** pass.
 - Remaining CP8 work, in dependency order:
-  1. Partition `workspace-persistence.ts` cursor, queue, and epoch state by `serverId`; validate every snapshot/event/command response against the requested server.
-  2. Make `applyAuthoritativeWorkspace(serverId, workspace)` replace only that server's partition. Preserve other servers' projects, sessions, tabs, cached state, and subscriptions.
-  3. Use compound identities everywhere collisions matter: `{serverId,path}`, `{serverId,agentSessionId}`, and `{serverId,ptyId}`. Do not assume bare paths or PTY/session IDs are globally unique.
-  4. Move `AppConnection` and renderer domain code to the server-ID `ConnectionRegistry`; remove mutable current-server behavior and remaining PTY domain fallbacks through `window.electronAPI`.
-  5. Ensure PTY write, resize, data/exit subscriptions, resume, close, restore, polling, and orchestrator/API-open-session events resolve the immutable owning server and fail closed when it is unavailable.
-  6. Build the Connections manager and explicit Server/Harness controls. Changing either creates a new session; it never mutates ownership of the existing canonical session.
-  7. Add two-server acceptance proving simultaneous use, independent disconnect, correct command routing, read-only offline cache, collision safety, and harness replacement with the old session preserved.
+  1. Finish compound identity coverage for tab attention and the remaining path/PTY/session lookup sites.
+  2. Move `AppConnection` and renderer domain code to the server-ID `ConnectionRegistry`; remove mutable current-server behavior and remaining PTY domain fallbacks through `window.electronAPI`.
+  3. Ensure PTY write, resize, data/exit subscriptions, resume, close, restore, polling, and orchestrator/API-open-session events resolve the immutable owning server and fail closed when it is unavailable.
+  4. Build the Connections manager and explicit Server/Harness controls. Changing either creates a new session; it never mutates ownership of the existing canonical session.
+  5. Add two-server acceptance proving simultaneous use, independent disconnect, correct command routing, read-only offline cache, collision safety, and harness replacement with the old session preserved.
 - Beads source of truth: `Claude-Terminal-fb6` (`Checkpoint 8: add multi-server connection management`) remains `in_progress`.
 
 ## Focused checks

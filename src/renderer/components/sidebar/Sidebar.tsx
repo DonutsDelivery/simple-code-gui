@@ -11,6 +11,7 @@ import { SidebarMobile } from './SidebarMobile.js'
 import { SidebarDesktop, SidebarCollapsed } from './SidebarDesktop.js'
 
 export function Sidebar({
+  serverId,
   projects,
   openTabs,
   activeTabId,
@@ -38,6 +39,7 @@ export function Sidebar({
 
   // Initialize state
   const state = useSidebarState({
+    serverId,
     projects,
     openTabs,
     activeTabId,

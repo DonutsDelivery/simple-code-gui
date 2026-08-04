@@ -9,10 +9,35 @@ interface EnvironmentCursor {
   revision: number
 }
 
-let environmentCursor: EnvironmentCursor | null = null
-let saveQueue: Promise<void> = Promise.resolve()
+interface EnvironmentPersistenceState {
+  cursor: EnvironmentCursor | null
+  saveQueue: Promise<void>
+  epoch: number
+}
+
+const environmentPersistenceByServer = new Map<string, EnvironmentPersistenceState>()
 const rendererClientId = `renderer-${crypto.randomUUID()}`
-let environmentEpoch = 0
+
+function getPersistenceState(serverId: string): EnvironmentPersistenceState {
+  let state = environmentPersistenceByServer.get(serverId)
+  if (!state) {
+    state = { cursor: null, saveQueue: Promise.resolve(), epoch: 0 }
+    environmentPersistenceByServer.set(serverId, state)
+  }
+  return state
+}
+
+function assertServerIdentity(expectedServerId: string, actualServerId: string, source: string): void {
+  if (actualServerId !== expectedServerId) {
+    throw new Error(`${source} returned server ${actualServerId}; expected ${expectedServerId}`)
+  }
+}
+
+function assertApiServer(api: Api, serverId: string): void {
+  const actualServerId = api.getServerProtocol?.()?.serverId
+  if (!actualServerId) throw new Error(`Server ${serverId} has no established protocol identity`)
+  assertServerIdentity(serverId, actualServerId, 'API')
+}
 
 export class EnvironmentCacheInvalidatedError extends Error {
   constructor() {
@@ -22,30 +47,33 @@ export class EnvironmentCacheInvalidatedError extends Error {
 }
 
 export function cacheEnvironmentSnapshot(snapshot: EnvironmentSnapshot<Workspace>): void {
-  environmentCursor = { serverId: snapshot.serverId, revision: snapshot.revision }
+  const state = getPersistenceState(snapshot.serverId)
+  state.cursor = { serverId: snapshot.serverId, revision: snapshot.revision }
 }
 
-export function getEnvironmentCursor(): EnvironmentCursor | null {
-  return environmentCursor ? { ...environmentCursor } : null
+export function getEnvironmentCursor(serverId: string): EnvironmentCursor | null {
+  const cursor = environmentPersistenceByServer.get(serverId)?.cursor
+  return cursor ? { ...cursor } : null
 }
 
 export function resetEnvironmentPersistenceForTests(): void {
-  environmentCursor = null
-  saveQueue = Promise.resolve()
-  environmentEpoch = 0
+  environmentPersistenceByServer.clear()
 }
 
 export function observeEnvironmentRevision(serverId: string, revision: number): boolean {
-  if (!environmentCursor || environmentCursor.serverId !== serverId) return false
-  if (revision <= environmentCursor.revision) return true
-  if (revision !== environmentCursor.revision + 1) return false
-  environmentCursor = { serverId, revision }
+  const state = getPersistenceState(serverId)
+  if (!state.cursor) return false
+  if (revision <= state.cursor.revision) return true
+  if (revision !== state.cursor.revision + 1) return false
+  state.cursor = { serverId, revision }
   return true
 }
 
-export async function loadAuthoritativeWorkspace(api: Api): Promise<Workspace> {
+export async function loadAuthoritativeWorkspace(api: Api, serverId: string): Promise<Workspace> {
+  assertApiServer(api, serverId)
   if (!api.getEnvironmentSnapshot) return api.getWorkspace()
   const snapshot = await api.getEnvironmentSnapshot()
+  assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
   return snapshot.workspace
 }
@@ -53,17 +81,20 @@ export async function loadAuthoritativeWorkspace(api: Api): Promise<Workspace> {
 /** Resolve an ordered server event, recovering any cursor gap before applying it. */
 export async function resolveAuthoritativeEnvironmentEvent(
   api: Api,
+  serverId: string,
   event: EventEnvelope<EnvironmentEvent<Workspace>>,
 ): Promise<EnvironmentSnapshot<Workspace> | null> {
-  const cursor = environmentCursor
-  if (cursor && cursor.serverId === event.serverId && event.revision <= cursor.revision) return null
+  assertApiServer(api, serverId)
+  assertServerIdentity(serverId, event.serverId, 'Environment event')
+  const state = getPersistenceState(serverId)
+  const cursor = state.cursor
+  if (cursor && event.revision <= cursor.revision) return null
 
-  if (event.event.clientId !== rendererClientId) environmentEpoch += 1
+  if (event.event.clientId !== rendererClientId) state.epoch += 1
 
   const eventSnapshot = event.event.snapshot
   if (
     cursor
-    && cursor.serverId === event.serverId
     && event.revision === cursor.revision + 1
     && eventSnapshot?.serverId === event.serverId
     && eventSnapshot.revision === event.revision
@@ -78,6 +109,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
       ? catchUp.snapshot
       : catchUp.events?.at(-1)?.event.snapshot
     if (snapshot) {
+      assertServerIdentity(serverId, snapshot.serverId, 'Environment catch-up')
       cacheEnvironmentSnapshot(snapshot)
       return snapshot
     }
@@ -85,40 +117,48 @@ export async function resolveAuthoritativeEnvironmentEvent(
 
   if (!api.getEnvironmentSnapshot) return null
   const snapshot = await api.getEnvironmentSnapshot()
+  assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
   return snapshot
 }
 
-export function saveAuthoritativeWorkspace(api: Api, workspace: Workspace): Promise<void> {
-  const requestedEpoch = environmentEpoch
-  const operation = saveQueue.then(async () => {
+export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace: Workspace): Promise<void> {
+  assertApiServer(api, serverId)
+  const state = getPersistenceState(serverId)
+  const requestedEpoch = state.epoch
+  const operation = state.saveQueue.then(async () => {
     if (!api.executeEnvironmentCommand || !api.getEnvironmentSnapshot) {
       await api.saveWorkspace(workspace)
       return
     }
 
-    if (!environmentCursor) {
-      cacheEnvironmentSnapshot(await api.getEnvironmentSnapshot())
+    if (!state.cursor) {
+      const snapshot = await api.getEnvironmentSnapshot()
+      assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
+      cacheEnvironmentSnapshot(snapshot)
     }
-    if (requestedEpoch !== environmentEpoch) throw new EnvironmentCacheInvalidatedError()
-    const cursor = environmentCursor!
+    if (requestedEpoch !== state.epoch) throw new EnvironmentCacheInvalidatedError()
+    const cursor = state.cursor!
     try {
       const response = await api.executeEnvironmentCommand({
         clientId: rendererClientId,
         commandId: crypto.randomUUID(),
-        serverId: cursor.serverId,
+        serverId,
         expectedRevision: cursor.revision,
         command: { type: 'replace-workspace', workspace },
       })
-      environmentCursor = { serverId: response.serverId, revision: response.revision }
+      assertServerIdentity(serverId, response.serverId, 'Environment command')
+      state.cursor = { serverId, revision: response.revision }
     } catch (error) {
       // Never retry the stale full-workspace payload at a newer revision. Refresh
       // only the disposable cursor/cache and let the caller reconcile explicitly.
-      cacheEnvironmentSnapshot(await api.getEnvironmentSnapshot())
+      const snapshot = await api.getEnvironmentSnapshot()
+      assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
+      cacheEnvironmentSnapshot(snapshot)
       throw error
     }
   })
-  saveQueue = operation.catch(() => undefined)
+  state.saveQueue = operation.catch(() => undefined)
   return operation
 }
 
@@ -134,24 +174,31 @@ function normalizeTabForSave(tab: any): OpenTab {
 // empty until the user switches into them. Round-trip their on-disk savedData
 // so the save effect doesn't flush every unswitched workspace to empty.
 export function serializeSessionsForSave(
-  sessions: WorkspaceSession[]
+  sessions: WorkspaceSession[],
+  serverId: string,
 ): SavedWorkspaceSession[] {
-  return sessions.map(s => {
+  return sessions
+    .filter(session => session.serverId === serverId || session.openTabs.some(tab => tab.serverId === serverId))
+    .map(s => {
+    const authoritySessionId = s.serverId === serverId ? s.authoritySessionId : s.id
     if (!s.isRestored && s.savedData) {
+      const openTabs = (s.savedData.openTabs ?? [])
+        .filter((tab: OpenTab) => tab.serverId === serverId)
+        .map(normalizeTabForSave)
       return {
-        id: s.id,
+        id: authoritySessionId,
         name: s.name,
-        openTabs: (s.savedData.openTabs ?? []).map(normalizeTabForSave),
-        activeTabId: s.savedData.activeTabId ?? null,
+        openTabs,
+        activeTabId: openTabs.some(tab => tab.id === s.savedData!.activeTabId) ? s.savedData.activeTabId : openTabs[0]?.id ?? null,
         tileTree: s.savedData.tileTree ?? undefined,
         canvasScene: s.savedData.canvasScene,
         activeView: s.savedData.activeView ?? 'tiles',
       }
     }
-    return {
-      id: s.id,
-      name: s.name,
-      openTabs: s.openTabs.map(t => normalizeTabForSave({
+    const openTabs = s.openTabs
+      .filter(tab => tab.serverId === serverId)
+      .map(t => normalizeTabForSave({
+        serverId: t.serverId,
         id: t.id,
         projectPath: t.projectPath,
         sessionId: t.sessionId,
@@ -159,8 +206,12 @@ export function serializeSessionsForSave(
         customTitle: t.customTitle || undefined,
         ptyId: t.ptyId,
         harnessId: t.harnessId ?? t.backend,
-      })) as OpenTab[],
-      activeTabId: s.activeTabId,
+      })) as OpenTab[]
+    return {
+      id: authoritySessionId,
+      name: s.name,
+      openTabs,
+      activeTabId: openTabs.some(tab => tab.id === s.activeTabId) ? s.activeTabId : openTabs[0]?.id ?? null,
       tileTree: s.activeTileTree || undefined,
       canvasScene: s.preservedCanvasScene ?? s.canvasScene ?? undefined,
       activeView: s.preservedCanvasScene === undefined ? s.activeView : 'tiles',

@@ -209,11 +209,11 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     if (!api.onEnvironmentEvent) return
     let mounted = true
     const unsubscribe = api.onEnvironmentEvent((event) => {
-      void resolveAuthoritativeEnvironmentEvent(api, event)
+      void resolveAuthoritativeEnvironmentEvent(api, serverId, event)
         .then((snapshot) => {
           if (!mounted || !snapshot) return
           suppressAuthoritativeSaveRef.current = true
-          applyAuthoritativeWorkspace(snapshot.workspace)
+          applyAuthoritativeWorkspace(serverId, snapshot.workspace)
         })
         .catch(error => console.error('Failed to synchronize server environment:', error))
     })
@@ -221,7 +221,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       mounted = false
       unsubscribe()
     }
-  }, [api, applyAuthoritativeWorkspace])
+  }, [api, applyAuthoritativeWorkspace, serverId])
 
   // Orphan healer: every openTab in the active session must appear in its tileTree
   useEffect(() => {
@@ -242,7 +242,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     if (!activeTabId) { setProjectVoice(null); return }
     const activeTab = openTabs.find(t => t.id === activeTabId)
     if (!activeTab) { setProjectVoice(null); return }
-    const project = projects.find(p => p.path === activeTab.projectPath)
+    const project = projects.find(p => p.serverId === activeTab.serverId && p.path === activeTab.projectPath)
     if (project?.ttsVoice && project?.ttsEngine) {
       setProjectVoice({ ttsVoice: project.ttsVoice, ttsEngine: project.ttsEngine })
     } else {
@@ -271,19 +271,30 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     }
 
     const allSessions = useWorkspaceStore.getState().sessions
-    const savedSessions = serializeSessionsForSave(allSessions)
+    const savedSessions = serializeSessionsForSave(allSessions, serverId)
+    const serverPrefix = `${serverId}\0`
+    const toAuthorityId = (id: string): string => id.startsWith(serverPrefix) ? id.slice(serverPrefix.length) : id
+    const savedProjects = projects
+      .filter(project => project.serverId === serverId)
+      .map(({ serverId: _serverId, ...project }) => ({
+        ...project,
+        categoryId: project.categoryId ? toAuthorityId(project.categoryId) : undefined,
+      }))
+    const savedCategories = categories
+      .filter(category => category.serverId === serverId)
+      .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
 
-    void saveAuthoritativeWorkspace(api, {
-      projects,
-      categories,
+    void saveAuthoritativeWorkspace(api, serverId, {
+      projects: savedProjects,
+      categories: savedCategories,
       sessions: savedSessions,
-      activeSessionId,
+      activeSessionId: allSessions.find(session => session.id === activeSessionId && session.serverId === serverId)?.authoritySessionId ?? null,
     }).catch(error => {
       if (!(error instanceof EnvironmentCacheInvalidatedError)) {
         console.error('Failed to save workspace:', error)
       }
     })
-  }, [api, projects, openTabs, activeTabId, loading, activeTileTree, categories, sessions, activeSessionId])
+  }, [api, serverId, projects, openTabs, activeTabId, loading, activeTileTree, categories, sessions, activeSessionId])
 
   // Workspace switcher handlers
   const handleSwitchSession = useCallback(async (id: string) => {
@@ -347,21 +358,21 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   }, [handleOpenSessionAtPosition, setActiveCanvasScene])
 
   const handleAddSession = useCallback(() => {
-    addSession()
+    addSession(serverId)
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-  }, [addSession])
+  }, [addSession, serverId])
 
   const handleRemoveSession = useCallback((id: string) => {
     const state = useWorkspaceStore.getState()
     const session = state.sessions.find(s => s.id === id)
     if (session) {
       for (const tab of session.openTabs) {
-        api.killPty(tab.id)
+        getApiForServer(tab.serverId)?.killPty(tab.id)
       }
     }
     removeSession(id)
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-  }, [api, removeSession])
+  }, [getApiForServer, removeSession])
 
   const openMobileDrawer = useCallback(() => setMobileDrawerOpen(true), [])
   const closeMobileDrawer = useCallback(() => setMobileDrawerOpen(false), [])
@@ -386,6 +397,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       <TitleBar />
       <div className="app-content">
         <Sidebar
+          serverId={serverId}
           projects={projects}
           openTabs={openTabs}
           activeTabId={activeTabId}
