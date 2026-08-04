@@ -27,23 +27,36 @@ ENV_DIR="${2:-$HOME/.cache/ct-test-env}"
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REAL_SECRET_DIR="$HOME/.claude-terminal"
 LOG_FILE="$ENV_DIR/test-instance.log"
+PID_FILE="$ENV_DIR/test-instance.pid"
+
+read_live_pid() {
+  [ -f "$PID_FILE" ] || return 1
+  local pid
+  pid="$(tr -cd '0-9' < "$PID_FILE")"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  printf '%s' "$pid"
+}
 
 status() {
-  if pgrep -f -- "--user-data-dir=$ENV_DIR/userdata" > /dev/null; then
-    echo "running (pids: $(pgrep -f -- "--user-data-dir=$ENV_DIR/userdata" | tr '\n' ' '))"
+  local pid
+  if pid="$(read_live_pid)"; then
+    echo "running (session leader pid: $pid)"
   else
+    rm -f "$PID_FILE"
     echo "not running"
   fi
 }
 
 case "$CMD" in
   start)
-    if pgrep -f -- "--user-data-dir=$ENV_DIR/userdata" > /dev/null; then
+    if read_live_pid > /dev/null; then
       echo "Test env already running at $ENV_DIR ($(status))"
       exit 0
     fi
+    rm -f "$PID_FILE"
 
-    mkdir -p "$ENV_DIR/home" "$ENV_DIR/userdata/config" "$ENV_DIR/projects" "$ENV_DIR/bin"
+    mkdir -p "$ENV_DIR/home" "$ENV_DIR/userdata/config" "$ENV_DIR/projects" "$ENV_DIR/bin" "$ENV_DIR/tmp"
     chmod 700 "$ENV_DIR"
 
     # Hybrid "claude" backend shim, resolved via the PATH override:
@@ -142,13 +155,18 @@ EOF
     export DISPLAY="${DISPLAY:-:0}"
     [ -n "${WAYLAND_DISPLAY:-}" ] || export WAYLAND_DISPLAY=wayland-0
 
+    # Hermes-hosted terminals already have a deep per-session TMPDIR. Chromium
+    # adds Unix-socket suffixes that can exceed AF_UNIX's path limit there and
+    # abort with SIGTRAP, so keep the test instance's temp root short and local.
     HOME="$ENV_DIR/home" \
     PATH="$ENV_DIR/bin:$PATH" \
+    TMPDIR="$ENV_DIR/tmp" \
     ORCHESTRATOR_SECRET_DIR="$REAL_SECRET_DIR" \
     NODE_ENV=production \
     DEBUG_MODE=1 \
-    nohup "$APP_DIR/node_modules/.bin/electron" "$APP_DIR" \
+    setsid nohup "$APP_DIR/node_modules/.bin/electron" "$APP_DIR" \
       --user-data-dir="$ENV_DIR/userdata" > "$LOG_FILE" 2>&1 &
+    echo "$!" > "$PID_FILE"
     disown || true
 
     echo "Started. Waiting for orchestrator..."
@@ -166,9 +184,17 @@ EOF
     ;;
 
   stop)
-    pgrep -f -- "--user-data-dir=$ENV_DIR/userdata" | xargs -r kill 2>/dev/null || true
-    sleep 1
-    pgrep -f -- "--user-data-dir=$ENV_DIR/userdata" | xargs -r kill -9 2>/dev/null || true
+    if pid="$(read_live_pid)"; then
+      kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+      for _ in $(seq 1 20); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      fi
+    fi
+    rm -f "$PID_FILE"
     echo "Stopped. Env kept at $ENV_DIR (delete it to reset: rm -rf $ENV_DIR)"
     ;;
 

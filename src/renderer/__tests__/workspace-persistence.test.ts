@@ -1,7 +1,16 @@
-import { describe, it, expect } from 'vitest'
-import { serializeSessionsForSave } from '../stores/workspace-persistence'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import {
+  EnvironmentCacheInvalidatedError,
+  cacheEnvironmentSnapshot,
+  getEnvironmentCursor,
+  resetEnvironmentPersistenceForTests,
+  resolveAuthoritativeEnvironmentEvent,
+  saveAuthoritativeWorkspace,
+  serializeSessionsForSave,
+} from '../stores/workspace-persistence'
 import type { WorkspaceSession } from '../stores/workspace'
 import { createEmptyCanvasScene } from '../components/canvas'
+import type { Api, Workspace } from '../api/types'
 
 const tab = (overrides: Partial<any> = {}) => ({
   id: 'pty-1',
@@ -13,6 +22,8 @@ const tab = (overrides: Partial<any> = {}) => ({
   backend: 'claude' as const,
   ...overrides,
 })
+
+beforeEach(() => resetEnvironmentPersistenceForTests())
 
 describe('serializeSessionsForSave', () => {
   // AC: @layout/multi-workspace-persistence ac-1
@@ -159,5 +170,98 @@ describe('serializeSessionsForSave', () => {
 
     const result = serializeSessionsForSave(sessions)
     expect((result[0].openTabs[0] as any).customTitle).toBeUndefined()
+  })
+})
+
+describe('authoritative workspace persistence', () => {
+  const workspace: Workspace = { projects: [], categories: [], sessions: [], activeSessionId: null }
+
+  it('serializes local saves using the revision returned by the prior command', async () => {
+    let revision = 0
+    const executeEnvironmentCommand = vi.fn(async () => ({
+      serverId: 'server-a',
+      revision: ++revision,
+      result: { success: true },
+      replayed: false,
+    }))
+    const api = {
+      getEnvironmentSnapshot: vi.fn(async () => ({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })),
+      executeEnvironmentCommand,
+    } as unknown as Api
+
+    await Promise.all([
+      saveAuthoritativeWorkspace(api, workspace),
+      saveAuthoritativeWorkspace(api, workspace),
+    ])
+
+    expect(executeEnvironmentCommand.mock.calls.map(([command]) => command.expectedRevision)).toEqual([0, 1])
+    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 2 })
+  })
+
+  it('does not replay a stale full-workspace payload over a newer snapshot', async () => {
+    const getEnvironmentSnapshot = vi.fn()
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 4, workspace, sessions: [], ptys: [] })
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 5, workspace, sessions: [], ptys: [] })
+    const executeEnvironmentCommand = vi.fn().mockRejectedValue(new Error('Expected revision 4, current revision is 5'))
+    const api = { getEnvironmentSnapshot, executeEnvironmentCommand } as unknown as Api
+
+    await expect(saveAuthoritativeWorkspace(api, workspace)).rejects.toThrow('current revision is 5')
+
+    expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1)
+    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 5 })
+  })
+
+  it('applies the next broadcast snapshot and catches up across an event gap', async () => {
+    const revisionOne = { serverId: 'server-a', revision: 1, workspace: { ...workspace, activeSessionId: 'one' }, sessions: [], ptys: [] }
+    const revisionThree = { serverId: 'server-a', revision: 3, workspace: { ...workspace, activeSessionId: 'three' }, sessions: [], ptys: [] }
+    cacheEnvironmentSnapshot({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })
+    const getEnvironmentEvents = vi.fn(async () => ({
+      mode: 'events' as const,
+      afterRevision: 1,
+      currentRevision: 3,
+      events: [{
+        serverId: 'server-a', revision: 3, eventId: 'server-a:3', occurredAt: 3,
+        event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'three', result: {}, snapshot: revisionThree },
+      }],
+    }))
+    const api = { getEnvironmentEvents } as unknown as Api
+
+    await expect(resolveAuthoritativeEnvironmentEvent(api, {
+      serverId: 'server-a', revision: 1, eventId: 'server-a:1', occurredAt: 1,
+      event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'one', result: {}, snapshot: revisionOne },
+    })).resolves.toEqual(revisionOne)
+    await expect(resolveAuthoritativeEnvironmentEvent(api, {
+      serverId: 'server-a', revision: 3, eventId: 'server-a:3', occurredAt: 3,
+      event: { type: 'replace-workspace', clientId: 'client-b', commandId: 'three', result: {}, snapshot: revisionThree },
+    })).resolves.toEqual(revisionThree)
+
+    expect(getEnvironmentEvents).toHaveBeenCalledWith(1)
+    expect(getEnvironmentCursor()).toEqual({ serverId: 'server-a', revision: 3 })
+  })
+
+  it('cancels a queued full-workspace save when another client advances authority', async () => {
+    let rejectFirst!: (reason: Error) => void
+    const executeEnvironmentCommand = vi.fn(() => new Promise((_resolve, reject) => { rejectFirst = reject }))
+    const api = {
+      getEnvironmentSnapshot: vi.fn(async () => ({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })),
+      executeEnvironmentCommand,
+    } as unknown as Api
+    cacheEnvironmentSnapshot(await api.getEnvironmentSnapshot!())
+
+    const first = saveAuthoritativeWorkspace(api, workspace)
+    await vi.waitFor(() => expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1))
+    const queued = saveAuthoritativeWorkspace(api, { ...workspace, activeSessionId: 'stale-local' })
+    await resolveAuthoritativeEnvironmentEvent(api, {
+      serverId: 'server-a', revision: 1, eventId: 'server-a:1', occurredAt: 1,
+      event: {
+        type: 'replace-workspace', clientId: 'client-b', commandId: 'remote', result: {},
+        snapshot: { serverId: 'server-a', revision: 1, workspace: { ...workspace, activeSessionId: 'remote' }, sessions: [], ptys: [] },
+      },
+    })
+    rejectFirst(new Error('revision conflict'))
+
+    await expect(first).rejects.toThrow('revision conflict')
+    await expect(queued).rejects.toBeInstanceOf(EnvironmentCacheInvalidatedError)
+    expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1)
   })
 })

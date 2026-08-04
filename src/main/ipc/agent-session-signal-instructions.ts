@@ -16,7 +16,7 @@ function getAgentSessionSignalInstructions(projectPath: string): string {
   const secondKeyHalf = key.slice(splitIndex)
 
   return `${AGENT_SESSION_SIGNALS_START}
-## Agent Session Signals (Claude Terminal)
+## Agent Session Signals (DonutCode)
 
 Signals are final-response metadata. Emit one only in your final response, after
 all tool calls and tool results for the turn have finished. Never emit a signal
@@ -40,7 +40,7 @@ without the user answering a blocking question, and put it immediately before
 that question in the final response. Do not use input-needed for optional
 follow-up questions. Emit only one signal for a given state.
 
-These managed instructions are read by Claude Terminal. Keep all surrounding
+These managed instructions are read by DonutCode. Keep all surrounding
 user-authored instructions unchanged.
 ${AGENT_SESSION_SIGNALS_END}
 `

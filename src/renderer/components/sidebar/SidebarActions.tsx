@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { Project } from '../../stores/workspace.js'
 import { VoiceControls } from '../VoiceControls.js'
+import { SidebarActionDock } from './SidebarActionDock.js'
 
 interface SidebarActionsProps {
   activeTabId: string | null
@@ -31,78 +32,29 @@ export const SidebarActions = React.memo(function SidebarActions({
   focusedTabIdRef.current = focusedTabId
 
   return (
-    <div className="sidebar-actions">
-      <VoiceControls
-        activeTabId={activeTabId}
-        onTranscription={(text) => {
-          // Use focusedTabId (last clicked tile) over activeTabId (last opened tab)
-          const currentTabId = focusedTabIdRef.current || activeTabIdRef.current
-          if (currentTabId && window.electronAPI?.writePty) {
-            window.electronAPI?.writePty(currentTabId, text)
-            setTimeout(() => window.electronAPI?.writePty?.(currentTabId, '\r'), 100)
-          }
-        }}
-      />
-      {focusedProject && (
-        <button
-          className={`action-icon-btn ${apiStatus?.running ? 'enabled' : ''}`}
-          onClick={() => {
-            if (!focusedProject.apiPort) {
-              onOpenProjectSettings(focusedProject)
-            } else {
-              onToggleApi(focusedProject)
-            }
-          }}
-          tabIndex={0}
-          title={
-            apiStatus?.running
-              ? `Stop API (port ${focusedProject.apiPort})`
-              : focusedProject.apiPort
-                ? `Start API (port ${focusedProject.apiPort})`
-                : 'Configure API'
-          }
-          aria-label={
-            apiStatus?.running
-              ? `Stop API (port ${focusedProject.apiPort})`
-              : focusedProject.apiPort
-                ? `Start API (port ${focusedProject.apiPort})`
-                : 'Configure API'
-          }
-        >
-          {apiStatus?.running ? '🟢' : '🔌'}
-        </button>
+    <VoiceControls
+      activeTabId={activeTabId}
+      onTranscription={(text) => {
+        // Use focusedTabId (last clicked tile) over activeTabId (last opened tab)
+        const currentTabId = focusedTabIdRef.current || activeTabIdRef.current
+        if (currentTabId && window.electronAPI?.writePty) {
+          window.electronAPI.writePty(currentTabId, text)
+          setTimeout(() => window.electronAPI?.writePty?.(currentTabId, '\r'), 100)
+        }
+      }}
+    >
+      {(voice) => (
+        <SidebarActionDock
+          voice={voice}
+          focusedProject={focusedProject}
+          apiStatus={apiStatus}
+          isDebugMode={isDebugMode}
+          onOpenSettings={onOpenSettings}
+          onOpenProjectSettings={onOpenProjectSettings}
+          onToggleApi={onToggleApi}
+          onOpenConnections={onOpenMobileConnect}
+        />
       )}
-      {isDebugMode && (
-        <button
-          className="action-icon-btn"
-          onClick={() => window.electronAPI?.refresh?.()}
-          tabIndex={0}
-          title="Refresh (Debug Mode)"
-          aria-label="Refresh (Debug Mode)"
-        >
-          🔄
-        </button>
-      )}
-      {onOpenMobileConnect && (
-        <button
-          className="action-icon-btn"
-          onClick={onOpenMobileConnect}
-          tabIndex={0}
-          title="Connect Mobile Device"
-          aria-label="Connect Mobile Device"
-        >
-          📱
-        </button>
-      )}
-      <button
-        className="action-icon-btn"
-        onClick={onOpenSettings}
-        tabIndex={0}
-        title="Settings"
-        aria-label="Settings"
-      >
-        ⚙️
-      </button>
-    </div>
+    </VoiceControls>
   )
 })

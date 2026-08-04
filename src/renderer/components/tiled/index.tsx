@@ -40,6 +40,7 @@ export function TiledTerminalView({
   projects,
   theme,
   focusedTabId,
+  attentionByTabId = {},
   onCloseTab,
   onRenameTab,
   onFocusTab,
@@ -48,11 +49,12 @@ export function TiledTerminalView({
   onOpenSessionAtPosition,
   onAddTab,
   onUndoCloseTab,
-  api
+  api,
+  getApiForServer,
 }: TiledTerminalViewProps): React.ReactElement | null {
   const containerRef = useRef<HTMLDivElement>(null)
-  const containerSizeRef = useRef({ width: 1920, height: 1080 })
-  const [viewportSize, setViewportSize] = useState({ width: 1920, height: 1080 })
+  const containerSizeRef = useRef({ width: 0, height: 0 })
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 })
   const onTreeChangeRef = useRef(onTreeChange)
   onTreeChangeRef.current = onTreeChange
   const tileTreeRef = useRef(tileTree)
@@ -671,11 +673,10 @@ export function TiledTerminalView({
     return edges
   }, [tileTree, hoveredEdge, leaves, leafRects])
 
-  if (tabs.length === 0) return null
-
   return (
     <div
       ref={containerRef}
+      data-testid="tiled-terminal-viewport"
       className={`terminal-tiled-custom${tileResizing ? ' is-resizing' : ''}${isPanning ? ' is-panning' : ''}`}
       style={{ flex: 1, padding: `${GAP}px`, overflow: 'hidden', background: 'var(--bg-base)', position: 'relative' }}
       onDragOver={handleContainerDragOver}
@@ -716,7 +717,7 @@ export function TiledTerminalView({
             ? leaf.activeTabId
             : tileTabs[0].id
 
-          const project = projects.find(p => p.path === tileTabs[0].projectPath)
+          const project = projects.find(p => p.serverId === tileTabs[0].serverId && p.path === tileTabs[0].projectPath)
           const isFocused = focusedTabId != null && leaf.tabIds.includes(focusedTabId)
 
           return (
@@ -731,9 +732,11 @@ export function TiledTerminalView({
               activeTabId={leaf.activeTabId}
               tabs={tileTabs}
               activeSubTabId={activeSubTabId}
+              attentionByTabId={attentionByTabId}
               project={project}
               theme={theme}
               api={api}
+              getApiForServer={getApiForServer}
               GAP={GAP}
               isFocused={isFocused}
               isDragging={draggedTile === leaf.id && !draggedSubTab}

@@ -6,9 +6,9 @@
  */
 
 import { randomBytes, createHash } from 'crypto'
-import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import { getRuntimeDataDir } from '../runtime-paths.js'
 
 let cachedFingerprint: string | null = null
 
@@ -16,8 +16,7 @@ let cachedFingerprint: string | null = null
  * Get the fingerprint storage path
  */
 function getFingerprintPath(): string {
-  const userDataPath = app.getPath('userData')
-  return join(userDataPath, 'mobile-server-fingerprint')
+  return join(getRuntimeDataDir(), 'mobile-server-fingerprint')
 }
 
 /**
@@ -54,7 +53,7 @@ export function getOrCreateFingerprint(): string {
 
   // Save to disk
   try {
-    const dir = join(app.getPath('userData'))
+    const dir = getRuntimeDataDir()
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }

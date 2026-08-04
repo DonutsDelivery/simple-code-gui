@@ -1,7 +1,7 @@
-import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, lstatSync, readlinkSync, unlinkSync, rmSync, symlinkSync } from 'fs'
 import { join } from 'path'
 import type { Workspace, Project, ProjectCategory } from './session-store'
+import { getRuntimeDataDir } from './runtime-paths.js'
 
 const UNCATEGORIZED_FOLDER = 'Uncategorized'
 
@@ -9,7 +9,7 @@ const UNCATEGORIZED_FOLDER = 'Uncategorized'
  * Get the base path for meta-projects symlink structure
  */
 function getMetaProjectsBasePath(): string {
-  return join(app.getPath('userData'), 'meta-projects')
+  return join(getRuntimeDataDir(), 'meta-projects')
 }
 
 /**
@@ -163,7 +163,7 @@ function groupProjectsByCategory(
  * Sync workspace projects to meta-projects symlink structure
  *
  * Creates a hierarchical symlink structure mirroring workspace categories:
- * ~/.config/simple-code-gui/meta-projects/
+ * <DonutCode user data>/meta-projects/
  * ├── Work/
  * │   ├── ProjectA -> /home/user/work/ProjectA
  * │   └── ProjectB -> /home/user/work/ProjectB

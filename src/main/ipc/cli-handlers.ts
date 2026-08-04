@@ -167,7 +167,7 @@ export function registerCliHandlers(getMainWindow: () => BrowserWindow | null) {
             timeout: 300000
           })
           getMainWindow()?.webContents.send('install:progress', { type: 'git', status: 'Git installed!', percent: 100 })
-          return { success: true, method: 'winget', message: 'Git installed! Please restart Simple Code GUI.' }
+          return { success: true, method: 'winget', message: 'Git installed! Please restart DonutCode.' }
         } catch (e: any) {
           console.log('Winget install failed, falling back to download:', e.message)
         }
@@ -177,7 +177,7 @@ export function registerCliHandlers(getMainWindow: () => BrowserWindow | null) {
       return {
         success: false,
         method: 'download',
-        message: 'Please download and install Git for Windows, then restart Simple Code GUI.'
+        message: 'Please download and install Git for Windows, then restart DonutCode.'
       }
     } catch (e: any) {
       return { success: false, error: e.message }

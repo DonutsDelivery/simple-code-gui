@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
-export type AIBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+export type AIBackend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
 
 interface InstructionFileConfig {
   /** Subdirectory under project root (null = project root) */
@@ -31,6 +31,7 @@ interface InstructionFileConfig {
  */
 const BACKEND_INSTRUCTION_FILES: Record<AIBackend, InstructionFileConfig> = {
   claude:   { dir: '.claude', file: 'CLAUDE.md' },
+  'claude-codex': { dir: '.claude', file: 'CLAUDE.md' },
   gemini:   { dir: null, file: 'GEMINI.md' },
   codex:    { dir: null, file: 'AGENTS.md' },
   opencode: { dir: null, file: 'AGENTS.md' },
@@ -43,6 +44,7 @@ const BACKEND_INSTRUCTION_FILES: Record<AIBackend, InstructionFileConfig> = {
 /** Human-readable label for the instruction file (used in UI) */
 const BACKEND_FILE_LABELS: Record<AIBackend, string> = {
   claude:   'CLAUDE.md',
+  'claude-codex': 'CLAUDE.md',
   gemini:   'GEMINI.md',
   codex:    'AGENTS.md',
   opencode: 'AGENTS.md',

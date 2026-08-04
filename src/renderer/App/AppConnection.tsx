@@ -1,8 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { ConnectionScreen } from '../components/ConnectionScreen'
 import { MainApp } from './MainApp'
-import type { Api, HttpBackend } from '../api'
-import { isElectronEnvironment, initializeApi } from '../api'
+import type { Api } from '../api'
+import { HttpBackend, isElectronEnvironment, setApi } from '../api'
+
+const CONNECTION_STORAGE_KEY = 'donutcode-connection'
+const LEGACY_CONNECTION_STORAGE_KEY = 'claude-terminal-connection'
+const MANUAL_DISCONNECT_KEY = 'donutcode-manual-disconnect'
+
+function loadSavedConnection(): string | null {
+  const current = localStorage.getItem(CONNECTION_STORAGE_KEY)
+  if (current) return current
+  const legacy = localStorage.getItem(LEGACY_CONNECTION_STORAGE_KEY)
+  if (legacy) localStorage.setItem(CONNECTION_STORAGE_KEY, legacy)
+  return legacy
+}
 
 // Check if running in Capacitor native app
 export function isCapacitorApp(): boolean {
@@ -32,11 +44,35 @@ export function AppConnection(): React.ReactElement | null {
   }, [isCapacitor, isElectron])
 
   // Connection state for browser/Capacitor mode
-  const [isConnected, setIsConnected] = useState(isElectron)
-  const [api, setApiState] = useState<Api | null>(isElectron ? initializeApi() : null)
+  const [isConnected, setIsConnected] = useState(false)
+  const [api, setApiState] = useState<Api | null>(null)
+  const [initializingLocalServer, setInitializingLocalServer] = useState(isElectron)
+
+  useEffect(() => {
+    if (!isElectron) return
+    let cancelled = false
+    void window.electronAPI.mobileGetConnectionInfo()
+      .then(async info => {
+        const localApi = new HttpBackend({ host: '127.0.0.1', port: info.port, token: info.token })
+        const result = await localApi.testConnection()
+        if (cancelled) return
+        if (!result.success) throw new Error(result.error || 'Local DonutCode Server connection failed')
+        setApi(localApi)
+        setApiState(localApi)
+        setIsConnected(true)
+      })
+      .catch(error => {
+        if (!cancelled) console.error('[App] Local server connection failed:', error)
+      })
+      .finally(() => {
+        if (!cancelled) setInitializingLocalServer(false)
+      })
+    return () => { cancelled = true }
+  }, [isElectron])
 
   // Handle successful connection from ConnectionScreen
   const handleConnected = useCallback((connectedApi: HttpBackend) => {
+    setApi(connectedApi)
     setApiState(connectedApi)
     setIsConnected(true)
   }, [])
@@ -45,10 +81,10 @@ export function AppConnection(): React.ReactElement | null {
   const handleDisconnect = useCallback(() => {
     console.log('[App] Disconnecting...')
     // Only clear the active connection, keep saved hosts for easy reconnect
-    localStorage.removeItem('claude-terminal-connection')
-    // Don't clear saved hosts: localStorage.removeItem('claude-terminal-saved-hosts')
+    localStorage.removeItem(CONNECTION_STORAGE_KEY)
+    localStorage.removeItem(LEGACY_CONNECTION_STORAGE_KEY)
     // Set flag to prevent auto-reconnect (cleared on next app launch)
-    sessionStorage.setItem('claude-terminal-manual-disconnect', 'true')
+    sessionStorage.setItem(MANUAL_DISCONNECT_KEY, 'true')
     setApiState(null)
     setIsConnected(false)
   }, [])
@@ -75,7 +111,7 @@ export function AppConnection(): React.ReactElement | null {
 
       // Save to localStorage so future reloads work
       const config = { host, port, token: urlToken }
-      localStorage.setItem('claude-terminal-connection', JSON.stringify(config))
+      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(config))
 
       // Clear token from URL for cleaner appearance
       window.history.replaceState({}, document.title, window.location.pathname)
@@ -84,7 +120,7 @@ export function AppConnection(): React.ReactElement | null {
     }
 
     try {
-      const saved = localStorage.getItem('claude-terminal-connection')
+      const saved = loadSavedConnection()
       if (saved) {
         const config = JSON.parse(saved)
         // Validate port from saved config
@@ -92,7 +128,8 @@ export function AppConnection(): React.ReactElement | null {
           // We have valid saved config, the ConnectionScreen will auto-connect
         } else if (config.port && !isValidPort(config.port)) {
           console.error('[App] Invalid port in saved config:', config.port, '- clearing')
-          localStorage.removeItem('claude-terminal-connection')
+          localStorage.removeItem(CONNECTION_STORAGE_KEY)
+          localStorage.removeItem(LEGACY_CONNECTION_STORAGE_KEY)
         }
       }
     } catch (e) {
@@ -101,11 +138,13 @@ export function AppConnection(): React.ReactElement | null {
   }, [isElectron, isConnected])
 
   // Show connection screen if not connected (browser/Capacitor mode)
+  if (initializingLocalServer) return null
+
   if (!isConnected || !api) {
     // Try to get saved config for auto-connect
     let savedConfig: { host: string; port: number; token: string } | null = null
     try {
-      const saved = localStorage.getItem('claude-terminal-connection')
+      const saved = loadSavedConnection()
       if (saved) {
         const parsed = JSON.parse(saved)
         // Only use config if port is valid
@@ -123,5 +162,9 @@ export function AppConnection(): React.ReactElement | null {
   }
 
   // Render the main app with the connected API
-  return <MainApp api={api} isElectron={isElectron} onDisconnect={handleDisconnect} />
+  const serverId = api.getServerProtocol?.()?.serverId
+  if (!serverId) {
+    return <ConnectionScreen onConnected={handleConnected} savedConfig={savedConfig} />
+  }
+  return <MainApp serverId={serverId} api={api} isElectron={isElectron} onDisconnect={handleDisconnect} />
 }

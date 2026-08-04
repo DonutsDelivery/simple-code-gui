@@ -1,7 +1,7 @@
 {
-  "name": "simple-code-gui",
+  "name": "donutcode",
   "version": "1.3.58",
-  "description": "Multi-backend AI coding assistant GUI",
+  "description": "Distributed AI development workspace",
   "author": {
     "name": "DonutsDelivery",
     "email": "donutsdelivery@users.noreply.github.com"
@@ -12,10 +12,14 @@
     "url": "https://github.com/DonutsDelivery/simple-code-gui"
   },
   "main": "./dist/main/index.js",
+  "bin": {
+    "donutcode-server": "./dist/main/server-cli.js"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "server": "node dist/main/server-cli.js serve",
     "package": "electron-builder",
     "test": "vitest run",
     "test:watch": "vitest",

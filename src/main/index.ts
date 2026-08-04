@@ -1,27 +1,22 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Notification } from 'electron'
 import { join } from 'path'
-import { mkdirSync, existsSync, copyFileSync, statSync } from 'fs'
 
-import { PtyManager } from './pty-manager.js'
 import { HeadroomProxyManager, HEADROOM_DEFAULT_PORT } from './headroom-proxy.js'
-import { SessionStore } from './session-store.js'
 import { ApiServerManager } from './api-server.js'
 import { OrchestratorApi } from './orchestrator-api.js'
 import { registerOrchestratorMcp } from './orchestrator-mcp-registration.js'
 import { installSelfCompactionInstructions } from './ipc/self-compaction-instructions.js'
-import { MobileServer } from './mobile-server.js'
+import { removeLegacyTaskPanelInstructions } from './ipc/legacy-task-instructions.js'
 import { voiceManager } from './voice-manager.js'
 import { setPortableBinDirs } from './platform.js'
 import { getPortableBinDirs } from './portable-deps.js'
 import { initUpdater } from './updater.js'
 import {
   registerCliHandlers,
-  registerBeadsHandlers,
   registerVoiceHandlers,
   registerExtensionHandlers,
   registerWindowHandlers,
   cleanupClipboardTempFiles,
-  registerKspecHandlers,
   registerGlobalInstructionHandlers,
 } from './ipc/index.js'
 
@@ -35,28 +30,51 @@ import { registerPtyHandlers } from './app/ipc-handlers/pty.js'
 import { registerServerHandlers } from './app/ipc-handlers/servers.js'
 import { registerSettingsHandlers } from './app/ipc-handlers/settings.js'
 import { HermesBackupManager, type HermesBackupReason } from './hermes-backup-manager.js'
+import { migrateLegacyBrandData } from './brand-migration.js'
+import { configureRuntimePaths } from './runtime-paths.js'
+import { EnvironmentRuntime } from './environment-runtime.js'
 
 // Apply app config (must be done before app.whenReady)
 setupAppConfig()
+configureRuntimePaths({ dataDir: app.getPath('userData'), appPath: app.getAppPath() })
 
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
-  app.quit()
+  // A live DonutCode process owns the server and will receive second-instance.
+  // Exit synchronously so this contender cannot continue into whenReady() and
+  // accidentally create a second EnvironmentRuntime.
+  app.exit(0)
 } else {
+  migrateLegacyBrandData(app.getPath('appData'), app.getPath('userData'))
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
+    } else if (app.isReady()) {
+      mainWindow = createWindow(sessionStore, setMainWindow, handleRendererFailure)
+      createApplicationMenu(mainWindow)
+      orchestratorApi.debugApi.attachToWindow(mainWindow)
     }
   })
 }
 
 let mainWindow: BrowserWindow | null = null
-const ptyManager = new PtyManager()
-const sessionStore = new SessionStore()
+const environmentRuntime = new EnvironmentRuntime({
+  dataDir: app.getPath('userData'),
+  appPath: app.getAppPath(),
+  version: app.getVersion(),
+  voiceManager,
+})
+const {
+  ptyManager,
+  sessionStore,
+  serverId,
+  environmentRouter,
+  runtimeRegistry: sessionRuntimeRegistry,
+  server: mobileServer,
+} = environmentRuntime
 const apiServerManager = new ApiServerManager()
-const mobileServer = new MobileServer()
 const hermesBackupManager = new HermesBackupManager(join(app.getPath('userData'), 'backups', 'hermes'))
 hermesBackupManager.setRecoveryContext(
   join(app.getPath('userData'), 'config', 'workspace.json'),
@@ -68,7 +86,14 @@ const ptyToProject = new Map<string, string>()
 const ptyToBackend = new Map<string, string>()
 const getMainWindow = (): BrowserWindow | null => mainWindow
 
-const orchestratorApi = new OrchestratorApi(ptyManager, ptyToProject, ptyToBackend, sessionStore, getMainWindow)
+const orchestratorApi = new OrchestratorApi(
+  ptyManager,
+  ptyToProject,
+  ptyToBackend,
+  sessionStore,
+  getMainWindow,
+  sessionRuntimeRegistry,
+)
 const setMainWindow = (win: BrowserWindow | null): void => { mainWindow = win }
 
 // Headroom context-compression proxy. Pushes status to the renderer and is kept
@@ -119,60 +144,33 @@ ipcMain.handle('headroom:status', () => headroomProxy.getStatus())
 
 // Register IPC handlers
 registerCliHandlers(getMainWindow)
-registerBeadsHandlers(getMainWindow)
 registerVoiceHandlers(getMainWindow)
 registerExtensionHandlers()
 registerWindowHandlers(getMainWindow)
-registerKspecHandlers()
 registerGlobalInstructionHandlers()
-registerWorkspaceHandlers(sessionStore, getMainWindow)
+registerWorkspaceHandlers(sessionStore, environmentRouter, getMainWindow)
 registerCanvasAssetHandlers(join(app.getPath('userData'), 'canvas-assets'), getMainWindow)
-registerPtyHandlers(ptyManager, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow, hermesBackupManager)
-registerServerHandlers(apiServerManager, mobileServer, sessionStore)
+registerPtyHandlers(ptyManager, sessionRuntimeRegistry, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow, hermesBackupManager)
+registerServerHandlers(apiServerManager, mobileServer, sessionStore, environmentRuntime)
 registerSettingsHandlers(sessionStore, getMainWindow, (settings) => syncHeadroom(settings))
 
 // Setup API prompt handler
-setupApiPromptHandler(apiServerManager, sessionStore, ptyManager, ptyToProject, getMainWindow)
+setupApiPromptHandler(
+  apiServerManager,
+  sessionStore,
+  sessionRuntimeRegistry,
+  ptyToProject,
+  getMainWindow,
+)
 
-app.whenReady().then(() => {
-  // Migrate data from old app name
-  const oldConfigDir = join(app.getPath('appData'), 'simple-claude-gui', 'config')
-  const newConfigDir = join(app.getPath('userData'), 'config')
-  const oldWorkspace = join(oldConfigDir, 'workspace.json')
-  const newWorkspace = join(newConfigDir, 'workspace.json')
-
-  if (existsSync(oldWorkspace)) {
-    try {
-      const oldSize = statSync(oldWorkspace).size
-      let shouldMigrate = false
-
-      if (!existsSync(newWorkspace)) {
-        shouldMigrate = true
-      } else {
-        const newSize = statSync(newWorkspace).size
-        if (oldSize > 500 && newSize < 500) shouldMigrate = true
-      }
-
-      if (shouldMigrate) {
-        console.log('Migrating workspace from simple-claude-gui to simple-code-gui...')
-        mkdirSync(newConfigDir, { recursive: true })
-        copyFileSync(oldWorkspace, newWorkspace)
-
-        const oldVoice = join(app.getPath('appData'), 'simple-claude-gui', 'voice-settings.json')
-        const newVoice = join(app.getPath('userData'), 'voice-settings.json')
-        if (existsSync(oldVoice) && !existsSync(newVoice)) {
-          copyFileSync(oldVoice, newVoice)
-        }
-        console.log('Migration complete')
-      }
-    } catch (err) {
-      console.error('Workspace migration failed, continuing with empty workspace:', err)
-    }
-  }
-
+app.whenReady().then(async () => {
   // Initialize portable deps PATH
   const portableDirs = getPortableBinDirs()
   setPortableBinDirs(portableDirs)
+
+  // The local server is the desktop's domain boundary too. It is always
+  // available on loopback; mobile access only changes whether it is LAN-bound.
+  await environmentRuntime.start()
 
   // Setup security headers
   setupSecurityHeaders()
@@ -190,31 +188,15 @@ app.whenReady().then(() => {
   // Start the Headroom proxy if enabled in settings.
   syncHeadroom()
 
-  // Refresh task instructions in each project's backend-specific instruction file on startup.
-  // This ensures existing sessions pick up updated instructions after compaction.
+  // Remove instruction blocks previously managed by the retired task panel.
   try {
-    const projects = sessionStore.getWorkspace().projects || []
-    const globalBackend = sessionStore.getSettings().backend
-    import('./ipc/kspec-handlers.js').then(({ installTaskInstructions: installTaskInstr }) => {
-      for (const project of projects) {
-        if (!project?.path) continue
-        try {
-          const hasKspec = existsSync(join(project.path, '.kspec'))
-          const hasBeads = existsSync(join(project.path, '.beads'))
-          if (!hasKspec && !hasBeads) continue
-          const aiBackend = (project.backend && project.backend !== 'default'
-            ? project.backend
-            : (globalBackend && globalBackend !== 'default'
-              ? globalBackend
-              : 'claude')) as 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
-          if (hasKspec) installTaskInstr(project.path, 'kspec', aiBackend)
-          else installTaskInstr(project.path, 'beads', aiBackend)
-        } catch { /* skip individual project errors */ }
-      }
-    }).catch(() => { /* kspec handlers not available */ })
+    for (const project of sessionStore.getWorkspace().projects || []) {
+      if (project?.path) removeLegacyTaskPanelInstructions(project.path)
+    }
   } catch (e) {
-    console.error('[Startup] Failed to refresh task instructions:', e)
+    console.error('[Startup] Failed to remove legacy task-panel instructions:', e)
   }
+
 
   // Inject self-compaction instructions into every project's instruction file so
   // sessions know to compact themselves via the orchestrator `compact_session`
@@ -250,11 +232,10 @@ app.whenReady().then(() => {
   // binds 0.0.0.0 over plain HTTP and can drive PTYs, so we must not silently
   // expose it on the LAN at every launch (H1). Managers are wired up regardless
   // so the user can turn it on later (Connect Mobile Device) without a restart.
-  mobileServer.setPtyManager(ptyManager)
-  mobileServer.setSessionStore(sessionStore)
-  mobileServer.setVoiceManager(voiceManager)
+  // Server is fully owned and wired by EnvironmentRuntime; Electron only controls
+  // whether its local HTTP endpoint is enabled for this launch.
   if (sessionStore.getSettings().mobileAccessEnabled === true) {
-    mobileServer.start().then(() => {
+    environmentRuntime.start().then(() => {
       const info = mobileServer.getConnectionInfo()
       console.log(`[Mobile] Server ready at ${info.ips[0]}:${info.port}`)
     }).catch(err => {
@@ -274,10 +255,10 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // Don't SIGKILL here — let `before-quit` run a graceful shutdown so backends
-  // can flush their session files. On Linux/Windows `app.quit()` triggers
-  // `before-quit` next; on macOS the app stays alive and PTYs are torn down
-  // by the renderer on next window open.
+  // Closing the frontend only detaches it. The authoritative server and PTYs
+  // remain available to other desktop, browser, and mobile clients. Explicit
+  // application quit still runs the graceful server shutdown below.
+  if (environmentRuntime.server.isRunning()) return
   if (process.platform !== 'darwin') app.quit()
 })
 
@@ -298,11 +279,10 @@ app.on('before-quit', (event) => {
     try {
       orchestratorApi.stop()
       headroomProxy.stop()
-      mobileServer.stop()
+      await environmentRuntime.stop()
       apiServerManager.stopAll()
       if (hasActiveHermes()) await backupHermes('shutdown')
       hermesBackupManager.stop()
-      await ptyManager.gracefulShutdown(1500)
       cleanupClipboardTempFiles()
     } catch (e) {
       console.error('[shutdown] error during graceful shutdown:', e)

@@ -142,7 +142,7 @@ export function MobileTerminalBar({
     },
     {
       id: 'backend',
-      label: 'Backend',
+      label: 'Harness',
       icon: '🔧',
       items: [
         { id: 'claude', label: 'Claude' },

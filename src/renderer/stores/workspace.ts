@@ -1,15 +1,16 @@
 import { create } from 'zustand'
-import { clearProjectCaches } from '../utils/lruCache'
 import { debugTrace } from '../debug/debugBridge'
 import { removeTabFromLeaf, splitRoot, createLeaf, generateTileId, type TileNode } from '../components/tile-tree'
 import {
   createEmptyCanvasScene,
   generateCanvasScene,
+  loadCanvasScene,
   reconcileCanvasScene,
   remapSceneTabIds,
   type CanvasScene,
   type CanvasTabDescriptor,
 } from '../components/canvas'
+import type { HarnessSelection, Workspace as AuthoritativeWorkspace } from '../api/types'
 
 export interface ProjectCategory {
   id: string
@@ -19,6 +20,7 @@ export interface ProjectCategory {
 }
 
 export interface Project {
+  serverId: string
   path: string
   name: string
   executable?: string
@@ -32,19 +34,25 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
   categoryId?: string
   order?: number
 }
 
 export interface OpenTab {
+  serverId: string
   id: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   customTitle?: boolean
   ptyId: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
 }
 
 export type WorkspaceView = 'tiles' | 'canvas'
@@ -110,6 +118,7 @@ interface WorkspaceState {
   activeCanvasScene: CanvasScene | null
   activeView: WorkspaceView
   attentionByTabId: Record<string, AgentAttentionKind>
+  applyAuthoritativeWorkspace: (workspace: AuthoritativeWorkspace) => void
 
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
@@ -198,6 +207,61 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeCanvasScene: null,
   activeView: 'tiles',
   attentionByTabId: {},
+
+  applyAuthoritativeWorkspace: (workspace) => {
+    set((state) => {
+      const sessions: WorkspaceSession[] = (workspace.sessions ?? []).map((saved) => {
+        const openTabs: OpenTab[] = saved.openTabs.map(tab => ({
+          ...tab,
+          ptyId: tab.ptyId || tab.id,
+          harnessId: tab.harnessId ?? tab.backend,
+        }))
+        const activeTileTree = (saved.tileTree ?? null) as TileNode | null
+        const generatedScene = generateCanvasScene(toCanvasTabs(openTabs), { tileTree: activeTileTree })
+        let canvasScene = generatedScene
+        let preservedCanvasScene: unknown
+        if (saved.canvasScene !== undefined && saved.canvasScene !== null) {
+          const loaded = loadCanvasScene(saved.canvasScene)
+          if (loaded.status === 'ok') {
+            canvasScene = reconcileCanvasScene(loaded.scene, toCanvasTabs(openTabs))
+          } else if (loaded.status === 'future-version') {
+            preservedCanvasScene = loaded.data
+          }
+        }
+        return {
+          id: saved.id,
+          name: saved.name,
+          openTabs,
+          activeTabId: saved.activeTabId,
+          activeTileTree,
+          canvasScene,
+          preservedCanvasScene,
+          activeView: preservedCanvasScene === undefined ? (saved.activeView ?? 'tiles') : 'tiles',
+          isRestored: true,
+        }
+      })
+      const activeSessionId = workspace.activeSessionId
+        && sessions.some(session => session.id === workspace.activeSessionId)
+        ? workspace.activeSessionId
+        : sessions[0]?.id ?? null
+      const active = sessions.find(session => session.id === activeSessionId) ?? null
+      const liveTabIds = new Set(sessions.flatMap(session => session.openTabs.map(tab => tab.id)))
+      return {
+        projects: workspace.projects,
+        categories: workspace.categories ?? [],
+        sessions,
+        activeSessionId,
+        openTabs: active?.openTabs ?? [],
+        activeTabId: active?.activeTabId ?? null,
+        activeTileTree: active?.activeTileTree ?? null,
+        activeCanvasScene: active?.canvasScene ?? null,
+        activeView: active?.activeView ?? 'tiles',
+        attentionByTabId: Object.fromEntries(
+          Object.entries(state.attentionByTabId).filter(([tabId]) => liveTabIds.has(tabId))
+        ),
+      }
+    })
+  },
 
   // -------------------------------------------------------------------------
   // Session management
@@ -607,7 +671,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   removeProject: (path) => {
-    clearProjectCaches(path)
     set(state => ({ projects: state.projects.filter(p => p.path !== path) }))
   },
 

@@ -7,6 +7,7 @@ import { computeDropZone } from '../tiled-layout-utils.js'
 import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
 import type { OpenTab, Project, ResizeEdge, ClientToCanvasPercent } from './types.js'
+import type { AgentAttentionKind } from '../../stores/workspace.js'
 
 interface TileTerminalProps {
   leafId: string
@@ -18,9 +19,11 @@ interface TileTerminalProps {
   activeTabId: string
   tabs: OpenTab[]
   activeSubTabId: string
+  attentionByTabId: Record<string, AgentAttentionKind>
   project: Project | undefined
   theme: Theme
   api: Api | undefined
+  getApiForServer?: (serverId: string) => Api | undefined
   GAP: number
   isFocused: boolean
   isDragging: boolean
@@ -56,9 +59,11 @@ export function TileTerminal({
   activeTabId: _activeTabId,
   tabs,
   activeSubTabId,
+  attentionByTabId,
   project,
   theme,
   api,
+  getApiForServer,
   GAP,
   isFocused,
   isDragging,
@@ -394,7 +399,7 @@ export function TileTerminal({
                 onFocus={() => onFocusTab(tab.id)}
                 projectPath={tab.projectPath}
                 backend={tab.backend}
-                api={api}
+                api={getApiForServer?.(tab.serverId) ?? api}
               />
             </ErrorBoundary>
           </div>

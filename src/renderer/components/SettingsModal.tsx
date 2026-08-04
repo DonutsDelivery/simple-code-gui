@@ -337,7 +337,7 @@ export function SettingsModal({
 
   // Remove TTS instructions from all projects (uninstall feature)
   async function handleRemoveTTSFromAllProjects(): Promise<void> {
-    if (!confirm('This will remove TTS voice output instructions from CLAUDE.md files in ALL your projects. This is useful if you want to stop using Claude Terminal.\n\nContinue?')) {
+    if (!confirm('This will remove TTS voice output instructions from CLAUDE.md files in ALL your projects. This is useful if you want to stop using DonutCode.\n\nContinue?')) {
       return
     }
 

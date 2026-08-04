@@ -3,7 +3,7 @@
 // ============================================
 
 import type { HostConfig } from './types.js'
-import { STORAGE_KEY } from './constants.js'
+import { LEGACY_STORAGE_KEY, STORAGE_KEY } from './constants.js'
 
 /**
  * Generate a unique ID for hosts
@@ -46,8 +46,9 @@ export function getDeviceIdentity(): { deviceId: string; deviceName: string } {
  */
 export function loadHosts(): HostConfig[] {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!stored) return []
+    if (!localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, stored)
 
     const hosts = JSON.parse(stored) as HostConfig[]
 

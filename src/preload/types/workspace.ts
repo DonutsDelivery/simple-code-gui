@@ -1,3 +1,6 @@
+export type HarnessId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
+export type HarnessSelection = 'default' | HarnessId
+
 export interface ProjectCategory {
   id: string
   name: string
@@ -19,7 +22,9 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts' | 'tada'
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
   categoryId?: string
   order?: number
 }
@@ -27,10 +32,13 @@ export interface Project {
 export interface OpenTab {
   id: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   ptyId: string
-  backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
 }
 
 export interface SavedWorkspaceSession {

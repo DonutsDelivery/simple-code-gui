@@ -35,46 +35,29 @@ export class PtyApi {
     return list.ptys || []
   }
 
-  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
+  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId, agentSessionId?: string): Promise<string> {
     this.connection.setConnectionState('connecting')
 
-    // If we know the sessionId, see if a PTY for the same project+session is
-    // already running on the host and attach to it instead of spawning a
-    // parallel `--resume` process (which would branch the conversation —
-    // each fork writes to the backend's session file independently).
-    if (sessionId) {
-      try {
-        const list = await this.connection.fetchJson<{
-          ptys: Array<{ id: string; cwd: string; backend: string; sessionId?: string }>
-        }>('/api/pty/list', { method: 'GET' })
-        const match = list.ptys?.find(
-          p => p.cwd === cwd && p.sessionId === sessionId && (!backend || p.backend === backend)
-        )
-        if (match) {
-          console.log('[HttpBackend] Attaching to existing PTY:', match.id, 'for session:', sessionId)
-          this.attachedPtyIds.add(match.id)
-          this.wsManager.connectPtyStream(match.id)
-          return match.id
-        }
-      } catch (e) {
-        // List failed — fall through to spawn.  Don't block the user.
-        console.warn('[HttpBackend] /api/pty/list failed, falling back to spawn:', e)
-      }
-    }
-
-    const data = await this.connection.fetchJson<{ ptyId: string }>('/api/pty/spawn', {
+    // Attach/resume is one atomic server decision. A client-side list followed
+    // by spawn leaves a race where two frontends can both launch --resume.
+    const data = await this.connection.fetchJson<{
+      ptyId: string
+      agentSessionId: string
+      runtimeId: string
+      attached: boolean
+    }>('/api/pty/spawn', {
       method: 'POST',
       body: JSON.stringify({
         projectPath: cwd,
         sessionId,
+        agentSessionId: agentSessionId || sessionId,
         model,
         backend
       })
     })
 
-    // Connect WebSocket for this PTY's data stream
+    if (data.attached) this.attachedPtyIds.add(data.ptyId)
     this.wsManager.connectPtyStream(data.ptyId)
-
     return data.ptyId
   }
 

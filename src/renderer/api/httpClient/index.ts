@@ -9,15 +9,12 @@ import { HostConfig } from '../hostConfig.js'
 import { WebSocketManager } from './websocket-manager.js'
 import * as workspace from './api-workspace.js'
 import * as terminal from './api-terminal.js'
-import * as beads from './api-beads.js'
 import * as misc from './api-misc.js'
 import type {
   BackendId,
   Workspace,
   Settings,
   Session,
-  BeadsTask,
-  BeadsCloseResult,
   VoiceSettings
 } from './types.js'
 
@@ -175,71 +172,6 @@ export class HttpApiClient {
     return misc.grokCheck(this.config)
   }
 
-  // ===========================================================================
-  // Beads API
-  // ===========================================================================
-
-  beadsCheck(cwd: string): Promise<{ installed: boolean; initialized: boolean }> {
-    return beads.beadsCheck(this.config, cwd)
-  }
-
-  beadsInit(cwd: string): Promise<{ success: boolean; error?: string }> {
-    return beads.beadsInit(this.config, cwd)
-  }
-
-  beadsList(cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }> {
-    return beads.beadsList(this.config, cwd)
-  }
-
-  beadsShow(cwd: string, taskId: string): Promise<{ success: boolean; task?: BeadsTask; error?: string }> {
-    return beads.beadsShow(this.config, cwd, taskId)
-  }
-
-  beadsCreate(
-    cwd: string,
-    title: string,
-    description?: string,
-    priority?: number,
-    type?: string,
-    labels?: string
-  ): Promise<{ success: boolean; task?: BeadsTask; error?: string }> {
-    return beads.beadsCreate(this.config, cwd, title, description, priority, type, labels)
-  }
-
-  beadsComplete(cwd: string, taskId: string): Promise<{ success: boolean; result?: BeadsCloseResult; error?: string }> {
-    return beads.beadsComplete(this.config, cwd, taskId)
-  }
-
-  beadsDelete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
-    return beads.beadsDelete(this.config, cwd, taskId)
-  }
-
-  beadsStart(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }> {
-    return beads.beadsStart(this.config, cwd, taskId)
-  }
-
-  beadsUpdate(
-    cwd: string,
-    taskId: string,
-    status?: string,
-    title?: string,
-    description?: string,
-    priority?: number
-  ): Promise<{ success: boolean; error?: string }> {
-    return beads.beadsUpdate(this.config, cwd, taskId, status, title, description, priority)
-  }
-
-  beadsWatch(cwd: string): Promise<{ success: boolean; error?: string }> {
-    return misc.beadsWatch(cwd)
-  }
-
-  beadsUnwatch(cwd: string): Promise<{ success: boolean; error?: string }> {
-    return misc.beadsUnwatch(cwd)
-  }
-
-  onBeadsTasksChanged(callback: (data: { cwd: string }) => void): () => void {
-    return misc.onBeadsTasksChanged(callback)
-  }
 
   // ===========================================================================
   // Voice API
@@ -311,13 +243,6 @@ export class HttpApiClient {
 
 
 
-  beadsInstall(): Promise<{ success: boolean; error?: string }> {
-    return misc.beadsInstall()
-  }
-
-  beadsReady(cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }> {
-    return misc.beadsReady(cwd)
-  }
 
   windowMinimize(): void {
     misc.windowMinimize()

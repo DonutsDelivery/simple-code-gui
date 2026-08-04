@@ -28,6 +28,9 @@ import type {
   AgentSessionSignalEvent,
   AgentSessionSignalMessage
 } from '../../common/agent-session-signal'
+import { createServerProtocolDescriptor } from '../../common/server-protocol'
+import type { EnvironmentCommandRouter } from '../environment-command-router.js'
+import type { SessionRuntimeRegistry } from '../session-runtime-registry.js'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
 import {
   issueDeviceToken,
@@ -49,15 +52,15 @@ import {
 import {
   setupTerminalRoutes,
   setupWorkspaceRoutes,
-  setupBeadsRoutes,
   setupFilesRoutes,
   setupPtyRoutes,
-  setupTtsRoutes
+  setupTtsRoutes,
+  setupProtocolRoutes,
+  setupEnvironmentRoutes
 } from './routes/index'
 import {
   setupWebSocket,
   broadcastTerminalData as wsBroadcastTerminalData,
-  broadcastPtyData as wsBroadcastPtyData,
   broadcastPtyExit as wsBroadcastPtyExit
 } from './websocket-manager'
 import {
@@ -73,12 +76,19 @@ export class MobileServer {
   private wss: WebSocketServer | null = null
   private token: string
   private port: number
+  private host: string
+  private serverVersion: string
+  private serverId: string
+  private startupNonce?: string
   private terminalSubscriptions: Map<string, Set<WebSocket>> = new Map()
   private ptyStreams: Map<string, Set<WebSocket>> = new Map()
   private ptyDataBuffer: Map<string, string[]> = new Map()
 
   private ptyManager: any = null
+  private runtimeRegistry: SessionRuntimeRegistry | null = null
   private unsubscribeAgentSessionSignals: (() => void) | null = null
+  private unsubscribeEnvironmentEvents: (() => void) | null = null
+  private environmentRouter: EnvironmentCommandRouter | null = null
   private sessionStore: any = null
   private voiceManager: any = null
 
@@ -92,7 +102,11 @@ export class MobileServer {
   private certFingerprint: string = ''
 
   constructor(config: MobileServerConfig = {}) {
-    this.port = config.port || DEFAULT_PORT
+    this.port = config.port ?? DEFAULT_PORT
+    this.host = config.host || '0.0.0.0'
+    this.serverVersion = config.serverVersion || 'unknown'
+    this.serverId = config.serverId || getOrCreateFingerprint()
+    this.startupNonce = config.startupNonce
     this.token = loadOrCreateToken()
     this.rendererPath = getRendererPath()
     this.app = express()
@@ -114,7 +128,12 @@ export class MobileServer {
     // Health check (unauthenticated)
     this.app.get('/health', (req: Request, res: Response) => {
       log('Health check', { clientIp: getClientIp(req) })
-      res.json({ status: 'ok', version: '2.0.0' })
+      res.json({
+        status: 'ok',
+        version: this.serverVersion,
+        serverId: this.serverId,
+        ...(this.startupNonce ? { startupNonce: this.startupNonce } : {}),
+      })
     })
 
     // WebSocket test
@@ -181,17 +200,23 @@ export class MobileServer {
     })
 
     // Set up route modules
+    setupProtocolRoutes(this.app, () => createServerProtocolDescriptor(
+      this.serverVersion,
+      this.serverId,
+      process.platform as 'linux' | 'darwin' | 'win32'
+    ))
+
     setupTerminalRoutes(
       this.app,
       () => this.ptyManager,
+      () => this.runtimeRegistry,
       () => this.sessionStore,
       () => this.terminalSubscriptions,
       (ptyId, data) => this.broadcastTerminalData(ptyId, data)
     )
 
-    setupWorkspaceRoutes(this.app, () => this.sessionStore)
-
-    setupBeadsRoutes(this.app)
+    setupWorkspaceRoutes(this.app, () => this.sessionStore, () => this.environmentRouter)
+    setupEnvironmentRoutes(this.app, () => this.environmentRouter)
 
     setupFilesRoutes(
       this.app,
@@ -205,11 +230,10 @@ export class MobileServer {
     setupPtyRoutes(
       this.app,
       () => this.ptyManager,
+      () => this.runtimeRegistry,
       () => this.sessionStore,
       () => this.localPtys,
       () => this.ptyStreams,
-      () => this.ptyDataBuffer,
-      (ptyId, data) => this.broadcastPtyData(ptyId, data),
       (ptyId, code) => this.broadcastPtyExit(ptyId, code)
     )
 
@@ -222,13 +246,15 @@ export class MobileServer {
     this.wss = setupWebSocket(this.server, {
       getToken: () => this.token,
       getPtyManager: () => this.ptyManager,
+      getRuntimeRegistry: () => this.runtimeRegistry,
       getPort: () => this.port,
       getTerminalSubscriptions: () => this.terminalSubscriptions,
       getPtyStreams: () => this.ptyStreams,
       getPtyDataBuffer: () => this.ptyDataBuffer,
       getConnectedClients: () => this.connectedClients,
       getPendingFiles: () => this.pendingFiles,
-      getLocalPtys: () => this.localPtys
+      getLocalPtys: () => this.localPtys,
+      getEnvironmentSnapshot: () => this.environmentRouter?.getSnapshot() ?? null,
     })
   }
 
@@ -236,9 +262,6 @@ export class MobileServer {
     wsBroadcastTerminalData(ptyId, data, this.terminalSubscriptions)
   }
 
-  private broadcastPtyData(ptyId: string, data: string): void {
-    wsBroadcastPtyData(ptyId, data, this.ptyStreams, this.ptyDataBuffer)
-  }
 
   private broadcastPtyExit(ptyId: string, code: number): void {
     wsBroadcastPtyExit(ptyId, code, this.ptyStreams, this.terminalSubscriptions, this.ptyDataBuffer)
@@ -276,8 +299,23 @@ export class MobileServer {
     this.subscribeAgentSessionSignals()
   }
 
+  setRuntimeRegistry(registry: SessionRuntimeRegistry): void {
+    this.runtimeRegistry = registry
+  }
+
   setSessionStore(store: any): void {
     this.sessionStore = store
+  }
+
+  setEnvironmentRouter(router: EnvironmentCommandRouter): void {
+    this.unsubscribeEnvironmentEvents?.()
+    this.environmentRouter = router
+    this.unsubscribeEnvironmentEvents = router.onEvent((event) => {
+      const message = JSON.stringify({ type: 'environment-event', event })
+      for (const client of this.connectedClients) {
+        if (client.readyState === WebSocket.OPEN) client.send(message)
+      }
+    })
   }
 
   setVoiceManager(manager: any): void {
@@ -351,7 +389,7 @@ export class MobileServer {
     // - certFingerprint: SHA256 of server's TLS certificate (for pinning)
     // - secure: true means use HTTPS/WSS
     const qrPayload = {
-      type: 'claude-terminal',
+      type: 'donutcode',
       version: 3,
       host: primaryIp,
       hosts: allHosts,
@@ -366,7 +404,7 @@ export class MobileServer {
 
     const protocol = this.useTls ? 'https' : 'http'
     return {
-      url: `claude-terminal://${primaryIp}:${this.port}?token=${this.token}`,
+      url: `donutcode://${primaryIp}:${this.port}?token=${this.token}`,
       token: this.token,
       port: this.port,
       ips,
@@ -424,7 +462,9 @@ export class MobileServer {
       }, 2 * 60 * 1000)
 
       return new Promise((resolve, reject) => {
-        this.server!.listen(this.port, '0.0.0.0', () => {
+        this.server!.listen(this.port, this.host, () => {
+          const address = this.server?.address()
+          if (address && typeof address !== 'string') this.port = address.port
           const protocol = this.useTls ? 'HTTPS' : 'HTTP'
           log(`Started ${protocol} server on port ${this.port}`)
           log(`Token: ${this.token.slice(0, 8)}...`)
@@ -452,11 +492,22 @@ export class MobileServer {
     }
   }
 
-  stop(): void {
+  getEndpoint(): { host: string; port: number; secure: boolean } {
+    return { host: this.host, port: this.port, secure: this.useTls }
+  }
+
+  setHost(host: string): void {
+    if (this.isRunning()) throw new Error('Cannot change server host while running')
+    this.host = host
+  }
+
+  async stop(): Promise<void> {
     stopNonceCleanup()
 
     this.unsubscribeAgentSessionSignals?.()
     this.unsubscribeAgentSessionSignals = null
+    this.unsubscribeEnvironmentEvents?.()
+    this.unsubscribeEnvironmentEvents = null
 
     if (this.rateLimitCleanupInterval) {
       clearInterval(this.rateLimitCleanupInterval)
@@ -468,8 +519,9 @@ export class MobileServer {
       this.wss = null
     }
     if (this.server) {
-      this.server.close()
+      const server = this.server
       this.server = null
+      await new Promise<void>(resolve => server.close(() => resolve()))
     }
     log('Stopped')
   }

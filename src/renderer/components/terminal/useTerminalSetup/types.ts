@@ -12,7 +12,6 @@ export interface UseTerminalSetupOptions {
   onTTSChunk: (cleanChunk: string) => void
   onUserInput: (data: string) => void
   onSummaryChunk: (cleanChunk: string) => void
-  onAutoWorkMarker: (cleanChunk: string) => void
   prePopulateSpokenContent: (chunks: string[]) => void
   resetTTSState: () => void
   onPtyExit?: (code: number) => void

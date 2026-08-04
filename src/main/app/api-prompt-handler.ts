@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron'
 import { ApiServerManager, PromptResult } from '../api-server.js'
 import { SessionStore } from '../session-store.js'
-import { PtyManager } from '../pty-manager.js'
 import { API_DUPLICATE_WINDOW_MS, API_SESSION_TIMEOUT_MS } from '../../constants.js'
+import type { SessionRuntimeRegistry } from '../session-runtime-registry.js'
 
 export interface PendingApiPrompt {
   prompt: string
@@ -27,7 +27,7 @@ function cleanupStaleApiPrompts(now: number): void {
 export function setupApiPromptHandler(
   apiServerManager: ApiServerManager,
   sessionStore: SessionStore,
-  ptyManager: PtyManager,
+  runtimeRegistry: SessionRuntimeRegistry,
   ptyToProject: Map<string, string>,
   getMainWindow: () => BrowserWindow | null
 ): void {
@@ -53,8 +53,8 @@ export function setupApiPromptHandler(
     if (sessionMode === 'existing') {
       for (const [ptyId, path] of ptyToProject) {
         if (path === projectPath) {
-          ptyManager.writeUserInput(ptyId, prompt)
-          setTimeout(() => ptyManager.write(ptyId, '\r'), 300)
+          runtimeRegistry.writeInput(ptyId, prompt)
+          setTimeout(() => runtimeRegistry.writeInput(ptyId, '\r', true), 300)
           return { success: true, message: 'Prompt sent to existing terminal' }
         }
       }

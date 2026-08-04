@@ -102,6 +102,7 @@ export interface Project {
 export interface OpenTab {
   id: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   ptyId: string
@@ -150,29 +151,6 @@ export interface Session {
   slug: string
 }
 
-// =============================================================================
-// Beads Types
-// =============================================================================
-
-export interface BeadsTask {
-  id: string
-  title: string
-  status: string
-  priority?: number
-  created?: string
-  blockers?: string[]
-  description?: string
-  issue_type?: string
-  created_at?: string
-  updated_at?: string
-  dependency_count?: number
-  dependent_count?: number
-}
-
-export interface BeadsCloseResult {
-  taskId: string
-  status: string
-}
 
 // =============================================================================
 // API Response Types
@@ -244,14 +222,6 @@ export interface ApiClient {
   // Backend switching (not available via HTTP)
   setPtyBackend?(id: string, backend: BackendId): Promise<void>
 
-  // Beads
-  beadsCheck(cwd: string): Promise<{ installed: boolean; initialized: boolean }>
-  beadsList(cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }>
-  beadsCreate(cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string): Promise<{ success: boolean; task?: BeadsTask; error?: string }>
-  beadsComplete(cwd: string, taskId: string): Promise<{ success: boolean; result?: BeadsCloseResult; error?: string }>
-  beadsDelete(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
-  beadsStart(cwd: string, taskId: string): Promise<{ success: boolean; error?: string }>
-  beadsUpdate(cwd: string, taskId: string, status?: string, title?: string, description?: string, priority?: number): Promise<{ success: boolean; error?: string }>
 
 
   // CLI Status

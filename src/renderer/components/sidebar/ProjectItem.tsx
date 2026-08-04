@@ -3,6 +3,7 @@ import { Project } from '../../stores/workspace.js'
 import { ProjectIcon } from '../ProjectIcon.js'
 import { ClaudeSession, DropTarget } from './types.js'
 import { formatDate } from './utils.js'
+import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 
 interface ProjectItemProps {
   project: Project
@@ -13,11 +14,10 @@ interface ProjectItemProps {
   isEditing: boolean
   editingName: string
   sessions: ClaudeSession[]
-  taskCounts?: { open: number; inProgress: number }
   dropTarget: DropTarget | null
   editInputRef: React.RefObject<HTMLInputElement | null>
   onToggleExpand: (e: React.MouseEvent) => void
-  onOpenSession: (sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => void
+  onOpenSession: (options?: OpenSessionOptions) => void
   onRunExecutable: () => void
   onCloseProjectTabs: () => void
   onContextMenu: (e: React.MouseEvent) => void
@@ -40,7 +40,6 @@ export const ProjectItem = React.memo(function ProjectItem({
   isEditing,
   editingName,
   sessions,
-  taskCounts,
   dropTarget,
   editInputRef,
   onToggleExpand,
@@ -59,7 +58,6 @@ export const ProjectItem = React.memo(function ProjectItem({
 }: ProjectItemProps) {
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
-  const taskTotal = taskCounts ? taskCounts.open + taskCounts.inProgress : 0
 
   return (
     <div>
@@ -108,14 +106,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             </div>
           )}
         </div>
-        {taskCounts && taskTotal > 0 && (
-          <div className="project-badges" title={`${taskTotal} open tasks`}>
-            {taskCounts.inProgress > 0 && (
-              <span className="project-badge active">{taskCounts.inProgress}</span>
-            )}
-            <span className="project-badge">{taskTotal}</span>
-          </div>
-        )}
+
         {project.executable && (
           <button
             className="start-btn"
@@ -150,7 +141,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             className="session-item new-session"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenSession(undefined, undefined, true)
+              onOpenSession({ forceNewSession: true })
             }}
           >
             <span>+</span>
@@ -162,7 +153,11 @@ export const ProjectItem = React.memo(function ProjectItem({
               className={`session-item ${index === 0 ? 'most-recent' : ''}`}
               onClick={(e) => {
                 e.stopPropagation()
-                onOpenSession(session.sessionId, session.slug, undefined, session.cwd)
+                onOpenSession({
+                  sessionId: session.sessionId,
+                  slug: session.slug,
+                  resumeCwd: session.cwd,
+                })
               }}
               title={`Session ID: ${session.sessionId}`}
             >

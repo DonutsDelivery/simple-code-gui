@@ -7,7 +7,6 @@ import {
   ENABLE_WEBGL,
   TTS_GUILLEMET_REGEX,
   SUMMARY_MARKER_DISPLAY_REGEX,
-  AUTOWORK_MARKER_REGEX,
   TERMINAL_CONFIG,
   DEFAULT_FONT_SIZE,
   FONT_SIZE_STORAGE_KEY,
@@ -647,7 +646,6 @@ export function handlePtyData(
   ptyId: string,
   onTTSChunk: (chunk: string) => void,
   onSummaryChunk: (chunk: string) => void,
-  onAutoWorkMarker: (chunk: string) => void,
   state: InitState
 ): void {
 
@@ -675,14 +673,10 @@ export function handlePtyData(
   // Strip OSC 52 sequences from display output
   displayData = displayData.replace(osc52Re, '')
 
-  // Process TTS, summary, and autowork
+  // Process TTS and summary markers.
   const cleanChunk = stripAnsi(data)
   onTTSChunk(cleanChunk)
   onSummaryChunk(cleanChunk)
-  onAutoWorkMarker(cleanChunk)
-
-  // Strip autowork marker from display
-  displayData = displayData.replace(AUTOWORK_MARKER_REGEX, '')
 
   // Queue writes if terminal not ready yet, or while a history replay is
   // being restored (keeps replay-then-live ordering intact)

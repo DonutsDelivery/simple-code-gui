@@ -1,20 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join } from 'path'
 
-// Mock electron app module before importing session-store
-vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn().mockReturnValue('/mock/userData')
-  }
+vi.mock('../runtime-paths', () => ({
+  getRuntimeDataDir: vi.fn().mockReturnValue('/mock/userData'),
 }))
 
 // Mock fs module
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn()
-}))
+vi.mock('fs', () => {
+  const mockedFs = {
+    existsSync: vi.fn(),
+    mkdirSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    renameSync: vi.fn(),
+    statSync: vi.fn(),
+    unlinkSync: vi.fn(),
+    readdirSync: vi.fn(),
+    lstatSync: vi.fn(),
+    readlinkSync: vi.fn(),
+    symlinkSync: vi.fn(),
+    rmSync: vi.fn(),
+  }
+  return { ...mockedFs, default: mockedFs }
+})
 
 import { SessionStore, Workspace, Settings, WindowBounds } from '../session-store'
 import * as fs from 'fs'
@@ -22,9 +30,21 @@ import * as fs from 'fs'
 describe('SessionStore', () => {
   const mockConfigDir = '/mock/userData/config'
   const mockConfigPath = join(mockConfigDir, 'workspace.json')
+  const writtenFiles = new Map<string, string | Buffer>()
 
   beforeEach(() => {
     vi.clearAllMocks()
+    writtenFiles.clear()
+    vi.mocked(fs.statSync).mockReturnValue({ size: 1 } as fs.Stats)
+    vi.mocked(fs.readdirSync).mockReturnValue([])
+    vi.mocked(fs.writeFileSync).mockImplementation((path, data) => {
+      writtenFiles.set(String(path), data as string | Buffer)
+    })
+    vi.mocked(fs.readFileSync).mockImplementation((path) => {
+      return writtenFiles.get(String(path)) ?? JSON.stringify({
+        workspace: { projects: [], openTabs: [], activeTabId: null }
+      })
+    })
   })
 
   afterEach(() => {
@@ -163,9 +183,10 @@ describe('SessionStore', () => {
       store.saveWorkspace(newWorkspace)
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        mockConfigPath,
+        `${mockConfigPath}.tmp`,
         expect.stringContaining('"projects"')
       )
+      expect(fs.renameSync).toHaveBeenCalledWith(`${mockConfigPath}.tmp`, mockConfigPath)
     })
 
     it('should handle write errors gracefully', () => {
@@ -231,9 +252,11 @@ describe('SessionStore', () => {
       const store = new SessionStore()
       const settings = store.getSettings()
 
-      expect(settings).toEqual({
+      expect(settings).toMatchObject({
         defaultProjectDir: '',
-        theme: 'default'
+        theme: 'default',
+        defaultHarnessId: 'default',
+        notificationSoundsEnabled: true,
       })
     })
 
@@ -254,7 +277,7 @@ describe('SessionStore', () => {
       store.saveSettings(settings)
 
       expect(fs.writeFileSync).toHaveBeenCalled()
-      expect(store.getSettings()).toEqual(settings)
+      expect(store.getSettings()).toMatchObject(settings)
     })
   })
 
@@ -299,7 +322,7 @@ describe('SessionStore', () => {
       const store = new SessionStore()
       const workspace = store.getWorkspace()
 
-      expect(workspace).toEqual(fullWorkspace)
+      expect(workspace).toMatchObject(fullWorkspace)
     })
 
     it('should handle partial data in workspace.json', () => {

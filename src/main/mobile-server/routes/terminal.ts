@@ -10,17 +10,21 @@ import type { AIBackend } from '../../ipc/instruction-files'
 import { resolveMobileSpawnSettings } from './spawn-settings'
 import { validateWithinProjectRoots } from '../../mobile-security'
 import { getProjectRoots } from '../utils'
+import type { SessionRuntimeRegistry } from '../../session-runtime-registry'
 
 export function setupTerminalRoutes(
   app: Express,
   getPtyManager: () => any,
+  getRuntimeRegistry: () => SessionRuntimeRegistry | null,
   getSessionStore: () => SessionStore | null,
   getTerminalSubscriptions: () => Map<string, Set<WebSocket>>,
   broadcastTerminalData: (ptyId: string, data: string) => void
 ): void {
+  const dataSubscriptions = new Map<string, () => void>()
+
   app.post('/api/terminal/create', async (req: Request, res: Response) => {
     try {
-      const { cwd, projectPath, sessionId, model, backend } = req.body
+      const { cwd, projectPath, agentSessionId, sessionId, model, backend } = req.body
       const spawnCwd = projectPath || cwd
       if (!spawnCwd || typeof spawnCwd !== 'string') {
         return res.status(400).json({ error: 'projectPath is required' })
@@ -51,21 +55,42 @@ export function setupTerminalRoutes(
       )
 
       installAgentSessionSignalInstructions(safeSpawnCwd, spawnSettings.backend as AIBackend)
-      const ptyId = await ptyManager.spawn(
-        safeSpawnCwd,
-        sessionId,
-        spawnSettings.autoAcceptTools,
-        spawnSettings.permissionMode,
-        spawnSettings.model,
-        spawnSettings.backend
-      )
-
-      // Set up data forwarding to WebSocket subscribers
-      ptyManager.onData(ptyId, (data: string) => {
-        broadcastTerminalData(ptyId, data)
+      const runtimeRegistry = getRuntimeRegistry()
+      if (!runtimeRegistry) {
+        return res.status(503).json({ error: 'Runtime authority is not available' })
+      }
+      const runtime = await runtimeRegistry.ensureRuntime({
+        agentSessionId: agentSessionId || sessionId,
+        nativeSessionId: sessionId,
+        projectId: safeSpawnCwd,
+        harnessId: spawnSettings.backend,
+        autoAcceptTools: spawnSettings.autoAcceptTools,
+        permissionMode: spawnSettings.permissionMode,
+        model: spawnSettings.model,
       })
+      const ptyId = runtime.ptyId
 
-      res.json({ success: true, ptyId })
+      if (!dataSubscriptions.has(ptyId)) {
+        const disposeData = ptyManager.addDataListener(ptyId, (data: string) => {
+          broadcastTerminalData(ptyId, data)
+        })
+        const disposeExit = ptyManager.addExitListener(ptyId, () => {
+          disposeData()
+          disposeExit()
+          dataSubscriptions.delete(ptyId)
+        })
+        dataSubscriptions.set(ptyId, () => {
+          disposeData()
+          disposeExit()
+        })
+      }
+
+      res.json({
+        success: true,
+        ptyId,
+        runtimeId: runtime.runtimeId,
+        agentSessionId: runtime.agentSessionId,
+      })
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' })
     }
@@ -79,9 +104,9 @@ export function setupTerminalRoutes(
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
-      if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(ptyId, data)
-      else ptyManager.write(ptyId, data)
-      res.json({ success: true })
+      const acknowledgement = getRuntimeRegistry()?.writeInput(ptyId, data)
+      if (!acknowledgement) return res.status(503).json({ error: 'Runtime authority is not available' })
+      res.json({ success: true, acknowledgement })
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' })
     }
@@ -95,21 +120,27 @@ export function setupTerminalRoutes(
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
-      ptyManager.resize(ptyId, cols, rows)
+      const runtimeRegistry = getRuntimeRegistry()
+      if (!runtimeRegistry) return res.status(503).json({ error: 'Runtime authority is not available' })
+      runtimeRegistry.resize(ptyId, cols, rows)
       res.json({ success: true })
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' })
     }
   })
 
-  app.delete('/api/terminal/:ptyId', (req: Request, res: Response) => {
+  app.delete('/api/terminal/:ptyId', async (req: Request, res: Response) => {
     try {
       const { ptyId } = req.params
       const ptyManager = getPtyManager()
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
-      ptyManager.kill(ptyId)
+      const runtimeRegistry = getRuntimeRegistry()
+      if (!runtimeRegistry) return res.status(503).json({ error: 'Runtime authority is not available' })
+      dataSubscriptions.get(ptyId)?.()
+      dataSubscriptions.delete(ptyId)
+      await runtimeRegistry.stopRuntimeByPty(ptyId)
       getTerminalSubscriptions().delete(ptyId)
       res.json({ success: true })
     } catch (error) {

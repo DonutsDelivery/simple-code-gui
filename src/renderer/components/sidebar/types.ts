@@ -1,4 +1,5 @@
 import { Project } from '../../stores/workspace.js'
+import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 
 export interface ClaudeSession {
   sessionId: string
@@ -9,11 +10,12 @@ export interface ClaudeSession {
 }
 
 export interface OpenTab {
+  serverId: string
   id: string
   projectPath: string
   sessionId?: string
   ptyId?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
 }
 
 export interface SidebarProps {
@@ -24,7 +26,7 @@ export interface SidebarProps {
   onAddProject: () => void
   onAddProjectsFromParent: () => void
   onRemoveProject: (path: string) => void
-  onOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => void
+  onOpenSession: (projectPath: string, options?: OpenSessionOptions) => void
   onSwitchToTab: (tabId: string) => void
   onOpenSettings: () => void
   onOpenMakeProject: () => void

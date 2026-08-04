@@ -36,6 +36,10 @@ export default defineConfig({
     build: {
       outDir: 'dist/main',
       rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'server-cli': resolve(__dirname, 'src/main/server-cli.ts'),
+        },
         external: ['node-pty', 'better-sqlite3']
       }
     }

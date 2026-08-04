@@ -228,15 +228,15 @@ export function ProjectSettingsModal({
             </div>
           </div>
 
-          {/* Backend Settings Section */}
+          {/* Harness Settings Section */}
           <div className="settings-section">
-            <h3>Backend Settings</h3>
-            <p className="form-hint">Override the global default backend for this project.</p>
+            <h3>Harness Settings</h3>
+            <p className="form-hint">Override the global default harness for this project.</p>
 
             <div className="form-group">
               <div className="permission-mode-options compact">
                 {[
-                  { value: 'default', label: 'Use global default', desc: 'Uses the backend selected in the main settings.' },
+                  { value: 'default', label: 'Use global default', desc: 'Uses the harness selected in the main settings.' },
                   { value: 'claude', label: 'Claude', desc: 'Forces this project to use Claude.' },
                   { value: 'gemini', label: 'Gemini', desc: 'Forces this project to use Gemini.' },
                   { value: 'codex', label: 'Codex', desc: 'Forces this project to use Codex.' },

@@ -40,13 +40,14 @@ describe('spawnSessionTabs', () => {
 
     const result = await spawnSessionTabs(
       api,
+      'test-server',
       [savedTab()],
       [{ path: projectPath, backend: 'codex' }],
       null,
       (tab) => addedTabs.push(tab)
     )
 
-    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex')
+    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex', 'ses_stale')
     expect(result.restoredTabs[0]).toMatchObject({ sessionId: 'most-recent', projectPath: worktreePath })
     expect(addedTabs[0].sessionId).toBe('most-recent')
   })
@@ -58,13 +59,14 @@ describe('spawnSessionTabs', () => {
 
     const result = await spawnSessionTabs(
       api,
+      'test-server',
       [savedTab({ sessionId: undefined })],
       [{ path: projectPath, backend: 'codex' }],
       null,
       () => {}
     )
 
-    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex')
+    expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex', 'saved-pty')
     expect(result.restoredTabs[0]).toMatchObject({ sessionId: 'most-recent', projectPath: worktreePath })
   })
 
@@ -74,13 +76,14 @@ describe('spawnSessionTabs', () => {
 
     const result = await spawnSessionTabs(
       api,
+      'test-server',
       [savedTab()],
       [{ path: projectPath, backend: 'codex' }],
       null,
       (tab) => addedTabs.push(tab)
     )
 
-    expect(api.spawnPty).toHaveBeenCalledWith(projectPath, '__codex_resume_last__', undefined, 'codex')
+    expect(api.spawnPty).toHaveBeenCalledWith(projectPath, '__codex_resume_last__', undefined, 'codex', 'ses_stale')
     expect(result.restoredTabs[0].sessionId).toBeUndefined()
     expect(addedTabs[0].sessionId).toBeUndefined()
   })
@@ -96,6 +99,7 @@ describe('spawnSessionTabs', () => {
 
     const result = await spawnSessionTabs(
       api,
+      'test-server',
       [savedTab()],
       [{ path: projectPath, backend: 'codex' }],
       null,

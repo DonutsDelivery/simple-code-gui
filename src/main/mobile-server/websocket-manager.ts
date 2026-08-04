@@ -7,15 +7,13 @@ import { Server } from 'http'
 import { isDeviceTokenValid } from './device-registry'
 import { log, tokensEqual } from './utils'
 import { PendingFile, LocalPty } from './types'
+import type { SessionRuntimeRegistry } from '../session-runtime-registry'
+import type { EnvironmentSnapshot } from '../../common/environment-protocol'
 
 // L3: ceiling on simultaneous WebSocket connections (main + PTY streams) so a
 // client can't exhaust sockets/file descriptors by opening connections in a loop.
 const MAX_WS_CONNECTIONS = 64
 
-function writeUserInput(ptyManager: any, ptyId: string, data: string): void {
-  if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(ptyId, data)
-  else ptyManager.write(ptyId, data)
-}
 
 function totalWsConnections(deps: WebSocketManagerDeps): number {
   let ptyStreamSockets = 0
@@ -26,12 +24,14 @@ function totalWsConnections(deps: WebSocketManagerDeps): number {
 export interface WebSocketManagerDeps {
   getToken: () => string
   getPtyManager: () => any
+  getRuntimeRegistry?: () => SessionRuntimeRegistry | null
   getPort: () => number
   getTerminalSubscriptions: () => Map<string, Set<WebSocket>>
   getPtyStreams: () => Map<string, Set<WebSocket>>
   getPtyDataBuffer: () => Map<string, string[]>
   getConnectedClients: () => Set<WebSocket>
   getPendingFiles: () => Map<string, PendingFile>
+  getEnvironmentSnapshot?: () => EnvironmentSnapshot<unknown> | null
   // Optional: PTYs spawned by the mobile-server itself (vs. attached-to
   // desktop-owned PTYs).  Used to gate phone-driven resize.
   getLocalPtys?: () => Map<string, LocalPty>
@@ -134,6 +134,28 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
     // Send welcome message
     ws.send(JSON.stringify({ type: 'connected', timestamp: Date.now() }))
 
+    // A reconnect must trigger immediate cursor reconciliation even when no
+    // further mutation occurs after the socket opens.
+    const snapshot = deps.getEnvironmentSnapshot?.()
+    if (snapshot) {
+      ws.send(JSON.stringify({
+        type: 'environment-event',
+        event: {
+          serverId: snapshot.serverId,
+          revision: snapshot.revision,
+          eventId: `${snapshot.serverId}:snapshot:${snapshot.revision}`,
+          occurredAt: Date.now(),
+          event: {
+            type: 'environment-snapshot',
+            clientId: 'server',
+            commandId: `snapshot-${snapshot.revision}`,
+            result: null,
+            snapshot,
+          },
+        },
+      }))
+    }
+
     // Send any pending files to new client
     sendPendingFilesToClient(ws, deps.getPendingFiles())
   })
@@ -179,7 +201,12 @@ function handlePtyStreamUpgrade(
     // subscriber was connected.
     const replayBytes = ptyManager.getReplayBytes ? ptyManager.getReplayBytes(ptyId) : null
     if (replayBytes && replayBytes.length > 0) {
-      ws.send(JSON.stringify({ type: 'data', data: replayBytes }))
+      ws.send(JSON.stringify({
+        type: 'data',
+        data: replayBytes,
+        sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+        snapshot: true,
+      }))
     }
     // Also flush any legacy buffered data (covers PTYs spawned before the
     // pty-manager replay buffer was added or any other edge case).
@@ -191,7 +218,11 @@ function handlePtyStreamUpgrade(
     const disposeData = ptyManager.addDataListener
       ? ptyManager.addDataListener(ptyId, (data: string) => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'data', data }))
+            ws.send(JSON.stringify({
+              type: 'data',
+              data,
+              sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+            }))
           }
         })
       : (() => {})
@@ -204,12 +235,6 @@ function handlePtyStreamUpgrade(
         })
       : (() => {})
 
-    // Resize gating: only honor phone-driven resize if this PTY was
-    // spawned by the mobile server.  A desktop-owned PTY is sized to the
-    // desktop's xterm; mutating its dimensions from the phone would
-    // garble the desktop display and trigger Ink-backend re-render storms.
-    const localPtys = deps.getLocalPtys ? deps.getLocalPtys() : null
-    const isMobileOwned = (): boolean => !!(localPtys && localPtys.has(ptyId))
 
     ws.on('message', (message: Buffer) => {
       try {
@@ -218,13 +243,20 @@ function handlePtyStreamUpgrade(
         switch (msg.type) {
           case 'input':
             if (msg.data && ptyManager) {
-              writeUserInput(ptyManager, ptyId, msg.data)
+              const registry = deps.getRuntimeRegistry?.()
+              if (!registry) throw new Error('Runtime authority is not available')
+              const acknowledgement = registry.writeInput(ptyId, msg.data)
+              if (acknowledgement && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'input-ack', ...acknowledgement }))
+              }
             }
             break
 
           case 'resize':
-            if (msg.cols && msg.rows && ptyManager && isMobileOwned()) {
-              ptyManager.resize(ptyId, msg.cols, msg.rows)
+            if (msg.cols && msg.rows && ptyManager) {
+              const registry = deps.getRuntimeRegistry?.()
+              if (!registry) throw new Error('Runtime authority is not available')
+              registry.resize(ptyId, msg.cols, msg.rows)
             }
             break
 
@@ -282,13 +314,18 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
 
     case 'write':
       if (msg.ptyId && msg.data && ptyManager) {
-        writeUserInput(ptyManager, msg.ptyId, msg.data)
+        const registry = deps.getRuntimeRegistry?.()
+        if (!registry) throw new Error('Runtime authority is not available')
+        const acknowledgement = registry.writeInput(msg.ptyId, msg.data)
+        ws.send(JSON.stringify({ type: 'input-ack', ...acknowledgement }))
       }
       break
 
     case 'resize':
       if (msg.ptyId && msg.cols && msg.rows && ptyManager) {
-        ptyManager.resize(msg.ptyId, msg.cols, msg.rows)
+        const registry = deps.getRuntimeRegistry?.()
+        if (!registry) throw new Error('Runtime authority is not available')
+        registry.resize(msg.ptyId, msg.cols, msg.rows)
       }
       break
 

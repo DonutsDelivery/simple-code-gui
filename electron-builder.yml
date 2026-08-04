@@ -1,5 +1,5 @@
 appId: com.simple-code-gui.app
-productName: Simple Code GUI
+productName: DonutCode
 directories:
   buildResources: resources
   output: dist-build
@@ -22,24 +22,24 @@ linux:
     - rpm
   category: Development
   icon: resources/icon.png
-  executableName: simple-code-gui
+  executableName: donutcode
   desktop:
-    StartupWMClass: simple-code-gui
-  synopsis: Multi-backend AI coding assistant GUI
-  description: Desktop app for managing multiple AI coding assistant sessions across projects
+    StartupWMClass: donutcode
+  synopsis: Distributed AI development workspace
+  description: DonutCode manages AI coding sessions across projects and execution servers
 
 appImage:
-  artifactName: Simple-Code-GUI-${version}.${ext}
+  artifactName: DonutCode-${version}.${ext}
 
 deb:
-  artifactName: Simple-Code-GUI-${version}.${ext}
+  artifactName: DonutCode-${version}.${ext}
   depends:
     - libnotify4
     - libxtst6
     - libnss3
 
 rpm:
-  artifactName: Simple-Code-GUI-${version}.${ext}
+  artifactName: DonutCode-${version}.${ext}
 
 mac:
   target:
@@ -47,7 +47,7 @@ mac:
     - zip
   category: public.app-category.developer-tools
   icon: resources/icon.png
-  artifactName: Simple-Code-GUI-${version}-${arch}.${ext}
+  artifactName: DonutCode-${version}-${arch}.${ext}
 
 win:
   target:
@@ -55,22 +55,22 @@ win:
     - portable
     - appx
   icon: resources/icon.ico
-  artifactName: Simple-Code-GUI-${version}-${arch}.${ext}
+  artifactName: DonutCode-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: Simple-Code-GUI-Setup-${version}.${ext}
+  artifactName: DonutCode-Setup-${version}.${ext}
 
 portable:
-  artifactName: Simple-Code-GUI-Portable-${version}.${ext}
+  artifactName: DonutCode-Portable-${version}.${ext}
 
 appx:
   applicationId: SimpleCodeGUI
-  displayName: Simple Claude GUI
+  displayName: DonutCode
   identityName: SimpleCodeGUI
   publisher: CN=DonutsDelivery
   publisherDisplayName: DonutsDelivery
   languages:
     - en-US
-  artifactName: Simple-Code-GUI-Store-${version}.${ext}
+  artifactName: DonutCode-Store-${version}.${ext}

@@ -4,13 +4,35 @@ import { readdirSync, statSync } from 'fs'
 import { SessionStore } from '../../session-store.js'
 import { getMetaProjectsPath } from '../../meta-project-sync.js'
 import { discoverSessions } from '../../session-discovery.js'
+import { randomUUID } from 'crypto'
+import type { EnvironmentCommandRouter } from '../../environment-command-router.js'
 
 export function registerWorkspaceHandlers(
   sessionStore: SessionStore,
+  environmentRouter: EnvironmentCommandRouter,
   getMainWindow: () => BrowserWindow | null
 ): void {
-  ipcMain.handle('workspace:get', () => sessionStore.getWorkspace())
-  ipcMain.handle('workspace:save', (_, workspace) => sessionStore.saveWorkspace(workspace))
+  ipcMain.handle('workspace:get', () => environmentRouter.getSnapshot().workspace)
+  ipcMain.handle('workspace:save', (_, workspace) => {
+    const snapshot = environmentRouter.getSnapshot()
+    return environmentRouter.execute({
+      clientId: 'legacy-electron-renderer',
+      commandId: randomUUID(),
+      serverId: snapshot.serverId,
+      expectedRevision: snapshot.revision,
+      command: { type: 'replace-workspace', workspace },
+    })
+  })
+  ipcMain.handle('environment:getSnapshot', () => environmentRouter.getSnapshot())
+  ipcMain.handle('environment:getEvents', (_, afterRevision: number) => environmentRouter.getEventsAfter(afterRevision))
+  ipcMain.handle('environment:executeCommand', (_, command) => environmentRouter.execute(command))
+  environmentRouter.onEvent(event => {
+    try {
+      getMainWindow()?.webContents.send('environment:event', event)
+    } catch {
+      // Window may be closing; authority remains alive in the main process.
+    }
+  })
   ipcMain.handle('workspace:getMetaProjectsPath', () => getMetaProjectsPath())
   ipcMain.handle('workspace:getCategoryMetaPath', (_, categoryName: string) => {
     const basePath = getMetaProjectsPath()

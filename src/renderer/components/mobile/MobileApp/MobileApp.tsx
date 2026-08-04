@@ -111,7 +111,7 @@ export function MobileApp(): React.ReactElement {
     }
   }, []) // Only on mount
 
-  // Listen for deep links (claude-terminal://...) - only on native
+  // Listen for DonutCode and legacy deep links - only on native
   useEffect(() => {
     if (!CapacitorApp) return // Skip on web
 
@@ -249,7 +249,7 @@ export function MobileApp(): React.ReactElement {
       <div className="empty-state">
         <div className="mobile-logo">\u25C7</div>
         <h2>Mobile App</h2>
-        <p>Connect to your desktop host to start using Claude Terminal.</p>
+        <p>Connect to your server to start using DonutCode.</p>
         {(scanError || error) && <p className="error-message">{scanError || error}</p>}
         <button className="mobile-btn" onClick={startScan}>
           Scan QR Code

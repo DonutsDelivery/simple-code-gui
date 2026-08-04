@@ -1,3 +1,6 @@
+export type HarnessId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
+export type HarnessSelection = 'default' | HarnessId
+
 export interface ThemeCustomization {
   accentColor: string | null
   backgroundColor: string | null
@@ -28,7 +31,9 @@ export interface Settings {
   notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  defaultHarnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
   globalInstructionInjection?: string
   // Headroom context-compression proxy
   headroomEnabled?: boolean

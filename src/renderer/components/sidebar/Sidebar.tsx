@@ -50,7 +50,6 @@ export function Sidebar({
   // Initialize effects
   useSidebarEffects({
     state,
-    projects,
     isMobile,
     isMobileOpen,
     onMobileClose,
@@ -91,12 +90,11 @@ export function Sidebar({
         isEditing={state.editingProject?.path === project.path}
         editingName={state.editingProject?.path === project.path ? state.editingProject.name : ''}
         sessions={state.sessions[project.path] || []}
-        taskCounts={state.taskCounts[project.path]}
         dropTarget={state.dropTarget}
         editInputRef={state.editInputRef}
         onToggleExpand={(e) => callbacks.handleProjectToggleExpand(e, project.path)}
-        onOpenSession={(sessionId, slug, isNewSession, resumeCwd) =>
-          callbacks.handleProjectOpenSession(project.path, sessionId, slug, isNewSession, resumeCwd)
+        onOpenSession={(options) =>
+          callbacks.handleProjectOpenSession(project.path, options)
         }
         onRunExecutable={() => callbacks.handleProjectRunExecutable(project.path)}
         onCloseProjectTabs={() => callbacks.handleProjectCloseProjectTabs(project.path)}
@@ -120,7 +118,6 @@ export function Sidebar({
     openTabs,
     activeTabId,
     focusedTabId: lastFocusedTabId ?? null,
-    onOpenSession,
     onRemoveProject,
     onUpdateProject,
     onAddProject,

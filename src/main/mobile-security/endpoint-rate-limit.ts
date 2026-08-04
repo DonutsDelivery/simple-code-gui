@@ -16,10 +16,6 @@ const ENDPOINT_RATE_LIMITS: Record<string, number> = {
   'POST:/api/pty/spawn': 10,
   'POST:/api/pty/write': 120, // Higher limit for typing
   'POST:/api/tts/speak': 30,
-  // Beads operations
-  'POST:/projects/beads': 30,
-  'PATCH:/projects/beads': 30,
-  'DELETE:/projects/beads': 20,
   // Read operations have higher limits
   'GET:/api': 60,
   'GET:/projects': 60,

@@ -29,6 +29,7 @@ function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileN
 }
 
 interface UseApiListenersOptions {
+  serverId: string
   api: Api
   projects: Project[]
   settings: AppSettings | null
@@ -41,6 +42,7 @@ interface UseApiListenersOptions {
 }
 
 export function useApiListeners({
+  serverId,
   api,
   projects,
   settings,
@@ -59,7 +61,7 @@ export function useApiListeners({
       const title = `${projectPath.split(/[/\\]/).pop() || projectPath} - API${modelLabel}${autoClose ? ' (auto-close)' : ''}`
 
       // Get project and determine effective backend
-      const project = projects.find((p) => p.path === projectPath)
+      const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
 
       const effectiveBackend = (project?.backend && project.backend !== 'default'
         ? project.backend
@@ -73,8 +75,10 @@ export function useApiListeners({
 
         const ptyId = await api.spawnPty(projectPath, undefined, model, effectiveBackend)
         addTab({
+          serverId,
           id: ptyId,
           projectPath,
+          agentSessionId: ptyId,
           title,
           ptyId,
           backend: effectiveBackend
@@ -89,8 +93,12 @@ export function useApiListeners({
 
   // Listen for orchestrator-created sessions (MCP create_session tool)
   useEffect(() => {
+    const protocol = api.getServerProtocol?.()
+    if (protocol && !protocol.capabilities.orchestratorSessionEvents) {
+      return
+    }
     const unsubscribe = api.onOrchestratorSessionCreated(({ ptyId, projectPath, backend, workspaceId, tileId, placement }) => {
-      const alreadyOpen = openTabs.some(t => t.id === ptyId)
+      const alreadyOpen = openTabs.some(t => t.serverId === serverId && t.id === ptyId)
       if (alreadyOpen) return
 
       // Switch workspace if requested and different from active
@@ -105,6 +113,7 @@ export function useApiListeners({
       const title = `${projectName} - Orchestrator`
 
       addTab({
+        serverId,
         id: ptyId,
         projectPath,
         title,
@@ -152,7 +161,7 @@ export function useApiListeners({
     const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
       console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
       // Find the tab with the old ID
-      const tab = useWorkspaceStore.getState().openTabs.find((t) => t.id === oldId)
+      const tab = useWorkspaceStore.getState().openTabs.find((t) => t.serverId === serverId && t.id === oldId)
       if (tab) {
         // Update the tab with the new ID and backend
         updateTab(oldId, { id: newId, ptyId: newId, backend, sessionId })

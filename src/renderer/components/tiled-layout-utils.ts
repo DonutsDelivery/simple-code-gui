@@ -9,11 +9,12 @@ export interface TileLayout {
 }
 
 export interface OpenTab {
+  serverId: string
   id: string
   projectPath: string
   sessionId?: string
   title: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
 }
 
 export type DropZoneType =

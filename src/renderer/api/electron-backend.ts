@@ -23,6 +23,9 @@ import {
 } from './types'
 import type { BackendId } from './types'
 import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
+import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResult, EnvironmentSnapshot } from '../../common/environment-protocol.js'
+import type { CommandEnvelope, EventEnvelope } from '../../common/server-protocol.js'
+import type { EnvironmentCommand } from '../../main/environment-command-router.js'
 
 /**
  * Type declaration for the global electronAPI
@@ -32,7 +35,7 @@ declare global {
     electronAPI?: {
       // PTY Management
       listPtys: () => Promise<PtySession[]>
-      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
+      spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId, agentSessionId?: string) => Promise<string>
       killPty: (id: string) => void
       writePty: (id: string, data: string) => void
       resizePty: (id: string, cols: number, rows: number) => void
@@ -52,6 +55,10 @@ declare global {
       // Workspace Management
       getWorkspace: () => Promise<Workspace>
       saveWorkspace: (workspace: Workspace) => Promise<void>
+      getEnvironmentSnapshot: () => Promise<EnvironmentSnapshot<Workspace>>
+      getEnvironmentEvents: (afterRevision: number) => Promise<EnvironmentEventsResult<Workspace>>
+      executeEnvironmentCommand: (command: CommandEnvelope<EnvironmentCommand>) => Promise<EnvironmentCommandResult>
+      onEnvironmentEvent: (callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void) => () => void
       pickCanvasAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
       importCanvasAssetBytes: (bytes: Uint8Array) => Promise<CanvasAssetResult<CanvasAssetMetadata>>
       importCanvasClipboardAsset: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
@@ -136,32 +143,7 @@ declare global {
       mobileListDevices?: () => Promise<Array<{ deviceId: string; name: string; createdAt: number; lastSeen: number; revoked: boolean }>>
       mobileRevokeDevice?: (deviceId: string) => Promise<{ revoked: number }>
 
-      // Beads
-      beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
-      beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      beadsInstall: () => Promise<{ success: boolean; error?: string; method?: string; needsPython?: boolean }>
-      beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: unknown[]; error?: string }>
-      beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: unknown[]; error?: string }>
-      beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: unknown; error?: string }>
-      beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: unknown; error?: string }>
-      beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: unknown; error?: string }>
-      beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-      beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-      beadsUpdate: (cwd: string, taskId: string, status?: string, title?: string, description?: string, priority?: number) => Promise<{ success: boolean; error?: string }>
-      beadsWatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      beadsUnwatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      onBeadsTasksChanged: (callback: (data: { cwd: string }) => void) => () => void
 
-      // Kspec
-      kspecCheck: (cwd: string) => Promise<{ exists: boolean }>
-      kspecInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      kspecEnsureDaemon: (cwd: string) => Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
-      kspecCheckCli: () => Promise<{ installed: boolean; version?: string }>
-      kspecInstallCli: () => Promise<{ success: boolean; error?: string }>
-      kspecMigrateFromBeads: (cwd: string) => Promise<{ success: boolean; migrated: number; error?: string }>
-      kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
-      kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
 
       // Install progress
       pythonInstall: () => Promise<{ success: boolean; error?: string; method?: string }>
@@ -193,9 +175,9 @@ export class ElectronBackend implements ExtendedApi {
     return window.electronAPI!.listPtys()
   }
 
-  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
+  async spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId, agentSessionId?: string): Promise<string> {
     this.checkApi()
-    return window.electronAPI!.spawnPty(cwd, sessionId, model, backend)
+    return window.electronAPI!.spawnPty(cwd, sessionId, model, backend, agentSessionId)
   }
 
   killPty(id: string): void {
@@ -267,6 +249,26 @@ export class ElectronBackend implements ExtendedApi {
   async saveWorkspace(workspace: Workspace): Promise<void> {
     this.checkApi()
     return window.electronAPI!.saveWorkspace(workspace)
+  }
+
+  async getEnvironmentSnapshot(): Promise<EnvironmentSnapshot<Workspace>> {
+    this.checkApi()
+    return window.electronAPI!.getEnvironmentSnapshot()
+  }
+
+  async getEnvironmentEvents(afterRevision: number): Promise<EnvironmentEventsResult<Workspace>> {
+    this.checkApi()
+    return window.electronAPI!.getEnvironmentEvents(afterRevision)
+  }
+
+  async executeEnvironmentCommand(command: CommandEnvelope<EnvironmentCommand>): Promise<EnvironmentCommandResult> {
+    this.checkApi()
+    return window.electronAPI!.executeEnvironmentCommand(command)
+  }
+
+  onEnvironmentEvent(callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void): Unsubscribe {
+    this.checkApi()
+    return window.electronAPI!.onEnvironmentEvent(callback)
   }
 
   async pickCanvasAsset(): Promise<CanvasAssetResult<CanvasAssetMetadata | null>> {

@@ -18,12 +18,14 @@ import {
 import { clearTerminalBuffer } from '../components/terminal/Terminal'
 
 interface UseProjectHandlersOptions {
+  serverId: string
   api: Api
+  getApiForServer: (serverId: string) => Api | undefined
   projects: Project[]
   openTabs: OpenTab[]
   settings: AppSettings | null
   tileTree: TileNode | null
-  addProject: (project: { path: string; name: string }) => void
+  addProject: (project: Project) => void
   removeTab: (id: string) => void
   addTab: (tab: OpenTab) => void
   setActiveTab: (id: string) => void
@@ -31,16 +33,29 @@ interface UseProjectHandlersOptions {
 }
 
 interface ClosedTabInfo {
+  serverId: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   backend?: string
 }
 
+export interface OpenSessionOptions {
+  serverId?: string
+  harnessId?: BackendId
+  agentSessionId?: string
+  sessionId?: string
+  slug?: string
+  initialPrompt?: string
+  forceNewSession?: boolean
+  resumeCwd?: string
+}
+
 interface UseProjectHandlersReturn {
   handleAddProject: () => Promise<void>
   handleAddProjectsFromParent: () => Promise<void>
-  handleOpenSession: (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => Promise<void>
+  handleOpenSession: (projectPath: string, options?: OpenSessionOptions) => Promise<void>
   handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null) => Promise<void>
   handleAddTabToTile: (projectPath: string, tileId: string) => Promise<void>
   handleCloseTab: (tabId: string) => void
@@ -51,7 +66,9 @@ interface UseProjectHandlersReturn {
 }
 
 export function useProjectHandlers({
+  serverId,
   api,
+  getApiForServer,
   projects,
   openTabs,
   settings,
@@ -71,7 +88,7 @@ export function useProjectHandlers({
 
   /** Resolve project → effective AI backend, used for instruction file injection */
   const getEffectiveBackend = useCallback((projectPath: string): BackendId => {
-    const project = projects.find((p) => p.path === projectPath)
+    const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
     return (project?.backend && project.backend !== 'default'
       ? project.backend
       : (settings?.backend && settings.backend !== 'default'
@@ -83,7 +100,7 @@ export function useProjectHandlers({
     const path = await api.addProject()
     if (path) {
       const name = path.split(/[/\\]/).pop() || path
-      addProject({ path, name })
+      addProject({ serverId, path, name })
       await api.ttsInstallInstructions?.(path, getEffectiveBackend(path))
     }
   }, [api, addProject, getEffectiveBackend])
@@ -95,16 +112,22 @@ export function useProjectHandlers({
       const newProjects = projectsToAdd.filter((p) => !existingPaths.has(p.path))
 
       for (const project of newProjects) {
-        addProject({ path: project.path, name: project.name })
+        addProject({ serverId, path: project.path, name: project.name })
         await api.ttsInstallInstructions?.(project.path, getEffectiveBackend(project.path))
       }
     }
   }, [api, addProject, projects])
 
-  const handleOpenSession = useCallback(async (projectPath: string, sessionId?: string, slug?: string, initialPrompt?: string, forceNewSession?: boolean, resumeCwd?: string) => {
+  const handleOpenSession = useCallback(async (projectPath: string, options: OpenSessionOptions = {}) => {
+    let { agentSessionId, sessionId, slug, resumeCwd } = options
+    const { initialPrompt, forceNewSession = false } = options
+    const targetServerId = options.serverId || serverId
+    const targetApi = getApiForServer(targetServerId)
+    if (!targetApi) throw new Error(`Server ${targetServerId} is disconnected`)
+
     // Check if this session is already open
     if (sessionId) {
-      const existingTab = openTabs.find(tab => tab.sessionId === sessionId)
+      const existingTab = openTabs.find(tab => tab.serverId === targetServerId && tab.sessionId === sessionId)
       if (existingTab) {
         setActiveTab(existingTab.id)
         return
@@ -112,20 +135,20 @@ export function useProjectHandlers({
     }
 
     // Get project and determine effective backend
-    const project = projects.find((p) => p.path === projectPath)
-    const effectiveBackend = (project?.backend && project.backend !== 'default'
+    const project = projects.find((p) => p.serverId === targetServerId && p.path === projectPath)
+    const effectiveBackend = (options.harnessId || (project?.backend && project.backend !== 'default'
       ? project.backend
       : (settings?.backend && settings.backend !== 'default'
         ? settings.backend
-        : 'claude')) as BackendId
+        : 'claude'))) as BackendId
 
     // Only discover sessions if no specific sessionId was requested
     if (!forceNewSession && !sessionId) {
       try {
-        const sessions = await api.discoverSessions(projectPath, effectiveBackend)
+        const sessions = await targetApi.discoverSessions(projectPath, effectiveBackend)
         if (sessions.length > 0) {
           const [mostRecent] = sessions
-          const existingTab = openTabs.find((tab) => tab.sessionId === mostRecent.sessionId)
+          const existingTab = openTabs.find((tab) => tab.serverId === targetServerId && tab.sessionId === mostRecent.sessionId)
 
           if (existingTab) {
             setActiveTab(existingTab.id)
@@ -145,9 +168,9 @@ export function useProjectHandlers({
 
     try {
       const workingPath = resumeCwd || projectPath
-      await api.ttsInstallInstructions?.(workingPath, effectiveBackend)
+      await targetApi.ttsInstallInstructions?.(workingPath, effectiveBackend)
 
-      const ptyId = await api.spawnPty(workingPath, sessionId, undefined, effectiveBackend)
+      const ptyId = await targetApi.spawnPty(workingPath, sessionId, undefined, effectiveBackend, agentSessionId)
 
       // Add leaf to tree — single operation, no race condition
       const currentTree = tileTreeRef.current
@@ -155,8 +178,10 @@ export function useProjectHandlers({
       setTileTree(newTree)
 
       addTab({
+        serverId: targetServerId,
         id: ptyId,
         projectPath: workingPath,
+        agentSessionId: agentSessionId || sessionId || ptyId,
         sessionId,
         title,
         ptyId,
@@ -166,9 +191,9 @@ export function useProjectHandlers({
       // If an initial prompt was provided, send it after a short delay
       if (initialPrompt) {
         setTimeout(() => {
-          api.writePty(ptyId, initialPrompt)
+          targetApi.writePty(ptyId, initialPrompt)
           setTimeout(() => {
-            api.writePty(ptyId, '\r')
+            targetApi.writePty(ptyId, '\r')
           }, 100)
         }, 1500)
       }
@@ -177,7 +202,7 @@ export function useProjectHandlers({
       const errorMsg = e?.message || String(e)
       alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
     }
-  }, [api, addTab, openTabs, projects, setActiveTab, settings?.backend, setTileTree])
+  }, [addTab, getApiForServer, openTabs, projects, serverId, setActiveTab, settings?.backend, setTileTree])
 
   const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null) => {
     const treeToUse = currentTree !== undefined ? currentTree : tileTreeRef.current
@@ -187,7 +212,7 @@ export function useProjectHandlers({
       return
     }
 
-    const project = projects.find((p) => p.path === projectPath)
+    const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
     const effectiveBackend = (project?.backend && project.backend !== 'default'
       ? project.backend
       : (settings?.backend && settings.backend !== 'default'
@@ -239,8 +264,10 @@ export function useProjectHandlers({
       setTileTree(newTree)
 
       addTab({
+        serverId,
         id: ptyId,
         projectPath,
+        agentSessionId: ptyId,
         sessionId: undefined,
         title,
         ptyId,
@@ -254,7 +281,7 @@ export function useProjectHandlers({
   }, [api, addTab, projects, openTabs, settings?.backend, setTileTree])
 
   const handleAddTabToTile = useCallback(async (projectPath: string, tileId: string) => {
-    const project = projects.find((p) => p.path === projectPath)
+    const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
     const effectiveBackend = (project?.backend && project.backend !== 'default'
       ? project.backend
       : (settings?.backend && settings.backend !== 'default'
@@ -275,8 +302,10 @@ export function useProjectHandlers({
       }
 
       addTab({
+        serverId,
         id: ptyId,
         projectPath,
+        agentSessionId: ptyId,
         sessionId: undefined,
         title,
         ptyId,
@@ -293,7 +322,9 @@ export function useProjectHandlers({
     const tab = openTabs.find(t => t.id === tabId)
     if (tab) {
       closedTabsRef.current.push({
+        serverId: tab.serverId,
         projectPath: tab.projectPath,
+        agentSessionId: tab.agentSessionId || tab.sessionId || tab.id,
         sessionId: tab.sessionId,
         title: tab.title,
         backend: tab.backend
@@ -308,17 +339,21 @@ export function useProjectHandlers({
       setTileTree(newTree)
     }
 
-    api.killPty(tabId)
+    const tabApi = tab ? getApiForServer(tab.serverId) : undefined
+    if (!tabApi) throw new Error(`Server ${tab?.serverId || serverId} is disconnected`)
+    tabApi.killPty(tabId)
     clearTerminalBuffer(tabId)
     removeTab(tabId)
   }, [api, openTabs, removeTab, setTileTree])
 
   const handleCloseProjectTabs = useCallback((projectPath: string) => {
-    const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
+    const tabsToClose = openTabs.filter(tab => tab.serverId === serverId && tab.projectPath === projectPath)
     let currentTree = tileTreeRef.current
     for (const tab of tabsToClose) {
       closedTabsRef.current.push({
+        serverId: tab.serverId,
         projectPath: tab.projectPath,
+        agentSessionId: tab.agentSessionId || tab.sessionId || tab.id,
         sessionId: tab.sessionId,
         title: tab.title,
         backend: tab.backend
@@ -326,7 +361,9 @@ export function useProjectHandlers({
       if (currentTree) {
         currentTree = removeTabFromLeaf(currentTree, tab.id)
       }
-      api.killPty(tab.id)
+      const tabApi = getApiForServer(tab.serverId)
+      if (!tabApi) throw new Error(`Server ${tab.serverId} is disconnected`)
+      tabApi.killPty(tab.id)
       clearTerminalBuffer(tab.id)
       removeTab(tab.id)
     }
@@ -335,15 +372,19 @@ export function useProjectHandlers({
   }, [api, openTabs, removeTab, setTileTree])
 
   const handleProjectCreated = useCallback((projectPath: string, projectName: string) => {
-    addProject({ path: projectPath, name: projectName })
-    handleOpenSession(projectPath, undefined, undefined, undefined, false)
+    addProject({ serverId, path: projectPath, name: projectName })
+    handleOpenSession(projectPath)
   }, [addProject, handleOpenSession])
 
   const handleUndoCloseTab = useCallback(() => {
     const info = closedTabsRef.current.pop()
     if (!info) return
     setClosedTabCount(closedTabsRef.current.length)
-    handleOpenSession(info.projectPath, info.sessionId)
+    handleOpenSession(info.projectPath, {
+      serverId: info.serverId,
+      agentSessionId: info.agentSessionId,
+      sessionId: info.sessionId,
+    })
   }, [handleOpenSession])
 
   return {

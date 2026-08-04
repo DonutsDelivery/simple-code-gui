@@ -10,6 +10,7 @@ import { validateWithinProjectRoots } from './mobile-security/index.js'
 import { DebugApi } from './debug-api.js'
 import { installAgentSessionSignalInstructions } from './ipc/agent-session-signal-instructions.js'
 import type { AIBackend } from './ipc/instruction-files.js'
+import type { SessionRuntimeRegistry } from './session-runtime-registry.js'
 
 const ORCHESTRATOR_PORT = 19836
 
@@ -65,6 +66,7 @@ export class OrchestratorApi {
   private ptyToBackend: Map<string, string>
   private sessionStore: SessionStore
   private getMainWindow: () => BrowserWindow | null
+  private runtimeRegistry: SessionRuntimeRegistry
   private activePort: number = ORCHESTRATOR_PORT
   private secret: string = ''
   readonly debugApi: DebugApi
@@ -75,12 +77,14 @@ export class OrchestratorApi {
     ptyToBackend: Map<string, string>,
     sessionStore: SessionStore,
     getMainWindow: () => BrowserWindow | null,
+    runtimeRegistry: SessionRuntimeRegistry,
   ) {
     this.ptyManager = ptyManager
     this.ptyToProject = ptyToProject
     this.ptyToBackend = ptyToBackend
     this.sessionStore = sessionStore
     this.getMainWindow = getMainWindow
+    this.runtimeRegistry = runtimeRegistry
     this.debugApi = new DebugApi(ptyManager, sessionStore, getMainWindow)
   }
 
@@ -123,7 +127,7 @@ export class OrchestratorApi {
       } else if (req.method === 'POST' && path === '/sessions') {
         this.handleCreateSession(req, res)
       } else if (req.method === 'DELETE' && sessionIdMatch) {
-        this.handleDeleteSession(sessionIdMatch[1], res)
+        void this.handleDeleteSession(sessionIdMatch[1], res)
       } else if (req.method === 'GET' && sessionMatch?.[2] === 'output') {
         const maxLines = parseInt(url.searchParams.get('lines') || '50', 10)
         this.handleReadOutput(sessionMatch[1], maxLines, res).catch(err => {
@@ -252,7 +256,7 @@ export class OrchestratorApi {
         req.destroy()
       }
     })
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const data = JSON.parse(body)
         const cwd = data.cwd
@@ -294,7 +298,14 @@ export class OrchestratorApi {
         const permissionMode = project?.permissionMode ?? globalSettings.permissionMode
 
         installAgentSessionSignalInstructions(cwd, effectiveBackend as AIBackend)
-        const id = this.ptyManager.spawn(cwd, undefined, autoAcceptTools, permissionMode, effectiveModel, effectiveBackend)
+        const runtime = await this.runtimeRegistry.ensureRuntime({
+          projectId: cwd,
+          harnessId: effectiveBackend,
+          autoAcceptTools,
+          permissionMode,
+          model: effectiveModel,
+        })
+        const id = runtime.ptyId
         this.ptyToProject.set(id, cwd)
         this.ptyToBackend.set(id, effectiveBackend)
 
@@ -340,7 +351,7 @@ export class OrchestratorApi {
     })
   }
 
-  private handleDeleteSession(id: string, res: http.ServerResponse): void {
+  private async handleDeleteSession(id: string, res: http.ServerResponse): Promise<void> {
     const proc = this.ptyManager.getProcess(id)
     if (!proc) {
       res.writeHead(404)
@@ -348,14 +359,9 @@ export class OrchestratorApi {
       return
     }
 
-    // Notify renderer to close the tab before killing the PTY
-    // (kill() disposes the onExit listener, so the normal pty:exit event won't fire)
-    const mainWindow = this.getMainWindow()
-    mainWindow?.webContents.send(`pty:exit:${id}`, 0)
-
     this.ptyToProject.delete(id)
     this.ptyToBackend.delete(id)
-    this.ptyManager.kill(id)
+    await this.runtimeRegistry.stopRuntimeByPty(id)
 
     res.writeHead(200)
     res.end(JSON.stringify({ success: true, message: `Session ${id} closed` }))
@@ -412,17 +418,17 @@ export class OrchestratorApi {
           const stripped = lastLine.replace(/\x1b\[[0-9;]*[mGKHFABCDJ]/g, '').trimEnd()
           const atShellPrompt = /[$%#>]\s*$/.test(stripped)
           if (atShellPrompt) {
-            this.ptyManager.write(id, '\x03') // Ctrl-C
+            this.runtimeRegistry.writeInput(id, '\x03', true) // Ctrl-C
             await new Promise(resolve => setTimeout(resolve, 300))
           }
         }
 
         if (raw) {
-          this.ptyManager.writeUserInput(id, input)
+          this.runtimeRegistry.writeInput(id, input)
         } else {
-          this.ptyManager.writeUserInput(id, input)
+          this.runtimeRegistry.writeInput(id, input)
           await new Promise(resolve => setTimeout(resolve, enterDelay))
-          this.ptyManager.write(id, '\r')
+          this.runtimeRegistry.writeInput(id, '\r', true)
         }
         res.writeHead(200)
         res.end(JSON.stringify({ success: true, message: `Input sent to session ${id}` }))

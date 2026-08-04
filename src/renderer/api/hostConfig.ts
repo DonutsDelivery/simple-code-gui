@@ -2,7 +2,7 @@
  * Host Configuration Storage
  *
  * Handles storing and retrieving host configuration from localStorage
- * for connecting to the Claude Terminal API server.
+ * for connecting to the DonutCode server.
  */
 
 // =============================================================================
@@ -20,7 +20,8 @@ export interface HostConfig {
 // Constants
 // =============================================================================
 
-const STORAGE_KEY = 'claude-terminal-host-config'
+const STORAGE_KEY = 'donutcode-server-config'
+const LEGACY_STORAGE_KEY = 'claude-terminal-host-config'
 
 const DEFAULT_CONFIG: HostConfig = {
   host: 'localhost',
@@ -39,10 +40,11 @@ const DEFAULT_CONFIG: HostConfig = {
  */
 export function getHostConfig(): HostConfig | null {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!stored) {
       return null
     }
+    if (!localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, stored)
 
     const config = JSON.parse(stored) as HostConfig
 
@@ -80,6 +82,7 @@ export function saveHostConfig(config: HostConfig): void {
  */
 export function clearHostConfig(): void {
   localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(LEGACY_STORAGE_KEY)
 }
 
 /**

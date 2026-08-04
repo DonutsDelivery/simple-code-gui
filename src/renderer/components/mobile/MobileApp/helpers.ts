@@ -1,12 +1,11 @@
 import type { ParsedConnectionUrl } from '../QRScanner.js'
 
 /**
- * Parse claude-terminal:// URL into connection parameters
+ * Parse DonutCode and legacy Claude Terminal URLs into connection parameters.
  */
 export function parseDeepLink(url: string): ParsedConnectionUrl | null {
   try {
-    // Format: claude-terminal://host:port?token=xxx&nonce=xxx&fingerprint=xxx
-    const match = url.match(/^claude-terminal:\/\/([^:/?]+):(\d+)\?(.+)$/)
+    const match = url.match(/^(?:donutcode|claude-terminal):\/\/([^:/?]+):(\d+)\?(.+)$/)
     if (!match) return null
 
     const [, host, portStr, queryStr] = match

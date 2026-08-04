@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react'
 import { Project, useWorkspaceStore } from '../../stores/workspace.js'
 import { useVoice } from '../../contexts/VoiceContext.js'
 import { SidebarProps, OpenTab, ClaudeSession } from './types.js'
+import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 import { useSessions, useDragAndDrop, useProjectSettingsModal } from './hooks/index.js'
 
 export interface SidebarState {
@@ -29,10 +30,7 @@ export interface SidebarState {
   toggleProject: (e: React.MouseEvent, projectPath: string) => void
   handleOpenSession: (
     projectPath: string,
-    sessionId?: string,
-    slug?: string,
-    isNewSession?: boolean,
-    resumeCwd?: string
+    options?: OpenSessionOptions
   ) => void
 
   // Drag and drop
@@ -67,8 +65,7 @@ export interface SidebarState {
   handleProjectSettingsChange: ReturnType<typeof useProjectSettingsModal>['handleProjectSettingsChange']
 
   // Local state
-  beadsExpanded: boolean
-  setBeadsExpanded: (v: boolean) => void
+
   isResizing: boolean
   setIsResizing: (v: boolean) => void
   contextMenu: { x: number; y: number; project: Project } | null
@@ -97,8 +94,6 @@ export interface SidebarState {
   setClaudeMdEditorModal: (v: { project: Project } | null) => void
   deleteConfirmModal: { project: Project } | null
   setDeleteConfirmModal: (v: { project: Project } | null) => void
-  taskCounts: Record<string, { open: number; inProgress: number }>
-  setTaskCounts: (v: Record<string, { open: number; inProgress: number }>) => void
 
   // Refs
   sidebarRef: React.RefObject<HTMLDivElement>
@@ -107,10 +102,7 @@ export interface SidebarState {
 
   // Computed values
   focusedTabId: string | null
-  focusedTab: OpenTab | undefined
   focusedProjectPath: string | null
-  focusedTabPtyId: string | null
-  beadsProjectPath: string | null
   focusedProject: Project | undefined
   sortedCategories: ReturnType<typeof useWorkspaceStore.getState>['categories']
   projectsByCategory: Record<string, Project[]>
@@ -190,7 +182,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
   } = useProjectSettingsModal({ onUpdateProject })
 
   // Local state
-  const [beadsExpanded, setBeadsExpanded] = useState(true)
+
   const [isResizing, setIsResizing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; project: Project } | null>(
     null
@@ -208,9 +200,6 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
   )
   const [claudeMdEditorModal, setClaudeMdEditorModal] = useState<{ project: Project } | null>(null)
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ project: Project } | null>(null)
-  const [taskCounts, setTaskCounts] = useState<Record<string, { open: number; inProgress: number }>>(
-    {}
-  )
 
   // Refs
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -224,11 +213,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     [openTabs, focusedTabId]
   )
   const focusedProjectPath = useMemo(() => focusedTab?.projectPath || null, [focusedTab])
-  const focusedTabPtyId = useMemo(() => focusedTab?.ptyId || null, [focusedTab])
-  const beadsProjectPath = useMemo(
-    () => focusedProjectPath || expandedProject,
-    [focusedProjectPath, expandedProject]
-  )
+
   const focusedProject = useMemo(
     () => projects.find((p) => p.path === focusedProjectPath),
     [projects, focusedProjectPath]
@@ -317,8 +302,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     handleProjectSettingsChange,
 
     // Local state
-    beadsExpanded,
-    setBeadsExpanded,
+
     isResizing,
     setIsResizing,
     contextMenu,
@@ -337,8 +321,6 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     setClaudeMdEditorModal,
     deleteConfirmModal,
     setDeleteConfirmModal,
-    taskCounts,
-    setTaskCounts,
 
     // Refs
     sidebarRef,
@@ -347,10 +329,7 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
 
     // Computed values
     focusedTabId,
-    focusedTab,
     focusedProjectPath,
-    focusedTabPtyId,
-    beadsProjectPath,
     focusedProject,
     sortedCategories,
     projectsByCategory,

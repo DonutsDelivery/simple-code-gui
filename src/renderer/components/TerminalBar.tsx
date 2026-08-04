@@ -9,11 +9,10 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ReactDOM from 'react-dom'
 import { getCommandMenuItems } from '../utils/backendCommands'
-import { AutoWorkOptions } from './TerminalMenu'
 
 interface TerminalBarProps {
   ptyId: string
-  onCommand: (command: string, options?: AutoWorkOptions) => void
+  onCommand: (command: string) => void
   onInput?: (data: string) => void
   currentBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
   onBackendChange: (backend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => void
@@ -35,8 +34,6 @@ interface MenuItem {
   id: string
   label: string
   disabled?: boolean
-  isToggle?: boolean
-  toggleKey?: keyof AutoWorkOptions
 }
 
 interface MenuCategory {
@@ -47,15 +44,6 @@ interface MenuCategory {
   items: MenuItem[]
 }
 
-const AUTOWORK_OPTIONS_KEY = 'terminal-autowork-options'
-
-const defaultAutoWorkOptions: AutoWorkOptions = {
-  withContext: false,
-  askQuestions: false,
-  pauseForReview: false,
-  finalEvaluation: false,
-  gitCommitEachTask: false,
-}
 
 export function TerminalBar({
   ptyId,
@@ -96,23 +84,6 @@ export function TerminalBar({
     window.electronAPI?.setAutoAccept?.(ptyId, newState)
   }, [autoAccept, ptyId])
 
-  // Auto work options state
-  const [autoWorkOptions, setAutoWorkOptions] = useState<AutoWorkOptions>(() => {
-    const stored = localStorage.getItem(AUTOWORK_OPTIONS_KEY)
-    if (stored) {
-      try {
-        return { ...defaultAutoWorkOptions, ...JSON.parse(stored) }
-      } catch {
-        return defaultAutoWorkOptions
-      }
-    }
-    return defaultAutoWorkOptions
-  })
-
-  // Persist autowork options
-  useEffect(() => {
-    localStorage.setItem(AUTOWORK_OPTIONS_KEY, JSON.stringify(autoWorkOptions))
-  }, [autoWorkOptions])
 
   // Convert vertical scroll wheel to horizontal scroll on the bar
   useEffect(() => {
@@ -210,22 +181,7 @@ export function TerminalBar({
       layout: 'dense',
       items: commandItems.filter((item) => !item.id.startsWith('divider')),
     },
-    {
-      id: 'automation',
-      label: 'Auto',
-      icon: '🤖',
-      layout: 'dense',
-      items: [
-        { id: 'autowork', label: 'Start Auto Work' },
-        { id: 'toggle-context', label: 'With Context', isToggle: true, toggleKey: 'withContext' },
-        { id: 'toggle-questions', label: 'Ask Questions', isToggle: true, toggleKey: 'askQuestions' },
-        { id: 'toggle-review', label: 'Pause for Review', isToggle: true, toggleKey: 'pauseForReview' },
-        { id: 'toggle-evaluation', label: 'Final Evaluation', isToggle: true, toggleKey: 'finalEvaluation' },
-        { id: 'toggle-git', label: 'Git Commit Each', isToggle: true, toggleKey: 'gitCommitEachTask' },
-        { id: 'continuework', label: 'Continue to Next' },
-        { id: 'stopwork', label: 'Stop After Task' },
-      ],
-    },
+
     {
       id: 'session',
       label: 'Session',
@@ -238,7 +194,7 @@ export function TerminalBar({
     },
     {
       id: 'backend',
-      label: 'Backend',
+      label: 'Harness',
       icon: '🔧',
       layout: 'dense',
       items: [
@@ -263,24 +219,9 @@ export function TerminalBar({
   const handleMenuItemClick = (categoryId: string, item: MenuItem) => {
     if (item.disabled) return
 
-    // Handle toggles
-    if (item.isToggle && item.toggleKey) {
-      setAutoWorkOptions((prev) => ({
-        ...prev,
-        [item.toggleKey!]: !prev[item.toggleKey!]
-      }))
-      return // Don't close menu for toggles
-    }
 
     if (categoryId === 'backend') {
       onBackendChange(item.id as 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok')
-      closeMenu()
-      return
-    }
-
-
-    if (item.id === 'autowork') {
-      onCommand('autowork', autoWorkOptions)
       closeMenu()
       return
     }
@@ -465,23 +406,18 @@ export function TerminalBar({
           }}
         >
           {openCategory.items.map((item, index) => {
-            const isToggle = item.isToggle && item.toggleKey
-            const isChecked = isToggle ? autoWorkOptions[item.toggleKey!] : false
-
             return (
               <button
                 key={item.id}
-                className={`terminal-bar-dropdown-item ${item.disabled ? 'disabled' : ''} ${isToggle ? 'toggle-item' : ''} ${isChecked ? 'checked' : ''} ${openCategory.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
+                className={`terminal-bar-dropdown-item ${item.disabled ? 'disabled' : ''} ${openCategory.id === 'backend' && item.id === currentBackend ? 'selected' : ''}`}
                 onClick={() => handleMenuItemClick(openCategory.id, item)}
                 disabled={item.disabled}
                 ref={(node) => { dropdownItemRefs.current[index] = node }}
-                role={isToggle ? 'menuitemcheckbox' : openCategory.id === 'backend' ? 'menuitemradio' : 'menuitem'}
-                aria-checked={isToggle ? Boolean(isChecked) : openCategory.id === 'backend' ? item.id === currentBackend : undefined}
+                role={openCategory.id === 'backend' ? 'menuitemradio' : 'menuitem'}
+                aria-checked={openCategory.id === 'backend' ? item.id === currentBackend : undefined}
                 tabIndex={index === openCategory.items.findIndex((candidate) => !candidate.disabled) ? 0 : -1}
               >
-                {isToggle && (
-                  <span className="terminal-bar-toggle-indicator">{isChecked ? '✓' : '○'}</span>
-                )}
+
                 <span>{item.label}</span>
                 {openCategory.id === 'backend' && item.id === currentBackend && (
                   <span className="terminal-bar-check">✓</span>

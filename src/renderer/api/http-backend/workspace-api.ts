@@ -13,6 +13,9 @@ import {
   BackendId
 } from '../types'
 import { ConnectionManager } from './connection'
+import type { CommandEnvelope } from '../../../common/server-protocol.js'
+import type { EnvironmentCommandResult, EnvironmentEventsResult, EnvironmentSnapshot } from '../../../common/environment-protocol.js'
+import type { EnvironmentCommand } from '../../../main/environment-command-router.js'
 
 export class WorkspaceApi {
   private connection: ConnectionManager
@@ -42,11 +45,30 @@ export class WorkspaceApi {
     return this.connection.fetchJson<Workspace>('/api/workspace')
   }
 
-  async saveWorkspace(_workspace: Workspace): Promise<void> {
-    // NO-OP: Browser/mobile should NOT save workspace back to desktop
-    // The Electron desktop app is the source of truth for workspace data
-    // This prevents browser from accidentally wiping desktop's projects
-    console.log('[HttpBackend] saveWorkspace() ignored - desktop is source of truth')
+  async saveWorkspace(workspace: Workspace): Promise<void> {
+    const snapshot = await this.getEnvironmentSnapshot()
+    await this.executeEnvironmentCommand({
+      clientId: 'http-workspace-compatibility',
+      commandId: crypto.randomUUID(),
+      serverId: snapshot.serverId,
+      expectedRevision: snapshot.revision,
+      command: { type: 'replace-workspace', workspace },
+    })
+  }
+
+  async getEnvironmentSnapshot(): Promise<EnvironmentSnapshot<Workspace>> {
+    return this.connection.fetchJson<EnvironmentSnapshot<Workspace>>('/api/environment/snapshot')
+  }
+
+  async getEnvironmentEvents(afterRevision: number): Promise<EnvironmentEventsResult<Workspace>> {
+    return this.connection.fetchJson<EnvironmentEventsResult<Workspace>>(`/api/environment/events?after=${afterRevision}`)
+  }
+
+  async executeEnvironmentCommand(command: CommandEnvelope<EnvironmentCommand>): Promise<EnvironmentCommandResult> {
+    return this.connection.fetchJson<EnvironmentCommandResult>('/api/environment/commands', {
+      method: 'POST',
+      body: JSON.stringify(command),
+    })
   }
 
   // Settings Management

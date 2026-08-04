@@ -16,9 +16,14 @@ import {
   PtyRecreatedCallback,
   AgentSessionSignalCallback,
   ApiOpenSessionCallback,
+  OrchestratorSessionCreatedCallback,
   Unsubscribe,
   BackendId
 } from '../types'
+import {
+  assertCompatibleServerProtocol,
+  type ServerProtocolDescriptor
+} from '../../../common/server-protocol'
 import { HttpBackendConfig } from './types'
 import { DEFAULT_PORT } from './constants'
 import { isLocalNetwork } from './helpers'
@@ -27,6 +32,9 @@ import { PtyWebSocketManager } from './pty-websocket'
 import { PtyApi } from './pty-api'
 import { WorkspaceApi } from './workspace-api'
 import { AgentSessionSignalConnection } from './agent-session-signals'
+import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResult, EnvironmentSnapshot } from '../../../common/environment-protocol.js'
+import type { CommandEnvelope, EventEnvelope } from '../../../common/server-protocol.js'
+import type { EnvironmentCommand } from '../../../main/environment-command-router.js'
 
 export class HttpBackend implements Api {
   voiceGetInstalled?: () => Promise<
@@ -55,6 +63,7 @@ export class HttpBackend implements Api {
   private agentSignals: AgentSessionSignalConnection
   private ptyApi: PtyApi
   private workspaceApi: WorkspaceApi
+  private serverProtocol: ServerProtocolDescriptor | null = null
 
   constructor(config: HttpBackendConfig) {
     // Validate port to prevent requests to invalid addresses like localhost:1
@@ -115,8 +124,8 @@ export class HttpBackend implements Api {
     return this.ptyApi.listPtys()
   }
 
-  spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId): Promise<string> {
-    return this.ptyApi.spawnPty(cwd, sessionId, model, backend)
+  spawnPty(cwd: string, sessionId?: string, model?: string, backend?: BackendId, agentSessionId?: string): Promise<string> {
+    return this.ptyApi.spawnPty(cwd, sessionId, model, backend, agentSessionId)
   }
 
   killPty(id: string): void {
@@ -163,6 +172,22 @@ export class HttpBackend implements Api {
     return this.workspaceApi.saveWorkspace(workspace)
   }
 
+  getEnvironmentSnapshot(): Promise<EnvironmentSnapshot<Workspace>> {
+    return this.workspaceApi.getEnvironmentSnapshot()
+  }
+
+  getEnvironmentEvents(afterRevision: number): Promise<EnvironmentEventsResult<Workspace>> {
+    return this.workspaceApi.getEnvironmentEvents(afterRevision)
+  }
+
+  executeEnvironmentCommand(command: CommandEnvelope<EnvironmentCommand>): Promise<EnvironmentCommandResult> {
+    return this.workspaceApi.executeEnvironmentCommand(command)
+  }
+
+  onEnvironmentEvent(callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void): Unsubscribe {
+    return this.agentSignals.subscribeEnvironment(callback)
+  }
+
   // Settings Management
 
   getSettings(): Promise<Settings> {
@@ -203,6 +228,13 @@ export class HttpBackend implements Api {
     return this.workspaceApi.onApiOpenSession(callback)
   }
 
+  onOrchestratorSessionCreated(_callback: OrchestratorSessionCreatedCallback): Unsubscribe {
+    // Protocol v1 advertises that this desktop-originated event is unavailable
+    // over HTTP. Keep the API callable so capability-aware renderers can share
+    // listener setup without crashing.
+    return () => undefined
+  }
+
   // Connection Management
 
   getConnectionInfo(): { host: string; port: number; token: string } {
@@ -211,6 +243,10 @@ export class HttpBackend implements Api {
       port: this.port,
       token: this.connection.getToken()
     }
+  }
+
+  getServerProtocol(): ServerProtocolDescriptor | null {
+    return this.serverProtocol
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
@@ -224,16 +260,21 @@ export class HttpBackend implements Api {
       }
 
       await response.json()
+      const descriptor = await this.connection.fetchJson<ServerProtocolDescriptor>('/api/protocol')
+      assertCompatibleServerProtocol(descriptor)
+      this.serverProtocol = descriptor
       this.connection.setConnectionState('connected')
       return { success: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection failed'
+      this.serverProtocol = null
       this.connection.setConnectionState('error', message)
       return { success: false, error: message }
     }
   }
 
   disconnect(): void {
+    this.serverProtocol = null
     this.agentSignals.disconnect()
     this.wsManager.disconnectAll()
     this.connection.setConnectionState('disconnected')

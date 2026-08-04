@@ -6,7 +6,7 @@
 
 import { HostConfig } from '../hostConfig.js'
 import { get, post } from './http-helpers.js'
-import type { VoiceSettings, BeadsTask, BackendId } from './types.js'
+import type { VoiceSettings, BackendId } from './types.js'
 
 // =============================================================================
 // CLI Status API
@@ -178,29 +178,6 @@ export function onInstallProgress(
 
 
 
-// Beads installation and watch
-export function beadsInstall(): Promise<{ success: boolean; error?: string }> {
-  return Promise.resolve({ success: false, error: 'Installation not available via HTTP' })
-}
-
-export function beadsReady(_cwd: string): Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }> {
-  return Promise.resolve({ success: false, error: 'Not available via HTTP' })
-}
-
-export function beadsWatch(_cwd: string): Promise<{ success: boolean; error?: string }> {
-  console.warn('[HttpApiClient] beadsWatch not available via HTTP')
-  return Promise.resolve({ success: false, error: 'Not available via HTTP' })
-}
-
-export function beadsUnwatch(_cwd: string): Promise<{ success: boolean; error?: string }> {
-  console.warn('[HttpApiClient] beadsUnwatch not available via HTTP')
-  return Promise.resolve({ success: false, error: 'Not available via HTTP' })
-}
-
-export function onBeadsTasksChanged(_callback: (data: { cwd: string }) => void): () => void {
-  console.warn('[HttpApiClient] onBeadsTasksChanged not available via HTTP')
-  return () => {}
-}
 
 // Window controls
 export function windowMinimize(): void {}

@@ -13,7 +13,7 @@ import { HttpBackend } from './http-backend'
 // API Instance Management
 // =============================================================================
 
-let apiInstance: Api | null = null
+const apiInstances = new Map<string, Api>()
 
 /**
  * Check if running in Electron environment with electronAPI available
@@ -25,8 +25,8 @@ export function isElectronEnvironment(): boolean {
 /**
  * Get the current API instance (may be null if not initialized)
  */
-export function getApi(): Api | null {
-  return apiInstance
+export function getApi(serverId: string): Api | null {
+  return apiInstances.get(serverId) || null
 }
 
 /**
@@ -36,27 +36,33 @@ export function getApi(): Api | null {
  */
 export function initializeApi(config?: { host: string; port: number; token: string }): Api {
   if (isElectronEnvironment()) {
-    apiInstance = new ElectronBackend()
+    return new ElectronBackend()
   } else if (config) {
-    apiInstance = new HttpBackend(config)
+    return new HttpBackend(config)
   } else {
     throw new Error('HTTP backend requires connection config')
   }
-  return apiInstance
 }
 
 /**
  * Set the API instance directly (useful for testing or custom backends)
  */
-export function setApi(api: Api): void {
-  apiInstance = api
+export function setApi(api: Api): string {
+  const serverId = api.getServerProtocol?.()?.serverId
+  if (!serverId) throw new Error('Cannot register an API without a stable server ID')
+  apiInstances.set(serverId, api)
+  return serverId
 }
 
 /**
  * Clear the API instance
  */
-export function clearApi(): void {
-  apiInstance = null
+export function clearApi(serverId: string): void {
+  apiInstances.delete(serverId)
+}
+
+export function getConnectedServerIds(): string[] {
+  return [...apiInstances.keys()]
 }
 
 // =============================================================================
@@ -108,11 +114,7 @@ export {
 // HTTP Client exports (legacy compatibility)
 // =============================================================================
 
-export type {
-  ApiClient,
-  BeadsTask,
-  BeadsCloseResult
-} from './httpClient'
+export type { ApiClient } from './httpClient'
 
 export {
   HttpApiClient,

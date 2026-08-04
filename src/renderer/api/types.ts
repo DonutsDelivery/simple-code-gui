@@ -7,6 +7,10 @@
 
 import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
 import type { AgentSessionSignalEvent } from '../../common/agent-session-signal.js'
+import type { ServerProtocolDescriptor } from '../../common/server-protocol.js'
+import type { CommandEnvelope, EventEnvelope } from '../../common/server-protocol.js'
+import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResult, EnvironmentSnapshot } from '../../common/environment-protocol.js'
+import type { EnvironmentCommand } from '../../main/environment-command-router.js'
 export type {
   AgentSessionSignalEvent,
   AgentSessionSignalMessage,
@@ -26,6 +30,14 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'err
  * Type of API backend being used
  */
 export type ApiBackendType = 'electron' | 'http'
+
+export type HarnessId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
+export type HarnessSelection = 'default' | HarnessId
+
+/** @deprecated Use HarnessId. */
+export type BackendId = HarnessId
+/** @deprecated Use HarnessSelection. */
+export type BackendSelection = HarnessSelection
 
 // ============================================================================
 // Data Types
@@ -72,7 +84,9 @@ export interface Settings {
   notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: BackendSelection
+  defaultHarnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
   globalInstructionInjection?: string
   // Headroom context-compression proxy
   headroomEnabled?: boolean
@@ -107,7 +121,9 @@ export interface Project {
   color?: string
   ttsVoice?: string
   ttsEngine?: 'piper' | 'xtts'
-  backend?: 'default' | BackendId
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
   categoryId?: string
   order?: number
 }
@@ -118,16 +134,21 @@ export interface Project {
 export interface OpenTab {
   id: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   ptyId: string
-  backend?: BackendSelection
+  harnessId?: HarnessSelection
+  /** @deprecated Schema v1 compatibility only. */
+  backend?: HarnessSelection
 }
 
 export interface PtySession {
   id: string
   cwd: string
-  backend: BackendId
+  harnessId: HarnessId
+  /** @deprecated Protocol v1 compatibility only. */
+  backend?: HarnessId
   sessionId?: string
   spawnedAt: number
 }
@@ -200,11 +221,9 @@ export type Unsubscribe = () => void
 
 export type PtyDataCallback = (data: string) => void
 export type PtyExitCallback = (code: number) => void
-export type PtyRecreatedCallback = (data: { oldId: string; newId: string; backend: BackendId; sessionId?: string }) => void
+export type PtyRecreatedCallback = (data: { oldId: string; newId: string; harnessId: HarnessId; sessionId?: string; backend?: HarnessId }) => void
 export type AgentSessionSignalCallback = (event: AgentSessionSignalEvent) => void
 
-export type BackendId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
-export type BackendSelection = 'default' | BackendId
 
 export interface ApiOpenSessionEvent {
   projectPath: string
@@ -217,7 +236,9 @@ export type ApiOpenSessionCallback = (event: ApiOpenSessionEvent) => void
 export interface OrchestratorSessionCreatedEvent {
   ptyId: string
   projectPath: string
-  backend: string
+  harnessId: HarnessId
+  /** @deprecated Protocol v1 compatibility only. */
+  backend?: string
   workspaceId?: string
   tileId?: string
   placement?: 'new-tile' | 'sub-tab' | 'split-left' | 'split-right' | 'split-top' | 'split-bottom'
@@ -228,6 +249,9 @@ export type OrchestratorSessionCreatedCallback = (event: OrchestratorSessionCrea
  * Core API interface for the renderer
  */
 export interface Api {
+  /** Protocol/capability descriptor for the connected server, when applicable. */
+  getServerProtocol?: () => ServerProtocolDescriptor | null
+
   // Optional: Desktop-only voice catalog and XTTS management
   voiceGetInstalled?: () => Promise<Array<{ key: string; displayName: string; source: 'builtin' | 'downloaded' | 'custom'; quality?: string; language?: string }>>
   xttsGetVoices?: () => Promise<Array<{ id: string; name: string; language: string; createdAt: number }>>
@@ -259,6 +283,10 @@ export interface Api {
    * @param workspace Workspace data to save
    */
   saveWorkspace: (workspace: Workspace) => Promise<void>
+  getEnvironmentSnapshot?: () => Promise<EnvironmentSnapshot<Workspace>>
+  getEnvironmentEvents?: (afterRevision: number) => Promise<EnvironmentEventsResult<Workspace>>
+  executeEnvironmentCommand?: (command: CommandEnvelope<EnvironmentCommand>) => Promise<EnvironmentCommandResult>
+  onEnvironmentEvent?: (callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void) => Unsubscribe
 
   // Desktop-only managed Canvas assets. HTTP/mobile backends leave these absent.
   pickCanvasAsset?: () => Promise<CanvasAssetResult<CanvasAssetMetadata | null>>
@@ -326,7 +354,7 @@ export interface Api {
    * @param model Optional model override
    * @param backend Optional backend override ('claude', 'gemini', etc.)
    */
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId) => Promise<string>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: BackendId, agentSessionId?: string) => Promise<string>
 
   /**
    * Write data to a PTY

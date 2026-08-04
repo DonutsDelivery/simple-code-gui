@@ -482,6 +482,20 @@ describe('PtyManager', () => {
     })
   })
 
+  describe('terminate()', () => {
+    it('keeps the runtime registered until the OS exit is observed', async () => {
+      const id = manager.spawn('/test/dir')
+
+      const terminating = manager.terminate(id)
+      expect(mockPtyProcess.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(manager.getProcess(id)).toBeDefined()
+
+      exitCallback?.({ exitCode: 0 })
+      await terminating
+      expect(manager.getProcess(id)).toBeUndefined()
+    })
+  })
+
   describe('killAll()', () => {
     it('should kill all PTY processes', () => {
       // Reset UUID mock to return different values
@@ -600,7 +614,7 @@ describe('PtyManager', () => {
       expect(live?.sessionId).toBe('20260715_120000_abcdef')
       expect(manager.getProcess(id)?.sessionId).toBe('20260715_120000_abcdef')
       expect(spawnOptions?.env?.TMPDIR).toMatch(
-        /simple-code-gui\/hermes-runtime\/uuid-\d+$/
+        /donutcode\/hermes-runtime\/uuid-\d+$/
       )
     })
 
@@ -675,6 +689,19 @@ describe('PtyManager', () => {
       expect(pty.spawn).toHaveBeenCalledTimes(2)
       expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
     })
+
+    it('preserves additive runtime listeners across a quick resume retry', () => {
+      const id = manager.spawn(projectPath, 'stale-session')
+      const exitListener = vi.fn()
+      manager.addExitListener(id, exitListener)
+
+      exitCallback?.({ exitCode: 1 })
+      expect(pty.spawn).toHaveBeenCalledTimes(2)
+      expect(exitListener).not.toHaveBeenCalled()
+
+      exitCallback?.({ exitCode: 0 })
+      expect(exitListener).toHaveBeenCalledWith(0)
+    })
   })
 
   describe('onData()', () => {
@@ -728,6 +755,7 @@ describe('PtyManager', () => {
 
       dataCallback?.('hello')
 
+      expect(manager.getOutputSequence(id)).toBe(1)
       expect(primary).toHaveBeenCalledWith('hello')
       expect(listenerA).toHaveBeenCalledWith('hello')
       expect(listenerB).toHaveBeenCalledWith('hello')

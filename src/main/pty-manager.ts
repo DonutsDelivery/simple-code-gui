@@ -18,8 +18,12 @@ import type { AgentSessionSignalEvent } from '../common/agent-session-signal'
 // Suppressing their initial frame prevents default-size cursor output from
 // being interpreted after the renderer has already fitted to the tile.
 const RESIZE_SENSITIVE_BACKENDS = new Set(['gemini', 'droid', 'hermes'])
+
+function isDurableHermesSessionId(sessionId: string): boolean {
+  return /^\d{8}_\d{6}_[0-9a-f]+$/i.test(sessionId)
+}
 const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
-type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+export type Backend = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
 // Headroom proxy routing. Anthropic-shaped harnesses honor ANTHROPIC_BASE_URL;
 // OpenAI-compatible ones honor OPENAI_BASE_URL. Backends not listed here speak a
@@ -155,6 +159,7 @@ interface ClaudeProcess {
   outputBuffer: OutputBuffer
   signalDetector: AgentSessionSignalDetector
   replayBuffer: ReplayBuffer
+  outputSequence: number
   /** Resize-sensitive TUIs: suppress output until the first settled resize */
   suppressOutput?: boolean
   /** Per-PTY temp directory containing Hermes's authoritative active-session file. */
@@ -932,7 +937,7 @@ export class PtyManager {
     // back to exactly one tab without relying on recency or titles.
     let hermesRuntimeDir: string | undefined
     if (backend === 'hermes') {
-      hermesRuntimeDir = path.join(os.homedir(), '.cache', 'simple-code-gui', 'hermes-runtime', id)
+      hermesRuntimeDir = path.join(os.homedir(), '.cache', 'donutcode', 'hermes-runtime', id)
       fs.mkdirSync(hermesRuntimeDir, { recursive: true })
       env.TMPDIR = hermesRuntimeDir
     }
@@ -964,6 +969,7 @@ export class PtyManager {
       outputBuffer: new OutputBuffer(),
       signalDetector: new AgentSessionSignalDetector(cwd),
       replayBuffer: new ReplayBuffer(),
+      outputSequence: 0,
       hermesRuntimeDir,
     }
 
@@ -981,6 +987,7 @@ export class PtyManager {
       this.detectAgentSessionSignals(proc, data)
       if (proc.suppressOutput) return // swallow until first resize
       proc.replayBuffer.append(data)
+      proc.outputSequence += 1
       const callback = this.dataCallbacks.get(id)
       if (callback) {
         callback(data)
@@ -1008,9 +1015,13 @@ export class PtyManager {
         // Preserve callbacks before cleanup deletes them
         const savedDataCb = this.dataCallbacks.get(id)
         const savedExitCb = this.exitCallbacks.get(id)
+        const savedDataListeners = this.dataListeners.get(id)
+        const savedExitListeners = this.exitListeners.get(id)
         this.cleanupProcess(id)
         if (savedDataCb) this.dataCallbacks.set(id, savedDataCb)
         if (savedExitCb) this.exitCallbacks.set(id, savedExitCb)
+        if (savedDataListeners) this.dataListeners.set(id, savedDataListeners)
+        if (savedExitListeners) this.exitListeners.set(id, savedExitListeners)
 
         // Clear the renderer's terminal so the failed attempt's garbage is gone
         // ESC[2J = clear screen, ESC[H = cursor home
@@ -1045,6 +1056,7 @@ export class PtyManager {
           outputBuffer: new OutputBuffer(),
           signalDetector: new AgentSessionSignalDetector(cwd),
           replayBuffer: new ReplayBuffer(),
+          outputSequence: 0,
         }
         this.processes.set(id, retryProc)
 
@@ -1052,6 +1064,7 @@ export class PtyManager {
           retryProc.outputBuffer.append(data)
           this.detectAgentSessionSignals(retryProc, data)
           retryProc.replayBuffer.append(data)
+          retryProc.outputSequence += 1
           const cb = this.dataCallbacks.get(id)
           if (cb) cb(data)
           const listeners = this.dataListeners.get(id)
@@ -1233,6 +1246,33 @@ export class PtyManager {
     }
   }
 
+  async terminate(id: string, timeoutMs = 2_000): Promise<void> {
+    const proc = this.processes.get(id)
+    if (!proc) return
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let exitDisposable: { dispose(): void } | undefined
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        try { exitDisposable?.dispose() } catch { /* ignore */ }
+        resolve()
+      }
+      const timeout = setTimeout(finish, timeoutMs)
+      exitDisposable = proc.pty.onExit(finish)
+      try {
+        if (isWindows) proc.pty.kill()
+        else proc.pty.kill('SIGKILL')
+      } catch {
+        finish()
+      }
+    })
+
+    this.cleanupProcess(id)
+  }
+
   killAll(): void {
     console.log(`Killing ${this.processes.size} PTY processes`)
     for (const [id] of this.processes) {
@@ -1335,6 +1375,10 @@ export class PtyManager {
     return proc ? proc.replayBuffer.read() : null
   }
 
+  getOutputSequence(id: string): number | null {
+    return this.processes.get(id)?.outputSequence ?? null
+  }
+
   // Clean serialized snapshot of the interpreted screen state (see
   // OutputBuffer.serialize). Preferred over getReplayBytes for restoring
   // scrollback into a fresh renderer terminal.
@@ -1368,8 +1412,11 @@ export class PtyManager {
       if (!activeFile) return
 
       const payload = JSON.parse(fs.readFileSync(path.join(proc.hermesRuntimeDir, activeFile), 'utf8'))
-      if (typeof payload.session_id === 'string' && payload.session_id.trim()) {
-        proc.sessionId = payload.session_id
+      if (typeof payload.session_id === 'string') {
+        const reportedSessionId = payload.session_id.trim()
+        if (isDurableHermesSessionId(reportedSessionId)) {
+          proc.sessionId = reportedSessionId
+        }
       }
     } catch {
       // Hermes may be replacing the file while it switches sessions. Keep the

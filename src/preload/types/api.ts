@@ -1,15 +1,22 @@
 import type { Settings } from './settings.js'
 import type { Workspace, Session } from './workspace.js'
-import type { BeadsTask, BeadsCloseResult } from './beads.js'
+
 import type { VoiceSettings } from './voice.js'
 import type { Extension } from './extension.js'
 import type { CanvasAssetBytes, CanvasAssetMetadata, CanvasAssetResult } from '../../common/canvas-assets.js'
 import type { AgentSessionSignalEvent } from '../../common/agent-session-signal.js'
+import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResult, EnvironmentSnapshot } from '../../common/environment-protocol.js'
+import type { CommandEnvelope, EventEnvelope } from '../../common/server-protocol.js'
+import type { EnvironmentCommand } from '../../main/environment-command-router.js'
 
 export interface ElectronAPI {
   // Workspace
   getWorkspace: () => Promise<Workspace>
   saveWorkspace: (workspace: Workspace) => Promise<void>
+  getEnvironmentSnapshot: () => Promise<EnvironmentSnapshot<Workspace>>
+  getEnvironmentEvents: (afterRevision: number) => Promise<EnvironmentEventsResult<Workspace>>
+  executeEnvironmentCommand: (command: CommandEnvelope<EnvironmentCommand>) => Promise<EnvironmentCommandResult>
+  onEnvironmentEvent: (callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void) => () => void
   addProject: () => Promise<string | null>
   addProjectsFromParent: () => Promise<Array<{ path: string; name: string }> | null>
   getMetaProjectsPath: () => Promise<string>
@@ -67,33 +74,7 @@ export interface ElectronAPI {
   grokInstall: () => Promise<{ success: boolean; error?: string }>
 
 
-  // Beads
-  beadsCheck: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
-  beadsInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  beadsInstall: () => Promise<{ success: boolean; error?: string; method?: string; needsPython?: boolean }>
-  beadsReady: (cwd: string) => Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }>
-  beadsList: (cwd: string) => Promise<{ success: boolean; tasks?: BeadsTask[]; error?: string }>
-  beadsShow: (cwd: string, taskId: string) => Promise<{ success: boolean; task?: BeadsTask; error?: string }>
-  beadsCreate: (cwd: string, title: string, description?: string, priority?: number, type?: string, labels?: string) => Promise<{ success: boolean; task?: BeadsTask; error?: string }>
-  beadsComplete: (cwd: string, taskId: string) => Promise<{ success: boolean; result?: BeadsCloseResult; error?: string }>
-  beadsDelete: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-  beadsStart: (cwd: string, taskId: string) => Promise<{ success: boolean; error?: string }>
-  beadsUpdate: (cwd: string, taskId: string, status?: string, title?: string, description?: string, priority?: number) => Promise<{ success: boolean; error?: string }>
-  beadsWatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  beadsUnwatch: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  onBeadsTasksChanged: (callback: (data: { cwd: string }) => void) => () => void
 
-  // Kspec
-  kspecCheck: (cwd: string) => Promise<{ exists: boolean }>
-  kspecInit: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  kspecEnsureDaemon: (cwd: string) => Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>
-  kspecCheckCli: () => Promise<{ installed: boolean; version?: string }>
-  kspecInstallCli: () => Promise<{ success: boolean; error?: string }>
-  kspecMigrateFromBeads: (cwd: string) => Promise<{ success: boolean; migrated: number; error?: string }>
-  kspecDispatchStart: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  kspecDispatchStop: (cwd: string) => Promise<{ success: boolean; error?: string }>
-  kspecDispatchStatus: (cwd: string) => Promise<{ running: boolean; [key: string]: unknown }>
-  kspecDeleteTask: (cwd: string, taskRef: string) => Promise<{ success: boolean; error?: string }>
 
   // TTS instructions (backend-specific instruction file)
   ttsInstallInstructions: (projectPath: string, aiBackend?: string) => Promise<{ success: boolean }>
@@ -174,7 +155,7 @@ export interface ElectronAPI {
 
   // PTY
   listPtys: () => Promise<Array<{ id: string; cwd: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; sessionId?: string; spawnedAt: number }>>
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => Promise<string>
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok', agentSessionId?: string) => Promise<string>
   writePty: (id: string, data: string) => void
   resizePty: (id: string, cols: number, rows: number) => void
   killPty: (id: string) => void
@@ -281,9 +262,6 @@ export interface ElectronAPI {
   claudeMdRead: (projectPath: string) => Promise<{ success: boolean; content?: string; exists?: boolean; error?: string }>
   claudeMdSave: (projectPath: string, content: string) => Promise<{ success: boolean; error?: string }>
 
-  // Auto Work mode marker (for hooks)
-  autoworkSetActive: (projectPath: string) => Promise<{ success: boolean }>
-  autoworkClearActive: (projectPath: string) => Promise<{ success: boolean }>
 
   // Extensions
   extensionsFetchRegistry: (forceRefresh?: boolean) => Promise<{

@@ -4,8 +4,8 @@
 
 import { randomBytes } from 'crypto'
 import { existsSync, readFileSync } from 'fs'
-import { app } from 'electron'
 import { join } from 'path'
+import { getRuntimeDataDir } from '../runtime-paths.js'
 import {
   encryptToken,
   decryptToken,
@@ -14,7 +14,7 @@ import {
 import { log } from './utils'
 
 export function getTokenPath(): string {
-  return join(app.getPath('userData'), 'mobile-server-token')
+  return join(getRuntimeDataDir(), 'mobile-server-token')
 }
 
 export function loadOrCreateToken(): string {

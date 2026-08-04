@@ -3,15 +3,13 @@ import { Project } from '../../stores/workspace.js'
 import { SidebarState } from './useSidebarState.js'
 import { SidebarHandlers } from './useSidebarHandlers.js'
 import { OpenTab } from './types.js'
+import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 
 export interface ProjectItemCallbacks {
   handleProjectToggleExpand: (e: React.MouseEvent, projectPath: string) => void
   handleProjectOpenSession: (
     projectPath: string,
-    sessionId?: string,
-    slug?: string,
-    isNewSession?: boolean,
-    resumeCwd?: string
+    options?: OpenSessionOptions
   ) => void
   handleProjectRunExecutable: (projectPath: string) => Promise<void>
   handleProjectCloseProjectTabs: (projectPath: string) => void
@@ -60,8 +58,8 @@ export function useProjectItemCallbacks(
   )
 
   const handleProjectOpenSession = useCallback(
-    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => {
-      handleOpenSession(projectPath, sessionId, slug, isNewSession, resumeCwd)
+    (projectPath: string, options?: OpenSessionOptions) => {
+      handleOpenSession(projectPath, options)
     },
     [handleOpenSession]
   )
@@ -155,7 +153,6 @@ export function useProjectItemDependencies(
     draggedProject,
     editingProject,
     sessions,
-    taskCounts,
     dropTarget,
     handleProjectDragEnd,
   } = state
@@ -168,7 +165,6 @@ export function useProjectItemDependencies(
     draggedProject,
     editingProject,
     sessions,
-    taskCounts,
     dropTarget,
     callbacks.handleProjectToggleExpand,
     callbacks.handleProjectOpenSession,

@@ -1,17 +1,17 @@
-import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as https from 'https'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { isWindows, isMac } from './platform'
+import { getRuntimeDataDir } from './runtime-paths.js'
 
 const execAsync = promisify(exec)
 
 // Portable deps directory in app data
-const depsDir = path.join(app.getPath('userData'), 'deps')
-const nodeDir = path.join(depsDir, 'node')
-const pythonDir = path.join(depsDir, 'python')
+const getDepsDir = (): string => path.join(getRuntimeDataDir(), 'deps')
+const getNodeDir = (): string => path.join(getDepsDir(), 'node')
+const getPythonDir = (): string => path.join(getDepsDir(), 'python')
 
 // URLs for portable downloads
 const NODE_VERSION = '20.18.1'
@@ -38,41 +38,41 @@ export interface DepStatus {
 
 // Ensure deps directory exists
 function ensureDepsDir(): void {
-  if (!fs.existsSync(depsDir)) {
-    fs.mkdirSync(depsDir, { recursive: true })
+  if (!fs.existsSync(getDepsDir())) {
+    fs.mkdirSync(getDepsDir(), { recursive: true })
   }
 }
 
 // Get paths to portable executables
 export function getPortableNodePath(): string | null {
   if (isWindows) {
-    const nodePath = path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`, 'node.exe')
+    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`, 'node.exe')
     return fs.existsSync(nodePath) ? nodePath : null
   } else if (isMac) {
-    const nodePath = path.join(nodeDir, `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'node')
+    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'node')
     return fs.existsSync(nodePath) ? nodePath : null
   } else {
-    const nodePath = path.join(nodeDir, `node-v${NODE_VERSION}-linux-x64`, 'bin', 'node')
+    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin', 'node')
     return fs.existsSync(nodePath) ? nodePath : null
   }
 }
 
 export function getPortableNpmPath(): string | null {
   if (isWindows) {
-    const npmPath = path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`, 'npm.cmd')
+    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`, 'npm.cmd')
     return fs.existsSync(npmPath) ? npmPath : null
   } else if (isMac) {
-    const npmPath = path.join(nodeDir, `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'npm')
+    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'npm')
     return fs.existsSync(npmPath) ? npmPath : null
   } else {
-    const npmPath = path.join(nodeDir, `node-v${NODE_VERSION}-linux-x64`, 'bin', 'npm')
+    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin', 'npm')
     return fs.existsSync(npmPath) ? npmPath : null
   }
 }
 
 export function getPortablePythonPath(): string | null {
   if (isWindows) {
-    const pythonPath = path.join(pythonDir, 'python.exe')
+    const pythonPath = path.join(getPythonDir(), 'python.exe')
     return fs.existsSync(pythonPath) ? pythonPath : null
   }
   return null // Use system Python on macOS/Linux
@@ -80,7 +80,7 @@ export function getPortablePythonPath(): string | null {
 
 export function getPortablePipPath(): string | null {
   if (isWindows) {
-    const pipPath = path.join(pythonDir, 'Scripts', 'pip.exe')
+    const pipPath = path.join(getPythonDir(), 'Scripts', 'pip.exe')
     return fs.existsSync(pipPath) ? pipPath : null
   }
   return null
@@ -90,33 +90,27 @@ export function getPortablePipPath(): string | null {
 export function getPortableBinDirs(): string[] {
   const dirs: string[] = []
 
-  // Add beads directory (cross-platform)
-  const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
-  if (fs.existsSync(beadsDir)) {
-    dirs.push(beadsDir)
-  }
-
   if (isWindows) {
-    const nodeBase = path.join(nodeDir, `node-v${NODE_VERSION}-win-x64`)
+    const nodeBase = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`)
     if (fs.existsSync(nodeBase)) {
       dirs.push(nodeBase)
     }
-    if (fs.existsSync(pythonDir)) {
-      dirs.push(pythonDir)
-      dirs.push(path.join(pythonDir, 'Scripts'))
+    if (fs.existsSync(getPythonDir())) {
+      dirs.push(getPythonDir())
+      dirs.push(path.join(getPythonDir(), 'Scripts'))
     }
     // npm global packages installed via portable npm
-    const npmGlobal = path.join(app.getPath('userData'), 'npm-global')
+    const npmGlobal = path.join(getRuntimeDataDir(), 'npm-global')
     if (fs.existsSync(npmGlobal)) {
       dirs.push(npmGlobal)
     }
   } else if (isMac) {
-    const nodeBin = path.join(nodeDir, `node-v${NODE_VERSION}-darwin-x64`, 'bin')
+    const nodeBin = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin')
     if (fs.existsSync(nodeBin)) {
       dirs.push(nodeBin)
     }
   } else {
-    const nodeBin = path.join(nodeDir, `node-v${NODE_VERSION}-linux-x64`, 'bin')
+    const nodeBin = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin')
     if (fs.existsSync(nodeBin)) {
       dirs.push(nodeBin)
     }
@@ -223,7 +217,7 @@ export async function installPortableNode(onProgress?: (status: string, percent?
     }
 
     const ext = isWindows ? '.zip' : '.tar.gz'
-    const archivePath = path.join(depsDir, `node${ext}`)
+    const archivePath = path.join(getDepsDir(), `node${ext}`)
 
     onProgress?.('Downloading Node.js...', 0)
     await downloadFile(url, archivePath, (percent) => {
@@ -231,10 +225,10 @@ export async function installPortableNode(onProgress?: (status: string, percent?
     })
 
     onProgress?.('Extracting Node.js...', undefined)
-    if (!fs.existsSync(nodeDir)) {
-      fs.mkdirSync(nodeDir, { recursive: true })
+    if (!fs.existsSync(getNodeDir())) {
+      fs.mkdirSync(getNodeDir(), { recursive: true })
     }
-    await extractArchive(archivePath, nodeDir)
+    await extractArchive(archivePath, getNodeDir())
 
     // Cleanup archive
     fs.unlinkSync(archivePath)
@@ -246,7 +240,7 @@ export async function installPortableNode(onProgress?: (status: string, percent?
     }
 
     // Create npm global directory
-    const npmGlobal = path.join(app.getPath('userData'), 'npm-global')
+    const npmGlobal = path.join(getRuntimeDataDir(), 'npm-global')
     if (!fs.existsSync(npmGlobal)) {
       fs.mkdirSync(npmGlobal, { recursive: true })
     }
@@ -274,7 +268,7 @@ export async function installPortablePython(onProgress?: (status: string, percen
     ensureDepsDir()
 
     const url = PYTHON_URLS.win32
-    const archivePath = path.join(depsDir, 'python.zip')
+    const archivePath = path.join(getDepsDir(), 'python.zip')
 
     onProgress?.('Downloading Python...', 0)
     await downloadFile(url, archivePath, (percent) => {
@@ -282,10 +276,10 @@ export async function installPortablePython(onProgress?: (status: string, percen
     })
 
     onProgress?.('Extracting Python...', undefined)
-    if (!fs.existsSync(pythonDir)) {
-      fs.mkdirSync(pythonDir, { recursive: true })
+    if (!fs.existsSync(getPythonDir())) {
+      fs.mkdirSync(getPythonDir(), { recursive: true })
     }
-    await extractArchive(archivePath, pythonDir)
+    await extractArchive(archivePath, getPythonDir())
 
     // Cleanup archive
     fs.unlinkSync(archivePath)
@@ -295,20 +289,20 @@ export async function installPortablePython(onProgress?: (status: string, percen
     onProgress?.('Installing pip...', undefined)
 
     // Download get-pip.py
-    const getPipPath = path.join(pythonDir, 'get-pip.py')
+    const getPipPath = path.join(getPythonDir(), 'get-pip.py')
     await downloadFile('https://bootstrap.pypa.io/get-pip.py', getPipPath)
 
     // Uncomment import site in pythonXX._pth to enable pip
-    const pthFiles = fs.readdirSync(pythonDir).filter(f => f.endsWith('._pth'))
+    const pthFiles = fs.readdirSync(getPythonDir()).filter(f => f.endsWith('._pth'))
     for (const pthFile of pthFiles) {
-      const pthPath = path.join(pythonDir, pthFile)
+      const pthPath = path.join(getPythonDir(), pthFile)
       let content = fs.readFileSync(pthPath, 'utf-8')
       content = content.replace('#import site', 'import site')
       fs.writeFileSync(pthPath, content)
     }
 
     // Run get-pip.py
-    const pythonPath = path.join(pythonDir, 'python.exe')
+    const pythonPath = path.join(getPythonDir(), 'python.exe')
     await execAsync(`"${pythonPath}" "${getPipPath}"`, { timeout: 120000 })
 
     // Cleanup get-pip.py
@@ -336,112 +330,6 @@ export async function installClaudeWithPortableNpm(): Promise<{ success: boolean
 
   try {
     await execAsync(`"${npmPath}" install -g @anthropic-ai/claude-code`, { timeout: 300000 })
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
-}
-
-// Get the beads binary path
-export function getBeadsBinaryPath(): string | null {
-  const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
-  const binaryName = isWindows ? 'bd.exe' : 'bd'
-  const binaryPath = path.join(beadsDir, binaryName)
-  return fs.existsSync(binaryPath) ? binaryPath : null
-}
-
-// Get beads bin directory
-export function getBeadsBinDir(): string {
-  return path.join(app.getPath('userData'), 'deps', 'beads')
-}
-
-// Install Beads CLI (Go binary from GitHub releases)
-export async function installBeadsBinary(onProgress?: (status: string, percent?: number) => void): Promise<{ success: boolean; error?: string }> {
-  try {
-    ensureDepsDir()
-
-    const beadsDir = path.join(app.getPath('userData'), 'deps', 'beads')
-    if (!fs.existsSync(beadsDir)) {
-      fs.mkdirSync(beadsDir, { recursive: true })
-    }
-
-    // Determine platform and architecture
-    const platform = process.platform
-    const arch = process.arch
-
-    // Determine platform pattern for asset matching
-    // Asset names are like: beads_0.38.0_windows_amd64.zip
-    let osName: string
-    let archName: string
-    let ext: string
-
-    if (platform === 'win32') {
-      osName = 'windows'
-      ext = '.zip'
-    } else if (platform === 'darwin') {
-      osName = 'darwin'
-      ext = '.tar.gz'
-    } else {
-      osName = 'linux'
-      ext = '.tar.gz'
-    }
-
-    archName = arch === 'arm64' ? 'arm64' : 'amd64'
-
-    // Get latest release URL from GitHub
-    onProgress?.('Fetching latest release info...', 0)
-
-    const releaseUrl = 'https://api.github.com/repos/steveyegge/beads/releases/latest'
-    const releaseInfo = await new Promise<any>((resolve, reject) => {
-      https.get(releaseUrl, { headers: { 'User-Agent': 'simple-code-gui' } }, (res) => {
-        let data = ''
-        res.on('data', chunk => data += chunk)
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data))
-          } catch (e) {
-            reject(new Error('Failed to parse release info'))
-          }
-        })
-      }).on('error', reject)
-    })
-
-    // Find asset matching pattern: beads_VERSION_OS_ARCH.EXT
-    const assetPattern = new RegExp(`beads_.*_${osName}_${archName}\\${ext}$`)
-    const asset = releaseInfo.assets?.find((a: any) => assetPattern.test(a.name))
-    if (!asset) {
-      return { success: false, error: `No release found for ${osName}_${archName}${ext}` }
-    }
-
-    const downloadUrl = asset.browser_download_url
-    const archivePath = path.join(beadsDir, `beads${ext}`)
-
-    onProgress?.('Downloading Beads CLI...', 10)
-    await downloadFile(downloadUrl, archivePath, (percent) => {
-      onProgress?.('Downloading Beads CLI...', 10 + Math.round(percent * 0.7))
-    })
-
-    onProgress?.('Extracting Beads CLI...', 85)
-    await extractArchive(archivePath, beadsDir)
-
-    // Cleanup archive
-    fs.unlinkSync(archivePath)
-
-    // On Unix, make binary executable
-    if (!isWindows) {
-      const binaryPath = path.join(beadsDir, 'bd')
-      if (fs.existsSync(binaryPath)) {
-        fs.chmodSync(binaryPath, 0o755)
-      }
-    }
-
-    // Verify installation
-    const binaryPath = getBeadsBinaryPath()
-    if (!binaryPath) {
-      return { success: false, error: 'Beads extraction failed - binary not found' }
-    }
-
-    onProgress?.('Beads CLI installed successfully', 100)
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }

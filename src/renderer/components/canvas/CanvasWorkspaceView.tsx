@@ -62,6 +62,7 @@ interface CanvasWorkspaceViewProps {
   onRenameTab: (id: string, title: string) => void
   onDropProject?: (projectPath: string, point: CanvasPoint) => void
   api?: Api
+  getApiForServer?: (serverId: string) => Api | undefined
   isWorkspaceActive?: boolean
   maxMountedTerminals?: number
 }
@@ -517,6 +518,7 @@ export function CanvasWorkspaceView({
   onRenameTab,
   onDropProject,
   api,
+  getApiForServer,
   isWorkspaceActive = true,
   maxMountedTerminals = DEFAULT_MAX_MOUNTED_TERMINALS,
 }: CanvasWorkspaceViewProps): React.ReactElement {
@@ -897,7 +899,7 @@ export function CanvasWorkspaceView({
       return
     }
 
-    const project = projects.find(candidate => candidate.path === tab.projectPath)
+    const project = projects.find(candidate => candidate.serverId === tab.serverId && candidate.path === tab.projectPath)
     const newNode: CanvasTerminalNode = {
       id: `tab:${tab.id}`,
       tabIds: [tab.id],
@@ -1032,7 +1034,7 @@ export function CanvasWorkspaceView({
   }), [draft, maxMountedTerminals, viewport])
   const mountedIds = useMemo(() => new Set(plan.mountNodeIds), [plan.mountNodeIds])
   const tabById = useMemo(() => new Map(tabs.map(tab => [tab.id, tab])), [tabs])
-  const projectByPath = useMemo(() => new Map(projects.map(project => [project.path, project])), [projects])
+  const projectByPath = useMemo(() => new Map(projects.map(project => [`${project.serverId}\0${project.path}`, project])), [projects])
   const marquee = gestureRef.current?.kind === 'marquee'
     ? normalizeRect(gestureRef.current.startWorld, gestureRef.current.currentWorld)
     : null
@@ -1143,7 +1145,9 @@ export function CanvasWorkspaceView({
           {draft.nodes.map(node => {
             const nodeTabs = node.tabIds.map(id => tabById.get(id)).filter((tab): tab is OpenTab => Boolean(tab))
             const activeTab = tabById.get(node.activeTabId) ?? nodeTabs[0]
-            const project = projectByPath.get(node.projectPath ?? activeTab?.projectPath ?? '')
+            const project = activeTab
+              ? projectByPath.get(`${activeTab.serverId}\0${node.projectPath ?? activeTab.projectPath}`)
+              : undefined
             const hidden = node.groupId && draft.groups.some(group => group.id === node.groupId && group.collapsed)
             if (hidden) return null
             return (
@@ -1159,7 +1163,7 @@ export function CanvasWorkspaceView({
                 focused={focusedNodeId === node.id || Boolean(focusedTabId && node.tabIds.includes(focusedTabId))}
                 workspaceActive={isWorkspaceActive}
                 theme={theme}
-                api={api}
+                api={activeTab ? (getApiForServer?.(activeTab.serverId) ?? api) : api}
                 onSelect={event => selectItem(event, node)}
                 onMoveStart={event => startMove(event, node)}
                 onResizeStart={(event, handle) => startResize(event, node, handle)}

@@ -4,7 +4,7 @@ import { join } from 'path'
 import { voiceManager, WHISPER_MODELS, PIPER_VOICES, WhisperModelName, PiperVoiceName } from '../voice-manager'
 import { xttsManager, XTTS_LANGUAGES, XTTS_SAMPLE_VOICES } from '../xtts-manager'
 import { tadaTTS, TADA_SAMPLE_VOICES, getTadaSamplePath } from '../voice/tada-tts'
-import { installTaskInstructions } from './kspec-handlers'
+
 import { type AIBackend, readInstructionFile, writeInstructionFile, ensureAiderConfig } from './instruction-files'
 
 const TTS_INSTRUCTIONS_START = '\n\n<!-- TTS_VOICE_OUTPUT_START -->'
@@ -46,10 +46,6 @@ function installTTSInstructions(projectPath: string, aiBackend: AIBackend = 'cla
       ensureAiderConfig(projectPath)
     }
 
-    // Also refresh task instructions on every session open so outdated
-    // instruction entries (e.g. wrong --type list) get corrected.
-    // Runs after TTS write so installTaskInstructions reads the updated file.
-    refreshTaskInstructions(projectPath, aiBackend)
 
     return true
   } catch (e) {
@@ -58,23 +54,6 @@ function installTTSInstructions(projectPath: string, aiBackend: AIBackend = 'cla
   }
 }
 
-/**
- * Refresh task management instructions in CLAUDE.md if a task backend is initialized.
- * Detects kspec (.kspec/) or beads (.beads/) and re-injects current instructions,
- * ensuring outdated instructions from older app versions get replaced.
- */
-function refreshTaskInstructions(projectPath: string, aiBackend: AIBackend = 'claude'): void {
-  try {
-    const hasKspec = existsSync(join(projectPath, '.kspec'))
-    const hasBeads = existsSync(join(projectPath, '.beads'))
-    if (!hasKspec && !hasBeads) return
-
-    const backend = hasKspec ? 'kspec' : 'beads'
-    installTaskInstructions(projectPath, backend, aiBackend)
-  } catch {
-    // Non-critical — task instructions will be injected at next init
-  }
-}
 
 function removeTTSInstructions(projectPath: string, aiBackend: AIBackend = 'claude'): boolean {
   try {

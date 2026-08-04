@@ -1,6 +1,6 @@
 import React from 'react'
 import { Project, useWorkspaceStore } from '../../stores/workspace.js'
-import { BeadsPanel } from '../BeadsPanel.js'
+
 import { ExtensionBrowser } from '../ExtensionBrowser.js'
 import { ClaudeMdEditor } from '../ClaudeMdEditor.js'
 import {
@@ -26,7 +26,7 @@ export interface SidebarContentProps {
   openTabs: OpenTab[]
   activeTabId: string | null
   focusedTabId: string | null
-  onOpenSession: SidebarProps['onOpenSession']
+
   onRemoveProject: SidebarProps['onRemoveProject']
   onUpdateProject: SidebarProps['onUpdateProject']
   onAddProject: SidebarProps['onAddProject']
@@ -44,7 +44,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
     projects,
     activeTabId,
     focusedTabId,
-    onOpenSession,
+
     onRemoveProject,
     onUpdateProject,
     onAddProject,
@@ -87,10 +87,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
     setExtensionBrowserModal,
     claudeMdEditorModal,
     setClaudeMdEditorModal,
-    beadsExpanded,
-    setBeadsExpanded,
-    beadsProjectPath,
-    focusedTabPtyId,
+
     focusedProject,
     focusedProjectPath,
     apiStatus,
@@ -277,22 +274,6 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
           </button>
         </div>
       </div>
-
-      <BeadsPanel
-        projectPath={beadsProjectPath}
-        isExpanded={beadsExpanded}
-        onToggle={() => setBeadsExpanded(!beadsExpanded)}
-        onStartTaskInNewTab={(prompt) => {
-          if (beadsProjectPath) onOpenSession(beadsProjectPath, undefined, undefined, prompt, true)
-        }}
-        onSendToCurrentTab={(prompt) => {
-          if (focusedTabPtyId) {
-            window.electronAPI?.writePty(focusedTabPtyId, prompt)
-            setTimeout(() => window.electronAPI?.writePty(focusedTabPtyId, '\r'), 100)
-          }
-        }}
-        currentTabPtyId={focusedTabPtyId}
-      />
 
 
       {voiceOutputEnabled && (

@@ -1,13 +1,14 @@
 import { app, crashReporter, session } from 'electron'
+import { DONUTCODE_APP_NAME, DONUTCODE_APP_SLUG } from '../brand-migration.js'
 
 export const IS_DEBUG_MODE = process.argv.includes('--debug') || process.env.DEBUG_MODE === '1'
 
 export function setupAppConfig(): void {
   // Set app name and WM_CLASS for proper Linux taskbar integration
-  app.setName('simple-code-gui')
+  app.setName(DONUTCODE_APP_NAME)
   if (process.platform === 'linux') {
-    app.commandLine.appendSwitch('class', 'simple-code-gui')
-    app.commandLine.appendSwitch('name', 'simple-code-gui')
+    app.commandLine.appendSwitch('class', DONUTCODE_APP_SLUG)
+    app.commandLine.appendSwitch('name', DONUTCODE_APP_SLUG)
   }
 
   // Enable GPU acceleration
@@ -17,7 +18,7 @@ export function setupAppConfig(): void {
   // Configure crash reporter for packaged builds
   if (app.isPackaged) {
     crashReporter.start({
-      productName: 'Simple Code GUI',
+      productName: DONUTCODE_APP_NAME,
       submitURL: '', // Set to crash collection server URL when available
       uploadToServer: false // Enable when submitURL is configured
     })

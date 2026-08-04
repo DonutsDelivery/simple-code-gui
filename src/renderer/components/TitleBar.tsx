@@ -4,7 +4,7 @@ interface TitleBarProps {
   title?: string
 }
 
-export function TitleBar({ title = 'Simple Code GUI' }: TitleBarProps) {
+export function TitleBar({ title = 'DonutCode' }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false)
   const throttleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastCallRef = useRef<number>(0)

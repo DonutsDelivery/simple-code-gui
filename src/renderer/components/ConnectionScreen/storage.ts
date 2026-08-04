@@ -5,11 +5,17 @@
 import { Preferences } from '@capacitor/preferences'
 import type { SavedHost } from './types.js'
 
-const HOSTS_STORAGE_KEY = 'claude-terminal-saved-hosts'
+const HOSTS_STORAGE_KEY = 'donutcode-saved-servers'
+const LEGACY_HOSTS_STORAGE_KEY = 'claude-terminal-saved-hosts'
 
 export async function loadSavedHostsAsync(): Promise<SavedHost[]> {
   try {
-    const { value } = await Preferences.get({ key: HOSTS_STORAGE_KEY })
+    let { value } = await Preferences.get({ key: HOSTS_STORAGE_KEY })
+    if (!value) {
+      const legacy = await Preferences.get({ key: LEGACY_HOSTS_STORAGE_KEY })
+      value = legacy.value
+      if (value) await Preferences.set({ key: HOSTS_STORAGE_KEY, value })
+    }
     console.log('[ConnectionScreen] Loading saved hosts from Preferences:', value)
     if (!value) return []
     const hosts = JSON.parse(value) as SavedHost[]

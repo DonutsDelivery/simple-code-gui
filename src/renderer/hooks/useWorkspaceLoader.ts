@@ -14,6 +14,7 @@ import {
 import { Theme, getThemeById, applyTheme, themes } from '../themes'
 import { cleanupOrphanedBuffers } from '../components/terminal/Terminal'
 import type { TileNode } from '../components/tile-tree.js'
+import { loadAuthoritativeWorkspace } from '../stores/workspace-persistence.js'
 import {
   deserializeTree,
   migrateFromFlat,
@@ -53,6 +54,7 @@ const CODEX_RESUME_LAST_SESSION_ID = '__codex_resume_last__'
 
 export async function spawnSessionTabs(
   api: Api,
+  serverId: string,
   savedTabs: any[],
   projects: any[],
   settings: AppSettings | null,
@@ -194,7 +196,8 @@ export async function spawnSessionTabs(
           projectPathToRestore,
           sessionIdForSpawn,
           undefined,
-          effectiveBackend
+          effectiveBackend,
+          savedTab.agentSessionId || savedTab.sessionId || savedTab.id,
         )
 
       if (savedTab.id) {
@@ -202,8 +205,10 @@ export async function spawnSessionTabs(
       }
 
       const tab: OpenTab = {
+        serverId,
         id: ptyId,
         projectPath: projectPathToRestore,
+        agentSessionId: savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId,
         sessionId: sessionIdToRestore,
         title: titleToRestore,
         customTitle: savedTab.customTitle || undefined,
@@ -384,6 +389,7 @@ export function useWorkspaceLoader({
     }
     const { idMapping } = await spawnSessionTabs(
       api,
+      api.getServerProtocol?.()?.serverId || (() => { throw new Error('Missing server identity') })(),
       savedData.openTabs,
       projectsRef.current,
       settingsRef.current,
@@ -424,12 +430,15 @@ export function useWorkspaceLoader({
         }
         clearAllTabs()
 
-        const workspace = await api.getWorkspace()
+        const workspace = await loadAuthoritativeWorkspace(api)
+        const serverId = api.getServerProtocol?.()?.serverId
+        if (!serverId) throw new Error('Cannot load a workspace without a stable server identity')
 
         if (workspace.projects) {
-          setProjects(workspace.projects)
-          projectsRef.current = workspace.projects
-          for (const project of workspace.projects) {
+          const serverProjects = workspace.projects.map(project => ({ ...project, serverId }))
+          setProjects(serverProjects)
+          projectsRef.current = serverProjects
+          for (const project of serverProjects) {
             const projBackend = (project.backend && project.backend !== 'default'
               ? project.backend
               : (loadedSettings?.backend && loadedSettings.backend !== 'default'
@@ -505,6 +514,7 @@ export function useWorkspaceLoader({
           const restoredTabs: OpenTab[] = []
           const { idMapping } = await spawnSessionTabs(
             api,
+            serverId,
             activeSaved.openTabs,
             workspace.projects ?? [],
             loadedSettings,

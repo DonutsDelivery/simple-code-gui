@@ -23,24 +23,6 @@ export interface TerminalProps {
   onPtyExit?: (code: number) => void
 }
 
-// Auto work options passed from menu
-export interface AutoWorkOptions {
-  withContext?: boolean
-  askQuestions?: boolean
-  pauseForReview?: boolean
-  finalEvaluation?: boolean
-  gitCommitEachTask?: boolean
-}
-
-// Auto work state for the hook
-export interface AutoWorkState {
-  enabled: boolean
-  withSummary: boolean
-  askQuestions: boolean
-  pauseForReview: boolean
-  finalEvaluation: boolean
-  gitCommit: boolean
-}
 
 // TTS state for the hook
 export interface TTSState {

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/header-gui-v3.png" alt="simple-code-gui" width="600">
+  <img src="assets/header-gui-v3.png" alt="DonutCode" width="600">
 </p>
 
 <p align="center">
@@ -11,9 +11,9 @@
   <img src="https://img.shields.io/aur/version/simple-code-gui" alt="AUR">
 </p>
 
-A desktop GUI for managing multiple AI coding assistant sessions across different projects in a single window. Supports **Claude Code**, **Gemini CLI**, **Codex**, and **OpenCode**.
+A distributed development workspace for managing multiple AI coding sessions across projects and execution servers. Supports **Claude Code**, **Gemini CLI**, **Codex**, and **OpenCode**.
 
-Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants on multiple projects simultaneously, instantly resume past conversations, and switch between sessions with a click. Features voice input/output, image pasting, task tracking with Beads integration, and 9 color themes.
+DonutCode lets you run AI coding assistants on multiple projects simultaneously, instantly resume past conversations, and switch between sessions with a click. Features voice input/output, image pasting, and 9 color themes.
 
 ![Main Interface - Tiled View](https://donutsdelivery.online/assets/mockups/thumbs/simplecodegui-mockup-1.svg)
 
@@ -24,7 +24,7 @@ Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants o
 | Windows | [Installer (.exe)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-Setup-1.3.50.exe) \| [Portable (.exe)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-Portable-1.3.50.exe) |
 | macOS (untested) | [Apple Silicon (.dmg)](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50-arm64.dmg) |
 | Linux | [AppImage](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.AppImage) \| [.deb](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.deb) \| [.rpm](https://github.com/DonutsDelivery/simple-code-gui/releases/download/v1.3.50/Simple-Code-GUI-1.3.50.rpm) |
-| Arch Linux | `yay -S simple-code-gui` |
+| Arch Linux | `yay -S donutcode` |
 
 [All releases](https://github.com/DonutsDelivery/simple-code-gui/releases)
 
@@ -33,13 +33,13 @@ Stop juggling terminal tabs. Simple Code GUI lets you run AI coding assistants o
 
 This is macOS Gatekeeper blocking unsigned apps. Run:
 ```bash
-sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
+sudo xattr -dr com.apple.quarantine "/Applications/DonutCode.app"
 ```
 </details>
 
 ## Features
 
-### Multi-Backend Support
+### Multi-Harness Support
 - **Claude Code** - Anthropic's Claude AI assistant
 - **Gemini CLI** - Google's Gemini AI
 - **Codex** - OpenAI Codex
@@ -57,7 +57,7 @@ sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
 - **Create Projects** - Make new project directories without leaving the app
 - **Session History** - Expand projects to see all past sessions with timestamps
 - **Project Icons** - Custom emoji icons for each project
-- **Per-Project Settings** - Override global settings per project (backend, permissions, voice)
+- **Per-Project Settings** - Override global settings per project (harness, permissions, voice)
 - **Run Executable** - Launch your app directly from the sidebar
 
 ### Voice Features
@@ -76,14 +76,9 @@ sudo xattr -dr com.apple.quarantine "/Applications/Simple Code GUI.app"
 
 ### Customization
 - **9 Color Themes** - Including RGB Gamer mode with animations
-- **Settings Panel** - Configure themes, permissions, backend, and voice
+- **Settings Panel** - Configure themes, permissions, harness, and voice
 - **Window Memory** - Remembers size and position
 
-### Task Tracking (Beads Integration)
-- **Task Panel** - Manage project tasks without leaving the app
-- **Create Tasks** - Add tasks with title, description, and priority
-- **Track Progress** - Start, complete, and delete tasks
-- **Auto-Refresh** - Task list updates automatically
 
 ### Setup & Updates
 - **Auto-Install Dependencies** - Installs Claude Code, Node.js, Git if missing

@@ -8,8 +8,8 @@ export const ptyHandlers = {
   listPtys: (): Promise<Array<{ id: string; cwd: string; backend: Backend; sessionId?: string; spawnedAt: number }>> =>
     ipcRenderer.invoke('pty:list'),
 
-  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: Backend): Promise<string> =>
-    ipcRenderer.invoke('pty:spawn', { cwd, sessionId, model, backend }),
+  spawnPty: (cwd: string, sessionId?: string, model?: string, backend?: Backend, agentSessionId?: string): Promise<string> =>
+    ipcRenderer.invoke('pty:spawn', { cwd, sessionId, model, backend, agentSessionId }),
 
   writePty: (id: string, data: string): void => ipcRenderer.send('pty:write', { id, data }),
 

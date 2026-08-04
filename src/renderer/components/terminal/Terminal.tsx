@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import '@xterm/xterm/css/xterm.css'
 import { TerminalBar } from '../TerminalBar.js'
-import { AutoWorkOptions } from '../TerminalMenu.js'
 import { CustomCommandModal } from '../CustomCommandModal.js'
 import { resolveBackendCommand } from '../../utils/backendCommands.js'
 import type { TerminalProps } from './types.js'
 import { useTerminalSetup } from './useTerminalSetup.js'
 import { useTTS } from './useTTS.js'
-import { useAutoWork } from './useAutoWork.js'
+
 import { useSummaryCapture } from './useSummaryCapture.js'
 import { clearTerminalBuffer, cleanupOrphanedBuffers, formatPathsForBackend } from './utils.js'
 
@@ -16,7 +15,7 @@ export { clearTerminalBuffer, cleanupOrphanedBuffers }
 
 /**
  * Terminal component that wraps xterm.js with PTY integration.
- * Supports TTS, auto work loop, summary capture, and backend-specific commands.
+ * Supports TTS, summary capture, and backend-specific commands.
  */
 export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend, api, isMobile, onOpenFileBrowser, onPtyExit }: TerminalProps): React.ReactElement {
   // Custom command modal state
@@ -59,14 +58,6 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     prePopulateSpokenContent,
   } = useTTS({ ptyId, isActive })
 
-  // Auto work hook (needs summary capture's triggerSummarize)
-  // We'll wire it up after summary capture is created
-  const autoWorkHookPlaceholder = useAutoWork({
-    ptyId,
-    sendBackendCommand,
-    triggerSummarize: () => {}, // Will be replaced
-  })
-
   // Summary capture hook
   const {
     processSummaryChunk,
@@ -74,23 +65,6 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   } = useSummaryCapture({
     ptyId,
     sendBackendCommand,
-    autoWorkWithSummary: autoWorkHookPlaceholder.autoWorkState.withSummary,
-    buildAutoWorkPrompt: autoWorkHookPlaceholder.buildAutoWorkPrompt,
-  })
-
-  // Reconnect auto work with actual triggerSummarize
-  const {
-    autoWorkState,
-    awaitingUserReview,
-    handleAutoWorkMarker,
-    startAutoWork,
-    continueAutoWork,
-    stopAutoWork,
-    cancelAutoWork,
-  } = useAutoWork({
-    ptyId,
-    sendBackendCommand,
-    triggerSummarize,
   })
 
   // Terminal setup hook
@@ -109,7 +83,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     onTTSChunk: processTTSChunk,
     onUserInput: handleUserInput,
     onSummaryChunk: processSummaryChunk,
-    onAutoWorkMarker: handleAutoWorkMarker,
+
     prePopulateSpokenContent,
     resetTTSState,
     onPtyExit,
@@ -348,7 +322,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [backend, ptyId, writePty, currentLineInputRef, inputSuppressedRef])
 
   // Handle menu commands
-  const handleMenuCommand = useCallback((command: string, options?: AutoWorkOptions) => {
+  const handleMenuCommand = useCallback((command: string) => {
     // Route clear/compact to special handlers that preserve user input
     if (command === 'clear') {
       handleClearWithRestore()
@@ -368,27 +342,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         triggerSummarize()
         break
 
-      case 'autowork':
-        startAutoWork(options)
-        break
-
-      case 'continuework':
-        continueAutoWork()
-        break
-
-      case 'stopwork':
-        stopAutoWork()
-        break
-
       case 'cancel':
-        cancelAutoWork()
+        writePty(ptyId, '\x1b')
         break
+
 
       case 'addcommand':
         setShowCustomCommandModal(true)
         break
     }
-  }, [sendBackendCommand, triggerSummarize, startAutoWork, continueAutoWork, stopAutoWork, cancelAutoWork, handleClearWithRestore, handleCompactWithRestore])
+  }, [sendBackendCommand, triggerSummarize, writePty, ptyId, handleClearWithRestore, handleCompactWithRestore])
 
   return (
     <div className="terminal-content-wrapper">

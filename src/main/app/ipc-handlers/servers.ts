@@ -2,11 +2,13 @@ import { ipcMain } from 'electron'
 import { ApiServerManager } from '../../api-server.js'
 import { MobileServer } from '../../mobile-server.js'
 import type { SessionStore } from '../../session-store.js'
+import type { EnvironmentRuntime } from '../../environment-runtime.js'
 
 export function registerServerHandlers(
   apiServerManager: ApiServerManager,
   mobileServer: MobileServer,
-  sessionStore: SessionStore
+  sessionStore: SessionStore,
+  environmentRuntime?: EnvironmentRuntime,
 ): void {
   // API Server management
   ipcMain.handle('api:start', (_, { projectPath, port }: { projectPath: string; port: number }) => apiServerManager.start(projectPath, port))
@@ -25,10 +27,14 @@ export function registerServerHandlers(
   ipcMain.handle('mobile:setEnabled', async (_event, enabled: boolean) => {
     const next = enabled === true
     sessionStore.saveSettings({ ...sessionStore.getSettings(), mobileAccessEnabled: next })
+    if (environmentRuntime) {
+      await environmentRuntime.setLanAccess(next)
+      return { enabled: next, running: mobileServer.isRunning() }
+    }
     if (next) {
       if (!mobileServer.isRunning()) await mobileServer.start()
     } else if (mobileServer.isRunning()) {
-      mobileServer.stop()
+      await mobileServer.stop()
     }
     return { enabled: next, running: mobileServer.isRunning() }
   })

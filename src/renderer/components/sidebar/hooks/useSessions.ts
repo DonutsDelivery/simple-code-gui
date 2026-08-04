@@ -2,17 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Project } from '../../../stores/workspace.js'
 import { OpenTab, ClaudeSession } from '../types.js'
 import type { BackendId } from '../../../api/types'
+import type { OpenSessionOptions } from '../../../hooks/useProjectHandlers.js'
 
 interface UseSessionsOptions {
   projects: Project[]
   openTabs: OpenTab[]
   onOpenSession: (
     projectPath: string,
-    sessionId?: string,
-    slug?: string,
-    initialPrompt?: string,
-    forceNewSession?: boolean,
-    resumeCwd?: string
+    options?: OpenSessionOptions
   ) => void
   onSwitchToTab: (tabId: string) => void
 }
@@ -25,10 +22,7 @@ interface UseSessionsReturn {
   openMostRecentSession: (projectPath: string) => Promise<void>
   handleOpenSession: (
     projectPath: string,
-    sessionId?: string,
-    slug?: string,
-    isNewSession?: boolean,
-    resumeCwd?: string
+    options?: OpenSessionOptions
   ) => void
 }
 
@@ -95,22 +89,27 @@ export function useSessions({
 
       if (projectSessions.length > 0) {
         const mostRecent = projectSessions[0]
-        onOpenSession(projectPath, mostRecent.sessionId, mostRecent.slug, undefined, undefined, mostRecent.cwd)
+        onOpenSession(projectPath, {
+          sessionId: mostRecent.sessionId,
+          slug: mostRecent.slug,
+          resumeCwd: mostRecent.cwd,
+        })
       } else {
-        onOpenSession(projectPath, undefined, undefined, undefined, false)
+        onOpenSession(projectPath)
       }
     },
     [openTabs, projects, sessions, onSwitchToTab, onOpenSession]
   )
 
   const handleOpenSession = useCallback(
-    (projectPath: string, sessionId?: string, slug?: string, isNewSession?: boolean, resumeCwd?: string) => {
+    (projectPath: string, options: OpenSessionOptions = {}) => {
+      const { sessionId, slug, forceNewSession, resumeCwd } = options
       if (sessionId) {
         const discoveredCwd = resumeCwd ?? sessions[projectPath]?.find(session => session.sessionId === sessionId)?.cwd
-        onOpenSession(projectPath, sessionId, slug, undefined, undefined, discoveredCwd)
-      } else if (isNewSession) {
+        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd })
+      } else if (forceNewSession) {
         // Explicit "New Session" click - always create a new session
-        onOpenSession(projectPath, undefined, undefined, undefined, true)
+        onOpenSession(projectPath, { forceNewSession: true })
       } else {
         openMostRecentSession(projectPath)
       }

@@ -10,7 +10,7 @@ describe('themes', () => {
     it('should have a default theme', () => {
       const defaultTheme = themes.find(t => t.id === 'default')
       expect(defaultTheme).toBeDefined()
-      expect(defaultTheme?.name).toBe('Claude Orange')
+      expect(defaultTheme?.name).toBe('Dark')
     })
 
     it('should have valid structure for all themes', () => {
@@ -37,7 +37,7 @@ describe('themes', () => {
     it('should return the correct theme by id', () => {
       const theme = getThemeById('default')
       expect(theme.id).toBe('default')
-      expect(theme.name).toBe('Claude Orange')
+      expect(theme.name).toBe('Dark')
     })
 
     it('should return default theme for unknown id', () => {

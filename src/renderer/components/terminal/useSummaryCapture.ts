@@ -9,8 +9,6 @@ import {
 interface UseSummaryCaptureOptions {
   ptyId: string
   sendBackendCommand: (commandId: string) => boolean
-  autoWorkWithSummary: boolean
-  buildAutoWorkPrompt: () => string
 }
 
 interface UseSummaryCaptureReturn {
@@ -26,8 +24,6 @@ interface UseSummaryCaptureReturn {
 export function useSummaryCapture({
   ptyId,
   sendBackendCommand,
-  autoWorkWithSummary,
-  buildAutoWorkPrompt,
 }: UseSummaryCaptureOptions): UseSummaryCaptureReturn {
   const summaryBufferRef = useRef('')
   const capturingSummaryRef = useRef(false)
@@ -73,8 +69,7 @@ export function useSummaryCapture({
     if (!pendingSummary) return
 
     const summaryToSend = pendingSummary
-    const shouldContinueAutoWork = autoWorkWithSummary
-    console.log('[Summary] useEffect triggered, running /clear, summary length:', summaryToSend.length, 'autowork:', shouldContinueAutoWork)
+    console.log('[Summary] useEffect triggered, running /clear, summary length:', summaryToSend.length)
 
     const didClear = sendBackendCommand('clear')
     const clearDelay = didClear ? 2000 : 100
@@ -87,21 +82,10 @@ export function useSummaryCapture({
         window.electronAPI?.writePty(ptyId, '\r')
       }, 100)
 
-      if (shouldContinueAutoWork) {
-        setTimeout(() => {
-          console.log('[AutoWork+Summary] Sending work prompt after summary')
-          const autoworkPrompt = buildAutoWorkPrompt()
-          window.electronAPI?.writePty(ptyId, autoworkPrompt)
-          // Small delay before Enter to ensure prompt is fully written
-          setTimeout(() => {
-            window.electronAPI?.writePty(ptyId, '\r')
-          }, 100)
-        }, 2000)
-      }
     }, clearDelay)
 
     setPendingSummary(null)
-  }, [pendingSummary, ptyId, sendBackendCommand, autoWorkWithSummary, buildAutoWorkPrompt])
+  }, [pendingSummary, ptyId, sendBackendCommand])
 
   return {
     processSummaryChunk,

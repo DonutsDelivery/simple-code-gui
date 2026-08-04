@@ -12,7 +12,7 @@ export function UninstallTTSSection({ removingTTS, ttsRemovalResult, onRemove }:
       <label>Uninstall TTS</label>
       <p className="form-hint">
         Remove TTS voice output instructions from CLAUDE.md files in all projects.
-        Use this if you want to stop using Claude Terminal altogether.
+        Use this if you want to stop using DonutCode altogether.
       </p>
       <button
         className="btn-danger"

@@ -24,8 +24,8 @@ export function WelcomeView({
     <div className="app">
       <div className="empty-state">
         <div className="mobile-logo">◇</div>
-        <h2>Claude Terminal</h2>
-        <p>Connect to your desktop to start using Claude Terminal on this device.</p>
+        <h2>DonutCode</h2>
+        <p>Connect to your server to start using DonutCode on this device.</p>
 
         {error && <p className="error-message">{error}</p>}
 

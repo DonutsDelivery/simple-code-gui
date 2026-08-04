@@ -2,8 +2,10 @@ import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
 import type { TileNode, ComputedRect, TileLeaf } from '../tile-tree.js'
 import type { DropZone, OpenTab } from '../tiled-layout-utils.js'
+import type { AgentAttentionKind } from '../../stores/workspace.js'
 
 export interface Project {
+  serverId: string
   path: string
   name: string
   icon?: string
@@ -17,6 +19,7 @@ export interface TiledTerminalViewProps {
   projects: Project[]
   theme: Theme
   focusedTabId?: string | null
+  attentionByTabId?: Record<string, AgentAttentionKind>
   onCloseTab: (id: string) => void
   onRenameTab: (id: string, title: string) => void
   onFocusTab: (id: string) => void
@@ -26,6 +29,7 @@ export interface TiledTerminalViewProps {
   onAddTab?: (projectPath: string, tileId: string) => void
   onUndoCloseTab?: () => void
   api?: Api
+  getApiForServer?: (serverId: string) => Api | undefined
 }
 
 export interface TileResizeState {

@@ -21,7 +21,7 @@ export function MobileSidebarContent({
     <div className="mobile-sidebar-content">
       {/* Header */}
       <div className="mobile-sidebar-header">
-        <h1 className="mobile-sidebar-title">Claude Terminal</h1>
+        <h1 className="mobile-sidebar-title">DonutCode</h1>
         <p className="mobile-sidebar-subtitle">
           {projects.length} project{projects.length !== 1 ? 's' : ''}
         </p>

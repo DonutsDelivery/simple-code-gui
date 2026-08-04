@@ -48,7 +48,7 @@ export const PERMISSION_MODES = [
 ]
 
 export const BACKEND_MODES = [
-  { label: 'Default', value: 'default', desc: 'Use the global backend selection' },
+  { label: 'Default', value: 'default', desc: 'Use the global harness selection' },
   { label: 'Claude', value: 'claude', desc: 'Use Claude for code generation' },
   { label: 'Gemini', value: 'gemini', desc: 'Use Gemini for code generation' },
   { label: 'Codex', value: 'codex', desc: 'Use Codex for code generation' },

@@ -8,6 +8,7 @@ import { validateWithinProjectRoots } from '../../mobile-security'
 import { log, getProjectRoots } from '../utils'
 import { LocalPty } from '../types'
 import type { SessionStore } from '../../session-store'
+import type { SessionRuntimeRegistry } from '../../session-runtime-registry'
 import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions'
 import type { AIBackend } from '../../ipc/instruction-files'
 import { resolveMobileSpawnSettings } from './spawn-settings'
@@ -19,17 +20,13 @@ const MAX_MOBILE_PTYS = 16
 export function setupPtyRoutes(
   app: Express,
   getPtyManager: () => any,
+  getRuntimeRegistry: () => SessionRuntimeRegistry | null,
   getSessionStore: () => SessionStore | null,
   getLocalPtys: () => Map<string, LocalPty>,
   getPtyStreams: () => Map<string, Set<WebSocket>>,
-  getPtyDataBuffer: () => Map<string, string[]>,
-  broadcastPtyData: (ptyId: string, data: string) => void,
   broadcastPtyExit: (ptyId: string, code: number) => void
 ): void {
-  // List all active PTYs (any owner: desktop renderer or mobile-spawned).
-  // Mobile clients call this before spawning so they can attach to a
-  // matching live PTY instead of spawning a parallel `--resume` process,
-  // which would branch the conversation.
+  // List all host-owned live PTYs for diagnostics and compatibility clients.
   app.get('/api/pty/list', (_req: Request, res: Response) => {
     try {
       const ptyManager = getPtyManager()
@@ -47,7 +44,7 @@ export function setupPtyRoutes(
   // Spawn a new PTY
   app.post('/api/pty/spawn', async (req: Request, res: Response) => {
     try {
-      const { projectPath, sessionId, model, backend } = req.body
+      const { projectPath, sessionId, agentSessionId, model, backend } = req.body
 
       if (!projectPath || typeof projectPath !== 'string') {
         return res.status(400).json({ error: 'projectPath is required' })
@@ -70,9 +67,18 @@ export function setupPtyRoutes(
       if (!ptyManager) {
         return res.status(500).json({ error: 'PTY manager not available' })
       }
+      const runtimeRegistry = getRuntimeRegistry()
+      if (!runtimeRegistry) {
+        return res.status(500).json({ error: 'Runtime registry not available' })
+      }
 
-      // L3: enforce the mobile-spawned PTY ceiling.
-      if (getLocalPtys().size >= MAX_MOBILE_PTYS) {
+      // L3: enforce the mobile-visible PTY ceiling only for a new runtime. An
+      // attach to an already running canonical session must remain available.
+      const canonicalSessionId = agentSessionId || sessionId
+      const existingRuntime = canonicalSessionId
+        ? runtimeRegistry.getRuntime(canonicalSessionId)
+        : null
+      if (!existingRuntime && getLocalPtys().size >= MAX_MOBILE_PTYS) {
         log('PTY spawn rejected: cap reached', { active: getLocalPtys().size })
         return res.status(429).json({ error: 'Too many active sessions. Close one before starting another.' })
       }
@@ -94,40 +100,44 @@ export function setupPtyRoutes(
       })
 
       installAgentSessionSignalInstructions(safeProjectPath, spawnSettings.backend as AIBackend)
-      const ptyId = ptyManager.spawn(
-        safeProjectPath,
-        sessionId,
-        spawnSettings.autoAcceptTools,
-        spawnSettings.permissionMode,
-        spawnSettings.model,
-        spawnSettings.backend
-      )
+      const runtime = await runtimeRegistry.ensureRuntime({
+        agentSessionId: canonicalSessionId,
+        nativeSessionId: sessionId,
+        projectId: safeProjectPath,
+        harnessId: spawnSettings.backend,
+        autoAcceptTools: spawnSettings.autoAcceptTools,
+        permissionMode: spawnSettings.permissionMode,
+        model: spawnSettings.model,
+      })
+      const ptyId = runtime.ptyId
 
-      // Track this PTY for cleanup
-      const localPty: LocalPty = {
-        ptyId,
-        projectPath: safeProjectPath,
-        dataCallbacks: new Set(),
-        exitCallbacks: new Set()
+      if (!getLocalPtys().has(ptyId)) {
+        const localPty: LocalPty = {
+          ptyId,
+          projectPath: safeProjectPath,
+          dataCallbacks: new Set(),
+          exitCallbacks: new Set()
+        }
+        getLocalPtys().set(ptyId, localPty)
+
+        localPty.disposeExit = ptyManager.addExitListener(ptyId, (code: number) => {
+          log('PTY exited', { ptyId, code })
+          broadcastPtyExit(ptyId, code)
+          getLocalPtys().delete(ptyId)
+        })
       }
-      getLocalPtys().set(ptyId, localPty)
 
-      // Set up data forwarding to WebSocket streams
-      ptyManager.onData(ptyId, (data: string) => {
-        broadcastPtyData(ptyId, data)
+      log(runtime.created ? 'PTY spawned' : 'PTY attached', {
+        ptyId,
+        agentSessionId: runtime.agentSessionId,
+        projectPath: safeProjectPath,
       })
-
-      // Set up exit handler
-      ptyManager.onExit(ptyId, (code: number) => {
-        log('PTY exited', { ptyId, code })
-        broadcastPtyExit(ptyId, code)
-        getLocalPtys().delete(ptyId)
-        getPtyStreams().delete(ptyId)
-        getPtyDataBuffer().delete(ptyId)
+      res.json({
+        ptyId,
+        runtimeId: runtime.runtimeId,
+        agentSessionId: runtime.agentSessionId,
+        attached: !runtime.created,
       })
-
-      log('PTY spawned', { ptyId, projectPath })
-      res.json({ ptyId })
     } catch (error) {
       log('PTY spawn error', { error: String(error) })
       res.status(500).json({ error: 'Internal server error' })
@@ -153,10 +163,9 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
-      if (typeof ptyManager.writeUserInput === 'function') ptyManager.writeUserInput(id, data)
-      else ptyManager.write(id, data)
+      const acknowledgement = getRuntimeRegistry()?.writeInput(id, data)
       log('PTY write', { ptyId: id, dataLength: data.length })
-      res.json({ success: true })
+      res.json({ success: true, acknowledgement })
     } catch (error) {
       log('PTY write error', { error: String(error) })
       res.status(500).json({ error: 'Internal server error' })
@@ -186,7 +195,7 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
-      ptyManager.resize(id, cols, rows)
+      getRuntimeRegistry()?.resize(id, cols, rows)
       log('PTY resize', { ptyId: id, cols, rows })
       res.json({ success: true })
     } catch (error) {
@@ -195,8 +204,8 @@ export function setupPtyRoutes(
     }
   })
 
-  // Kill PTY
-  app.delete('/api/pty/:id', (req: Request, res: Response) => {
+  // Detach a frontend. Pass ?stop=true only for an explicit host runtime stop.
+  app.delete('/api/pty/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params
 
@@ -209,22 +218,25 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
-      ptyManager.kill(id)
-      getLocalPtys().delete(id)
-
-      // Close any WebSocket streams for this PTY
-      const streams = getPtyStreams().get(id)
-      if (streams) {
-        streams.forEach(ws => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close(1000, 'PTY killed')
-          }
-        })
-        getPtyStreams().delete(id)
+      // Closing a frontend view detaches by default. Explicit process stop is
+      // reserved for callers that deliberately pass ?stop=true.
+      const shouldStop = req.query.stop === 'true'
+      if (shouldStop) {
+        const localPty = getLocalPtys().get(id)
+        localPty?.disposeExit?.()
+        getLocalPtys().delete(id)
+        await getRuntimeRegistry()?.stopRuntimeByPty(id)
+        const streams = getPtyStreams().get(id)
+        if (streams) {
+          streams.forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'PTY stopped')
+          })
+          getPtyStreams().delete(id)
+        }
       }
 
-      log('PTY killed', { ptyId: id })
-      res.json({ success: true })
+      log(shouldStop ? 'PTY stopped' : 'PTY detached', { ptyId: id })
+      res.json({ success: true, stopped: shouldStop })
     } catch (error) {
       log('PTY kill error', { error: String(error) })
       res.status(500).json({ error: 'Internal server error' })

@@ -9,9 +9,9 @@ interface BackendSettingsProps {
 export function BackendSettings({ backend, onChange }: BackendSettingsProps): React.ReactElement {
   return (
     <div className="form-group">
-      <label>Backend</label>
+      <label>Harness</label>
       <p className="form-hint">
-        The backend to use for the terminal sessions.
+        The coding-agent harness to use for new terminal sessions.
       </p>
       <div className="permission-mode-options">
         {BACKEND_MODES.map((mode) => (

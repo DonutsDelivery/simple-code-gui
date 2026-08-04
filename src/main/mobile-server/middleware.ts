@@ -229,6 +229,10 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
     return method === 'GET' ? 'read' : 'write'
   }
 
+  if (path.startsWith('/api/environment/')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
   // Project add needs write access
   if (path === '/api/project/add') {
     return 'write'
@@ -239,13 +243,6 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
     return 'read'
   }
 
-  // Beads: GET operations are read, write operations need write access
-  if (path.includes('/projects/beads')) {
-    if (method === 'GET') {
-      return 'read'
-    }
-    return 'write'
-  }
 
   // TTS speak/stop/settings need write
   if (path.includes('/api/tts/speak') || path.includes('/api/tts/stop') || path.includes('/api/tts/settings')) {

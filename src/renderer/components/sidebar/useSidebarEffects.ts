@@ -1,19 +1,18 @@
 import { useEffect, useCallback } from 'react'
-import { Project } from '../../stores/workspace.js'
+
 import { useSwipeGesture } from '../../hooks/useSwipeGesture.js'
 import { SidebarState } from './useSidebarState.js'
 
 // Use type assertion for extended electronAPI methods not in the base type
 const electronAPI = window.electronAPI as (typeof window.electronAPI) & {
   apiStatus?: (projectPath: string) => Promise<{ running: boolean; port?: number }>
-  beadsCheck?: (cwd: string) => Promise<{ installed: boolean; initialized: boolean }>
-  beadsList?: (cwd: string) => Promise<{ success: boolean; tasks?: Array<{ status: string }>; error?: string }>
+
   isDebugMode?: () => Promise<boolean>
 }
 
 export interface UseSidebarEffectsParams {
   state: SidebarState
-  projects: Project[]
+
   isMobile: boolean
   isMobileOpen: boolean | undefined
   onMobileClose: (() => void) | undefined
@@ -21,7 +20,7 @@ export interface UseSidebarEffectsParams {
 }
 
 export function useSidebarEffects(params: UseSidebarEffectsParams): void {
-  const { state, projects, isMobile, isMobileOpen, onMobileClose, onWidthChange } = params
+  const { state, isMobile, isMobileOpen, onMobileClose, onWidthChange } = params
   const {
     sidebarRef,
     isResizing,
@@ -31,7 +30,7 @@ export function useSidebarEffects(params: UseSidebarEffectsParams): void {
     setContextMenu,
     setCategoryContextMenu,
     setApiStatus,
-    setTaskCounts,
+
     focusedProjectPath,
     setIsDebugMode,
   } = state
@@ -98,33 +97,6 @@ export function useSidebarEffects(params: UseSidebarEffectsParams): void {
     }
   }, [contextMenu, setApiStatus])
 
-  // Fetch task counts for all projects
-  useEffect(() => {
-    async function fetchTaskCounts(): Promise<void> {
-      if (!electronAPI?.beadsCheck) return
-      const counts: Record<string, { open: number; inProgress: number }> = {}
-      for (const project of projects) {
-        try {
-          const status = await electronAPI.beadsCheck(project.path)
-          if (status.installed && status.initialized && electronAPI.beadsList) {
-            const result = await electronAPI.beadsList(project.path)
-            if (result.success && result.tasks) {
-              const tasks = result.tasks as Array<{ status: string }>
-              const open = tasks.filter((t) => t.status === 'open').length
-              const inProgress = tasks.filter((t) => t.status === 'in_progress').length
-              counts[project.path] = { open, inProgress }
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      setTaskCounts(counts)
-    }
-    fetchTaskCounts()
-    const interval = setInterval(fetchTaskCounts, 30000)
-    return () => clearInterval(interval)
-  }, [projects, setTaskCounts])
 
   // Fetch API status for focused project
   useEffect(() => {

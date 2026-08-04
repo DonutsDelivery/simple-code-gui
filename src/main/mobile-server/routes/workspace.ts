@@ -7,10 +7,12 @@ import { basename } from 'path'
 import { validateProjectPath } from '../../mobile-security'
 import { discoverSessions } from '../../session-discovery'
 import { log } from '../utils'
+import type { EnvironmentCommandRouter } from '../../environment-command-router.js'
 
 export function setupWorkspaceRoutes(
   app: Express,
-  getSessionStore: () => any
+  getSessionStore: () => any,
+  getEnvironmentRouter?: () => EnvironmentCommandRouter | null,
 ): void {
   // Reload workspace from disk
   app.post('/api/workspace/reload', async (_req: Request, res: Response) => {
@@ -33,64 +35,25 @@ export function setupWorkspaceRoutes(
       if (!sessionStore) {
         return res.status(500).json({ error: 'Session store not available' })
       }
-      const workspace = sessionStore.getWorkspace()
+      const workspace = getEnvironmentRouter?.()?.getSnapshot().workspace ?? sessionStore.getWorkspace()
       res.json(workspace)
     } catch (error) {
       res.status(500).json({ error: 'Internal server error' })
     }
   })
 
-  app.put('/api/workspace', async (req: Request, res: Response) => {
-    try {
-      const sessionStore = getSessionStore()
-      if (!sessionStore) {
-        return res.status(500).json({ error: 'Session store not available' })
-      }
-      // Protect against overwriting populated workspace with empty one
-      const incoming = req.body
-      const incomingProjects = incoming?.projects?.length || 0
-      if (incomingProjects === 0) {
-        const current = sessionStore.getWorkspace()
-        const currentProjects = current?.projects?.length || 0
-        if (currentProjects > 0) {
-          log('Rejected empty workspace save - current has projects', { currentProjects })
-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
-        }
-      }
-      sessionStore.saveWorkspace(req.body)
-      res.json({ success: true })
-    } catch (error) {
-      res.status(500).json({ error: 'Internal server error' })
-    }
+  app.put('/api/workspace', async (_req: Request, res: Response) => {
+    res.status(410).json({
+      error: 'Blind workspace replacement is disabled; use POST /api/environment/commands with expectedRevision',
+      code: 'AUTHORITATIVE_COMMAND_REQUIRED',
+    })
   })
 
-  app.post('/api/workspace', async (req: Request, res: Response) => {
-    try {
-      const sessionStore = getSessionStore()
-      if (!sessionStore) {
-        return res.status(500).json({ error: 'Session store not available' })
-      }
-      // POST expects { workspace: {...} } wrapper format
-      const incoming = req.body
-      const workspace = incoming?.workspace
-      if (!workspace) {
-        return res.status(400).json({ error: 'Missing workspace field in request body' })
-      }
-      // Protect against overwriting populated workspace with empty one
-      const incomingProjects = workspace?.projects?.length || 0
-      if (incomingProjects === 0) {
-        const current = sessionStore.getWorkspace()
-        const currentProjects = current?.projects?.length || 0
-        if (currentProjects > 0) {
-          log('Rejected empty workspace save - current has projects', { currentProjects })
-          return res.status(400).json({ error: 'Cannot overwrite populated workspace with empty one' })
-        }
-      }
-      sessionStore.saveWorkspace(workspace)
-      res.json({ success: true })
-    } catch (error) {
-      res.status(500).json({ error: 'Internal server error' })
-    }
+  app.post('/api/workspace', async (_req: Request, res: Response) => {
+    res.status(410).json({
+      error: 'Blind workspace replacement is disabled; use POST /api/environment/commands with expectedRevision',
+      code: 'AUTHORITATIVE_COMMAND_REQUIRED',
+    })
   })
 
   // Settings routes

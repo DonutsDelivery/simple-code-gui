@@ -2,12 +2,11 @@
  * Mobile Server Utilities
  */
 
-import { appendFileSync } from 'fs'
-import { app } from 'electron'
+import { appendFileSync, existsSync, mkdirSync } from 'fs'
 import { join, resolve } from 'path'
-import { existsSync } from 'fs'
 import { networkInterfaces } from 'os'
 import { timingSafeEqual } from 'crypto'
+import { getRuntimeAppPath, getRuntimeDataDir } from '../runtime-paths.js'
 
 /**
  * Constant-time comparison of two secret strings (M4). Avoids leaking how many
@@ -27,8 +26,13 @@ export function log(message: string, data?: any): void {
   const logLine = data
     ? `[${timestamp}] ${message} ${JSON.stringify(data)}\n`
     : `[${timestamp}] ${message}\n`
-  const logPath = join(app.getPath('userData'), 'mobile-server.log')
-  appendFileSync(logPath, logLine)
+  const logPath = join(getRuntimeDataDir(), 'server.log')
+  try {
+    mkdirSync(getRuntimeDataDir(), { recursive: true })
+    appendFileSync(logPath, logLine)
+  } catch (error) {
+    console.warn('[MobileServer] Failed to write server log:', error)
+  }
   console.log('[MobileServer]', message, data || '')
 }
 
@@ -56,7 +60,7 @@ export function getRendererPath(): string {
     return resolve(__dirname, '../../../dist/renderer')
   }
   // Production - check common locations
-  const appPath = app.getAppPath()
+  const appPath = getRuntimeAppPath()
   // If running from asar, renderer is in dist/renderer inside the asar
   if (appPath.includes('.asar')) {
     return join(appPath, 'dist/renderer')

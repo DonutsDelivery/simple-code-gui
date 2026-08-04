@@ -6,6 +6,10 @@ import { WebSocket } from 'ws'
 
 export interface MobileServerConfig {
   port?: number
+  host?: string
+  serverVersion?: string
+  serverId?: string
+  startupNonce?: string
 }
 
 export type EndpointAccess = 'admin' | 'write' | 'read'
@@ -20,6 +24,7 @@ export interface LocalPty {
   projectPath: string
   dataCallbacks: Set<(data: string) => void>
   exitCallbacks: Set<(code: number) => void>
+  disposeExit?: () => void
 }
 
 export interface PendingFile {

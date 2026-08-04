@@ -1,12 +1,13 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { PtyManager } from '../../pty-manager.js'
+import { SessionRuntimeRegistry } from '../../session-runtime-registry.js'
 import { SessionStore } from '../../session-store.js'
 import { ApiServerManager } from '../../api-server.js'
 import { pendingApiPrompts, autoCloseSessions } from '../api-prompt-handler.js'
-import { appendFileSync, existsSync } from 'fs'
+import { appendFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { installTaskInstructions } from '../../ipc/kspec-handlers.js'
+
 import { installSelfCompactionInstructions } from '../../ipc/self-compaction-instructions.js'
 import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions.js'
 import type { AIBackend } from '../../ipc/instruction-files.js'
@@ -104,6 +105,7 @@ export function isTerminalDeviceResponse(data: string): boolean {
 
 export function registerPtyHandlers(
   ptyManager: PtyManager,
+  runtimeRegistry: SessionRuntimeRegistry,
   sessionStore: SessionStore,
   apiServerManager: ApiServerManager,
   ptyToProject: Map<string, string>,
@@ -111,6 +113,12 @@ export function registerPtyHandlers(
   getMainWindow: () => BrowserWindow | null,
   hermesBackupManager?: HermesBackupManager,
 ): void {
+  const desktopSubscriptions = new Map<string, Array<() => void>>()
+  const detachDesktop = (id: string): void => {
+    for (const dispose of desktopSubscriptions.get(id) ?? []) dispose()
+    desktopSubscriptions.delete(id)
+  }
+
   ptyManager.onAgentSessionSignal(signal => {
     try {
       const currentWindow = getMainWindow()
@@ -129,7 +137,7 @@ export function registerPtyHandlers(
   // than raw replay bytes, which corrupt formatting when sizes changed.
   ipcMain.handle('pty:get-replay', (_, id: string) => ptyManager.getSerializedBuffer(id))
 
-  ipcMain.handle('pty:spawn', async (_, { cwd, sessionId, model, backend, hermesTmuxSessionId }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; hermesTmuxSessionId?: string }) => {
+  ipcMain.handle('pty:spawn', async (_, { cwd, sessionId, model, backend, agentSessionId, hermesTmuxSessionId }: { cwd: string; sessionId?: string; model?: string; backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'; agentSessionId?: string; hermesTmuxSessionId?: string }) => {
     try {
       const workspace = sessionStore.getWorkspace()
       const project = workspace.projects.find(p => p.path === cwd)
@@ -161,7 +169,17 @@ export function registerPtyHandlers(
         await hermesBackupManager.snapshot('pre-launch')
       }
 
-      const id = ptyManager.spawn(cwd, sessionId, autoAcceptTools, permissionMode, effectiveModel, effectiveBackend, hermesTmuxSessionId)
+      const runtime = await runtimeRegistry.ensureRuntime({
+        agentSessionId: agentSessionId || sessionId,
+        nativeSessionId: sessionId,
+        projectId: cwd,
+        harnessId: effectiveBackend as import('../../pty-manager.js').Backend,
+        autoAcceptTools,
+        permissionMode,
+        model: effectiveModel,
+        hermesTmuxSessionId,
+      })
+      const id = runtime.ptyId
       ptyToProject.set(id, cwd)
       ptyToBackend.set(id, effectiveBackend)
       if (effectiveBackend === 'hermes') hermesBackupManager?.start()
@@ -172,7 +190,8 @@ export function registerPtyHandlers(
 
       const mainWindow = getMainWindow()
 
-      ptyManager.onData(id, (data) => {
+      detachDesktop(id)
+      const disposeData = ptyManager.addDataListener(id, (data) => {
         maybeRespondToCursorPositionRequest(ptyManager, ptyToBackend, id, data)
         maybeAutoAccept(ptyManager, id, data)
         try {
@@ -182,7 +201,7 @@ export function registerPtyHandlers(
         }
       })
 
-      ptyManager.onExit(id, (code) => {
+      const disposeExit = ptyManager.addExitListener(id, (code) => {
         if (effectiveBackend === 'hermes') {
           void hermesBackupManager?.snapshot('backend-exit')
         }
@@ -197,10 +216,12 @@ export function registerPtyHandlers(
         autoAcceptEnabled.delete(id)
         autoAcceptBuffers.delete(id)
         autoAcceptCooldown.delete(id)
+        desktopSubscriptions.delete(id)
         if (effectiveBackend === 'hermes' && ![...ptyToBackend.values()].includes('hermes')) {
           hermesBackupManager?.stop()
         }
       })
+      desktopSubscriptions.set(id, [disposeData, disposeExit])
 
       if (pending) {
         pendingApiPrompts.delete(cwd)
@@ -208,7 +229,7 @@ export function registerPtyHandlers(
         setTimeout(() => {
           // Verify PTY still exists before writing (race condition guard)
           if (ptyManager.getProcess(id)) {
-            ptyManager.writeUserInput(id, pending.prompt + '\n')
+            runtimeRegistry.writeInput(id, pending.prompt + '\n')
             pending.resolve({ success: true, message: 'Prompt sent to new terminal', sessionCreated: true })
           } else {
             pending.resolve({ success: false, error: 'Terminal exited before prompt could be sent' })
@@ -230,18 +251,16 @@ export function registerPtyHandlers(
   })
 
   ipcMain.on('pty:write', (_, { id, data }: { id: string; data: string }) => {
-    if (isTerminalDeviceResponse(data)) ptyManager.write(id, data)
-    else ptyManager.writeUserInput(id, data)
+    runtimeRegistry.writeInput(id, data, isTerminalDeviceResponse(data))
   })
-  ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; rows: number }) => ptyManager.resize(id, cols, rows))
+  ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; rows: number }) => runtimeRegistry.resize(id, cols, rows))
   ipcMain.on('pty:kill', (_, id: string) => {
-    const backend = ptyToBackend.get(id)
-    ptyToProject.delete(id)
-    ptyToBackend.delete(id)
-    ptyManager.kill(id)
-    if (backend === 'hermes' && ![...ptyToBackend.values()].includes('hermes')) {
-      hermesBackupManager?.stop()
-    }
+    // Legacy event name: closing a renderer tab detaches this frontend. The
+    // host-owned runtime remains available to sibling/reconnecting clients.
+    detachDesktop(id)
+    autoAcceptEnabled.delete(id)
+    autoAcceptBuffers.delete(id)
+    autoAcceptCooldown.delete(id)
   })
 
   ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {
@@ -257,8 +276,16 @@ export function registerPtyHandlers(
       installAgentSessionSignalInstructions(projectPath, newBackend as AIBackend)
     }
 
-    ptyManager.kill(oldId)
-    const newId = ptyManager.spawn(cwd, effectiveSessionId, undefined, undefined, undefined, newBackend)
+    detachDesktop(oldId)
+    await runtimeRegistry.stopRuntimeByPty(oldId)
+    const runtime = await runtimeRegistry.ensureRuntime({
+      // A harness change creates a distinct canonical session. The old one is
+      // stopped but retained under its original immutable harness binding.
+      nativeSessionId: effectiveSessionId,
+      projectId: cwd,
+      harnessId: newBackend,
+    })
+    const newId = runtime.ptyId
 
     if (projectPath) {
       ptyToProject.set(newId, projectPath)
@@ -277,32 +304,22 @@ export function registerPtyHandlers(
     autoAcceptBuffers.delete(oldId)
     autoAcceptCooldown.delete(oldId)
 
-    ptyManager.onData(newId, (data) => {
+    const disposeData = ptyManager.addDataListener(newId, (data) => {
       maybeRespondToCursorPositionRequest(ptyManager, ptyToBackend, newId, data)
       maybeAutoAccept(ptyManager, newId, data)
       mainWindow?.webContents.send(`pty:data:${newId}`, data)
     })
 
-    ptyManager.onExit(newId, (code) => {
+    const disposeExit = ptyManager.addExitListener(newId, (code) => {
       mainWindow?.webContents.send(`pty:exit:${newId}`, code)
       ptyToProject.delete(newId)
       ptyToBackend.delete(newId)
       autoAcceptEnabled.delete(newId)
       autoAcceptBuffers.delete(newId)
       autoAcceptCooldown.delete(newId)
+      desktopSubscriptions.delete(newId)
     })
-
-    // Refresh instruction file for the new backend so it gets kspec/beads context
-    if (projectPath) {
-      try {
-        const hasKspec = existsSync(join(projectPath, '.kspec'))
-        const hasBeads = existsSync(join(projectPath, '.beads'))
-        if (hasKspec || hasBeads) {
-          const taskBackend = hasKspec ? 'kspec' : 'beads'
-          installTaskInstructions(projectPath, taskBackend, newBackend as AIBackend)
-        }
-      } catch { /* non-fatal */ }
-    }
+    desktopSubscriptions.set(newId, [disposeData, disposeExit])
 
     mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend, sessionId: effectiveSessionId })
   })

@@ -27,7 +27,7 @@ interface QRScannerProps {
  * V3 adds TLS certificate pinning fields
  */
 interface QRCodePayload {
-  type: 'claude-terminal'
+  type: 'donutcode' | 'claude-terminal'
   version: 2 | 3
   host: string
   hosts?: string[]  // Multiple IPs for fallback connection attempts
@@ -49,7 +49,7 @@ export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
   // Try parsing as JSON (v2/v3 format)
   try {
     const parsed = JSON.parse(data)
-    if (parsed.type === 'claude-terminal' && (parsed.version === 2 || parsed.version === 3)) {
+    if ((parsed.type === 'donutcode' || parsed.type === 'claude-terminal') && (parsed.version === 2 || parsed.version === 3)) {
       const qr = parsed as QRCodePayload
 
       // Validate required fields
@@ -83,7 +83,9 @@ export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
   // Try parsing as URL (v1 format for backward compatibility)
   try {
     // Handle custom protocol
-    const urlToParse = data.replace('claude-terminal://', 'https://')
+    const urlToParse = data
+      .replace('donutcode://', 'https://')
+      .replace('claude-terminal://', 'https://')
     const parsed = new URL(urlToParse)
 
     const host = parsed.hostname
@@ -150,7 +152,7 @@ export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.
         // Check if it was an expired nonce
         try {
           const data = JSON.parse(rawValue)
-          if (data.type === 'claude-terminal' && data.nonceExpires && Date.now() > data.nonceExpires) {
+          if ((data.type === 'donutcode' || data.type === 'claude-terminal') && data.nonceExpires && Date.now() > data.nonceExpires) {
             onError?.('QR code has expired. Please refresh the QR code on the host device.')
             onCancel()
             return

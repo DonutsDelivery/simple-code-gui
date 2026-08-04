@@ -1,7 +1,14 @@
-import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { syncMetaProjects } from './meta-project-sync'
+import { getRuntimeDataDir } from './runtime-paths.js'
+import type { EnvironmentCommandReceipt, EnvironmentEvent, EnvironmentSnapshot } from '../common/environment-protocol.js'
+import type { EventEnvelope } from '../common/server-protocol.js'
+
+export type HarnessId = 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
+export type HarnessSelection = 'default' | HarnessId
+
+const CURRENT_SCHEMA_VERSION = 3
 
 export interface ProjectCategory {
   id: string
@@ -24,7 +31,9 @@ export interface Project {
   color?: string              // Project color for visual identification
   ttsVoice?: string           // Per-project TTS voice (overrides global)
   ttsEngine?: 'piper' | 'xtts'  // Per-project TTS engine
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' // Per-project backend (overrides global)
+  harnessId?: HarnessSelection // Per-project harness (overrides global)
+  /** @deprecated Read-only compatibility with schema v1. */
+  backend?: HarnessSelection
   categoryId?: string         // Category this project belongs to
   order?: number              // Order within category or uncategorized list
 }
@@ -32,10 +41,13 @@ export interface Project {
 export interface OpenTab {
   id: string
   projectPath: string
+  agentSessionId?: string
   sessionId?: string
   title: string
   ptyId?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  harnessId?: HarnessSelection
+  /** @deprecated Read-only compatibility with schema v1. */
+  backend?: HarnessSelection
 }
 
 export interface TileLayout {
@@ -108,7 +120,9 @@ export interface Settings {
   notificationVolume?: number
   autoAcceptTools?: string[]
   permissionMode?: string
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  defaultHarnessId?: HarnessSelection
+  /** @deprecated Read-only compatibility with schema v1. */
+  backend?: HarnessSelection
   globalInstructionInjection?: string
   // Mobile/LAN access. Off by default — the embedded HTTP+WS server (which can
   // drive PTYs) only listens once the user explicitly opts in (H1).
@@ -120,8 +134,16 @@ export interface Settings {
 }
 
 
+export interface StoredEnvironmentAuthority {
+  snapshot: EnvironmentSnapshot<Workspace>
+  events: Array<EventEnvelope<EnvironmentEvent<Workspace>>>
+  receipts: EnvironmentCommandReceipt[]
+}
+
 interface StoredData {
+  schemaVersion: number
   workspace: Workspace
+  environment?: StoredEnvironmentAuthority
   windowBounds?: WindowBounds
   settings?: Settings
 }
@@ -130,15 +152,57 @@ export class SessionStore {
   private configPath: string
   private backupPath: string
   private data: StoredData
+  private migratedOnLoad = false
 
-  constructor() {
-    const configDir = join(app.getPath('userData'), 'config')
+  constructor(dataDir = getRuntimeDataDir()) {
+    const configDir = join(dataDir, 'config')
     if (!existsSync(configDir)) {
       mkdirSync(configDir, { recursive: true })
     }
     this.configPath = join(configDir, 'workspace.json')
     this.backupPath = join(configDir, 'workspace.json.backup')
     this.data = this.load()
+    if (this.migratedOnLoad) this.save()
+  }
+
+  private migrateHarnessFields(data: any): StoredData {
+    const migrateRecord = (record: any, target: 'harnessId' | 'defaultHarnessId'): void => {
+      if (!record || typeof record !== 'object') return
+      if (record[target] === undefined && record.backend !== undefined) record[target] = record.backend
+      delete record.backend
+    }
+
+    migrateRecord(data.settings, 'defaultHarnessId')
+    const migrateWorkspace = (workspace: any): void => {
+      if (!workspace) return
+      for (const project of workspace.projects ?? []) migrateRecord(project, 'harnessId')
+      for (const tab of workspace.openTabs ?? []) migrateRecord(tab, 'harnessId')
+      for (const session of workspace.sessions ?? []) {
+        for (const tab of session.openTabs ?? []) migrateRecord(tab, 'harnessId')
+      }
+    }
+    migrateWorkspace(data.workspace)
+    migrateWorkspace(data.environment?.snapshot?.workspace)
+    if (data.environment?.snapshot?.workspace) data.workspace = data.environment.snapshot.workspace
+    data.schemaVersion = CURRENT_SCHEMA_VERSION
+    return data as StoredData
+  }
+
+  private withHarnessCompatibility<T>(value: T): T {
+    const copy = JSON.parse(JSON.stringify(value))
+    const aliasRecord = (record: any, source: 'harnessId' | 'defaultHarnessId'): void => {
+      if (record?.[source] !== undefined) record.backend = record[source]
+    }
+    if (copy?.projects) {
+      for (const project of copy.projects) aliasRecord(project, 'harnessId')
+      for (const tab of copy.openTabs ?? []) aliasRecord(tab, 'harnessId')
+      for (const session of copy.sessions ?? []) {
+        for (const tab of session.openTabs ?? []) aliasRecord(tab, 'harnessId')
+      }
+    } else {
+      aliasRecord(copy, 'defaultHarnessId')
+    }
+    return copy as T
   }
 
   private loadFile(path: string): StoredData | null {
@@ -149,7 +213,8 @@ export class SessionStore {
       const content = readFileSync(path, 'utf-8')
       const data = JSON.parse(content)
       if (!data?.workspace) return null
-      return data
+      if (data.schemaVersion !== CURRENT_SCHEMA_VERSION) this.migratedOnLoad = true
+      return this.migrateHarnessFields(data)
     } catch (e) {
       console.error(`[SessionStore] Failed to load ${path}:`, e)
       return null
@@ -183,6 +248,7 @@ export class SessionStore {
     if (main) return main
 
     return {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       workspace: {
         projects: [],
         openTabs: [],
@@ -191,7 +257,7 @@ export class SessionStore {
     }
   }
 
-  private save(): void {
+  private save(throwOnError = false): void {
     try {
       const json = JSON.stringify(this.data, null, 2)
 
@@ -233,11 +299,12 @@ export class SessionStore {
       }
     } catch (e) {
       console.error('[SessionStore] Failed to save workspace:', e)
+      if (throwOnError) throw e
     }
   }
 
   getWorkspace(): Workspace {
-    return this.data.workspace
+    return this.withHarnessCompatibility(this.data.workspace)
   }
 
   // Reload workspace from disk (useful when file was modified externally)
@@ -255,9 +322,31 @@ export class SessionStore {
       console.log('[SessionStore] Rejected empty workspace save - current has', currentProjects, 'projects')
       return
     }
-    this.data.workspace = workspace
+    this.data = this.migrateHarnessFields({ ...this.data, workspace })
     this.save()
     syncMetaProjects(workspace)
+  }
+
+  getEnvironmentAuthority(serverId: string): StoredEnvironmentAuthority | undefined {
+    const authority = this.data.environment
+    if (!authority || authority.snapshot.serverId !== serverId) return undefined
+    return JSON.parse(JSON.stringify(authority))
+  }
+
+  saveEnvironmentAuthority(authority: StoredEnvironmentAuthority): void {
+    const previous = this.data
+    this.data = this.migrateHarnessFields({
+      ...this.data,
+      workspace: authority.snapshot.workspace,
+      environment: authority,
+    })
+    try {
+      this.save(true)
+      syncMetaProjects(authority.snapshot.workspace)
+    } catch (error) {
+      this.data = previous
+      throw error
+    }
   }
 
   getWindowBounds(): WindowBounds | undefined {
@@ -270,23 +359,24 @@ export class SessionStore {
   }
 
   getSettings(): Settings {
-    return {
+    return this.withHarnessCompatibility({
       defaultProjectDir: '',
       theme: 'default',
-      backend: 'default',
+      defaultHarnessId: 'default',
       globalInstructionInjection: '',
       notificationSoundsEnabled: true,
       notificationVolume: 0.65,
       ...this.data.settings,
-    }
+    })
   }
 
   saveSettings(settings: Settings): void {
-    this.data.settings = {
+    const normalizedSettings = {
       ...settings,
       notificationSoundsEnabled: settings.notificationSoundsEnabled !== false,
       notificationVolume: Math.max(0, Math.min(1, settings.notificationVolume ?? 0.65)),
     }
+    this.data = this.migrateHarnessFields({ ...this.data, settings: normalizedSettings })
     this.save()
   }
 }

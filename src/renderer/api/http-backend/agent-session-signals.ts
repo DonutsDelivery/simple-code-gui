@@ -4,12 +4,16 @@ import type {
   Unsubscribe
 } from '../types'
 import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAYS } from './constants'
+import type { EnvironmentEvent } from '../../../common/environment-protocol.js'
+import type { EventEnvelope } from '../../../common/server-protocol.js'
+import type { Workspace } from '../types.js'
 
 const HEARTBEAT_INTERVAL = 30_000
 const HEARTBEAT_TIMEOUT = 10_000
 
 export class AgentSessionSignalConnection {
   private listeners = new Set<AgentSessionSignalCallback>()
+  private environmentListeners = new Set<(event: EventEnvelope<EnvironmentEvent<Workspace>>) => void>()
   private socket: WebSocket | null = null
   private reconnectAttempts = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -27,7 +31,16 @@ export class AgentSessionSignalConnection {
 
     return () => {
       this.listeners.delete(callback)
-      if (this.listeners.size === 0) this.disconnect()
+      if (this.listeners.size === 0 && this.environmentListeners.size === 0) this.disconnect()
+    }
+  }
+
+  subscribeEnvironment(callback: (event: EventEnvelope<EnvironmentEvent<Workspace>>) => void): Unsubscribe {
+    this.environmentListeners.add(callback)
+    this.connect()
+    return () => {
+      this.environmentListeners.delete(callback)
+      if (this.listeners.size === 0 && this.environmentListeners.size === 0) this.disconnect()
     }
   }
 
@@ -73,7 +86,7 @@ export class AgentSessionSignalConnection {
   }
 
   private connect(): void {
-    if (this.listeners.size === 0) return
+    if (this.listeners.size === 0 && this.environmentListeners.size === 0) return
     if (
       this.socket
       && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)
@@ -95,14 +108,18 @@ export class AgentSessionSignalConnection {
         const message = JSON.parse(String(event.data)) as {
           type?: string
           signal?: AgentSessionSignalMessage['signal']
+          event?: EventEnvelope<EnvironmentEvent<Workspace>>
         }
         if (message.type === 'pong') {
           if (this.heartbeatTimeout) clearTimeout(this.heartbeatTimeout)
           this.heartbeatTimeout = null
           return
         }
-        if (message.type !== 'agent-session-signal' || !message.signal) return
-        for (const listener of this.listeners) listener(message.signal)
+        if (message.type === 'agent-session-signal' && message.signal) {
+          for (const listener of this.listeners) listener(message.signal)
+        } else if (message.type === 'environment-event' && message.event) {
+          for (const listener of this.environmentListeners) listener(message.event)
+        }
       } catch {
         // Ignore malformed messages from the shared event socket.
       }
@@ -114,7 +131,7 @@ export class AgentSessionSignalConnection {
       this.stopHeartbeat()
       if (
         event.code === 1000
-        || this.listeners.size === 0
+        || (this.listeners.size === 0 && this.environmentListeners.size === 0)
         || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS
       ) {
         return

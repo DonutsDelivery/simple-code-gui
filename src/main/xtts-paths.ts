@@ -96,7 +96,7 @@ export const XTTS_SAMPLE_VOICES = [
 
 // Python helper script content - runs as a persistent server to keep model loaded
 export const XTTS_HELPER_SCRIPT = `#!/usr/bin/env python3
-"""XTTS-v2 helper script for Claude Terminal - Server Mode"""
+"""XTTS-v2 helper script for DonutCode - Server Mode"""
 import sys
 import json
 import os

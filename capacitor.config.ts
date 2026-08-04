@@ -6,7 +6,7 @@ const LIVE_RELOAD_URL = undefined  // Production build - assets bundled in APK
 
 const config: CapacitorConfig = {
   appId: 'com.claudeterminal.app',
-  appName: 'Claude Terminal',
+  appName: 'DonutCode',
   webDir: 'dist/renderer',
   server: {
     // Use http scheme - needed for connecting to local HTTP servers

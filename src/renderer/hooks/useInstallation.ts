@@ -39,7 +39,7 @@ export function useInstallation(): UseInstallationReturn {
       const result = await window.electronAPI?.nodeInstall()
       if (result.success) {
         if (result.method === 'download') {
-          setInstallMessage(result.message || 'Please complete the Node.js installation and restart Simple Code GUI.')
+          setInstallMessage(result.message || 'Please complete the Node.js installation and restart DonutCode.')
         } else {
           setNpmInstalled(true)
           setInstallMessage('Node.js installed! Click "Install Claude Code" to continue.')
@@ -80,9 +80,9 @@ export function useInstallation(): UseInstallationReturn {
       const result = await window.electronAPI?.gitInstall()
       if (result.success) {
         setGitBashInstalled(true)
-        setInstallMessage(result.message || 'Git installed! Please restart Simple Code GUI.')
+        setInstallMessage(result.message || 'Git installed! Please restart DonutCode.')
       } else if (result.method === 'download') {
-        setInstallMessage(result.message || 'Please download and install Git, then restart Simple Code GUI.')
+        setInstallMessage(result.message || 'Please download and install Git, then restart DonutCode.')
       } else {
         setInstallError(result.error || 'Installation failed')
       }

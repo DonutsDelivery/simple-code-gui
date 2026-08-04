@@ -93,9 +93,6 @@ export const miscHandlers = {
   claudeMdRead: (projectPath: string, aiBackend?: string) => ipcRenderer.invoke('claudemd:read', projectPath, aiBackend),
   claudeMdSave: (projectPath: string, content: string, aiBackend?: string) => ipcRenderer.invoke('claudemd:save', { projectPath, content, aiBackend }),
 
-  // Auto Work mode marker
-  autoworkSetActive: (projectPath: string) => ipcRenderer.invoke('autowork:setActive', projectPath),
-  autoworkClearActive: (projectPath: string) => ipcRenderer.invoke('autowork:clearActive', projectPath),
 
   // Global instruction injection
   globalInstructionInject: (projectPath: string, instructionContent: string, aiBackends?: string[]) =>

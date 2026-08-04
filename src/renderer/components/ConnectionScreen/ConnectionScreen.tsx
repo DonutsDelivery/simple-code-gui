@@ -109,7 +109,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       setLastAttemptedConfig(successfulConfig)
 
       // Save config to localStorage for next time
-      localStorage.setItem('claude-terminal-connection', JSON.stringify(successfulConfig))
+      localStorage.setItem('donutcode-connection', JSON.stringify(successfulConfig))
 
       // Add or update this host in saved hosts list
       // Use the original hosts array from the QR code so retry can try all IPs
@@ -193,10 +193,10 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
     if (!hostsLoaded) return
 
     // Check if user manually disconnected (flag set in session)
-    const manualDisconnect = sessionStorage.getItem('claude-terminal-manual-disconnect')
+    const manualDisconnect = sessionStorage.getItem('donutcode-manual-disconnect')
     if (manualDisconnect) {
       console.log('[ConnectionScreen] Skipping auto-connect after manual disconnect')
-      sessionStorage.removeItem('claude-terminal-manual-disconnect')
+      sessionStorage.removeItem('donutcode-manual-disconnect')
       return
     }
 

@@ -4,11 +4,30 @@ import { useVoice } from '../contexts/VoiceContext'
 interface VoiceControlsProps {
   activeTabId: string | null
   onTranscription: (text: string) => void
+  children: (controls: VoiceControlState) => React.ReactNode
+}
+
+export interface VoiceControlState {
+  isRecording: boolean
+  isModelLoading: boolean
+  voiceInputTitle: string
+  handleVoiceInput: () => Promise<void>
+  showLevelMeter: boolean
+  audioLevel: number
+  silenceThreshold: number
+  setSilenceThreshold: (value: number) => void
+  pushToTalkEnabled: boolean
+  togglePushToTalk: () => void
+  voiceOutputEnabled: boolean
+  installingTTS: boolean
+  ttsInstalled: boolean
+  handleVoiceOutput: () => Promise<void>
 }
 
 export function VoiceControls({
   activeTabId,
-  onTranscription
+  onTranscription,
+  children,
 }: VoiceControlsProps) {
   const {
     // Voice Output
@@ -187,67 +206,20 @@ export function VoiceControls({
     return pushToTalkEnabled ? 'Push-to-Talk: Hold Ctrl+Space to record' : 'Click to start voice input'
   }
 
-  return (
-    <>
-      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-        <button
-          className={`action-icon-btn ${isRecording ? 'enabled recording' : ''} ${isModelLoading ? 'installing' : ''}`}
-          onClick={handleVoiceInput}
-          disabled={isModelLoading}
-          tabIndex={-1}
-          title={getVoiceInputTitle()}
-        >
-          {isModelLoading ? '\u23F3' : isRecording ? '\u23F9\uFE0F' : '\uD83C\uDFA4'}
-        </button>
-
-        {showLevelMeter && (
-          <div className="voice-level-meter" title={`Level: ${audioLevel}% | Threshold: ${silenceThreshold}%`}>
-            <div className="voice-level-bar-bg">
-              <div
-                className="voice-level-bar-fill"
-                style={{
-                  height: `${audioLevel}%`,
-                  backgroundColor: audioLevel > silenceThreshold ? 'var(--accent, #58a6ff)' : 'var(--text-muted, #666)'
-                }}
-              />
-              <div
-                className="voice-level-threshold"
-                style={{ bottom: `${silenceThreshold}%` }}
-              />
-            </div>
-            {!pushToTalkEnabled && (
-              <input
-                type="range"
-                className="voice-threshold-slider"
-                min="0"
-                max="50"
-                value={silenceThreshold}
-                onChange={(e) => setSilenceThreshold(Number(e.target.value))}
-                title={`Silence threshold: ${silenceThreshold}%`}
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      <button
-        className={`action-icon-btn ${pushToTalkEnabled ? 'enabled' : ''}`}
-        onClick={() => setPushToTalkEnabled(!pushToTalkEnabled)}
-        tabIndex={-1}
-        title={pushToTalkEnabled ? 'Push-to-Talk ON (Ctrl+Space) — click to switch to auto-detect' : 'Auto-detect mode — click to enable Push-to-Talk (Ctrl+Space)'}
-      >
-        {pushToTalkEnabled ? '\u{1F3A7}' : '\u{1F50D}'}
-      </button>
-
-      <button
-        className={`action-icon-btn ${voiceOutputEnabled ? 'enabled' : ''} ${installingTTS ? 'installing' : ''}`}
-        onClick={handleVoiceOutput}
-        disabled={installingTTS}
-        tabIndex={-1}
-        title={installingTTS ? 'Installing Piper...' : ttsInstalled ? (voiceOutputEnabled ? 'Disable voice output' : 'Enable voice output') : 'Click to install Piper'}
-      >
-        {installingTTS ? '\u23F3' : '\uD83D\uDD0A'}
-      </button>
-    </>
-  )
+  return children({
+    isRecording,
+    isModelLoading,
+    voiceInputTitle: getVoiceInputTitle(),
+    handleVoiceInput,
+    showLevelMeter,
+    audioLevel,
+    silenceThreshold,
+    setSilenceThreshold,
+    pushToTalkEnabled,
+    togglePushToTalk: () => setPushToTalkEnabled(!pushToTalkEnabled),
+    voiceOutputEnabled,
+    installingTTS,
+    ttsInstalled,
+    handleVoiceOutput,
+  }) as React.ReactElement
 }

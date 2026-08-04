@@ -17,8 +17,8 @@
 
 import { randomBytes } from 'crypto'
 import { existsSync, readFileSync } from 'fs'
-import { app } from 'electron'
 import { join } from 'path'
+import { getRuntimeDataDir } from '../runtime-paths.js'
 import { encryptToken, decryptToken, writeSecureFile } from '../mobile-security'
 import { log } from './utils'
 
@@ -43,7 +43,7 @@ export interface PairedDeviceInfo {
 let devices: Map<string, PairedDevice> | null = null
 
 function getStorePath(): string {
-  return join(app.getPath('userData'), 'mobile-devices')
+  return join(getRuntimeDataDir(), 'mobile-devices')
 }
 
 function load(): Map<string, PairedDevice> {

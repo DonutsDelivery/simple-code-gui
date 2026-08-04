@@ -13,9 +13,9 @@
  */
 
 import { createHash } from 'crypto'
-import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'fs'
 import { join } from 'path'
+import { getRuntimeDataDir } from '../runtime-paths.js'
 import { generate } from 'selfsigned'
 
 export interface CertificateData {
@@ -31,8 +31,7 @@ let cachedCertificate: CertificateData | null = null
  * Get the certificate storage directory
  */
 function getCertificatePath(): string {
-  const userDataPath = app.getPath('userData')
-  return join(userDataPath, 'tls')
+  return join(getRuntimeDataDir(), 'tls')
 }
 
 /**
@@ -55,8 +54,8 @@ function computeCertFingerprint(certPem: string): string {
  */
 async function generateCertificate(): Promise<CertificateData> {
   const attrs = [
-    { name: 'commonName', value: 'claude-terminal' },
-    { name: 'organizationName', value: 'Claude Terminal' }
+    { name: 'commonName', value: 'donutcode' },
+    { name: 'organizationName', value: 'DonutCode' }
   ]
 
   // Generate certificate with selfsigned library

@@ -26,7 +26,7 @@ class MockResponse {
 
 describe('OrchestratorApi agent signal instructions', () => {
   // AC: @agent-session-notifications ac-5
-  it('installs instructions for the effective backend before spawning', () => {
+  it('installs instructions for the effective backend before spawning', async () => {
     const cwd = process.cwd()
     const spawn = vi.fn(() => 'pty-created')
     const ptyManager = {
@@ -38,12 +38,19 @@ describe('OrchestratorApi agent signal instructions', () => {
       getWorkspace: () => ({ projects: [{ path: cwd }] }),
       getSettings: () => ({ backend: 'claude', autoAcceptTools: [], permissionMode: 'default' }),
     }
+    const runtimeRegistry = {
+      ensureRuntime: vi.fn(async () => {
+        const ptyId = spawn()
+        return { ptyId, runtimeId: 'runtime-1', agentSessionId: ptyId }
+      }),
+    }
     const api = new OrchestratorApi(
       ptyManager as any,
       new Map(),
       new Map(),
       sessionStore as any,
       () => null,
+      runtimeRegistry as any,
     )
     const request = new EventEmitter()
     const response = new MockResponse()
@@ -51,6 +58,7 @@ describe('OrchestratorApi agent signal instructions', () => {
     ;(api as any).handleCreateSession(request, response)
     request.emit('data', Buffer.from(JSON.stringify({ cwd, backend: 'codex' })))
     request.emit('end')
+    await vi.waitFor(() => expect(response.statusCode).toBe(201))
 
     expect(installAgentSessionSignalInstructions).toHaveBeenCalledWith(cwd, 'codex')
     expect(vi.mocked(installAgentSessionSignalInstructions).mock.invocationCallOrder[0])

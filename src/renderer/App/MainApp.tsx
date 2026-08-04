@@ -14,7 +14,12 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
 import { useWorkspaceStore } from '../stores/workspace'
-import { serializeSessionsForSave } from '../stores/workspace-persistence'
+import {
+  EnvironmentCacheInvalidatedError,
+  resolveAuthoritativeEnvironmentEvent,
+  saveAuthoritativeWorkspace,
+  serializeSessionsForSave,
+} from '../stores/workspace-persistence'
 import { useVoice } from '../contexts/VoiceContext'
 import { useModals } from '../contexts/ModalContext'
 import {
@@ -27,18 +32,21 @@ import {
   useAgentNotifications,
   useProjectHandlers,
 } from '../hooks'
-import type { Api } from '../api'
+import { getApi, type Api } from '../api'
 import { InstallationPrompt } from './InstallationPrompt'
 import { MobileConnectModal } from './MobileConnectModal'
 
 export interface MainAppProps {
+  serverId: string
   api: Api
   isElectron: boolean
   onDisconnect?: () => void
 }
 
-export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.ReactElement {
+export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProps): React.ReactElement {
   const isMobile = !isElectron
+  const getApiForServer = useCallback((targetServerId: string): Api | undefined =>
+    getApi(targetServerId) || undefined, [])
   const {
     projects,
     openTabs,
@@ -50,6 +58,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     activeCanvasScene,
     activeView,
     attentionByTabId,
+    applyAuthoritativeWorkspace,
     addProject,
     removeProject,
     updateProject,
@@ -113,6 +122,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
   useSessionPolling({ api, projects, openTabs, updateTab })
 
   useApiListeners({
+    serverId,
     api,
     projects,
     settings,
@@ -138,7 +148,9 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     handleUndoCloseTab,
     canUndoCloseTab
   } = useProjectHandlers({
+    serverId,
     api,
+    getApiForServer,
     projects,
     openTabs,
     settings,
@@ -164,30 +176,52 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     if (!tab) return
 
     const backend = !tab.backend || tab.backend === 'default' ? 'claude' : tab.backend
-    const newPtyId = await api.spawnPty(
+    const tabApi = getApiForServer(tab.serverId)
+    if (!tabApi) throw new Error(`Server ${tab.serverId} is disconnected`)
+    const newPtyId = await tabApi.spawnPty(
       tab.projectPath,
       tab.sessionId,
       undefined,
-      backend
+      backend,
+      tab.agentSessionId || tab.sessionId || id,
     )
 
-    updateTab(id, { id: newPtyId, ptyId: newPtyId })
+    updateTab(id, { id: newPtyId, ptyId: newPtyId, agentSessionId: tab.agentSessionId || tab.sessionId || id })
     if (activeTileTree) {
       setActiveTileTree(remapTabIds(activeTileTree, new Map([[id, newPtyId]])))
     }
     setActiveTab(newPtyId)
-  }, [activeTileTree, api, setActiveTab, setActiveTileTree, updateTab])
+  }, [activeTileTree, getApiForServer, setActiveTab, setActiveTileTree, updateTab])
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
   const [showFileBrowser, setShowFileBrowser] = useState(false)
   const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const hadProjectsRef = useRef(false)
+  const suppressAuthoritativeSaveRef = useRef(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     voiceOutputEnabledRef.current = voiceOutputEnabled
   }, [voiceOutputEnabled])
+
+  useEffect(() => {
+    if (!api.onEnvironmentEvent) return
+    let mounted = true
+    const unsubscribe = api.onEnvironmentEvent((event) => {
+      void resolveAuthoritativeEnvironmentEvent(api, event)
+        .then((snapshot) => {
+          if (!mounted || !snapshot) return
+          suppressAuthoritativeSaveRef.current = true
+          applyAuthoritativeWorkspace(snapshot.workspace)
+        })
+        .catch(error => console.error('Failed to synchronize server environment:', error))
+    })
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
+  }, [api, applyAuthoritativeWorkspace])
 
   // Orphan healer: every openTab in the active session must appear in its tileTree
   useEffect(() => {
@@ -219,6 +253,12 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
   // Save workspace when state changes
   useEffect(() => {
     if (loading) return
+    if (suppressAuthoritativeSaveRef.current) {
+      suppressAuthoritativeSaveRef.current = false
+      return
+    }
+    const protocol = api.getServerProtocol?.()
+    if (protocol && !protocol.capabilities.workspaceWrite) return
 
     const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
     if (projects.length === 0 && hadProjects) {
@@ -233,11 +273,15 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
     const allSessions = useWorkspaceStore.getState().sessions
     const savedSessions = serializeSessionsForSave(allSessions)
 
-    api.saveWorkspace({
+    void saveAuthoritativeWorkspace(api, {
       projects,
       categories,
       sessions: savedSessions,
       activeSessionId,
+    }).catch(error => {
+      if (!(error instanceof EnvironmentCacheInvalidatedError)) {
+        console.error('Failed to save workspace:', error)
+      }
     })
   }, [api, projects, openTabs, activeTabId, loading, activeTileTree, categories, sessions, activeSessionId])
 
@@ -386,7 +430,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                   onFocus={() => setLastFocusedTabId(tab.id)}
                   projectPath={tab.projectPath}
                   backend={tab.backend}
-                  api={api}
+                  api={getApiForServer(tab.serverId)}
                   isMobile={true}
                   onOpenFileBrowser={() => handleOpenFileBrowser(tab.projectPath || undefined)}
                 />
@@ -426,8 +470,8 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                   <WorkspaceViewToggle value={activeView} onChange={setActiveView} />
                 </div>
                 {activeView === 'tiles' && openTabs.length === 0 && (
-                  <div className="empty-state">
-                    <h2>Simple Code GUI</h2>
+                  <div className="empty-state workspace-empty-state">
+                    <h2>DonutCode</h2>
                     <p>Add a project from the sidebar, then click a session to open it</p>
                   </div>
                 )}
@@ -459,6 +503,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                               onRenameTab={handleRenameTab}
                               onDropProject={handleDropProjectOnCanvas}
                               api={api}
+                              getApiForServer={getApiForServer}
                               isWorkspaceActive={isWorkspaceActive}
                             />
                           </ErrorBoundary>
@@ -469,6 +514,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                               projects={projects}
                               theme={currentTheme}
                               focusedTabId={isWorkspaceActive ? lastFocusedTabId : null}
+                              attentionByTabId={attentionByTabId}
                               onCloseTab={handleCloseTab}
                               onRenameTab={handleRenameTab}
                               onFocusTab={isWorkspaceActive ? setLastFocusedTabId : () => {}}
@@ -478,6 +524,7 @@ export function MainApp({ api, isElectron, onDisconnect }: MainAppProps): React.
                               onAddTab={isWorkspaceActive ? handleAddTabToTile : undefined}
                               onUndoCloseTab={isWorkspaceActive && canUndoCloseTab ? handleUndoCloseTab : undefined}
                               api={api}
+                              getApiForServer={getApiForServer}
                             />
                           </ErrorBoundary>
                         )}

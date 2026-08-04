@@ -234,8 +234,8 @@ export function HostQRDisplay({
     }
   }, [token, onTokenChange])
 
-  // Generate the connection URL (v1 format for backward compatibility display)
-  const connectionUrl = `claude-terminal://${localIPs[0] || 'localhost'}:${serverPort}?token=${token}`
+  // Generate the current DonutCode connection URL. Parsers retain legacy scheme support.
+  const connectionUrl = `donutcode://${localIPs[0] || 'localhost'}:${serverPort}?token=${token}`
 
   // Regenerate token via server (also refreshes nonce)
   const handleRegenerateToken = useCallback(async () => {
@@ -290,7 +290,7 @@ export function HostQRDisplay({
           <h3 className="host-qr-display__title">Connect Mobile Device</h3>
           <p className="host-qr-display__subtitle">
             Mobile access is off. Turn it on to expose a token-protected
-            connection on your local network for the Claude Terminal mobile app.
+            connection on your local network for the DonutCode mobile app.
             It stays off until you enable it, and you can turn it off again here.
           </p>
         </div>
@@ -313,7 +313,7 @@ export function HostQRDisplay({
       <div className="host-qr-display__header">
         <h3 className="host-qr-display__title">Connect Mobile Device</h3>
         <p className="host-qr-display__subtitle">
-          Scan this QR code with the Claude Terminal mobile app
+          Scan this QR code with the DonutCode mobile app
         </p>
       </div>
 
