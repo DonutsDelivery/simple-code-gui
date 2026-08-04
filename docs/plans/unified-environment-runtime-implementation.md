@@ -980,7 +980,7 @@ Desktop users never need a rear camera, and every onboarding method ends with th
 - Electron, Android, and iOS certificate probe/pin paths are implemented. Android `assembleDebug` passes on Java 21; iOS Capacitor sync passes on Linux.
 - Full test gate: 59 files and 354 tests passed. Production build and `git diff --check` passed.
 
-The checkpoint remains **in progress**. Physical Android/iOS verification must independently prove pinned HTTPS and WSS success/mismatch behavior, the iOS code needs an Xcode build/runtime pass, and the Electron certificate path still needs isolated native runtime acceptance.
+The checkpoint remains **in progress**. Physical Android/iOS verification must independently prove pinned HTTPS and WSS success/mismatch behavior, and the iOS code needs an Xcode build/runtime pass. Isolated Electron runtime acceptance proved that the expected self-signed certificate succeeds and a replacement certificate at the same endpoint is rejected.
 
 ---
 

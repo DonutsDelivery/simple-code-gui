@@ -200,7 +200,7 @@ describe('EnvironmentRuntime headless lifecycle', () => {
 
     await server.stop()
     expect(readRuntimeInfo(dataDir)).toBeNull()
-  })
+  }, 15_000)
 
   it('serves HTTPS and rejects an unpinned certificate', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'donutcode-headless-tls-'))

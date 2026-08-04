@@ -11,7 +11,11 @@ function certificateEndpointKey(url: URL): string {
 }
 
 function normalizeFingerprint(value: string): string {
-  return value.replace(/^sha256:/i, '').replace(/:/g, '').toLowerCase()
+  const trimmed = value.trim()
+  if (/^sha256\//i.test(trimmed)) {
+    return Buffer.from(trimmed.slice(7), 'base64').toString('hex')
+  }
+  return trimmed.replace(/^sha256:/i, '').replace(/:/g, '').toLowerCase()
 }
 
 function credentialPath(): string {
@@ -44,14 +48,16 @@ function validateRef(ref: unknown): asserts ref is string {
 }
 
 export function registerSecureCredentialHandlers(): void {
-  session.defaultSession.setCertificateVerifyProc((request, callback) => {
-    const hostPrefix = `${request.hostname.toLowerCase()}:`
-    const expected = new Set([...serverCertificatePins]
-      .filter(([endpoint]) => endpoint.startsWith(hostPrefix))
-      .map(([, fingerprint]) => fingerprint))
-    if (expected.size === 0) return callback(-3)
-    const actual = normalizeFingerprint(request.certificate.fingerprint || '')
-    callback(expected.has(actual) ? 0 : -2)
+  void app.whenReady().then(() => {
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+      const hostPrefix = `${request.hostname.toLowerCase()}:`
+      const expected = new Set([...serverCertificatePins]
+        .filter(([endpoint]) => endpoint.startsWith(hostPrefix))
+        .map(([, fingerprint]) => fingerprint))
+      if (expected.size === 0) return callback(-3)
+      const actual = normalizeFingerprint(request.certificate.fingerprint || '')
+      callback(expected.has(actual) ? 0 : -2)
+    })
   })
 
   ipcMain.handle('server-certificates:trust', (_event, endpoint: unknown, fingerprint: unknown) => {
