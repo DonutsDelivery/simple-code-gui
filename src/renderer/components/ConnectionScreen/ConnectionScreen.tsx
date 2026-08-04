@@ -170,7 +170,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       // Native app or already on server: use API directly
       console.log('[ConnectionScreen] Connected, using bundled UI')
       const api = initializeApi(successfulConfig) as HttpBackend
-      onConnected(api)
+      onConnected(api, successfulConfig)
     } catch (err) {
       console.error('[ConnectionScreen] Connection failed:', err)
       setError(err instanceof Error ? err.message : 'Connection failed')

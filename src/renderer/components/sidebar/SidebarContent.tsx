@@ -34,6 +34,7 @@ export interface SidebarContentProps {
   onOpenSettings: SidebarProps['onOpenSettings']
   onOpenMakeProject: SidebarProps['onOpenMakeProject']
   onOpenMobileConnect: SidebarProps['onOpenMobileConnect']
+  onTranscription: SidebarProps['onTranscription']
   renderProjectItem: (project: Project) => React.ReactElement
 }
 
@@ -52,6 +53,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
     onOpenSettings,
     onOpenMakeProject,
     onOpenMobileConnect,
+    onTranscription,
     renderProjectItem,
   } = props
 
@@ -303,6 +305,7 @@ export function SidebarContent(props: SidebarContentProps): React.ReactElement {
           setContextMenu(null)
         }}
         onOpenMobileConnect={onOpenMobileConnect}
+        onTranscription={onTranscription}
       />
 
       {/* Context Menu */}

@@ -9,7 +9,7 @@ describe('ProjectItem session actions', () => {
 
     render(
       <ProjectItem
-        project={{ path: '/project', name: 'project' }}
+        project={{ serverId: 'server-a', path: '/project', name: 'project' }}
         isExpanded
         isFocused={false}
         hasOpenTab={false}
@@ -37,6 +37,6 @@ describe('ProjectItem session actions', () => {
 
     fireEvent.click(screen.getByText('New Session'))
 
-    expect(onOpenSession).toHaveBeenCalledWith({ forceNewSession: true })
+    expect(onOpenSession).toHaveBeenCalledWith({ forceNewSession: true, serverId: 'server-a', harnessId: 'claude' })
   })
 })

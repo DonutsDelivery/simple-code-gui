@@ -42,6 +42,7 @@ export interface SidebarProps {
   onMobileClose?: () => void    // Called when user closes drawer
   // Mobile connect modal
   onOpenMobileConnect?: () => void  // Opens the QR code modal for mobile connection
+  onTranscription: (text: string) => void
   // Mobile disconnect
   onDisconnect?: () => void     // Disconnects from desktop host (mobile only)
 }

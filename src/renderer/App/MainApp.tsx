@@ -13,7 +13,7 @@ import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
-import { tabResourceKey, useWorkspaceStore } from '../stores/workspace'
+import { serverResourceKey, tabResourceKey, useWorkspaceStore } from '../stores/workspace'
 import {
   EnvironmentCacheInvalidatedError,
   resolveAuthoritativeEnvironmentEvent,
@@ -35,6 +35,7 @@ import {
 import { getApi, type Api } from '../api'
 import { InstallationPrompt } from './InstallationPrompt'
 import { MobileConnectModal } from './MobileConnectModal'
+import { ConnectionsModal } from '../components/ConnectionsModal'
 
 export interface MainAppProps {
   serverId: string
@@ -183,18 +184,25 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       tab.sessionId,
       undefined,
       backend,
-      tab.agentSessionId || tab.sessionId || id,
+      tab.agentSessionId || tab.sessionId || tab.authorityTabId || id,
     )
+    const rendererTabId = serverResourceKey(tab.serverId, newPtyId)
 
-    updateTab(id, { id: newPtyId, ptyId: newPtyId, agentSessionId: tab.agentSessionId || tab.sessionId || id })
+    updateTab(id, {
+      id: rendererTabId,
+      authorityTabId: newPtyId,
+      ptyId: newPtyId,
+      agentSessionId: tab.agentSessionId || tab.sessionId || tab.authorityTabId || id,
+    })
     if (activeTileTree) {
-      setActiveTileTree(remapTabIds(activeTileTree, new Map([[id, newPtyId]])))
+      setActiveTileTree(remapTabIds(activeTileTree, new Map([[id, rendererTabId]])))
     }
-    setActiveTab(newPtyId)
+    setActiveTab(rendererTabId)
   }, [activeTileTree, getApiForServer, setActiveTab, setActiveTileTree, updateTab])
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
+  const [connectionsOpen, setConnectionsOpen] = useState(false)
   const [showFileBrowser, setShowFileBrowser] = useState(false)
   const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const hadProjectsRef = useRef(false)
@@ -417,7 +425,18 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
           onCollapsedChange={setSidebarCollapsed}
           isMobileOpen={mobileDrawerOpen}
           onMobileClose={closeMobileDrawer}
-          onOpenMobileConnect={() => setMobileConnectOpen(true)}
+          onOpenMobileConnect={() => setConnectionsOpen(true)}
+          onTranscription={(text) => {
+            const tabId = lastFocusedTabId || activeTabId
+            const tab = openTabs.find(candidate => candidate.id === tabId)
+            if (!tab) return
+            const tabApi = getApiForServer(tab.serverId)
+            if (!tabApi) throw new Error(`Server ${tab.serverId} is disconnected`)
+            const ptyId = tab.ptyId || tab.authorityTabId
+            if (!ptyId) throw new Error(`Tab ${tab.id} has no PTY identity`)
+            tabApi.writePty(ptyId, text)
+            setTimeout(() => tabApi.writePty(ptyId, '\r'), 100)
+          }}
           onDisconnect={onDisconnect}
         />
 
@@ -573,6 +592,10 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
             onClose={() => setMobileConnectOpen(false)}
             port={38470}
           />
+        )}
+
+        {connectionsOpen && (
+          <ConnectionsModal activeServerId={serverId} onClose={() => setConnectionsOpen(false)} />
         )}
 
         {isMobile && showFileBrowser && fileBrowserPath && (() => {

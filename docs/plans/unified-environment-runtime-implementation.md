@@ -869,9 +869,9 @@ interface ConnectionRegistry {
 7. Change Harness keeps the current server by default but may create the new session on another explicitly selected server. It still creates a new session in the same tile.
 8. A disconnected server leaves its canonical cached state visible/read-only and does not affect tabs owned by other servers.
 
-## In-progress handoff (commit `9f5832e`, 2026-08-04)
+## Completed handoff (2026-08-04)
 
-- CP8 is **not complete**. Do not start Checkpoint 9 or redesign the connection architecture until the CP8 stop condition and focused checks pass.
+- CP8 is complete. Checkpoint 9 may build on the immutable server registry without redesigning the CP5/CP6/CP7 ownership layers.
 - Implemented and tested:
   - `ConnectionRegistry` keyed strictly by immutable `serverId`, with endpoint failover, identity validation, independent disconnect, and no fallback lookup;
   - durable structural saved-connection metadata in `src/renderer/stores/connections.ts` without credential values;
@@ -889,12 +889,14 @@ interface ConnectionRegistry {
   - renderer tab IDs, tile trees, Canvas scenes, attention state, and PTY signal lookup are now scoped by server while persistence maps them back to authority-local IDs;
   - PTY termination routes the authority `ptyId` to the tab's immutable server rather than sending the composite renderer ID;
   - collision-hardening focused tests and the full **58/58 files, 347/347 tests** pass; production build and diff checks pass.
-- Remaining CP8 work, in dependency order:
-  1. Move `AppConnection` and renderer domain code to the server-ID `ConnectionRegistry`; remove mutable current-server behavior and remaining PTY domain fallbacks through `window.electronAPI`.
-  2. Ensure PTY write, resize, data/exit subscriptions, resume, close, restore, polling, and orchestrator/API-open-session events resolve the immutable owning server and fail closed when it is unavailable.
-  3. Build the Connections manager and explicit Server/Harness controls. Changing either creates a new session; it never mutates ownership of the existing canonical session.
-  4. Add two-server acceptance proving simultaneous use, independent disconnect, correct command routing, read-only offline cache, collision safety, and harness replacement with the old session preserved.
-- Beads source of truth: `Claude-Terminal-fb6` (`Checkpoint 8: add multi-server connection management`) remains `in_progress`.
+- Final CP8 integration and acceptance:
+  - `AppConnection` adopts negotiated APIs into the immutable registry and each connection loads/subscribes to its own authority projection;
+  - the Connections manager displays stable identity, endpoint, status, latency, platform, version, capabilities, reconnect, disconnect, rename, and remove controls;
+  - project session controls expose immutable origin plus explicit Server and Harness selection; launch creates a new session and preserves the old one;
+  - renderer voice/PTTY writes no longer bypass immutable server ownership through `window.electronAPI`;
+  - two real isolated headless servers published distinct stable identities; stopping server A preserved server B; restarting A from the same data directory retained A's identity on a new endpoint;
+  - full **58/58 files, 348/348 tests**, production build, and diff checks pass.
+- Beads source of truth: `Claude-Terminal-fb6` (`Checkpoint 8: add multi-server connection management`) is complete.
 
 ## Focused checks
 

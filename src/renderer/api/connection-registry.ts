@@ -132,6 +132,29 @@ export class ConnectionRegistry {
     throw new Error(lastError)
   }
 
+  async attach(serverId: string, api: ConnectableApi, endpoint: ConnectionEndpoint): Promise<void> {
+    const connection = this.requireConnection(serverId)
+    const startedAt = performance.now()
+    const result = await api.testConnection()
+    if (!result.success) throw new Error(result.error || 'Connection failed')
+    const descriptor = api.getServerProtocol?.()
+    if (!descriptor) throw new Error('Server did not publish its protocol descriptor')
+    if (descriptor.serverId !== serverId) {
+      throw new Error(`Server identity mismatch: expected ${serverId}, received ${descriptor.serverId}`)
+    }
+    connection.api = api
+    connection.saved.lastSeenProtocolVersion = descriptor.protocolVersion
+    connection.saved.capabilities = supportedCapabilities(descriptor)
+    this.updateStatus(connection, {
+      serverId,
+      state: 'connected',
+      endpoint: { ...endpoint },
+      latencyMs: Math.max(0, performance.now() - startedAt),
+      platform: descriptor.platform,
+      serverVersion: descriptor.serverVersion,
+    })
+  }
+
   disconnect(serverId: string): void {
     const connection = this.requireConnection(serverId)
     connection.api?.disconnect()

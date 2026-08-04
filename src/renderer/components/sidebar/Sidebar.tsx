@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { Project } from '../../stores/workspace.js'
+import { serverResourceKey, Project } from '../../stores/workspace.js'
 import { useIsMobile } from '../../hooks/useIsMobile.js'
 import { SidebarProps } from './types.js'
 import { ProjectItem } from './ProjectItem.js'
@@ -32,6 +32,7 @@ export function Sidebar({
   isMobileOpen,
   onMobileClose,
   onOpenMobileConnect,
+  onTranscription,
   onDisconnect,
 }: SidebarProps): React.ReactElement | null {
   // Mobile detection
@@ -83,11 +84,11 @@ export function Sidebar({
   const renderProjectItem = useCallback(
     (project: Project) => (
       <ProjectItem
-        key={project.path}
+        key={serverResourceKey(project.serverId, project.path)}
         project={project}
         isExpanded={state.expandedProject === project.path}
         isFocused={state.focusedProjectPath === project.path}
-        hasOpenTab={openTabs.some((t) => t.projectPath === project.path)}
+        hasOpenTab={openTabs.some((t) => t.serverId === project.serverId && t.projectPath === project.path)}
         isDragging={state.draggedProject === project.path}
         isEditing={state.editingProject?.path === project.path}
         editingName={state.editingProject?.path === project.path ? state.editingProject.name : ''}
@@ -96,7 +97,7 @@ export function Sidebar({
         editInputRef={state.editInputRef}
         onToggleExpand={(e) => callbacks.handleProjectToggleExpand(e, project.path)}
         onOpenSession={(options) =>
-          callbacks.handleProjectOpenSession(project.path, options)
+          callbacks.handleProjectOpenSession(project.path, { ...options, serverId: project.serverId })
         }
         onRunExecutable={() => callbacks.handleProjectRunExecutable(project.path)}
         onCloseProjectTabs={() => callbacks.handleProjectCloseProjectTabs(project.path)}
@@ -127,6 +128,7 @@ export function Sidebar({
     onOpenSettings,
     onOpenMakeProject,
     onOpenMobileConnect,
+    onTranscription,
     renderProjectItem,
   }
 

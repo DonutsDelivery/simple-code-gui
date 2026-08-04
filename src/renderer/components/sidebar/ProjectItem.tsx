@@ -4,6 +4,7 @@ import { ProjectIcon } from '../ProjectIcon.js'
 import { ClaudeSession, DropTarget } from './types.js'
 import { formatDate } from './utils.js'
 import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
+import { useConnectionsStore } from '../../stores/connections.js'
 
 interface ProjectItemProps {
   project: Project
@@ -56,6 +57,9 @@ export const ProjectItem = React.memo(function ProjectItem({
   onRenameSubmit,
   onRenameKeyDown,
 }: ProjectItemProps) {
+  const connections = useConnectionsStore(state => state.connections)
+  const [newServerId, setNewServerId] = React.useState(project.serverId)
+  const [newHarnessId, setNewHarnessId] = React.useState(project.backend && project.backend !== 'default' ? project.backend : 'claude')
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
 
@@ -137,11 +141,30 @@ export const ProjectItem = React.memo(function ProjectItem({
 
       {isExpanded && (
         <div className="sessions-list">
+          <div className="session-origin" aria-label={`Project origin server ${project.serverId}`}>
+            Origin: {connections.find(connection => connection.serverId === project.serverId)?.displayName || project.serverId}
+          </div>
+          <label className="session-launch-option">
+            Server
+            <select value={newServerId} onClick={event => event.stopPropagation()} onChange={event => setNewServerId(event.target.value)}>
+              {(connections.length ? connections : [{ serverId: project.serverId, displayName: project.serverId }]).map(connection => (
+                <option key={connection.serverId} value={connection.serverId}>{connection.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="session-launch-option">
+            Harness
+            <select value={newHarnessId} onClick={event => event.stopPropagation()} onChange={event => setNewHarnessId(event.target.value)}>
+              {['claude', 'hermes', 'codex', 'gemini', 'opencode', 'aider', 'droid', 'grok'].map(harness => (
+                <option key={harness} value={harness}>{harness}</option>
+              ))}
+            </select>
+          </label>
           <div
             className="session-item new-session"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenSession({ forceNewSession: true })
+              onOpenSession({ forceNewSession: true, serverId: newServerId, harnessId: newHarnessId as OpenSessionOptions['harnessId'] })
             }}
           >
             <span>+</span>

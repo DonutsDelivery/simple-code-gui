@@ -66,4 +66,19 @@ describe('ConnectionRegistry', () => {
     expect(registry.getStatus('server-a')).toMatchObject({ state: 'error' })
     expect(() => registry.get('server-a')).toThrow('not connected')
   })
+
+  it('attaches an already negotiated API without replacing another live server', async () => {
+    const registry = new ConnectionRegistry(() => 'token', () => fakeApi('unused'))
+    const apiA = fakeApi('server-a')
+    const apiB = fakeApi('server-b')
+    registry.register(saved('server-a', 4001))
+    registry.register(saved('server-b', 4002))
+
+    await registry.attach('server-a', apiA, { host: '127.0.0.1', port: 4001 })
+    await registry.attach('server-b', apiB, { host: '127.0.0.1', port: 4002 })
+
+    expect(registry.get('server-a')).toBe(apiA)
+    expect(registry.get('server-b')).toBe(apiB)
+    expect(registry.getStatus('server-a')).toMatchObject({ state: 'connected', platform: 'linux' })
+  })
 })
