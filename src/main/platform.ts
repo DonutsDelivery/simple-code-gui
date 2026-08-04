@@ -33,8 +33,7 @@ export function getAdditionalPaths(): string[] {
   }
 
   return [
-    path.join(homeDir, '.nvm/versions/node/v20.18.1/bin'),
-    path.join(homeDir, '.nvm/versions/node/v22.11.0/bin'),
+    path.join(homeDir, '.nvm/versions/node/v22.23.2/bin'),
     path.join(homeDir, '.local/bin'),
     path.join(homeDir, '.npm-global/bin'),
     path.join(homeDir, '.cargo', 'bin'),

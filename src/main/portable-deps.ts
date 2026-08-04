@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as https from 'https'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { isWindows, isMac } from './platform'
+import { isWindows } from './platform'
 import { getRuntimeDataDir } from './runtime-paths.js'
 
 const execAsync = promisify(exec)
@@ -14,13 +14,41 @@ const getNodeDir = (): string => path.join(getDepsDir(), 'node')
 const getPythonDir = (): string => path.join(getDepsDir(), 'python')
 
 // URLs for portable downloads
-const NODE_VERSION = '20.18.1'
-const PYTHON_VERSION = '3.12.0'
+const NODE_VERSION = '22.23.2'
+const PYTHON_VERSION = '3.14.6'
 
-const NODE_URLS = {
-  win32: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-x64.zip`,
-  darwin: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-darwin-x64.tar.gz`,
-  linux: `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz`
+type NodePlatform = 'win32' | 'darwin' | 'linux'
+type NodeArchitecture = 'x64' | 'arm64'
+
+function getNodePlatform(platform: string = process.platform): NodePlatform | null {
+  return platform === 'win32' || platform === 'darwin' || platform === 'linux'
+    ? platform
+    : null
+}
+
+function getNodeArchitecture(architecture: string = process.arch): NodeArchitecture {
+  return architecture === 'arm64' ? 'arm64' : 'x64'
+}
+
+function getPortableNodeInstallDir(): string | null {
+  const platform = getNodePlatform()
+  if (!platform) return null
+  const platformName = platform === 'win32' ? 'win' : platform
+  return path.join(getNodeDir(), `node-v${NODE_VERSION}-${platformName}-${getNodeArchitecture()}`)
+}
+
+function getPortableNodeBinDir(): string | null {
+  const installDir = getPortableNodeInstallDir()
+  if (!installDir) return null
+  return isWindows ? installDir : path.join(installDir, 'bin')
+}
+
+function getNodeDownloadUrl(platform: string = process.platform, architecture: string = process.arch): string | null {
+  const supportedPlatform = getNodePlatform(platform)
+  if (!supportedPlatform) return null
+  const platformName = supportedPlatform === 'win32' ? 'win' : supportedPlatform
+  const extension = supportedPlatform === 'win32' ? 'zip' : 'tar.gz'
+  return `https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${platformName}-${getNodeArchitecture(architecture)}.${extension}`
 }
 
 // Python embeddable for Windows (no installer needed)
@@ -45,29 +73,24 @@ function ensureDepsDir(): void {
 
 // Get paths to portable executables
 export function getPortableNodePath(): string | null {
-  if (isWindows) {
-    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`, 'node.exe')
-    return fs.existsSync(nodePath) ? nodePath : null
-  } else if (isMac) {
-    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'node')
-    return fs.existsSync(nodePath) ? nodePath : null
-  } else {
-    const nodePath = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin', 'node')
-    return fs.existsSync(nodePath) ? nodePath : null
-  }
+  const installDir = getPortableNodeInstallDir()
+  if (!installDir) return null
+  const nodePath = path.join(installDir, isWindows ? 'node.exe' : 'bin/node')
+  return fs.existsSync(nodePath) ? nodePath : null
 }
 
 export function getPortableNpmPath(): string | null {
-  if (isWindows) {
-    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`, 'npm.cmd')
-    return fs.existsSync(npmPath) ? npmPath : null
-  } else if (isMac) {
-    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin', 'npm')
-    return fs.existsSync(npmPath) ? npmPath : null
-  } else {
-    const npmPath = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin', 'npm')
-    return fs.existsSync(npmPath) ? npmPath : null
-  }
+  const installDir = getPortableNodeInstallDir()
+  if (!installDir) return null
+  const npmPath = path.join(installDir, isWindows ? 'npm.cmd' : 'bin/npm')
+  return fs.existsSync(npmPath) ? npmPath : null
+}
+
+/** npm's Unix entrypoint resolves node through /usr/bin/env. */
+export function getPortableCommandEnv(): NodeJS.ProcessEnv {
+  const nodeBinDir = getPortableNodeBinDir()
+  const pathValue = [nodeBinDir, process.env.PATH].filter(Boolean).join(path.delimiter)
+  return { ...process.env, PATH: pathValue }
 }
 
 export function getPortablePythonPath(): string | null {
@@ -91,30 +114,20 @@ export function getPortableBinDirs(): string[] {
   const dirs: string[] = []
 
   if (isWindows) {
-    const nodeBase = path.join(getNodeDir(), `node-v${NODE_VERSION}-win-x64`)
-    if (fs.existsSync(nodeBase)) {
-      dirs.push(nodeBase)
-    }
+    const nodeBin = getPortableNodeBinDir()
+    if (nodeBin && fs.existsSync(nodeBin)) dirs.push(nodeBin)
     if (fs.existsSync(getPythonDir())) {
       dirs.push(getPythonDir())
       dirs.push(path.join(getPythonDir(), 'Scripts'))
     }
-    // npm global packages installed via portable npm
-    const npmGlobal = path.join(getRuntimeDataDir(), 'npm-global')
-    if (fs.existsSync(npmGlobal)) {
-      dirs.push(npmGlobal)
-    }
-  } else if (isMac) {
-    const nodeBin = path.join(getNodeDir(), `node-v${NODE_VERSION}-darwin-x64`, 'bin')
-    if (fs.existsSync(nodeBin)) {
-      dirs.push(nodeBin)
-    }
   } else {
-    const nodeBin = path.join(getNodeDir(), `node-v${NODE_VERSION}-linux-x64`, 'bin')
-    if (fs.existsSync(nodeBin)) {
-      dirs.push(nodeBin)
-    }
+    const nodeBin = getPortableNodeBinDir()
+    if (nodeBin && fs.existsSync(nodeBin)) dirs.push(nodeBin)
   }
+
+  const npmGlobal = path.join(getRuntimeDataDir(), 'npm-global')
+  const npmGlobalBin = isWindows ? npmGlobal : path.join(npmGlobal, 'bin')
+  if (fs.existsSync(npmGlobalBin)) dirs.push(npmGlobalBin)
 
   return dirs
 }
@@ -211,7 +224,7 @@ export async function installPortableNode(onProgress?: (status: string, percent?
     ensureDepsDir()
 
     const platform = process.platform as 'win32' | 'darwin' | 'linux'
-    const url = NODE_URLS[platform]
+    const url = getNodeDownloadUrl(platform)
     if (!url) {
       return { success: false, error: `Unsupported platform: ${platform}` }
     }
@@ -248,7 +261,10 @@ export async function installPortableNode(onProgress?: (status: string, percent?
     // Configure npm to use local prefix
     const npmPath = getPortableNpmPath()
     if (npmPath) {
-      await execAsync(`"${npmPath}" config set prefix "${npmGlobal}"`, { timeout: 30000 })
+      await execAsync(`"${npmPath}" config set prefix "${npmGlobal}"`, {
+        timeout: 30000,
+        env: getPortableCommandEnv()
+      })
     }
 
     onProgress?.('Node.js installed successfully', 100)
@@ -329,7 +345,10 @@ export async function installClaudeWithPortableNpm(): Promise<{ success: boolean
   }
 
   try {
-    await execAsync(`"${npmPath}" install -g @anthropic-ai/claude-code`, { timeout: 300000 })
+    await execAsync(`"${npmPath}" install -g @anthropic-ai/claude-code`, {
+      timeout: 300000,
+      env: getPortableCommandEnv()
+    })
     return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
