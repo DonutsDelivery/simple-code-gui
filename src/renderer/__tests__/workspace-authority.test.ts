@@ -5,10 +5,10 @@ import { useWorkspaceStore, type WorkspaceSession } from '../stores/workspace'
 const existingSession: WorkspaceSession = {
   serverId: 'server-old',
   authoritySessionId: 'workspace-old',
-  id: 'workspace-old',
+  id: 'server-old\0workspace-old',
   name: 'Old workspace',
-  openTabs: [{ serverId: 'server-old', id: 'old-pty', ptyId: 'old-pty', projectPath: '/old', title: 'Old' }],
-  activeTabId: 'old-pty',
+  openTabs: [{ serverId: 'server-old', authorityTabId: 'old-pty', id: 'server-old\0old-pty', ptyId: 'old-pty', projectPath: '/old', title: 'Old' }],
+  activeTabId: 'server-old\0old-pty',
   activeTileTree: null,
   canvasScene: createEmptyCanvasScene(),
   activeView: 'tiles',
@@ -27,7 +27,7 @@ describe('authoritative workspace cache', () => {
       activeTileTree: null,
       activeCanvasScene: existingSession.canvasScene,
       activeView: 'tiles',
-      attentionByTabId: { 'old-pty': 'completed', 'new-pty': 'needs-input' },
+      attentionByTabId: { ['server-old\0old-pty']: 'completed', ['server-a\0new-pty']: 'needs-input' },
     })
   })
 
@@ -59,10 +59,10 @@ describe('authoritative workspace cache', () => {
       { serverId: 'server-a', path: '/repo', name: 'Canonical' },
     ])
     expect(state.sessions).toHaveLength(2)
-    expect(state.activeSessionId).toBe('workspace-old')
-    expect(state.openTabs[0]).toMatchObject({ serverId: 'server-old', id: 'old-pty' })
+    expect(state.activeSessionId).toBe('server-old\0workspace-old')
+    expect(state.openTabs[0]).toMatchObject({ serverId: 'server-old', id: 'server-old\0old-pty' })
     expect(state.sessions[1].id).toBe('server-a\0workspace-server')
-    expect(state.sessions[1].openTabs[0]).toMatchObject({ serverId: 'server-a', id: 'new-pty', sessionId: 'agent-1' })
-    expect(state.attentionByTabId).toEqual({ 'old-pty': 'completed', 'new-pty': 'needs-input' })
+    expect(state.sessions[1].openTabs[0]).toMatchObject({ serverId: 'server-a', id: 'server-a\0new-pty', authorityTabId: 'new-pty', sessionId: 'agent-1' })
+    expect(state.attentionByTabId).toEqual({ ['server-old\0old-pty']: 'completed', ['server-a\0new-pty']: 'needs-input' })
   })
 })

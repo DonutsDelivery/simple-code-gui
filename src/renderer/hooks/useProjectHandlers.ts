@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { Api } from '../api'
 import type { BackendId } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { OpenTab, Project } from '../stores/workspace'
+import { serverResourceKey, OpenTab, Project } from '../stores/workspace'
 import type { TileNode } from '../components/tile-tree.js'
 import type { DropZone } from '../components/tiled-layout-utils.js'
 import {
@@ -171,15 +171,17 @@ export function useProjectHandlers({
       await targetApi.ttsInstallInstructions?.(workingPath, effectiveBackend)
 
       const ptyId = await targetApi.spawnPty(workingPath, sessionId, undefined, effectiveBackend, agentSessionId)
+      const rendererTabId = serverResourceKey(targetServerId, ptyId)
 
       // Add leaf to tree — single operation, no race condition
       const currentTree = tileTreeRef.current
-      const newTree = addLeafToTree(currentTree, ptyId, window.innerWidth, window.innerHeight)
+      const newTree = addLeafToTree(currentTree, rendererTabId, window.innerWidth, window.innerHeight)
       setTileTree(newTree)
 
       addTab({
         serverId: targetServerId,
-        id: ptyId,
+        id: rendererTabId,
+        authorityTabId: ptyId,
         projectPath: workingPath,
         agentSessionId: agentSessionId || sessionId || ptyId,
         sessionId,
@@ -225,12 +227,13 @@ export function useProjectHandlers({
     try {
       await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
       const ptyId = await api.spawnPty(projectPath, undefined, undefined, effectiveBackend)
+      const rendererTabId = serverResourceKey(serverId, ptyId)
 
       let newTree: TileNode
 
       // Re-read the latest tree after async spawn
       const latestTree = currentTree !== undefined ? currentTree : tileTreeRef.current
-      const newLeaf = createLeaf(ptyId, [ptyId])
+      const newLeaf = createLeaf(rendererTabId, [rendererTabId])
 
       if (dropZone && dropZone.type === 'swap' && latestTree) {
         // Add as sub-tab to existing tile
@@ -238,9 +241,9 @@ export function useProjectHandlers({
           (latestTree.type === 'leaf' && latestTree.id === dropZone.targetTileId ? latestTree : null) ||
           findLeafById(latestTree, dropZone.targetTileId)
         if (targetLeaf) {
-          newTree = addTabToLeaf(latestTree, targetLeaf.id, ptyId)
+          newTree = addTabToLeaf(latestTree, targetLeaf.id, rendererTabId)
         } else {
-          newTree = addLeafToTree(latestTree, ptyId, containerSize.width, containerSize.height)
+          newTree = addLeafToTree(latestTree, rendererTabId, containerSize.width, containerSize.height)
         }
       } else if (dropZone && (dropZone.type === 'root-right' || dropZone.type === 'root-bottom') && latestTree) {
         // Drop on empty canvas: new root-level column/row
@@ -258,14 +261,15 @@ export function useProjectHandlers({
         const targetLeafId = dropZone.targetTileId
         newTree = splitLeaf(latestTree, targetLeafId, dir, newLeaf, pos)
       } else {
-        newTree = addLeafToTree(latestTree, ptyId, containerSize.width, containerSize.height)
+        newTree = addLeafToTree(latestTree, rendererTabId, containerSize.width, containerSize.height)
       }
 
       setTileTree(newTree)
 
       addTab({
         serverId,
-        id: ptyId,
+        id: rendererTabId,
+        authorityTabId: ptyId,
         projectPath,
         agentSessionId: ptyId,
         sessionId: undefined,
@@ -294,16 +298,18 @@ export function useProjectHandlers({
     try {
       await api.ttsInstallInstructions?.(projectPath, effectiveBackend)
       const ptyId = await api.spawnPty(projectPath, undefined, undefined, effectiveBackend)
+      const rendererTabId = serverResourceKey(serverId, ptyId)
 
       const currentTree = tileTreeRef.current
       if (currentTree) {
-        const newTree = addTabToLeaf(currentTree, tileId, ptyId)
+        const newTree = addTabToLeaf(currentTree, tileId, rendererTabId)
         setTileTree(newTree)
       }
 
       addTab({
         serverId,
-        id: ptyId,
+        id: rendererTabId,
+        authorityTabId: ptyId,
         projectPath,
         agentSessionId: ptyId,
         sessionId: undefined,
@@ -341,7 +347,7 @@ export function useProjectHandlers({
 
     const tabApi = tab ? getApiForServer(tab.serverId) : undefined
     if (!tabApi) throw new Error(`Server ${tab?.serverId || serverId} is disconnected`)
-    tabApi.killPty(tabId)
+    tabApi.killPty(tab?.ptyId || tab?.authorityTabId || tabId)
     clearTerminalBuffer(tabId)
     removeTab(tabId)
   }, [api, openTabs, removeTab, setTileTree])
@@ -363,7 +369,7 @@ export function useProjectHandlers({
       }
       const tabApi = getApiForServer(tab.serverId)
       if (!tabApi) throw new Error(`Server ${tab.serverId} is disconnected`)
-      tabApi.killPty(tab.id)
+      tabApi.killPty(tab.ptyId || tab.authorityTabId || tab.id)
       clearTerminalBuffer(tab.id)
       removeTab(tab.id)
     }

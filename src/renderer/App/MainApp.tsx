@@ -13,7 +13,7 @@ import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
-import { useWorkspaceStore } from '../stores/workspace'
+import { tabResourceKey, useWorkspaceStore } from '../stores/workspace'
 import {
   EnvironmentCacheInvalidatedError,
   resolveAuthoritativeEnvironmentEvent,
@@ -134,7 +134,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     openTabs,
   })
 
-  useAgentNotifications({ api, settings, isMobile })
+  useAgentNotifications({ serverId, api, settings, isMobile })
 
   const {
     handleAddProject,
@@ -425,12 +425,12 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         {isMobile && openTabs.map((tab) => (
           <div
             key={tab.id}
-            data-agent-visible-tab-id={tab.id}
-            className={`mobile-terminal-slide${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}`}
+            data-agent-visible-tab-id={tabResourceKey(tab)}
+            className={`mobile-terminal-slide${attentionByTabId[tabResourceKey(tab)] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tabResourceKey(tab)]}` : ''}`}
           >
-            <div className="mobile-slide-header" aria-label={`${tab.title}${attentionByTabId[tab.id] === 'needs-input' ? ', needs your input' : attentionByTabId[tab.id] === 'completed' ? ', agent completed' : ''}`}>
+            <div className="mobile-slide-header" aria-label={`${tab.title}${attentionByTabId[tabResourceKey(tab)] === 'needs-input' ? ', needs your input' : attentionByTabId[tabResourceKey(tab)] === 'completed' ? ', agent completed' : ''}`}>
               <span className="mobile-slide-title">{tab.title}</span>
-              {attentionByTabId[tab.id] && <span className="agent-attention-dot" aria-hidden="true" />}
+              {attentionByTabId[tabResourceKey(tab)] && <span className="agent-attention-dot" aria-hidden="true" />}
               <button className="mobile-slide-close" onClick={() => handleCloseTab(tab.id)}>×</button>
             </div>
             <div className="mobile-slide-content">

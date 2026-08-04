@@ -4,7 +4,7 @@ import { ErrorBoundary } from '../ErrorBoundary.js'
 import type { Api } from '../../api/types.js'
 import type { CanvasAssetMetadata } from '../../../common/canvas-assets.js'
 import type { Theme } from '../../themes.js'
-import { useWorkspaceStore } from '../../stores/workspace.js'
+import { tabResourceKey, useWorkspaceStore } from '../../stores/workspace.js'
 import type { OpenTab, Project } from '../tiled/types.js'
 import {
   fitBounds,
@@ -175,7 +175,7 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
   onRenameTab: (id: string, title: string) => void
 }): React.ReactElement {
   const attentionByTabId = useWorkspaceStore(useShallow(state => Object.fromEntries(
-    tabs.map(candidate => [candidate.id, state.attentionByTabId[candidate.id]]),
+    tabs.map(candidate => [candidate.id, state.attentionByTabId[tabResourceKey(candidate)]]),
   )))
   const [exitCode, setExitCode] = useState<number | null>(null)
   const [resuming, setResuming] = useState(false)

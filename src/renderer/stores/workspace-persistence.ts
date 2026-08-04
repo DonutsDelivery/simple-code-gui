@@ -3,6 +3,8 @@ import type { SavedWorkspaceSession, OpenTab } from '../api/types'
 import type { Api, Workspace } from '../api/types'
 import type { EnvironmentEvent, EnvironmentSnapshot } from '../../common/environment-protocol.js'
 import type { EventEnvelope } from '../../common/server-protocol.js'
+import { remapTabIds } from '../components/tile-tree.js'
+import { remapSceneTabIds } from '../components/canvas/index.js'
 
 interface EnvironmentCursor {
   serverId: string
@@ -163,9 +165,10 @@ export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace
 }
 
 function normalizeTabForSave(tab: any): OpenTab {
-  const { backend, ...current } = tab
+  const { backend, serverId: _serverId, authorityTabId, ...current } = tab
   return {
     ...current,
+    id: authorityTabId ?? current.id,
     harnessId: current.harnessId ?? backend,
   } as OpenTab
 }
@@ -199,6 +202,7 @@ export function serializeSessionsForSave(
       .filter(tab => tab.serverId === serverId)
       .map(t => normalizeTabForSave({
         serverId: t.serverId,
+        authorityTabId: t.authorityTabId,
         id: t.id,
         projectPath: t.projectPath,
         sessionId: t.sessionId,
@@ -207,13 +211,20 @@ export function serializeSessionsForSave(
         ptyId: t.ptyId,
         harnessId: t.harnessId ?? t.backend,
       })) as OpenTab[]
+    const tabIdMapping = new Map(s.openTabs
+      .filter(tab => tab.serverId === serverId)
+      .map(tab => [tab.id, tab.authorityTabId ?? tab.id]))
+    const tileTree = s.activeTileTree?.type ? remapTabIds(s.activeTileTree, tabIdMapping) : s.activeTileTree || undefined
+    const canvasScene = s.preservedCanvasScene
+      ?? (s.canvasScene ? remapSceneTabIds(s.canvasScene, Object.fromEntries(tabIdMapping)) : undefined)
+    const activeTabId = s.activeTabId ? tabIdMapping.get(s.activeTabId) ?? null : null
     return {
       id: authoritySessionId,
       name: s.name,
       openTabs,
-      activeTabId: openTabs.some(tab => tab.id === s.activeTabId) ? s.activeTabId : openTabs[0]?.id ?? null,
-      tileTree: s.activeTileTree || undefined,
-      canvasScene: s.preservedCanvasScene ?? s.canvasScene ?? undefined,
+      activeTabId: activeTabId && openTabs.some(tab => tab.id === activeTabId) ? activeTabId : openTabs[0]?.id ?? null,
+      tileTree,
+      canvasScene,
       activeView: s.preservedCanvasScene === undefined ? s.activeView : 'tiles',
     }
   })

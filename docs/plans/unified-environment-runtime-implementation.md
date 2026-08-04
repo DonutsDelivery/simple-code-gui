@@ -886,12 +886,14 @@ interface ConnectionRegistry {
   - renderer workspace/session/category IDs now use server-scoped composite keys while server persistence converts back to authority-local IDs;
   - workspace serialization sends only the selected server's projects, categories, tabs, sessions, and active session;
   - focused multi-server queue/revision/identity tests and full **58/58 files, 347/347 tests** pass.
+  - renderer tab IDs, tile trees, Canvas scenes, attention state, and PTY signal lookup are now scoped by server while persistence maps them back to authority-local IDs;
+  - PTY termination routes the authority `ptyId` to the tab's immutable server rather than sending the composite renderer ID;
+  - collision-hardening focused tests and the full **58/58 files, 347/347 tests** pass; production build and diff checks pass.
 - Remaining CP8 work, in dependency order:
-  1. Finish compound identity coverage for tab attention and the remaining path/PTY/session lookup sites.
-  2. Move `AppConnection` and renderer domain code to the server-ID `ConnectionRegistry`; remove mutable current-server behavior and remaining PTY domain fallbacks through `window.electronAPI`.
-  3. Ensure PTY write, resize, data/exit subscriptions, resume, close, restore, polling, and orchestrator/API-open-session events resolve the immutable owning server and fail closed when it is unavailable.
-  4. Build the Connections manager and explicit Server/Harness controls. Changing either creates a new session; it never mutates ownership of the existing canonical session.
-  5. Add two-server acceptance proving simultaneous use, independent disconnect, correct command routing, read-only offline cache, collision safety, and harness replacement with the old session preserved.
+  1. Move `AppConnection` and renderer domain code to the server-ID `ConnectionRegistry`; remove mutable current-server behavior and remaining PTY domain fallbacks through `window.electronAPI`.
+  2. Ensure PTY write, resize, data/exit subscriptions, resume, close, restore, polling, and orchestrator/API-open-session events resolve the immutable owning server and fail closed when it is unavailable.
+  3. Build the Connections manager and explicit Server/Harness controls. Changing either creates a new session; it never mutates ownership of the existing canonical session.
+  4. Add two-server acceptance proving simultaneous use, independent disconnect, correct command routing, read-only offline cache, collision safety, and harness replacement with the old session preserved.
 - Beads source of truth: `Claude-Terminal-fb6` (`Checkpoint 8: add multi-server connection management`) remains `in_progress`.
 
 ## Focused checks

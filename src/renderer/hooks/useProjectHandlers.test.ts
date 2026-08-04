@@ -49,7 +49,8 @@ describe('useProjectHandlers worktree resume', () => {
     expect(api.discoverSessions).toHaveBeenCalledWith(projectPath, 'claude-codex')
     expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'worktree-session', undefined, 'claude-codex', undefined)
     expect(addTab).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'pty-1',
+      id: 'server-a\0pty-1',
+      authorityTabId: 'pty-1',
       projectPath: worktreePath,
       sessionId: 'worktree-session',
       backend: 'claude-codex',
@@ -94,7 +95,8 @@ describe('useProjectHandlers worktree resume', () => {
     expect(api.discoverSessions).not.toHaveBeenCalled()
     expect(api.spawnPty).toHaveBeenCalledWith(projectPath, undefined, undefined, 'claude-codex', undefined)
     expect(addTab).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'pty-new',
+      id: 'server-a\0pty-new',
+      authorityTabId: 'pty-new',
       sessionId: undefined,
       title: 'app - New',
     }))

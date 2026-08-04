@@ -1,5 +1,5 @@
 import { getAllLeaves } from '../components/tile-tree'
-import type { WorkspaceSession } from '../stores/workspace'
+import { tabResourceKey, type WorkspaceSession } from '../stores/workspace'
 
 export function getVisibleTabIds(
   sessions: WorkspaceSession[],
@@ -8,14 +8,18 @@ export function getVisibleTabIds(
 ): Set<string> {
   const active = sessions.find(session => session.id === activeSessionId)
   if (!active) return new Set()
-  if (isMobile) return new Set(active.activeTabId ? [active.activeTabId] : [])
+  const keysFor = (tabIds: string[]): Set<string> => new Set(tabIds.flatMap(tabId => {
+    const tab = active.openTabs.find(candidate => candidate.id === tabId)
+    return tab ? [tabResourceKey(tab)] : []
+  }))
+  if (isMobile) return keysFor(active.activeTabId ? [active.activeTabId] : [])
 
   if (active.activeView === 'canvas') {
-    return new Set((active.canvasScene?.nodes ?? []).map(node => node.activeTabId).filter(Boolean))
+    return keysFor((active.canvasScene?.nodes ?? []).map(node => node.activeTabId).filter(Boolean))
   }
 
-  if (!active.activeTileTree) return new Set(active.activeTabId ? [active.activeTabId] : [])
-  return new Set(getAllLeaves(active.activeTileTree).map(leaf => leaf.activeTabId).filter(Boolean))
+  if (!active.activeTileTree) return keysFor(active.activeTabId ? [active.activeTabId] : [])
+  return keysFor(getAllLeaves(active.activeTileTree).map(leaf => leaf.activeTabId).filter(Boolean))
 }
 
 export function getActuallyVisibleTabIds(fallback: Set<string>): Set<string> {
@@ -42,10 +46,10 @@ export function getActuallyVisibleTabIds(fallback: Set<string>): Set<string> {
   }))
 }
 
-export function findTabByPtyId(sessions: WorkspaceSession[], ptyId: string): string | null {
+export function findTabByPtyId(sessions: WorkspaceSession[], serverId: string, ptyId: string): string | null {
   for (const session of sessions) {
-    const tab = session.openTabs.find(candidate => candidate.ptyId === ptyId)
-    if (tab) return tab.id
+    const tab = session.openTabs.find(candidate => candidate.serverId === serverId && candidate.ptyId === ptyId)
+    if (tab) return tabResourceKey(tab)
   }
   return null
 }

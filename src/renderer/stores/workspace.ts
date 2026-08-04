@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { debugTrace } from '../debug/debugBridge'
-import { removeTabFromLeaf, splitRoot, createLeaf, generateTileId, type TileNode } from '../components/tile-tree'
+import { removeTabFromLeaf, remapTabIds, splitRoot, createLeaf, generateTileId, type TileNode } from '../components/tile-tree'
 import {
   createEmptyCanvasScene,
   generateCanvasScene,
@@ -44,6 +44,7 @@ export interface Project {
 
 export interface OpenTab {
   serverId: string
+  authorityTabId?: string
   id: string
   projectPath: string
   agentSessionId?: string
@@ -203,6 +204,10 @@ export function serverResourceKey(serverId: string, resourceId: string): string 
   return `${serverId}\0${resourceId}`
 }
 
+export function tabResourceKey(tab: Pick<OpenTab, 'serverId' | 'id' | 'authorityTabId'>): string {
+  return tab.authorityTabId ? tab.id : serverResourceKey(tab.serverId, tab.id)
+}
+
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   projects: [],
   categories: [],
@@ -218,20 +223,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   applyAuthoritativeWorkspace: (serverId, workspace) => {
     set((state) => {
       const sessions: WorkspaceSession[] = (workspace.sessions ?? []).map((saved) => {
+        const tabIdMapping = new Map(saved.openTabs.map(tab => [tab.id, serverResourceKey(serverId, tab.id)]))
         const openTabs: OpenTab[] = saved.openTabs.map(tab => ({
           ...tab,
           serverId,
+          authorityTabId: tab.id,
+          id: tabIdMapping.get(tab.id)!,
           ptyId: tab.ptyId || tab.id,
           harnessId: tab.harnessId ?? tab.backend,
         }))
-        const activeTileTree = (saved.tileTree ?? null) as TileNode | null
+        const savedTree = (saved.tileTree ?? null) as TileNode | null
+        const activeTileTree = savedTree ? remapTabIds(savedTree, tabIdMapping) : null
         const generatedScene = generateCanvasScene(toCanvasTabs(openTabs), { tileTree: activeTileTree })
         let canvasScene = generatedScene
         let preservedCanvasScene: unknown
         if (saved.canvasScene !== undefined && saved.canvasScene !== null) {
           const loaded = loadCanvasScene(saved.canvasScene)
           if (loaded.status === 'ok') {
-            canvasScene = reconcileCanvasScene(loaded.scene, toCanvasTabs(openTabs))
+            canvasScene = reconcileCanvasScene(
+              remapSceneTabIds(loaded.scene, Object.fromEntries(tabIdMapping)),
+              toCanvasTabs(openTabs),
+            )
           } else if (loaded.status === 'future-version') {
             preservedCanvasScene = loaded.data
           }
@@ -242,7 +254,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           id: serverResourceKey(serverId, saved.id),
           name: saved.name,
           openTabs,
-          activeTabId: saved.activeTabId,
+          activeTabId: saved.activeTabId ? tabIdMapping.get(saved.activeTabId) ?? null : null,
           activeTileTree,
           canvasScene,
           preservedCanvasScene,
@@ -262,7 +274,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? state.activeSessionId
         : serverActiveId
       const active = mergedSessions.find(session => session.id === activeSessionId) ?? null
-      const liveTabIds = new Set(mergedSessions.flatMap(session => session.openTabs.map(tab => tab.id)))
+      const liveTabIds = new Set(mergedSessions.flatMap(session =>
+        session.openTabs.map(tabResourceKey)))
       return {
         projects: [
           ...state.projects.filter(project => project.serverId !== serverId),
@@ -560,6 +573,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   removeTab: (id) => {
     set(state => {
+      const removedTab = state.openTabs.find(tab => tab.id === id)
       const newTabs = state.openTabs.filter(t => t.id !== id)
       let newActiveId = state.activeTabId
       if (state.activeTabId === id) {
@@ -578,7 +592,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeTabId: newActiveId,
         activeCanvasScene,
       })
-      const { [id]: _removedAttention, ...attentionByTabId } = state.attentionByTabId
+      const attentionKey = removedTab ? tabResourceKey(removedTab) : id
+      const { [attentionKey]: _removedAttention, ...attentionByTabId } = state.attentionByTabId
       return { ...synced, attentionByTabId }
     })
   },
@@ -603,9 +618,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         activeTabId: newActiveId,
         activeCanvasScene,
       })
-      if (!newId || newId === id || !state.attentionByTabId[id]) return synced
-      const { [id]: remappedAttention, ...remainingAttention } = state.attentionByTabId
-      return { ...synced, attentionByTabId: { ...remainingAttention, [newId]: remappedAttention } }
+      const oldTab = state.openTabs.find(tab => tab.id === id)
+      if (!newId || newId === id || !oldTab) return synced
+      const oldKey = tabResourceKey(oldTab)
+      if (!state.attentionByTabId[oldKey]) return synced
+      const newKey = updates.authorityTabId ?? oldTab.authorityTabId
+        ? newId
+        : serverResourceKey(updates.serverId ?? oldTab.serverId, newId)
+      const { [oldKey]: remappedAttention, ...remainingAttention } = state.attentionByTabId
+      return { ...synced, attentionByTabId: { ...remainingAttention, [newKey]: remappedAttention } }
     })
   },
 
@@ -615,7 +636,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   clearTabs: () => {
     set(state => {
-      const removedIds = new Set(state.openTabs.map(tab => tab.id))
+      const removedIds = new Set(state.openTabs.map(tabResourceKey))
       const attentionByTabId = Object.fromEntries(
         Object.entries(state.attentionByTabId).filter(([id]) => !removedIds.has(id))
       )

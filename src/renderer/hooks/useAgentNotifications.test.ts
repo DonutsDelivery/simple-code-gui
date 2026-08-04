@@ -9,12 +9,15 @@ vi.mock('../utils/agentNotificationAudio', () => ({ playAgentNotificationSound: 
 import { playAgentNotificationSound } from '../utils/agentNotificationAudio'
 
 function session(id: string, tabId: string): WorkspaceSession {
+  const rendererTabId = `server-a\0${tabId}`
   return {
+    serverId: 'server-a',
+    authoritySessionId: id,
     id,
     name: id,
-    openTabs: [{ id: tabId, ptyId: `pty-${tabId}`, projectPath: `/${id}`, title: tabId }],
-    activeTabId: tabId,
-    activeTileTree: createLeaf(`leaf-${id}`, [tabId], tabId),
+    openTabs: [{ serverId: 'server-a', authorityTabId: tabId, id: rendererTabId, ptyId: `pty-${tabId}`, projectPath: `/${id}`, title: tabId }],
+    activeTabId: rendererTabId,
+    activeTileTree: createLeaf(`leaf-${id}`, [rendererTabId], rendererTabId),
     canvasScene: createEmptyCanvasScene(),
     activeView: 'tiles',
     isRestored: true,
@@ -40,14 +43,14 @@ describe('useAgentNotifications', () => {
     const api = {
       onAgentSessionSignal: vi.fn((callback) => { listener = callback; return vi.fn() }),
     } as any
-    renderHook(() => useAgentNotifications({ api, settings: { defaultProjectDir: '', theme: 'default' }, isMobile: false }))
+    renderHook(() => useAgentNotifications({ serverId: 'server-a', api, settings: { defaultProjectDir: '', theme: 'default' }, isMobile: false }))
 
     act(() => listener?.({ ptyId: 'pty-visible', type: 'complete' }))
     expect(playAgentNotificationSound).toHaveBeenCalledWith('completed', 0.65)
     expect(useWorkspaceStore.getState().attentionByTabId).toEqual({})
 
     act(() => listener?.({ ptyId: 'pty-hidden', type: 'input-needed' }))
-    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ hidden: 'needs-input' })
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ ['server-a\0hidden']: 'needs-input' })
 
     act(() => useWorkspaceStore.getState().switchSession('two'))
     expect(useWorkspaceStore.getState().attentionByTabId).toEqual({})
@@ -57,7 +60,7 @@ describe('useAgentNotifications', () => {
   it('delivers signals that arrive before restored PTYs are mapped to tabs', () => {
     let listener: ((event: { ptyId: string; type: 'complete' }) => void) | undefined
     const api = { onAgentSessionSignal: (callback: typeof listener) => { listener = callback; return vi.fn() } } as any
-    renderHook(() => useAgentNotifications({
+    renderHook(() => useAgentNotifications({ serverId: 'server-a',
       api,
       settings: { defaultProjectDir: '', theme: 'default' },
       isMobile: false,
@@ -74,14 +77,14 @@ describe('useAgentNotifications', () => {
     ], 'one'))
 
     expect(playAgentNotificationSound).toHaveBeenCalledWith('completed', 0.65)
-    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ restored: 'completed' })
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ ['server-a\0restored']: 'completed' })
   })
 
   // AC: @agent-session-notifications ac-6
   it('keeps highlighting enabled when independent notification audio is disabled', () => {
     let listener: ((event: { ptyId: string; type: 'complete' }) => void) | undefined
     const api = { onAgentSessionSignal: (callback: typeof listener) => { listener = callback; return vi.fn() } } as any
-    renderHook(() => useAgentNotifications({
+    renderHook(() => useAgentNotifications({ serverId: 'server-a',
       api,
       settings: { defaultProjectDir: '', theme: 'default', notificationSoundsEnabled: false, notificationVolume: 0.2 },
       isMobile: false,
@@ -89,7 +92,7 @@ describe('useAgentNotifications', () => {
 
     act(() => listener?.({ ptyId: 'pty-hidden', type: 'complete' }))
     expect(playAgentNotificationSound).not.toHaveBeenCalled()
-    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ hidden: 'completed' })
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ ['server-a\0hidden']: 'completed' })
   })
 
   // AC: @agent-session-notifications ac-3
@@ -97,7 +100,7 @@ describe('useAgentNotifications', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true })
     let listener: ((event: { ptyId: string; type: 'complete' }) => void) | undefined
     const api = { onAgentSessionSignal: (callback: typeof listener) => { listener = callback; return vi.fn() } } as any
-    renderHook(() => useAgentNotifications({
+    renderHook(() => useAgentNotifications({ serverId: 'server-a',
       api,
       settings: { defaultProjectDir: '', theme: 'default' },
       isMobile: true,
@@ -105,7 +108,7 @@ describe('useAgentNotifications', () => {
 
     act(() => listener?.({ ptyId: 'pty-visible', type: 'complete' }))
 
-    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ visible: 'completed' })
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ ['server-a\0visible']: 'completed' })
   })
 
   // AC: @agent-session-notifications ac-3
@@ -126,7 +129,7 @@ describe('useAgentNotifications', () => {
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
     vi.stubGlobal('MutationObserver', TestMutationObserver)
     const marker = document.createElement('div')
-    marker.dataset.agentVisibleTabId = 'hidden'
+    marker.dataset.agentVisibleTabId = 'server-a\0hidden'
     marker.getBoundingClientRect = () => ({
       width: 100,
       height: 100,
@@ -136,16 +139,16 @@ describe('useAgentNotifications', () => {
       bottom: 100,
     } as DOMRect)
     document.body.append(marker)
-    useWorkspaceStore.getState().markTabAttention('visible', 'completed')
+    useWorkspaceStore.getState().markTabAttention('server-a\0visible', 'completed')
 
-    renderHook(() => useAgentNotifications({
+    renderHook(() => useAgentNotifications({ serverId: 'server-a',
       api: { onAgentSessionSignal: () => vi.fn() } as any,
       settings: { defaultProjectDir: '', theme: 'default' },
       isMobile: true,
     }))
-    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ visible: 'completed' })
+    expect(useWorkspaceStore.getState().attentionByTabId).toEqual({ ['server-a\0visible']: 'completed' })
 
-    marker.dataset.agentVisibleTabId = 'visible'
+    marker.dataset.agentVisibleTabId = 'server-a\0visible'
     marker.getBoundingClientRect = () => ({
       width: 100,
       height: 100,
@@ -162,7 +165,7 @@ describe('useAgentNotifications', () => {
   // AC: @agent-session-notifications ac-3
   it('does not rerun visibility acknowledgement for Canvas-only scene updates', () => {
     const clearVisible = vi.spyOn(useWorkspaceStore.getState(), 'clearTabAttentionMany')
-    renderHook(() => useAgentNotifications({
+    renderHook(() => useAgentNotifications({ serverId: 'server-a',
       api: { onAgentSessionSignal: () => vi.fn() } as any,
       settings: { defaultProjectDir: '', theme: 'default' },
       isMobile: false,

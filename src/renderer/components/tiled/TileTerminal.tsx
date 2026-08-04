@@ -7,7 +7,7 @@ import { computeDropZone } from '../tiled-layout-utils.js'
 import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
 import type { OpenTab, Project, ResizeEdge, ClientToCanvasPercent } from './types.js'
-import type { AgentAttentionKind } from '../../stores/workspace.js'
+import { tabResourceKey, type AgentAttentionKind } from '../../stores/workspace.js'
 
 interface TileTerminalProps {
   leafId: string
@@ -227,7 +227,7 @@ export function TileTerminal({
 
   const hasMultipleTabs = tabs.length > 1
   const activeTab = tabs.find(t => t.id === activeSubTabId) || tabs[0]
-  const activeAttention = activeTab ? attentionByTabId[activeTab.id] : undefined
+  const activeAttention = activeTab ? attentionByTabId[tabResourceKey(activeTab)] : undefined
 
   return (
     <div
@@ -267,8 +267,8 @@ export function TileTerminal({
               {tabs.map((tab, tabIndex) => (
                 <div
                   key={tab.id}
-                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}${attentionByTabId[tab.id] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tab.id]}` : ''}${draggedSubTab?.tabId === tab.id ? ' subtab-dragging' : ''}${subTabInsert === tabIndex ? ' subtab-insert-before' : ''}${subTabInsert === tabIndex + 1 && tabIndex === tabs.length - 1 ? ' subtab-insert-after' : ''}`}
-                  aria-label={`${tab.title}${attentionByTabId[tab.id] === 'needs-input' ? ', needs your input' : attentionByTabId[tab.id] === 'completed' ? ', agent completed' : ''}`}
+                  className={`tile-subtab ${tab.id === activeSubTabId ? 'active' : ''}${attentionByTabId[tabResourceKey(tab)] ? ` has-agent-attention has-agent-attention--${attentionByTabId[tabResourceKey(tab)]}` : ''}${draggedSubTab?.tabId === tab.id ? ' subtab-dragging' : ''}${subTabInsert === tabIndex ? ' subtab-insert-before' : ''}${subTabInsert === tabIndex + 1 && tabIndex === tabs.length - 1 ? ' subtab-insert-after' : ''}`}
+                  aria-label={`${tab.title}${attentionByTabId[tabResourceKey(tab)] === 'needs-input' ? ', needs your input' : attentionByTabId[tabResourceKey(tab)] === 'completed' ? ', agent completed' : ''}`}
                   draggable
                   onDragStart={(e) => {
                     e.stopPropagation()
@@ -297,7 +297,7 @@ export function TileTerminal({
                       onDoubleClick={(e) => { e.stopPropagation(); startRename(tab.id, tab.title) }}
                     >{tab.title}</span>
                   )}
-                  {attentionByTabId[tab.id] && <span className="agent-attention-dot" aria-hidden="true" />}
+                  {attentionByTabId[tabResourceKey(tab)] && <span className="agent-attention-dot" aria-hidden="true" />}
                   <button
                     className="subtab-close"
                     draggable={false}

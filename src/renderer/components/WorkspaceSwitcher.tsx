@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, memo } from 'react'
-import { useWorkspaceStore, type AgentAttentionKind, type WorkspaceSession } from '../stores/workspace'
+import { tabResourceKey, useWorkspaceStore, type AgentAttentionKind, type WorkspaceSession } from '../stores/workspace'
 
 export function getWorkspaceAttention(
   session: WorkspaceSession,
@@ -7,7 +7,7 @@ export function getWorkspaceAttention(
 ): AgentAttentionKind | null {
   let completed = false
   for (const tab of session.openTabs) {
-    const attention = attentionByTabId[tab.id]
+    const attention = attentionByTabId[tabResourceKey(tab)]
     if (attention === 'needs-input') return attention
     if (attention === 'completed') completed = true
   }

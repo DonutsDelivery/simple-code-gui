@@ -8,12 +8,13 @@ import { findTabByPtyId, getActuallyVisibleTabIds, getVisibleTabIds } from '../u
 import { playAgentNotificationSound } from '../utils/agentNotificationAudio'
 
 interface UseAgentNotificationsOptions {
+  serverId: string
   api: Api
   settings: AppSettings | null
   isMobile: boolean
 }
 
-export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotificationsOptions): void {
+export function useAgentNotifications({ serverId, api, settings, isMobile }: UseAgentNotificationsOptions): void {
   const tabTopology = useWorkspaceStore(useShallow(
     state => state.sessions.map(session => session.openTabs),
   ))
@@ -22,8 +23,8 @@ export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotif
 
   const handleSignal = (event: AgentSessionSignalEvent): boolean => {
     const state = useWorkspaceStore.getState()
-    const tabId = findTabByPtyId(state.sessions, event.ptyId)
-    if (!tabId) return false
+    const attentionKey = findTabByPtyId(state.sessions, serverId, event.ptyId)
+    if (!attentionKey) return false
 
     const kind: AgentAttentionKind = event.type === 'complete' ? 'completed' : 'needs-input'
     if (settings?.notificationSoundsEnabled !== false) {
@@ -32,8 +33,8 @@ export function useAgentNotifications({ api, settings, isMobile }: UseAgentNotif
 
     const logical = getVisibleTabIds(state.sessions, state.activeSessionId, isMobile)
     const visible = getActuallyVisibleTabIds(logical)
-    if (visible.has(tabId)) state.clearTabAttention(tabId)
-    else state.markTabAttention(tabId, kind)
+    if (visible.has(attentionKey)) state.clearTabAttention(attentionKey)
+    else state.markTabAttention(attentionKey, kind)
     return true
   }
 
