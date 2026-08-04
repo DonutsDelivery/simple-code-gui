@@ -45,23 +45,21 @@ export function getDeviceIdentity(): { deviceId: string; deviceName: string } {
 /**
  * Load hosts from localStorage
  */
-export function loadHosts(): HostConfig[] {
+export async function loadHosts(): Promise<HostConfig[]> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!stored) return []
-    if (!localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, stored)
 
     const hosts = JSON.parse(stored) as HostConfig[]
-
-    // Convert date strings back to Date objects
-    return hosts.map(host => {
-      if (host.token) void storeDeviceCredential(host.id, host.token)
-      return {
-        ...host,
-        token: '',
-        lastConnected: host.lastConnected ? new Date(host.lastConnected) : undefined
-      }
-    })
+    await Promise.all(hosts.filter(host => host.token).map(host => storeDeviceCredential(host.id, host.token)))
+    const sanitized = hosts.map(host => ({
+      ...host,
+      token: '',
+      lastConnected: host.lastConnected ? new Date(host.lastConnected) : undefined
+    }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized))
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
+    return sanitized
   } catch {
     return []
   }

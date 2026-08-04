@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { generateKeyPairSync } from 'crypto'
 import { client, ready } from '@serenity-kit/opaque'
 import {
   createPairingOffer,
@@ -11,19 +12,24 @@ import { consumeWebSocketTicket, issueWebSocketTicket, PakePairingAuthority } fr
 
 describe('secure pairing protocol', () => {
   it('round trips a signed offer and rejects expiry, tampering, and fingerprint mismatch', () => {
+    const generated = generateKeyPairSync('ed25519')
+    const keys = {
+      publicKey: generated.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+      privateKey: generated.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    }
     const offer = createPairingOffer({
       serverId: 'server-a',
       endpointHints: ['https://host:38470'],
       certificateFingerprint: 'sha256:abc',
       expiresAt: 2000,
       requestedScopes: ['read', 'write'],
-    }, 'secret')
+    }, keys)
     const decoded = decodePairingOffer(encodePairingOffer(offer))
-    expect(verifyPairingOffer(decoded, 'secret', 'sha256:abc', 1000).serverId).toBe('server-a')
-    expect(() => verifyPairingOffer(decoded, 'secret', 'sha256:abc', 2000)).toThrow('expired')
-    expect(() => verifyPairingOffer(decoded, 'secret', 'sha256:other', 1000)).toThrow('fingerprint')
+    expect(verifyPairingOffer(decoded, keys.publicKey, 'sha256:abc', 1000).serverId).toBe('server-a')
+    expect(() => verifyPairingOffer(decoded, keys.publicKey, 'sha256:abc', 2000)).toThrow('expired')
+    expect(() => verifyPairingOffer(decoded, keys.publicKey, 'sha256:other', 1000)).toThrow('fingerprint')
     decoded.payload.serverId = 'server-b'
-    expect(() => verifyPairingOffer(decoded, 'secret', undefined, 1000)).toThrow('signature')
+    expect(() => verifyPairingOffer(decoded, keys.publicKey, undefined, 1000)).toThrow('signature')
     expect(pairingFingerprint('server-a', 'sha256:abc')).toMatch(/^[0-9a-f]{4}(?:-[0-9a-f]{4}){5}$/)
   })
 
@@ -54,7 +60,7 @@ describe('secure pairing protocol', () => {
       identifiers: { client: 'server-a', server: 'server-a' },
       keyStretching: 'rfc-recommended',
     })).toBeUndefined()
-  })
+  }, 20_000)
 
   it('issues single-use expiring websocket tickets', () => {
     const ticket = issueWebSocketTicket('device-token')

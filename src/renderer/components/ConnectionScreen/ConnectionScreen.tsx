@@ -17,6 +17,8 @@ import { connectionScreenStyles } from './styles.js'
 import type { ConnectionScreenProps, ViewState, ConnectionConfig, SavedHost } from './types.js'
 import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } from '../../security/device-credentials.js'
 import { pairWithHumanCode, redeemPairingOffer } from '../../security/human-code-pairing.js'
+import { trustServerEndpoint } from '../../security/server-certificate-trust.js'
+import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer.js'
 
 /**
  * Connection screen for browser/Capacitor environments
@@ -43,7 +45,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
    * Try connecting to a single host
    * Returns the successful config or throws an error
    */
-  const tryConnect = useCallback(async (config: { host: string; port: number; token: string }): Promise<{ api: HttpBackend; config: typeof config }> => {
+  const tryConnect = useCallback(async (config: ConnectionConfig): Promise<{ api: HttpBackend; config: ConnectionConfig }> => {
     const api = initializeApi(config) as HttpBackend
     const result = await api.testConnection()
 
@@ -58,7 +60,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
    * Handle connection attempt - tries multiple IPs if provided
    */
   const handleConnect = useCallback(async (
-    config: { host: string; hosts?: string[]; port: number; token: string },
+    config: ConnectionConfig,
     isRetry = false
   ) => {
     setView('connecting')
@@ -80,11 +82,11 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       : [config.host]
 
     let lastError: Error | null = null
-    let successfulConfig: { host: string; port: number; token: string } | null = null
+    let successfulConfig: ConnectionConfig | null = null
 
     // Try each host in sequence
     for (const host of hostsToTry) {
-      const attemptConfig = { host, port: config.port, token: config.token }
+      const attemptConfig: ConnectionConfig = { ...config, host, hosts: undefined }
       console.log(`[ConnectionScreen] Trying to connect to ${host}:${config.port}...`)
 
       try {
@@ -130,6 +132,8 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
           host: successfulConfig.host,
           hosts: allHosts,
           credentialRef,
+          secure: config.secure,
+          certFingerprint: config.certFingerprint,
           lastConnected: now
         }
       } else {
@@ -142,6 +146,8 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
           hosts: allHosts,
           port: successfulConfig.port,
           credentialRef,
+          secure: config.secure,
+          certFingerprint: config.certFingerprint,
           lastConnected: now
         }
         updatedHosts = [newHost, ...savedHosts]
@@ -189,18 +195,27 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       // Use the most recently connected host (includes all IPs for fallback)
       const mostRecent = savedHosts[0]
       console.log('[ConnectionScreen] Auto-connecting to saved host:', mostRecent.name, 'with hosts:', mostRecent.hosts)
-      void loadDeviceCredential(mostRecent.credentialRef).then(credential => {
+      void loadDeviceCredential(mostRecent.credentialRef).then(async credential => {
         if (!credential) {
           setError('Saved server credential is unavailable. Pair the device again.')
           setView('error')
           return
         }
+        if (mostRecent.secure) {
+          const hosts = mostRecent.hosts?.length ? mostRecent.hosts : [mostRecent.host]
+          await Promise.all(hosts.map(host => trustServerEndpoint(`https://${host}:${mostRecent.port}`, mostRecent.certFingerprint || '')))
+        }
         return handleConnect({
           host: mostRecent.host,
           hosts: mostRecent.hosts,
           port: mostRecent.port,
-          token: credential
+          token: credential,
+          secure: mostRecent.secure,
+          certFingerprint: mostRecent.certFingerprint
         })
+      }).catch(cause => {
+        setError(cause instanceof Error ? cause.message : 'Saved Server trust could not be restored')
+        setView('error')
       })
     } else if (savedConfig && view === 'welcome') {
       // Fallback to single-IP savedConfig if no saved hosts
@@ -216,6 +231,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
     setError(null)
     try {
       if (connection.pairingOffer && connection.endpointHints?.length) {
+        await verifyPairingOfferInBrowser(connection.pairingOffer)
         const approved = window.confirm(
           `Approve Server ${connection.serverId || 'unknown'}\nFingerprint: ${connection.fingerprint || 'not available'}\nScopes: ${(connection.scopes || []).join(', ') || 'not specified'}`,
         )
@@ -225,6 +241,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
         let lastError: unknown
         for (const endpoint of connection.endpointHints) {
           try {
+            await trustServerEndpoint(endpoint, connection.fingerprint || '')
             const paired = await redeemPairingOffer(
               pairingOffer,
               endpoint,
@@ -236,6 +253,8 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
               host: parsed.hostname,
               port: Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80),
               token: paired.deviceCredential,
+              secure: parsed.protocol === 'https:',
+              certFingerprint: connection.fingerprint,
             })
             return
           } catch (err) {
@@ -283,17 +302,21 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
     setError(null)
     try {
       const deviceId = crypto.randomUUID()
+      let certificateFingerprint = ''
       const paired = await pairWithHumanCode(
         manualHost.trim(),
         port,
         manualToken.trim(),
         deviceId,
         navigator.userAgent,
-        details => window.confirm(
-          `Approve Server ${details.serverId}\nFingerprint: ${details.certificateFingerprint || 'not available'}\nScopes: ${details.requestedScopes.join(', ')}`,
-        ),
+        details => {
+          certificateFingerprint = details.certificateFingerprint
+          return window.confirm(
+            `Approve Server ${details.serverId}\nFingerprint: ${details.certificateFingerprint || 'not available'}\nScopes: ${details.requestedScopes.join(', ')}`,
+          )
+        },
       )
-      await handleConnect({ host: manualHost.trim(), port, token: paired.deviceCredential })
+      await handleConnect({ host: manualHost.trim(), port, token: paired.deviceCredential, secure: true, certFingerprint: certificateFingerprint })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Pairing failed')
       setView('error')

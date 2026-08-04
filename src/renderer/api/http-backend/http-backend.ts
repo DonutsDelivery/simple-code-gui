@@ -88,8 +88,9 @@ export class HttpBackend implements Api {
     this.port = config.port
 
     // Determine protocol based on whether host is local
-    const httpProtocol = isLocalNetwork(config.host) ? 'http' : 'https'
-    const wsProtocol = isLocalNetwork(config.host) ? 'ws' : 'wss'
+    const secure = config.secure ?? !isLocalNetwork(config.host)
+    const httpProtocol = secure ? 'https' : 'http'
+    const wsProtocol = secure ? 'wss' : 'ws'
 
     const baseUrl = `${httpProtocol}://${config.host}:${config.port}`
     const wsBaseUrl = `${wsProtocol}://${config.host}:${config.port}`

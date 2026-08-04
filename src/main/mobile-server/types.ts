@@ -10,6 +10,7 @@ export interface MobileServerConfig {
   serverVersion?: string
   serverId?: string
   startupNonce?: string
+  secure?: boolean
 }
 
 export type EndpointAccess = 'admin' | 'write' | 'read'

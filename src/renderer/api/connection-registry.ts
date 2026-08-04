@@ -6,6 +6,7 @@ export interface ConnectionEndpoint {
   host: string
   port: number
   secure?: boolean
+  certFingerprint?: string
 }
 
 export interface SavedServerConnection {
@@ -61,6 +62,7 @@ export class ConnectionRegistry {
       host: endpoint.host,
       port: endpoint.port,
       token,
+      secure: endpoint.secure,
     }),
   ) {}
 

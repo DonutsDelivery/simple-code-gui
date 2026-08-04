@@ -224,12 +224,25 @@ export interface ElectronAPI {
     revoked: boolean
   }>>
   mobileRevokeDevice: (deviceId: string) => Promise<{ revoked: number }>
+  mobileListPairingRequests: () => Promise<Array<{
+    requestId: string
+    deviceId: string
+    deviceName: string
+    requestedScopes: string[]
+    createdAt: number
+    expiresAt: number
+  }>>
+  mobileApprovePairingRequest: (requestId: string) => Promise<{ approved: boolean }>
+  mobileRejectPairingRequest: (requestId: string) => Promise<{ rejected: boolean }>
 
   // Platform secure credential storage
   secureCredentialsAvailable: () => Promise<boolean>
   storeSecureCredential: (ref: string, credential: string) => Promise<boolean>
   loadSecureCredential: (ref: string) => Promise<string | null>
   removeSecureCredential: (ref: string) => Promise<void>
+  trustServerCertificate: (endpoint: string, fingerprint: string) => Promise<void>
+  probeServerCertificate: (endpoint: string) => Promise<string>
+  removeServerCertificateTrust: (endpoint: string) => Promise<void>
 
   // Updater
   getVersion: () => Promise<string>

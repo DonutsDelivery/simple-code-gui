@@ -302,6 +302,8 @@ function handlePtyStreamUpgrade(
 function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerDeps): void {
   const ptyManager = deps.getPtyManager()
   const terminalSubscriptions = deps.getTerminalSubscriptions()
+  const authToken = (ws as WebSocket & { __authToken?: string }).__authToken || ''
+  const canWrite = tokensEqual(authToken, deps.getToken()) || deviceTokenAllows(authToken, 'write')
 
   switch (msg.type) {
     case 'subscribe':
@@ -321,6 +323,10 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
       break
 
     case 'write':
+      if (!canWrite) {
+        ws.send(JSON.stringify({ type: 'authorization-error', requiredScope: 'write' }))
+        break
+      }
       if (msg.ptyId && msg.data && ptyManager) {
         const registry = deps.getRuntimeRegistry?.()
         if (!registry) throw new Error('Runtime authority is not available')
@@ -330,6 +336,10 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
       break
 
     case 'resize':
+      if (!canWrite) {
+        ws.send(JSON.stringify({ type: 'authorization-error', requiredScope: 'write' }))
+        break
+      }
       if (msg.ptyId && msg.cols && msg.rows && ptyManager) {
         const registry = deps.getRuntimeRegistry?.()
         if (!registry) throw new Error('Runtime authority is not available')

@@ -971,6 +971,17 @@ Desktop and mobile frontends can manage and display multiple simultaneous server
 
 Desktop users never need a rear camera, and every onboarding method ends with the same verified server identity and revocable per-device credential.
 
+## In-progress acceptance evidence — 2026-08-04
+
+- Signed offers use a persistent Ed25519 Server identity and are verified locally before endpoint hints are used.
+- Production Server startup uses HTTPS and publishes its SHA-256 certificate fingerprint; pinned CLI health and pairing-offer generation passed against a live self-signed Server.
+- QR/paste and OPAQUE proofs create pending device requests. A credential is issued only after explicit approval in the Server UI; rejection and secret-protected status polling are implemented.
+- Replay is rejected across Server restart. Read-only credentials cannot mint PTY tickets, and revocation closes an already-open device WebSocket immediately.
+- Electron, Android, and iOS certificate probe/pin paths are implemented. Android `assembleDebug` passes on Java 21; iOS Capacitor sync passes on Linux.
+- Full test gate: 59 files and 354 tests passed. Production build and `git diff --check` passed.
+
+The checkpoint remains **in progress**. Physical Android/iOS verification must independently prove pinned HTTPS and WSS success/mismatch behavior, the iOS code needs an Xcode build/runtime pass, and the Electron certificate path still needs isolated native runtime acceptance.
+
 ---
 
 # Checkpoint 10 — Add repository identity and exact source materialization across servers

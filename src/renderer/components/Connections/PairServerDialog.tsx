@@ -6,6 +6,8 @@ import {
   type HumanCodePairingResult,
   type PairingApprovalDetails,
 } from '../../security/human-code-pairing.js'
+import { trustServerEndpoint } from '../../security/server-certificate-trust.js'
+import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer.js'
 
 export interface PairedServerResult extends HumanCodePairingResult {
   endpoint: URL
@@ -58,6 +60,7 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
     if (!parsed?.pairingOffer || !parsed.endpointHints?.length || !parsed.serverId) {
       throw new Error('Pairing offer is invalid or expired')
     }
+    await verifyPairingOfferInBrowser(offer)
     const accepted = await requestApproval({
       serverId: parsed.serverId,
       endpointHints: parsed.endpointHints,
@@ -69,6 +72,7 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
     let lastError: unknown
     for (const endpoint of parsed.endpointHints) {
       try {
+        await trustServerEndpoint(endpoint, parsed.fingerprint || '')
         const paired = await redeemPairingOffer(offer, endpoint, crypto.randomUUID(), navigator.userAgent)
         await onPaired({ ...paired, endpoint: new URL(endpoint), fingerprint: parsed.fingerprint || '' })
         return
@@ -99,7 +103,7 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
     )
     await onPaired({
       ...paired,
-      endpoint: new URL(`http://${host.trim()}:${numericPort}`),
+      endpoint: new URL(`https://${host.trim()}:${numericPort}`),
       fingerprint,
     })
   }

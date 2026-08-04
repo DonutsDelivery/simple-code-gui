@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // Register the barcode scanner plugin
         registerPlugin(BarcodeScannerPlugin.class);
+        registerPlugin(ServerTrustPlugin.class);
 
         super.onCreate(savedInstanceState);
 
@@ -26,6 +27,7 @@ public class MainActivity extends BridgeActivity {
 
         // Enable WebSocket and other features for local network connections
         WebView webView = getBridge().getWebView();
+        webView.setWebViewClient(new DonutCodeWebViewClient(getBridge()));
         WebSettings settings = webView.getSettings();
 
         // SECURITY: Use COMPATIBILITY mode instead of ALWAYS_ALLOW

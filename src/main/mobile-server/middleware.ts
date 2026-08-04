@@ -130,7 +130,8 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
       || req.path === '/verify-handshake'
       || req.path === '/api/auth/pake/start'
       || req.path === '/api/auth/pake/finish'
-      || req.path === '/api/auth/pairing-offer/redeem'
+      || req.path === '/api/auth/pairing-offer/request'
+      || /^\/api\/auth\/pairing-offer\/request\/[^/]+\/status$/.test(req.path)
     ) {
       return next()
     }
@@ -155,8 +156,12 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
       return res.status(403).json({ error: 'Invalid token' })
     }
 
-    // Successful auth - clear rate limit
-    const requiredScope = req.method === 'GET' || req.method === 'HEAD' ? 'read' : 'write'
+    // Successful auth - clear rate limit. A read-scoped device may request a
+    // ticket only for the read-only main socket; PTY stream tickets require write.
+    const websocketPurpose = req.path === '/api/auth/websocket-ticket' ? req.body?.purpose : undefined
+    const requiredScope = websocketPurpose === '/ws'
+      ? 'read'
+      : req.method === 'GET' || req.method === 'HEAD' ? 'read' : 'write'
     if (
       isDeviceTokenValid(providedToken)
       && !deviceTokenAllows(providedToken, requiredScope)
@@ -237,8 +242,16 @@ export function isAccessAllowed(ipClass: IpClass, access: EndpointAccess): boole
 
 export function setupIpAccessMiddleware(app: Express): void {
   app.use((req: Request, res: Response, next: NextFunction) => {
-    // Skip for unauthenticated endpoints and static files
-    if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake' || req.path === '/ws-test') {
+    // Skip for credential-free pairing endpoints, health checks, and static files.
+    if (
+      req.path === '/health'
+      || req.path === '/connect'
+      || req.path === '/verify-handshake'
+      || req.path === '/api/auth/pake/start'
+      || req.path === '/api/auth/pake/finish'
+      || req.path === '/api/auth/pairing-offer/request'
+      || /^\/api\/auth\/pairing-offer\/request\/[^/]+\/status$/.test(req.path)
+    ) {
       return next()
     }
     if (isStaticPath(req.path)) {

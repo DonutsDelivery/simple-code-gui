@@ -5,6 +5,7 @@ import { join, resolve } from 'path'
 import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from './headless-server.js'
 import { configureRuntimePaths } from './runtime-paths.js'
 import { loadOrCreateToken } from './mobile-server/token-manager.js'
+import { runtimeHttpRequest } from './runtime-http.js'
 
 interface ServeOptions {
   dataDir: string
@@ -97,12 +98,12 @@ async function pairingOffer(args: string[]): Promise<void> {
 
   configureRuntimePaths({ dataDir, appPath: process.cwd() })
   const token = loadOrCreateToken()
-  const response = await fetch(`${info.endpoint.replace(/\/$/, '')}/api/auth/pairing-offer`, {
+  const response = await runtimeHttpRequest(info, '/api/auth/pairing-offer', {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!response.ok) throw new Error(`Pairing offer request failed (${response.status})`)
-  const payload = await response.json() as { offer: string; expiresAt: number }
+  if (response.status < 200 || response.status >= 300) throw new Error(`Pairing offer request failed (${response.status})`)
+  const payload = response.json<{ offer: string; expiresAt: number }>()
   const output = valueAfter(args, '--output')
   if (output) {
     const path = resolve(output)

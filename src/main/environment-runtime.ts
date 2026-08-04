@@ -19,6 +19,7 @@ export interface EnvironmentRuntimeOptions {
   port?: number
   voiceManager?: unknown
   startupNonce?: string
+  secure?: boolean
 }
 
 export interface EnvironmentRuntimeEndpoint {
@@ -26,6 +27,7 @@ export interface EnvironmentRuntimeEndpoint {
   host: string
   port: number
   secure: boolean
+  certFingerprint: string
   version: string
 }
 
@@ -74,6 +76,7 @@ export class EnvironmentRuntime {
       serverVersion: options.version,
       serverId: this.serverId,
       startupNonce: options.startupNonce,
+      secure: options.secure,
     })
     this.server.setPtyManager(this.ptyManager)
     this.server.setRuntimeRegistry(this.runtimeRegistry)

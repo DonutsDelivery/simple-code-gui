@@ -103,6 +103,7 @@ export function HostQRDisplay({
   const [toggling, setToggling] = useState(false)
   // H3: paired phones, individually revocable.
   const [devices, setDevices] = useState<Array<{ deviceId: string; name: string; lastSeen: number }>>([])
+  const [pairingRequests, setPairingRequests] = useState<Array<{ requestId: string; deviceId: string; deviceName: string; requestedScopes: string[]; expiresAt: number }>>([])
 
   // Refresh QR code with new nonce
   const refreshQRCode = useCallback(async () => {
@@ -145,6 +146,27 @@ export function HostQRDisplay({
       console.error('Failed to revoke device:', e)
     }
   }, [loadDevices])
+
+  const loadPairingRequests = useCallback(async () => {
+    if (!window.electronAPI?.mobileListPairingRequests) return
+    setPairingRequests(await window.electronAPI.mobileListPairingRequests())
+  }, [])
+
+  const handlePairingRequest = useCallback(async (requestId: string, approved: boolean) => {
+    const operation = approved
+      ? window.electronAPI?.mobileApprovePairingRequest
+      : window.electronAPI?.mobileRejectPairingRequest
+    if (!operation) return
+    await operation(requestId)
+    await Promise.all([loadPairingRequests(), loadDevices()])
+  }, [loadDevices, loadPairingRequests])
+
+  useEffect(() => {
+    if (!accessEnabled) return
+    void loadPairingRequests()
+    const timer = setInterval(() => { void loadPairingRequests() }, 1_000)
+    return () => clearInterval(timer)
+  }, [accessEnabled, loadPairingRequests])
 
   // Get connection info from mobile server on mount
   useEffect(() => {
@@ -423,6 +445,33 @@ export function HostQRDisplay({
       <div className="host-qr-display__url">
         <code className="host-qr-display__url-text">{connectionUrl}</code>
       </div>
+
+      {pairingRequests.length > 0 && (
+        <div className="host-qr-display__devices">
+          <div className="host-qr-display__devices-title">Pairing approval required</div>
+          {pairingRequests.map(request => (
+            <div key={request.requestId} className="host-qr-display__device">
+              <span className="host-qr-display__device-name">
+                {request.deviceName || request.deviceId} · {request.requestedScopes.join(', ')}
+              </span>
+              <button
+                className="host-qr-display__button"
+                onClick={() => { void handlePairingRequest(request.requestId, true) }}
+                title="Approve this device and issue its credential"
+              >
+                Approve
+              </button>
+              <button
+                className="host-qr-display__button host-qr-display__button--secondary"
+                onClick={() => { void handlePairingRequest(request.requestId, false) }}
+                title="Reject this pairing request"
+              >
+                Reject
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* H3: paired devices — each phone has its own token and can be revoked
           individually without affecting the others. */}

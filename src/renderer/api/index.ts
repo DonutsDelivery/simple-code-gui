@@ -34,7 +34,7 @@ export function getApi(serverId: string): Api | null {
  * - In Electron: Automatically uses ElectronBackend
  * - In browser/Capacitor: Requires config parameter for HttpBackend
  */
-export function initializeApi(config?: { host: string; port: number; token: string }): Api {
+export function initializeApi(config?: { host: string; port: number; token: string; secure?: boolean }): Api {
   if (isElectronEnvironment()) {
     return new ElectronBackend()
   } else if (config) {

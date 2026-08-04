@@ -27,11 +27,19 @@ import { loadDeviceCredential } from '../../security/device-credentials.js'
 
 export function useHostConnection(): UseHostConnectionReturn {
   // State
-  const [hosts, setHosts] = useState<HostConfig[]>(loadHosts)
+  const [hosts, setHosts] = useState<HostConfig[]>([])
   const [currentHost, setCurrentHost] = useState<HostConfig | null>(null)
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected')
   const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>('none')
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void loadHosts().then(loaded => {
+      if (active) setHosts(loaded)
+    })
+    return () => { active = false }
+  }, [])
   const [fingerprintWarning, setFingerprintWarning] = useState<string | null>(null)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
 

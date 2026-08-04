@@ -10,6 +10,7 @@ export interface HttpBackendConfig {
   host: string
   port: number
   token: string
+  secure?: boolean
 }
 
 export interface PtyWebSocketState {

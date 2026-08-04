@@ -118,8 +118,10 @@ export function FileBrowser({ host, basePath, initialPath, onClose }: FileBrowse
       const link = document.createElement('a')
       link.href = objectUrl
       link.download = file.name
+      document.body.appendChild(link)
       link.click()
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
     } catch (err) {
       setError(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {

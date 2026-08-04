@@ -54,4 +54,7 @@ export function registerServerHandlers(
   // (closes its live sockets) without rotating the shared token.
   ipcMain.handle('mobile:listDevices', () => mobileServer.listDevices())
   ipcMain.handle('mobile:revokeDevice', (_event, deviceId: string) => mobileServer.revokeDevice(deviceId))
+  ipcMain.handle('mobile:listPairingRequests', () => mobileServer.listPairingRequests())
+  ipcMain.handle('mobile:approvePairingRequest', (_event, requestId: string) => mobileServer.approvePairingRequest(requestId))
+  ipcMain.handle('mobile:rejectPairingRequest', (_event, requestId: string) => mobileServer.rejectPairingRequest(requestId))
 }

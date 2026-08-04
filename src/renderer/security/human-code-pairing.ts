@@ -1,4 +1,5 @@
 import { client, ready } from '@serenity-kit/opaque'
+import { probeAndTrustServerEndpoint } from './server-certificate-trust.js'
 
 export interface HumanCodePairingResult {
   serverId: string
@@ -13,19 +14,47 @@ export interface PairingApprovalDetails {
   requestedScopes: string[]
 }
 
+interface PendingApproval {
+  serverId: string
+  requestId: string
+  requestSecret: string
+  expiresAt: number
+}
+
+async function waitForPairingApproval(baseUrl: string, pending: PendingApproval): Promise<HumanCodePairingResult> {
+  while (Date.now() < pending.expiresAt) {
+    await new Promise(resolve => setTimeout(resolve, 1_000))
+    const response = await fetch(`${baseUrl}/api/auth/pairing-offer/request/${encodeURIComponent(pending.requestId)}/status`, {
+      headers: { 'X-Pairing-Request-Secret': pending.requestSecret },
+    })
+    if (!response.ok) throw new Error('Pairing request is no longer available')
+    const status = await response.json() as {
+      status: 'pending' | 'approved' | 'rejected'
+      deviceCredential?: string
+      scopes?: string[]
+    }
+    if (status.status === 'rejected') throw new Error('Pairing request was rejected')
+    if (status.status === 'approved' && status.deviceCredential) {
+      return { serverId: pending.serverId, deviceCredential: status.deviceCredential, scopes: status.scopes || [] }
+    }
+  }
+  throw new Error('Pairing request expired before it was approved')
+}
+
 export async function redeemPairingOffer(
   offer: string,
   endpoint: string,
   deviceId: string,
   deviceName: string,
 ): Promise<HumanCodePairingResult> {
-  const response = await fetch(`${endpoint.replace(/\/$/, '')}/api/auth/pairing-offer/redeem`, {
+  const baseUrl = endpoint.replace(/\/$/, '')
+  const response = await fetch(`${baseUrl}/api/auth/pairing-offer/request`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ offer, deviceId, deviceName }),
   })
   if (!response.ok) throw new Error('Pairing offer was rejected or expired')
-  return response.json() as Promise<HumanCodePairingResult>
+  return waitForPairingApproval(baseUrl, await response.json() as PendingApproval)
 }
 
 export async function pairWithHumanCode(
@@ -37,7 +66,8 @@ export async function pairWithHumanCode(
   approve?: (details: PairingApprovalDetails) => Promise<boolean> | boolean,
 ): Promise<HumanCodePairingResult> {
   await ready
-  const baseUrl = `http://${host}:${port}`
+  const baseUrl = `https://${host}:${port}`
+  const probedFingerprint = await probeAndTrustServerEndpoint(baseUrl)
   const start = client.startLogin({ password: humanCode })
   const startResponse = await fetch(`${baseUrl}/api/auth/pake/start`, {
     method: 'POST',
@@ -52,6 +82,9 @@ export async function pairWithHumanCode(
     endpointHints: string[]
     certificateFingerprint: string
     requestedScopes: string[]
+  }
+  if (challenge.certificateFingerprint.replace(/^sha256:/i, '').toLowerCase() !== probedFingerprint.toLowerCase()) {
+    throw new Error('Server certificate fingerprint changed during pairing')
   }
   if (approve && !await approve(challenge)) throw new Error('Pairing approval was cancelled')
   const finish = client.finishLogin({
@@ -68,5 +101,5 @@ export async function pairWithHumanCode(
     body: JSON.stringify({ attemptId: challenge.attemptId, finishLoginRequest: finish.finishLoginRequest }),
   })
   if (!finishResponse.ok) throw new Error('Pairing approval was rejected')
-  return finishResponse.json() as Promise<HumanCodePairingResult>
+  return waitForPairingApproval(baseUrl, await finishResponse.json() as PendingApproval)
 }

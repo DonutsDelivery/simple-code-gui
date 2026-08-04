@@ -47,6 +47,7 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
         host: result.endpoint.hostname,
         port: Number(result.endpoint.port) || (result.endpoint.protocol === 'https:' ? 443 : 80),
         secure: result.endpoint.protocol === 'https:',
+        certFingerprint: result.fingerprint,
       }
       const api = new HttpBackend({ ...endpoint, token: result.deviceCredential })
       const connectionTest = await api.testConnection()

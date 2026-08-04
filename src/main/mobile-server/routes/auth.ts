@@ -1,7 +1,6 @@
 import { randomBytes } from 'crypto'
 import { client, ready, server } from '@serenity-kit/opaque'
 import type { Express, Request, Response } from 'express'
-import { issueDeviceToken } from '../device-registry.js'
 import { getClientIp } from '../../mobile-security/index.js'
 import { log } from '../utils.js'
 
@@ -109,6 +108,7 @@ export interface AuthRouteOptions {
   humanCode: string
   certificateFingerprint: () => string
   endpointHints: () => string[]
+  createPairingRequest: (deviceId: string, deviceName: string) => { requestId: string; requestSecret: string; expiresAt: number }
 }
 
 export function setupAuthRoutes(app: Express, options: AuthRouteOptions): void {
@@ -152,11 +152,11 @@ export function setupAuthRoutes(app: Express, options: AuthRouteOptions): void {
     }
     try {
       const accepted = await authority.finish(attemptId, finishLoginRequest)
-      log('PAKE pairing approved', { deviceId: accepted.deviceId, clientIp: getClientIp(req) })
-      res.json({
+      const pending = options.createPairingRequest(accepted.deviceId, accepted.deviceName)
+      log('PAKE pairing proof accepted; approval requested', { deviceId: accepted.deviceId, clientIp: getClientIp(req) })
+      res.status(202).json({
         serverId: options.serverId,
-        deviceCredential: issueDeviceToken(accepted.deviceId, accepted.deviceName),
-        scopes: ['read', 'write'],
+        ...pending,
       })
     } catch {
       log('PAKE pairing proof rejected', { clientIp: getClientIp(req) })

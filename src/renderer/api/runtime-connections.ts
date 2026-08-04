@@ -5,6 +5,7 @@ import { clearApi, setApi } from './index.js'
 import { loadAuthoritativeWorkspace, resolveAuthoritativeEnvironmentEvent } from '../stores/workspace-persistence.js'
 import { useWorkspaceStore } from '../stores/workspace.js'
 import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } from '../security/device-credentials.js'
+import { trustServerEndpoint } from '../security/server-certificate-trust.js'
 
 const credentials = new Map<string, string>()
 const authoritySubscriptions = new Map<string, () => void>()
@@ -29,7 +30,7 @@ export const runtimeConnectionRegistry = new ConnectionRegistry(
     if (credential === undefined) throw new Error(`Credential ${credentialRef} is unavailable`)
     return credential
   },
-  (endpoint, token) => new HttpBackend({ host: endpoint.host, port: endpoint.port, token }),
+  (endpoint, token) => new HttpBackend({ host: endpoint.host, port: endpoint.port, token, secure: endpoint.secure }),
 )
 
 export function rememberRuntimeCredential(credentialRef: string, token: string): void {
@@ -51,6 +52,12 @@ export async function attachRuntimeConnection(
 }
 
 export async function connectRuntimeServer(serverId: string): Promise<Api> {
+  const saved = runtimeConnectionRegistry.list().find(connection => connection.serverId === serverId)
+  if (saved) {
+    await Promise.all(saved.endpoints.filter(endpoint => endpoint.secure).map(endpoint =>
+      trustServerEndpoint(`https://${endpoint.host}:${endpoint.port}`, endpoint.certFingerprint || ''),
+    ))
+  }
   await runtimeConnectionRegistry.connect(serverId)
   const api = runtimeConnectionRegistry.get(serverId)
   setApi(api)

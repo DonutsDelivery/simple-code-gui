@@ -16,6 +16,8 @@ export interface ConnectionConfig {
   hosts?: string[]
   port: number
   token: string
+  secure?: boolean
+  certFingerprint?: string
 }
 
 export interface SavedHost {
@@ -25,6 +27,8 @@ export interface SavedHost {
   hosts?: string[]
   port: number
   credentialRef: string
+  secure?: boolean
+  certFingerprint?: string
   /** Legacy migration input only; never written by current code. */
   token?: string
   lastConnected: string

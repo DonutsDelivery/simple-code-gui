@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { parseConnectionUrl } from './QRScanner'
 import { parseDeepLink } from './MobileApp/helpers'
+import { generateKeyPairSync } from 'crypto'
+import { createPairingOffer, encodePairingOffer } from '../../../common/pairing-protocol'
+import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer'
 
 const payload = {
   version: 3,
@@ -28,6 +31,23 @@ describe('DonutCode connection compatibility', () => {
       port: 38470,
       pairingOffer: expect.stringContaining('donutcode://pair/'),
     })
+  })
+
+  it('rejects endpoint tampering before sending a signed offer', async () => {
+    const generated = generateKeyPairSync('ed25519')
+    const offer = createPairingOffer({
+      serverId: 'server-a',
+      endpointHints: ['https://server.example:38470'],
+      certificateFingerprint: 'a'.repeat(64),
+      expiresAt: Date.now() + 60_000,
+      requestedScopes: ['read'],
+    }, {
+      publicKey: generated.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+      privateKey: generated.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    })
+    await expect(verifyPairingOfferInBrowser(encodePairingOffer(offer))).resolves.toBeUndefined()
+    offer.payload.endpointHints = ['https://attacker.example']
+    await expect(verifyPairingOfferInBrowser(encodePairingOffer(offer))).rejects.toThrow('signature')
   })
 
   it('parses newly emitted DonutCode QR payloads', () => {

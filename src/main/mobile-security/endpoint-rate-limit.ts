@@ -18,7 +18,7 @@ const ENDPOINT_RATE_LIMITS: Record<string, number> = {
   'POST:/api/tts/speak': 30,
   'POST:/api/auth/pake/start': 10,
   'POST:/api/auth/pake/finish': 10,
-  'POST:/api/auth/pairing-offer/redeem': 10,
+  'POST:/api/auth/pairing-offer/request': 10,
   // Read operations have higher limits
   'GET:/api': 60,
   'GET:/projects': 60,

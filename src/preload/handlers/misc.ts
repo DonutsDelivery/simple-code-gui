@@ -43,6 +43,9 @@ export const miscHandlers = {
   mobileGetPendingFiles: () => ipcRenderer.invoke('mobile:getPendingFiles'),
   mobileListDevices: () => ipcRenderer.invoke('mobile:listDevices'),
   mobileRevokeDevice: (deviceId: string) => ipcRenderer.invoke('mobile:revokeDevice', deviceId),
+  mobileListPairingRequests: () => ipcRenderer.invoke('mobile:listPairingRequests'),
+  mobileApprovePairingRequest: (requestId: string) => ipcRenderer.invoke('mobile:approvePairingRequest', requestId),
+  mobileRejectPairingRequest: (requestId: string) => ipcRenderer.invoke('mobile:rejectPairingRequest', requestId),
 
   // Updater
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),

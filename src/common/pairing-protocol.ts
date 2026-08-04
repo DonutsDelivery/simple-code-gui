@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto'
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify } from 'crypto'
 
 export const PAIRING_PROTOCOL_VERSION = 1
 export const DEFAULT_PAIRING_TTL_MS = 5 * 60_000
@@ -13,6 +13,7 @@ export interface PairingOfferPayload {
   expiresAt: number
   requestedScopes: PairingScope[]
   nonce: string
+  signingPublicKey: string
 }
 
 export interface SignedPairingOffer {
@@ -20,7 +21,7 @@ export interface SignedPairingOffer {
   signature: string
 }
 
-function canonicalPayload(payload: PairingOfferPayload): string {
+export function canonicalPairingPayload(payload: PairingOfferPayload): string {
   return JSON.stringify({
     version: payload.version,
     serverId: payload.serverId,
@@ -29,27 +30,29 @@ function canonicalPayload(payload: PairingOfferPayload): string {
     expiresAt: payload.expiresAt,
     requestedScopes: [...payload.requestedScopes],
     nonce: payload.nonce,
+    signingPublicKey: payload.signingPublicKey,
   })
 }
 
 export function createPairingOffer(
-  input: Omit<PairingOfferPayload, 'version' | 'nonce'>,
-  signingSecret: string,
+  input: Omit<PairingOfferPayload, 'version' | 'nonce' | 'signingPublicKey'>,
+  signingKeys: { publicKey: string; privateKey: string },
 ): SignedPairingOffer {
   const payload: PairingOfferPayload = {
     version: PAIRING_PROTOCOL_VERSION,
     ...input,
     nonce: randomBytes(24).toString('base64url'),
+    signingPublicKey: signingKeys.publicKey,
   }
   return {
     payload,
-    signature: createHmac('sha256', signingSecret).update(canonicalPayload(payload)).digest('base64url'),
+    signature: sign(null, Buffer.from(canonicalPairingPayload(payload)), createPrivateKey(signingKeys.privateKey)).toString('base64url'),
   }
 }
 
 export function verifyPairingOffer(
   offer: SignedPairingOffer,
-  signingSecret: string,
+  expectedSigningPublicKey?: string,
   expectedFingerprint?: string,
   now = Date.now(),
 ): PairingOfferPayload {
@@ -58,9 +61,17 @@ export function verifyPairingOffer(
   if (expectedFingerprint && offer.payload.certificateFingerprint !== expectedFingerprint) {
     throw new Error('Pairing fingerprint mismatch')
   }
-  const actual = Buffer.from(offer.signature || '', 'base64url')
-  const expected = createHmac('sha256', signingSecret).update(canonicalPayload(offer.payload)).digest()
-  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error('Invalid pairing offer signature')
+  if (expectedSigningPublicKey && offer.payload.signingPublicKey !== expectedSigningPublicKey) {
+    throw new Error('Pairing signing identity mismatch')
+  }
+  const publicKey = createPublicKey({
+    key: Buffer.from(offer.payload.signingPublicKey, 'base64url'),
+    type: 'spki',
+    format: 'der',
+  })
+  if (!verify(null, Buffer.from(canonicalPairingPayload(offer.payload)), publicKey, Buffer.from(offer.signature || '', 'base64url'))) {
+    throw new Error('Invalid pairing offer signature')
+  }
   return offer.payload
 }
 

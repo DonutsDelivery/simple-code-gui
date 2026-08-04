@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { EnvironmentRuntime, type EnvironmentRuntimeOptions } from './environment-runtime.js'
+import { runtimeHttpRequest } from './runtime-http.js'
 
 const processClaims = new Set<string>()
 
@@ -12,6 +13,7 @@ export interface RuntimeInfo {
   version: string
   startupNonce: string
   startedAt: number
+  certFingerprint: string
 }
 
 export function getRuntimeInfoPath(dataDir: string): string {
@@ -31,9 +33,9 @@ export function isProcessAlive(pid: number): boolean {
 export async function isRuntimeInfoLive(info: RuntimeInfo): Promise<boolean> {
   if (!isProcessAlive(info.pid)) return false
   try {
-    const response = await fetch(`${info.endpoint}/health`, { signal: AbortSignal.timeout(1000) })
-    if (!response.ok) return false
-    const health = await response.json() as { serverId?: string; startupNonce?: string }
+    const response = await runtimeHttpRequest(info, '/health', { timeoutMs: 1_000 })
+    if (response.status < 200 || response.status >= 300) return false
+    const health = response.json<{ serverId?: string; startupNonce?: string }>()
     return health.serverId === info.serverId && health.startupNonce === info.startupNonce
   } catch {
     return false
@@ -95,6 +97,7 @@ export class HeadlessServer {
       version: endpoint.version,
       startupNonce: this.startupNonce,
       startedAt: Date.now(),
+      certFingerprint: endpoint.certFingerprint,
     }
     writeRuntimeInfoAtomic(this.options.dataDir, this.runtimeInfo)
     return this.runtimeInfo

@@ -35,14 +35,14 @@ import type { EnvironmentCommandRouter } from '../environment-command-router.js'
 import type { SessionRuntimeRegistry } from '../session-runtime-registry.js'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
 import {
-  issueDeviceToken,
   isDeviceTokenValid,
   revokeDevice as revokeDeviceFn,
   listDevices as listDevicesFn,
   type PairedDeviceInfo
 } from './device-registry'
 import { setupAuthRoutes } from './routes/auth'
-import { consumePairingOfferNonce } from '../pairing-offer-store.js'
+import { loadOrCreatePairingSigningKeyPair } from '../pairing-signing-key.js'
+import { PairingRequestStore } from '../pairing-requests.js'
 import { log, getRendererPath, getLocalIPs, getTailscaleHostname, tokensEqual } from './utils'
 import {
   setupCorsMiddleware,
@@ -102,9 +102,11 @@ export class MobileServer {
 
   private rendererPath: string
   private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
-  private useTls: boolean = false // TODO: Enable once mobile app has cert pinning
+  private useTls: boolean
   private certFingerprint: string = ''
   private readonly pairingCode = `${randomInt(1000, 10_000)}-${randomInt(1000, 10_000)}`
+  private readonly pairingSigningKeys = loadOrCreatePairingSigningKeyPair()
+  private readonly pairingRequests = new PairingRequestStore()
 
 
   constructor(config: MobileServerConfig = {}) {
@@ -113,6 +115,7 @@ export class MobileServer {
     this.serverVersion = config.serverVersion || 'unknown'
     this.serverId = config.serverId || getOrCreateFingerprint()
     this.startupNonce = config.startupNonce
+    this.useTls = config.secure ?? true
     this.token = loadOrCreateToken()
     this.rendererPath = getRendererPath()
     this.app = express()
@@ -136,26 +139,43 @@ export class MobileServer {
       humanCode: this.pairingCode,
       certificateFingerprint: () => this.certFingerprint,
       endpointHints: () => getLocalIPs().map(ip => `${this.useTls ? 'https' : 'http'}://${ip}:${this.port}`),
+      createPairingRequest: (deviceId, deviceName) => this.pairingRequests.createPake(deviceId, deviceName),
     })
-    this.app.post('/api/auth/pairing-offer/redeem', (req: Request, res: Response) => {
+    this.app.post('/api/auth/pairing-offer/request', (req: Request, res: Response) => {
       const { offer, deviceId, deviceName } = req.body ?? {}
       if (![offer, deviceId, deviceName].every(value => typeof value === 'string' && value.length > 0)) {
         return res.status(400).json({ error: 'Invalid pairing offer request' })
       }
       try {
-        const verified = verifyPairingOffer(decodePairingOffer(offer), this.token, this.certFingerprint)
+        const verified = verifyPairingOffer(decodePairingOffer(offer), this.pairingSigningKeys.publicKey, this.certFingerprint)
         if (verified.serverId !== this.serverId) throw new Error('Server identity mismatch')
-        if (!consumePairingOfferNonce(verified.nonce, verified.expiresAt)) throw new Error('Pairing offer already used')
-        log('Pairing offer approved', { deviceId, clientIp: getClientIp(req) })
-        res.json({
-          serverId: this.serverId,
-          deviceCredential: issueDeviceToken(deviceId, deviceName),
-          scopes: verified.requestedScopes,
-        })
+        if (verified.requestedScopes.length === 0 || verified.requestedScopes.some(scope => scope !== 'read' && scope !== 'write')) {
+          throw new Error('Invalid requested scopes')
+        }
+        const pending = this.pairingRequests.create(verified, deviceId, deviceName)
+        log('Pairing approval requested', { deviceId, clientIp: getClientIp(req) })
+        res.status(202).json({ serverId: this.serverId, ...pending })
       } catch {
-        log('Pairing offer rejected', { deviceId, clientIp: getClientIp(req) })
+        log('Pairing request rejected', { deviceId, clientIp: getClientIp(req) })
         res.status(403).json({ error: 'Pairing offer rejected' })
       }
+    })
+    this.app.get('/api/auth/pairing-offer/request/:requestId/status', (req: Request, res: Response) => {
+      const secret = req.header('X-Pairing-Request-Secret') || ''
+      const status = this.pairingRequests.status(req.params.requestId, secret)
+      if (!status) return res.status(404).json({ error: 'Pairing request not found' })
+      res.json({ serverId: this.serverId, ...status })
+    })
+    this.app.get('/api/auth/pairing-requests', (_req: Request, res: Response) => {
+      res.json({ requests: this.pairingRequests.list() })
+    })
+    this.app.post('/api/auth/pairing-requests/:requestId/approve', (req: Request, res: Response) => {
+      if (!this.pairingRequests.approve(req.params.requestId)) return res.status(409).json({ error: 'Pairing request cannot be approved' })
+      res.json({ approved: true })
+    })
+    this.app.post('/api/auth/pairing-requests/:requestId/reject', (req: Request, res: Response) => {
+      if (!this.pairingRequests.reject(req.params.requestId)) return res.status(409).json({ error: 'Pairing request cannot be rejected' })
+      res.json({ rejected: true })
     })
 
     // Health check (unauthenticated)
@@ -208,23 +228,11 @@ export class MobileServer {
         })
       }
 
-      // H3: a valid single-use nonce is the pairing moment. If the device
-      // identifies itself, issue it a per-device token (trust-on-first-use) so
-      // it can stop using the shared QR token. Devices that don't send a
-      // deviceId (older clients) keep working with the shared token.
-      let deviceToken: string | undefined
-      const deviceId = req.body?.deviceId
-      if (typeof deviceId === 'string' && deviceId.length > 0) {
-        const deviceName = typeof req.body?.deviceName === 'string' ? req.body.deviceName : ''
-        deviceToken = issueDeviceToken(deviceId, deviceName)
-      }
-
       res.json({
         valid: true,
         fingerprint: getOrCreateFingerprint(),
         certFingerprint: this.certFingerprint,
-        secure: this.useTls,
-        ...(deviceToken ? { deviceToken } : {})
+        secure: this.useTls
       })
     })
 
@@ -375,6 +383,18 @@ export class MobileServer {
     return listDevicesFn()
   }
 
+  listPairingRequests() {
+    return this.pairingRequests.list()
+  }
+
+  approvePairingRequest(requestId: string): { approved: boolean } {
+    return { approved: this.pairingRequests.approve(requestId) }
+  }
+
+  rejectPairingRequest(requestId: string): { rejected: boolean } {
+    return { rejected: this.pairingRequests.reject(requestId) }
+  }
+
   // Close every live socket whose auth token matches the predicate. Covers both
   // the main /ws clients and per-PTY stream sockets.
   private closeSockets(shouldClose: (token: string) => boolean): void {
@@ -421,7 +441,7 @@ export class MobileServer {
       certificateFingerprint: this.certFingerprint || fingerprint,
       requestedScopes: ['read', 'write'],
       expiresAt,
-    }, this.token)
+    }, this.pairingSigningKeys)
 
     const encodedOffer = encodePairingOffer(offer)
     return {
@@ -513,8 +533,8 @@ export class MobileServer {
     }
   }
 
-  getEndpoint(): { host: string; port: number; secure: boolean } {
-    return { host: this.host, port: this.port, secure: this.useTls }
+  getEndpoint(): { host: string; port: number; secure: boolean; certFingerprint: string } {
+    return { host: this.host, port: this.port, secure: this.useTls, certFingerprint: this.certFingerprint }
   }
 
   setHost(host: string): void {

@@ -46,3 +46,7 @@ export function consumePairingOfferNonce(nonce: string, expiresAt: number, now =
   writeRecords(records)
   return true
 }
+
+export function isPairingOfferNonceConsumed(nonce: string, now = Date.now()): boolean {
+  return readRecords(now).some(record => record.nonce === nonce)
+}
