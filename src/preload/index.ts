@@ -7,6 +7,7 @@ import { cliHandlers } from './handlers/cli.js'
 
 import { miscHandlers } from './handlers/misc.js'
 import { canvasAssetHandlers } from './handlers/canvas-assets.js'
+import { credentialHandlers } from './handlers/credentials.js'
 import type { ElectronAPI } from './types/api.js'
 
 // Re-export types for external consumers
@@ -25,7 +26,8 @@ const api: ElectronAPI = {
 
 
   ...miscHandlers,
-  ...canvasAssetHandlers
+  ...canvasAssetHandlers,
+  ...credentialHandlers
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

@@ -2,6 +2,7 @@ import { createServer, type Server } from 'http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket, type WebSocketServer } from 'ws'
 import { setupWebSocket } from './websocket-manager'
+import { issueWebSocketTicket } from './routes/auth'
 
 vi.mock('./utils', async (importOriginal) => {
   const original = await importOriginal<typeof import('./utils')>()
@@ -48,7 +49,7 @@ describe('main WebSocket environment synchronization', () => {
     if (!address || typeof address === 'string') throw new Error('Expected TCP address')
     port = address.port
 
-    client = new WebSocket(`ws://127.0.0.1:${port}/ws?token=test-token`)
+    client = new WebSocket(`ws://127.0.0.1:${port}/ws`, [`ticket-${issueWebSocketTicket('test-token')}`])
     const messages = await new Promise<any[]>((resolve, reject) => {
       const received: any[] = []
       const timer = setTimeout(() => reject(new Error('Timed out waiting for synchronization messages')), 1000)

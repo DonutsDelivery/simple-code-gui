@@ -6,11 +6,13 @@
 
 import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAYS } from './constants'
 import { PtyWebSocketState } from './types'
+import { requestWebSocketTicket } from './websocket-ticket.js'
 
 export class PtyWebSocketManager {
   private ptyWebsockets: Map<string, PtyWebSocketState> = new Map()
   private wsBaseUrl: string
   private token: string
+  private connecting = new Set<string>()
 
   constructor(wsBaseUrl: string, token: string) {
     this.wsBaseUrl = wsBaseUrl
@@ -25,6 +27,10 @@ export class PtyWebSocketManager {
    * Connect WebSocket for PTY data streaming
    */
   connectPtyStream(ptyId: string): void {
+    void this.connectPtyStreamWithTicket(ptyId)
+  }
+
+  private async connectPtyStreamWithTicket(ptyId: string): Promise<void> {
     // Don't reconnect if already connected or connecting
     const existing = this.ptyWebsockets.get(ptyId)
     if (
@@ -33,11 +39,22 @@ export class PtyWebSocketManager {
     ) {
       return
     }
+    if (this.connecting.has(ptyId)) return
 
-    const url = `${this.wsBaseUrl}/api/pty/${ptyId}/stream?token=${encodeURIComponent(this.token)}`
+    this.connecting.add(ptyId)
+    let ticket: string
+    try {
+      ticket = await requestWebSocketTicket(this.wsBaseUrl, this.token, `/api/pty/${encodeURIComponent(ptyId)}/stream`)
+    } catch {
+      this.connecting.delete(ptyId)
+      setTimeout(() => this.connectPtyStream(ptyId), RECONNECT_DELAYS[0])
+      return
+    }
+    this.connecting.delete(ptyId)
+    const url = `${this.wsBaseUrl}/api/pty/${ptyId}/stream`
     console.log('[HttpBackend] Connecting PTY stream:', ptyId)
 
-    const ws = new WebSocket(url)
+    const ws = new WebSocket(url, [`ticket-${ticket}`])
 
     // Reuse existing state if available (preserves callbacks), otherwise create new
     const state: PtyWebSocketState = existing || {

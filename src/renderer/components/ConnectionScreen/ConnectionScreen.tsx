@@ -15,6 +15,8 @@ import { ConnectingView } from './views/ConnectingView.js'
 import { ErrorView } from './views/ErrorView.js'
 import { connectionScreenStyles } from './styles.js'
 import type { ConnectionScreenProps, ViewState, ConnectionConfig, SavedHost } from './types.js'
+import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } from '../../security/device-credentials.js'
+import { pairWithHumanCode, redeemPairingOffer } from '../../security/human-code-pairing.js'
 
 /**
  * Connection screen for browser/Capacitor environments
@@ -108,9 +110,6 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       // Update last attempted config with the successful host
       setLastAttemptedConfig(successfulConfig)
 
-      // Save config to localStorage for next time
-      localStorage.setItem('donutcode-connection', JSON.stringify(successfulConfig))
-
       // Add or update this host in saved hosts list
       // Use the original hosts array from the QR code so retry can try all IPs
       const allHosts = config.hosts && config.hosts.length > 0 ? config.hosts : [successfulConfig.host]
@@ -122,52 +121,37 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
         (h.host === successfulConfig.host || allHosts.includes(h.host)))
 
       let updatedHosts: SavedHost[]
+      let credentialRef: string
       if (existingIndex >= 0) {
-        // Update existing host
         updatedHosts = [...savedHosts]
+        credentialRef = updatedHosts[existingIndex].credentialRef || updatedHosts[existingIndex].id
         updatedHosts[existingIndex] = {
           ...updatedHosts[existingIndex],
           host: successfulConfig.host,
           hosts: allHosts,
-          token: successfulConfig.token,
+          credentialRef,
           lastConnected: now
         }
       } else {
-        // Add new host
+        const id = generateHostId()
+        credentialRef = id
         const newHost: SavedHost = {
-          id: generateHostId(),
+          id,
           name: `${successfulConfig.host}:${successfulConfig.port}`,
           host: successfulConfig.host,
           hosts: allHosts,
           port: successfulConfig.port,
-          token: successfulConfig.token,
+          credentialRef,
           lastConnected: now
         }
         updatedHosts = [newHost, ...savedHosts]
       }
 
-      // Save to Capacitor Preferences (fire and forget - don't block connection)
-      saveSavedHostsAsync(updatedHosts)
-      // Update React state (might not complete if component unmounts, but that's ok)
+      await storeDeviceCredential(credentialRef, successfulConfig.token)
+      await saveSavedHostsAsync(updatedHosts)
       setSavedHosts(updatedHosts)
 
-      // Check if we're in a native Capacitor app
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const isNativeApp = !!(window as any).Capacitor?.isNativePlatform?.()
-
-      if (!isNativeApp) {
-        // Browser/PWA mode: redirect to server for fresh UI
-        const currentOrigin = window.location.origin
-        const serverOrigin = `http://${successfulConfig.host}:${successfulConfig.port}`
-
-        if (!currentOrigin.includes(successfulConfig.host) || !currentOrigin.includes(String(successfulConfig.port))) {
-          console.log('[ConnectionScreen] Redirecting to server for fresh UI:', serverOrigin)
-          window.location.href = `${serverOrigin}/?token=${encodeURIComponent(successfulConfig.token)}`
-          return
-        }
-      }
-
-      // Native app or already on server: use API directly
+      // Use the API directly. Durable credentials never enter URLs or browser history.
       console.log('[ConnectionScreen] Connected, using bundled UI')
       const api = initializeApi(successfulConfig) as HttpBackend
       onConnected(api, successfulConfig)
@@ -205,11 +189,18 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       // Use the most recently connected host (includes all IPs for fallback)
       const mostRecent = savedHosts[0]
       console.log('[ConnectionScreen] Auto-connecting to saved host:', mostRecent.name, 'with hosts:', mostRecent.hosts)
-      handleConnect({
-        host: mostRecent.host,
-        hosts: mostRecent.hosts,
-        port: mostRecent.port,
-        token: mostRecent.token
+      void loadDeviceCredential(mostRecent.credentialRef).then(credential => {
+        if (!credential) {
+          setError('Saved server credential is unavailable. Pair the device again.')
+          setView('error')
+          return
+        }
+        return handleConnect({
+          host: mostRecent.host,
+          hosts: mostRecent.hosts,
+          port: mostRecent.port,
+          token: credential
+        })
       })
     } else if (savedConfig && view === 'welcome') {
       // Fallback to single-IP savedConfig if no saved hosts
@@ -220,26 +211,56 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
   /**
    * Handle successful QR scan
    */
-  const handleScan = useCallback((connection: ParsedConnectionUrl) => {
-    console.log('[ConnectionScreen] QR Scanned:', {
-      host: connection.host,
-      hosts: connection.hosts,
-      port: connection.port,
-      tokenLength: connection.token?.length
-    })
-
-    handleConnect({
-      host: connection.host,
-      hosts: connection.hosts,
-      port: connection.port,
-      token: connection.token
-    })
+  const handleScan = useCallback(async (connection: ParsedConnectionUrl) => {
+    setView('connecting')
+    setError(null)
+    try {
+      if (connection.pairingOffer && connection.endpointHints?.length) {
+        const approved = window.confirm(
+          `Approve Server ${connection.serverId || 'unknown'}\nFingerprint: ${connection.fingerprint || 'not available'}\nScopes: ${(connection.scopes || []).join(', ') || 'not specified'}`,
+        )
+        if (!approved) throw new Error('Pairing approval was cancelled')
+        const pairingOffer = connection.pairingOffer
+        const deviceId = crypto.randomUUID()
+        let lastError: unknown
+        for (const endpoint of connection.endpointHints) {
+          try {
+            const paired = await redeemPairingOffer(
+              pairingOffer,
+              endpoint,
+              deviceId,
+              navigator.userAgent,
+            )
+            const parsed = new URL(endpoint)
+            await handleConnect({
+              host: parsed.hostname,
+              port: Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80),
+              token: paired.deviceCredential,
+            })
+            return
+          } catch (err) {
+            lastError = err
+          }
+        }
+        throw lastError instanceof Error ? lastError : new Error('No pairing endpoint was reachable')
+      }
+      if (!connection.token) throw new Error('QR code does not contain a usable pairing offer')
+      await handleConnect({
+        host: connection.host,
+        hosts: connection.hosts,
+        port: connection.port,
+        token: connection.token
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Pairing failed')
+      setView('error')
+    }
   }, [handleConnect])
 
   /**
    * Handle manual form submission
    */
-  const handleManualSubmit = useCallback((e: React.FormEvent) => {
+  const handleManualSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
 
     const port = parseInt(manualPort, 10)
@@ -254,15 +275,29 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
     }
 
     if (!manualToken.trim()) {
-      setError('Token is required')
+      setError('Pairing code is required')
       return
     }
 
-    handleConnect({
-      host: manualHost.trim(),
-      port,
-      token: manualToken.trim()
-    })
+    setView('connecting')
+    setError(null)
+    try {
+      const deviceId = crypto.randomUUID()
+      const paired = await pairWithHumanCode(
+        manualHost.trim(),
+        port,
+        manualToken.trim(),
+        deviceId,
+        navigator.userAgent,
+        details => window.confirm(
+          `Approve Server ${details.serverId}\nFingerprint: ${details.certificateFingerprint || 'not available'}\nScopes: ${details.requestedScopes.join(', ')}`,
+        ),
+      )
+      await handleConnect({ host: manualHost.trim(), port, token: paired.deviceCredential })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Pairing failed')
+      setView('error')
+    }
   }, [manualHost, manualPort, manualToken, handleConnect])
 
   /**
@@ -293,12 +328,18 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
   /**
    * Connect to a saved host
    */
-  const handleConnectToSavedHost = useCallback((host: SavedHost) => {
-    handleConnect({
+  const handleConnectToSavedHost = useCallback(async (host: SavedHost) => {
+    const credential = await loadDeviceCredential(host.credentialRef)
+    if (!credential) {
+      setError('This server credential is unavailable. Pair the device again.')
+      setView('error')
+      return
+    }
+    await handleConnect({
       host: host.host,
       hosts: host.hosts,
       port: host.port,
-      token: host.token
+      token: credential
     })
   }, [handleConnect])
 
@@ -308,6 +349,8 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
   const handleRemoveSavedHost = useCallback((e: React.MouseEvent, hostId: string) => {
     e.stopPropagation()
     setSavedHosts(prev => {
+      const removed = prev.find(h => h.id === hostId)
+      if (removed) void removeDeviceCredential(removed.credentialRef)
       const updated = prev.filter(h => h.id !== hostId)
       saveSavedHostsAsync(updated)
       return updated

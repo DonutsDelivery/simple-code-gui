@@ -18,7 +18,7 @@ class MockWebSocket {
     this.onclose?.({ code } as CloseEvent)
   })
 
-  constructor(url: string) {
+  constructor(url: string, _protocols?: string[]) {
     this.url = url
     MockWebSocket.instances.push(this)
   }
@@ -29,9 +29,20 @@ class MockWebSocket {
 }
 
 describe('HTTP agent session signal connection', () => {
+  const nextSocket = async (index = 0): Promise<MockWebSocket> => {
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    return MockWebSocket.instances[index]
+  }
+
   beforeEach(() => {
     MockWebSocket.instances = []
     vi.stubGlobal('WebSocket', MockWebSocket)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ticket: 'single-use-ticket' }),
+    }))
   })
 
   afterEach(() => {
@@ -41,13 +52,17 @@ describe('HTTP agent session signal connection', () => {
 
   // AC: @agent-session-notifications ac-1
   // AC: @agent-session-notifications ac-2
-  it('delivers authenticated main-socket signals and supports unsubscribe', () => {
+  it('delivers authenticated main-socket signals and supports unsubscribe', async () => {
     const connection = new AgentSessionSignalConnection('ws://host:38470', 'secret token')
     const listener = vi.fn()
     const unsubscribe = connection.subscribe(listener)
-    const socket = MockWebSocket.instances[0]
+    const socket = await nextSocket()
 
-    expect(socket.url).toBe('ws://host:38470/ws?token=secret%20token')
+    expect(socket.url).toBe('ws://host:38470/ws')
+    expect(fetch).toHaveBeenCalledWith('http://host:38470/api/auth/websocket-ticket', expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer secret token' }),
+      body: JSON.stringify({ purpose: '/ws' }),
+    }))
     socket.receive({
       type: 'agent-session-signal',
       signal: { ptyId: 'pty-background', type: 'input-needed' },
@@ -65,11 +80,11 @@ describe('HTTP agent session signal connection', () => {
 
   // AC: @agent-session-notifications ac-1
   // AC: @agent-session-notifications ac-2
-  it('closes a half-open signal socket when heartbeat responses stop', () => {
+  it('closes a half-open signal socket when heartbeat responses stop', async () => {
     vi.useFakeTimers()
     const connection = new AgentSessionSignalConnection('ws://host:38470', 'secret')
     connection.subscribe(vi.fn())
-    const socket = MockWebSocket.instances[0]
+    const socket = await nextSocket()
     socket.readyState = MockWebSocket.OPEN
     socket.onopen?.()
 
@@ -81,10 +96,10 @@ describe('HTTP agent session signal connection', () => {
   })
 
   // AC: @agent-session-notifications ac-1
-  it('does not reconnect after an explicit backend disconnect', () => {
+  it('does not reconnect after an explicit backend disconnect', async () => {
     const connection = new AgentSessionSignalConnection('ws://host:38470', 'secret')
     connection.subscribe(vi.fn())
-    const socket = MockWebSocket.instances[0]
+    const socket = await nextSocket()
 
     connection.disconnect()
     socket.onclose?.({ code: 1006 } as CloseEvent)
@@ -93,13 +108,14 @@ describe('HTTP agent session signal connection', () => {
   })
 
   // AC: @agent-session-notifications ac-1
-  it('keeps signals isolated between backend instances', () => {
+  it('keeps signals isolated between backend instances', async () => {
     const first = new AgentSessionSignalConnection('ws://first:38470', 'first')
     const second = new AgentSessionSignalConnection('ws://second:38470', 'second')
     const firstListener = vi.fn()
     const secondListener = vi.fn()
     first.subscribe(firstListener)
     second.subscribe(secondListener)
+    await nextSocket(1)
 
     MockWebSocket.instances[0].receive({
       type: 'agent-session-signal',

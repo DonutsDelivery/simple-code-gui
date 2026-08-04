@@ -182,7 +182,7 @@ export function validateHostConfig(config: Partial<HostConfig>): { valid: boolea
 }
 
 /**
- * Parse a connection URL string (e.g., "http://192.168.1.100:38470?token=abc123")
+ * Parse a legacy connection URL during migration.
  */
 export function parseConnectionUrl(url: string): HostConfig | null {
   try {
@@ -210,9 +210,9 @@ export function parseConnectionUrl(url: string): HostConfig | null {
 }
 
 /**
- * Generate a connection URL string from config
+ * Generate a credential-free endpoint string from config.
  */
 export function generateConnectionUrl(config: HostConfig): string {
   const protocol = config.secure ? 'https' : 'http'
-  return `${protocol}://${config.host}:${config.port}?token=${encodeURIComponent(config.token)}`
+  return `${protocol}://${config.host}:${config.port}`
 }

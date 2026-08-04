@@ -22,6 +22,8 @@ import {
   buildHttpUrl,
   verifyHandshake
 } from './helpers.js'
+import { requestWebSocketTicket } from '../../api/http-backend/websocket-ticket.js'
+import { loadDeviceCredential } from '../../security/device-credentials.js'
 
 export function useHostConnection(): UseHostConnectionReturn {
   // State
@@ -44,7 +46,7 @@ export function useHostConnection(): UseHostConnectionReturn {
 
   // Save hosts to localStorage when they change
   useEffect(() => {
-    saveHosts(hosts)
+    void saveHosts(hosts)
   }, [hosts])
 
   // Cleanup on unmount
@@ -254,13 +256,11 @@ export function useHostConnection(): UseHostConnectionReturn {
    * Internal function to establish WebSocket connection after verification
    * NOTE: HTTP polling fallback is DISABLED for debugging WebSocket issues
    */
-  const establishWebSocket = useCallback((host: HostConfig, hostId: string) => {
+  const establishWebSocket = useCallback(async (host: HostConfig, hostId: string) => {
     const url = buildWebSocketUrl(host)
     console.log('[WebSocket] ========== CONNECTION ATTEMPT ==========')
-    console.log('[WebSocket] URL:', url)
     console.log('[WebSocket] Host:', host.host)
     console.log('[WebSocket] Port:', host.port)
-    console.log('[WebSocket] Token (first 8 chars):', host.token?.slice(0, 8))
     console.log('[WebSocket] Is local network:', isLocalNetwork(host.host))
 
     // Connection timeout - just show error, no fallback
@@ -275,8 +275,8 @@ export function useHostConnection(): UseHostConnectionReturn {
 
     try {
       console.log('[WebSocket] Creating WebSocket object...')
-      // Token passed via query string for Capacitor WebView compatibility
-      const ws = new WebSocket(url)
+      const ticket = await requestWebSocketTicket(url.replace(/\/ws$/, ''), host.token, '/ws')
+      const ws = new WebSocket(url, [`ticket-${ticket}`])
       console.log('[WebSocket] WebSocket object created, readyState:', ws.readyState)
 
       ws.onopen = () => {
@@ -384,6 +384,10 @@ export function useHostConnection(): UseHostConnectionReturn {
    */
   const connect = useCallback(async (hostId: string, options?: ConnectOptions) => {
     let host = hosts.find(h => h.id === hostId)
+    if (host && !options?.token && !host.token) {
+      const credential = await loadDeviceCredential(host.id)
+      if (credential) host = { ...host, token: credential }
+    }
 
     // Handle race condition: if host not found in state yet but we have enough info, construct it
     if (!host && options?.host && options?.port && options?.token) {
@@ -505,34 +509,8 @@ export function useHostConnection(): UseHostConnectionReturn {
       )
     }
 
-    // Pre-connection test: verify token is valid before attempting WebSocket
-    // This helps diagnose auth issues vs WebSocket issues
-    console.log('[Connect] Testing token validity with /ws-test endpoint...')
     setConnectionState('connecting')
-
-    try {
-      const testUrl = buildHttpUrl(host, `/ws-test?token=${encodeURIComponent(host.token)}`)
-      console.log('[Connect] Testing URL:', testUrl)
-      const testResponse = await fetch(testUrl)
-      const testData = await testResponse.json()
-      console.log('[Connect] ws-test response:', testData)
-
-      if (!testResponse.ok || !testData.ok) {
-        console.error('[Connect] Token validation failed:', testData)
-        setConnectionState('error')
-        setError(`Token validation failed: ${testData.message || 'Invalid token'}`)
-        return
-      }
-      console.log('[Connect] Token validated successfully, proceeding with WebSocket')
-    } catch (testErr) {
-      console.error('[Connect] Failed to reach server for token test:', testErr)
-      setConnectionState('error')
-      setError(`Cannot reach server: ${testErr instanceof Error ? testErr.message : String(testErr)}`)
-      return
-    }
-
-    // Proceed with WebSocket connection
-    establishWebSocket(host, hostId)
+    void establishWebSocket(host, hostId)
   }, [hosts, clearTimers, establishWebSocket])
 
   /**

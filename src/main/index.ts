@@ -29,6 +29,7 @@ import { registerCanvasAssetHandlers } from './app/ipc-handlers/canvas-assets.js
 import { registerPtyHandlers } from './app/ipc-handlers/pty.js'
 import { registerServerHandlers } from './app/ipc-handlers/servers.js'
 import { registerSettingsHandlers } from './app/ipc-handlers/settings.js'
+import { registerSecureCredentialHandlers } from './app/ipc-handlers/secure-credentials.js'
 import { HermesBackupManager, type HermesBackupReason } from './hermes-backup-manager.js'
 import { migrateLegacyBrandData } from './brand-migration.js'
 import { configureRuntimePaths } from './runtime-paths.js'
@@ -153,6 +154,7 @@ registerCanvasAssetHandlers(join(app.getPath('userData'), 'canvas-assets'), getM
 registerPtyHandlers(ptyManager, sessionRuntimeRegistry, sessionStore, apiServerManager, ptyToProject, ptyToBackend, getMainWindow, hermesBackupManager)
 registerServerHandlers(apiServerManager, mobileServer, sessionStore, environmentRuntime)
 registerSettingsHandlers(sessionStore, getMainWindow, (settings) => syncHeadroom(settings))
+registerSecureCredentialHandlers()
 
 // Setup API prompt handler
 setupApiPromptHandler(

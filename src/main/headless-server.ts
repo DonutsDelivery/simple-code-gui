@@ -3,6 +3,8 @@ import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 
 import { join } from 'path'
 import { EnvironmentRuntime, type EnvironmentRuntimeOptions } from './environment-runtime.js'
 
+const processClaims = new Set<string>()
+
 export interface RuntimeInfo {
   pid: number
   serverId: string
@@ -67,6 +69,9 @@ export class HeadlessServer {
   }
 
   async start(): Promise<RuntimeInfo> {
+    if (processClaims.has(this.options.dataDir)) {
+      throw new Error(`DonutCode Server is already running with PID ${process.pid}`)
+    }
     const existing = readRuntimeInfo(this.options.dataDir)
     if (existing && await isRuntimeInfoLive(existing)) {
       throw new Error(`DonutCode Server is already running with PID ${existing.pid}`)
@@ -75,7 +80,14 @@ export class HeadlessServer {
       try { unlinkSync(getRuntimeInfoPath(this.options.dataDir)) } catch { /* stale file already gone */ }
     }
 
-    const endpoint = await this.runtime.start()
+    processClaims.add(this.options.dataDir)
+    let endpoint: Awaited<ReturnType<EnvironmentRuntime['start']>>
+    try {
+      endpoint = await this.runtime.start()
+    } catch (error) {
+      processClaims.delete(this.options.dataDir)
+      throw error
+    }
     this.runtimeInfo = {
       pid: process.pid,
       serverId: endpoint.serverId,
@@ -89,11 +101,15 @@ export class HeadlessServer {
   }
 
   async stop(): Promise<void> {
-    await this.runtime.stop()
-    const current = readRuntimeInfo(this.options.dataDir)
-    if (current && current.startupNonce === this.runtimeInfo?.startupNonce) {
-      try { unlinkSync(getRuntimeInfoPath(this.options.dataDir)) } catch { /* already removed */ }
+    try {
+      await this.runtime.stop()
+      const current = readRuntimeInfo(this.options.dataDir)
+      if (current && current.startupNonce === this.runtimeInfo?.startupNonce) {
+        try { unlinkSync(getRuntimeInfoPath(this.options.dataDir)) } catch { /* already removed */ }
+      }
+      this.runtimeInfo = null
+    } finally {
+      processClaims.delete(this.options.dataDir)
     }
-    this.runtimeInfo = null
   }
 }

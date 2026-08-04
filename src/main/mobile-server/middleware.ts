@@ -15,7 +15,7 @@ import {
   checkEndpointRateLimit,
   IpClass
 } from '../mobile-security'
-import { isDeviceTokenValid, touchDevice } from './device-registry'
+import { deviceTokenAllows, isDeviceTokenValid, touchDevice } from './device-registry'
 import { log, isStaticPath, tokensEqual } from './utils'
 import { EndpointAccess } from './types'
 
@@ -75,38 +75,19 @@ export function setupCorsMiddleware(app: Express): void {
   }))
 }
 
-export function setupStaticMiddleware(app: Express, rendererPath: string, getToken: () => string): void {
+export function setupStaticMiddleware(app: Express, rendererPath: string, _getToken: () => string): void {
   log('Static files path:', { path: rendererPath, exists: existsSync(rendererPath) })
   if (!existsSync(rendererPath)) return
 
-  const isValid = (token?: string): boolean =>
-    !!token && (tokensEqual(token, getToken()) || isDeviceTokenValid(token))
-
-  // M11: express.static runs before the auth middleware, so without this gate
-  // any network client can pull the app shell unauthenticated. Localhost serves
-  // freely; network clients must present a valid token via query (first load)
-  // and we set a cookie so subsequent asset requests authenticate. The Capacitor
-  // app loads bundled assets over capacitor:// and never reaches this path.
+  // The remote UI is a bundled Capacitor application. Never bootstrap a browser
+  // session by placing a durable credential in a URL or cookie; only localhost
+  // may load the server's static renderer.
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (!isStaticPath(req.path) && req.path !== '/') {
-      return next()
+    if (!isStaticPath(req.path) && req.path !== '/') return next()
+    if (classifyIp(getClientIp(req)) !== 'localhost') {
+      return res.status(403).json({ error: 'Remote browser UI is disabled; pair with the DonutCode app.' })
     }
-    if (classifyIp(getClientIp(req)) === 'localhost') {
-      return next()
-    }
-    const queryToken = req.query.token as string
-    if (isValid(queryToken)) {
-      res.setHeader('Set-Cookie', `ct_token=${queryToken}; Path=/; HttpOnly; SameSite=Strict`)
-      return next()
-    }
-    const cookieToken = req.headers.cookie?.split(';')
-      .map(c => c.trim())
-      .find(c => c.startsWith('ct_token='))
-      ?.split('=')[1]
-    if (isValid(cookieToken)) {
-      return next()
-    }
-    return res.status(401).json({ error: 'Unauthorized' })
+    return next()
   })
 
   app.use(express.static(rendererPath, {
@@ -143,44 +124,18 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     // Skip auth for unauthenticated endpoints
-    if (req.path === '/health' || req.path === '/connect' || req.path === '/verify-handshake') {
-      return next()
-    }
-
-    // /ws-test uses query string auth (validates token itself)
-    if (req.path === '/ws-test') {
-      // Let the route handler return the proper error
-      return next()
-    }
-    // Skip auth for static files (token passed in query string for initial load)
-    if (isStaticPath(req.path)) {
-      const queryToken = req.query.token as string
-      if (isTokenValid(queryToken)) {
-        return next()
-      }
-      // Check cookie for subsequent static file requests
-      const cookieToken = req.headers.cookie?.split(';')
-        .map(c => c.trim())
-        .find(c => c.startsWith('ct_token='))
-        ?.split('=')[1]
-      if (isTokenValid(cookieToken)) {
-        return next()
-      }
-      // No valid token - still serve static files but without sensitive data
+    if (
+      req.path === '/health'
+      || req.path === '/connect'
+      || req.path === '/verify-handshake'
+      || req.path === '/api/auth/pake/start'
+      || req.path === '/api/auth/pake/finish'
+      || req.path === '/api/auth/pairing-offer/redeem'
+    ) {
       return next()
     }
 
     const clientIp = getClientIp(req)
-
-    // Allow query token for file downloads (needed for Android WebView window.open)
-    if (req.path.startsWith('/api/files/')) {
-      const queryToken = req.query.token as string
-      if (isTokenValid(queryToken)) {
-        touchDevice(queryToken)
-        clearRateLimit(clientIp)
-        return next()
-      }
-    }
 
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -201,8 +156,17 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
     }
 
     // Successful auth - clear rate limit
+    const requiredScope = req.method === 'GET' || req.method === 'HEAD' ? 'read' : 'write'
+    if (
+      isDeviceTokenValid(providedToken)
+      && !deviceTokenAllows(providedToken, requiredScope)
+    ) {
+      return res.status(403).json({ error: `Device credential lacks ${requiredScope} scope` })
+    }
+
     touchDevice(providedToken)
     clearRateLimit(clientIp)
+    ;(req as Request & { authToken?: string }).authToken = providedToken
 
     next()
   })

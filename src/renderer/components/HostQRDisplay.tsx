@@ -92,6 +92,8 @@ export function HostQRDisplay({
   const [fingerprint, setFingerprint] = useState<string>('')
   const [formattedFingerprint, setFormattedFingerprint] = useState<string>('')
   const [qrData, setQrData] = useState<string>('')
+  const [pairingCode, setPairingCode] = useState<string>('')
+  const [pairingApproved, setPairingApproved] = useState(false)
   const [nonceExpires, setNonceExpires] = useState<number>(0)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
   const nonceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -113,6 +115,7 @@ export function HostQRDisplay({
         setFingerprint(info.fingerprint)
         setFormattedFingerprint(info.formattedFingerprint)
         setQrData(info.qrData)
+        setPairingCode(info.pairingCode)
         setNonceExpires(info.nonceExpires)
       } catch (e) {
         console.error('Failed to get mobile connection info:', e)
@@ -235,28 +238,7 @@ export function HostQRDisplay({
   }, [token, onTokenChange])
 
   // Generate the current DonutCode connection URL. Parsers retain legacy scheme support.
-  const connectionUrl = `donutcode://${localIPs[0] || 'localhost'}:${serverPort}?token=${token}`
-
-  // Regenerate token via server (also refreshes nonce)
-  const handleRegenerateToken = useCallback(async () => {
-    if (window.electronAPI?.mobileRegenerateToken) {
-      try {
-        const info = await window.electronAPI?.mobileRegenerateToken()
-        setToken(info.token)
-        setFingerprint(info.fingerprint)
-        setFormattedFingerprint(info.formattedFingerprint)
-        setQrData(info.qrData)
-        setNonceExpires(info.nonceExpires)
-        setCopied(false)
-      } catch (e) {
-        console.error('Failed to regenerate token:', e)
-      }
-    } else {
-      const newToken = generateToken()
-      setToken(newToken)
-      setCopied(false)
-    }
-  }, [])
+  const connectionUrl = qrData
 
   // Copy URL to clipboard
   const handleCopyUrl = useCallback(async () => {
@@ -301,6 +283,36 @@ export function HostQRDisplay({
             disabled={toggling}
           >
             {toggling ? 'Enabling…' : 'Enable mobile access'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!pairingApproved) {
+    return (
+      <div className={`host-qr-display ${className}`} role="dialog" aria-labelledby="pairing-approval-title">
+        <div className="host-qr-display__header">
+          <h3 id="pairing-approval-title" className="host-qr-display__title">Approve device pairing</h3>
+          <p className="host-qr-display__subtitle">Review the server identity and access before revealing a pairing offer.</p>
+        </div>
+        <div className="host-qr-display__details">
+          <div className="host-qr-display__field host-qr-display__field--full">
+            <label className="host-qr-display__label">Server fingerprint</label>
+            <span className="host-qr-display__value host-qr-display__value--mono">{formattedFingerprint}</span>
+          </div>
+          <div className="host-qr-display__field">
+            <label className="host-qr-display__label">Endpoint</label>
+            <span className="host-qr-display__value">{localIPs[0] || 'localhost'}:{serverPort}</span>
+          </div>
+          <div className="host-qr-display__field">
+            <label className="host-qr-display__label">Scopes</label>
+            <span className="host-qr-display__value">Read and write</span>
+          </div>
+        </div>
+        <div className="host-qr-display__actions">
+          <button className="host-qr-display__button host-qr-display__button--primary" onClick={() => setPairingApproved(true)}>
+            Approve and show pairing offer
           </button>
         </div>
       </div>
@@ -361,11 +373,11 @@ export function HostQRDisplay({
           <span className="host-qr-display__value">{serverPort}</span>
         </div>
 
-        {/* Token (partially hidden) */}
+        {/* Human-entered PAKE code. This is not a bearer credential. */}
         <div className="host-qr-display__field">
-          <label className="host-qr-display__label">Token</label>
+          <label className="host-qr-display__label">Pairing code</label>
           <span className="host-qr-display__value host-qr-display__value--mono">
-            {token.slice(0, 8)}...{token.slice(-4)}
+            {pairingCode}
           </span>
         </div>
       </div>
@@ -382,18 +394,6 @@ export function HostQRDisplay({
             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
           </svg>
           Refresh QR
-        </button>
-
-        <button
-          className="host-qr-display__button host-qr-display__button--warning"
-          onClick={handleRegenerateToken}
-          title="Generate new token (invalidates existing connections)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
-          New Token
         </button>
 
         <button

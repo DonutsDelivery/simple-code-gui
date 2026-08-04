@@ -1,11 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 
+
 export interface ParsedConnectionUrl {
   host: string
   hosts?: string[]  // Multiple IPs for fallback connection attempts
   port: number
-  token: string
+  token?: string
+  pairingOffer?: string
+  endpointHints?: string[]
+  serverId?: string
+  scopes?: Array<'read' | 'write'>
   // v2 security fields
   version?: number
   fingerprint?: string
@@ -46,6 +51,35 @@ interface QRCodePayload {
  * Supports v1 (URL format), v2 (JSON), and v3 (JSON with TLS)
  */
 export function parseConnectionUrl(data: string): ParsedConnectionUrl | null {
+  if (data.startsWith('donutcode://pair/')) {
+    try {
+      const encoded = data.slice('donutcode://pair/'.length)
+      const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length / 4) * 4, '=')
+      const envelope = JSON.parse(atob(base64)) as { payload?: unknown }
+      const offer = envelope.payload as {
+        serverId: string
+        expiresAt: number
+        endpointHints: string[]
+        certificateFingerprint: string
+        scopes: Array<'read' | 'write'>
+      }
+      if (offer.expiresAt <= Date.now() || offer.endpointHints.length === 0) return null
+      const endpoint = new URL(offer.endpointHints[0])
+      return {
+        host: endpoint.hostname,
+        hosts: offer.endpointHints.map(hint => new URL(hint).hostname),
+        port: Number(endpoint.port) || (endpoint.protocol === 'https:' ? 443 : 80),
+        pairingOffer: data,
+        endpointHints: offer.endpointHints,
+        fingerprint: offer.certificateFingerprint,
+        serverId: offer.serverId,
+        scopes: offer.scopes,
+      }
+    } catch {
+      return null
+    }
+  }
+
   // Try parsing as JSON (v2/v3 format)
   try {
     const parsed = JSON.parse(data)

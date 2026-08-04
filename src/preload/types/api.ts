@@ -189,6 +189,7 @@ export interface ElectronAPI {
     nonce: string
     nonceExpires: number
     qrData: string
+    pairingCode: string
   }>
   mobileRegenerateToken: () => Promise<{
     token: string
@@ -200,6 +201,7 @@ export interface ElectronAPI {
     nonce: string
     nonceExpires: number
     qrData: string
+    pairingCode: string
   }>
   mobileIsRunning: () => Promise<boolean>
   mobileSendFile: (filePath: string, message?: string) => Promise<{ success: boolean; fileId?: string; error?: string }>
@@ -222,6 +224,12 @@ export interface ElectronAPI {
     revoked: boolean
   }>>
   mobileRevokeDevice: (deviceId: string) => Promise<{ revoked: number }>
+
+  // Platform secure credential storage
+  secureCredentialsAvailable: () => Promise<boolean>
+  storeSecureCredential: (ref: string, credential: string) => Promise<boolean>
+  loadSecureCredential: (ref: string) => Promise<string | null>
+  removeSecureCredential: (ref: string) => Promise<void>
 
   // Updater
   getVersion: () => Promise<string>

@@ -64,14 +64,16 @@ export function ManualEntryView({
           </div>
 
           <div className="form-group">
-            <label htmlFor="token">Token</label>
+            <label htmlFor="pairing-code">Pairing code</label>
             <input
-              id="token"
-              type="password"
+              id="pairing-code"
+              type="text"
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value)}
-              placeholder="Connection token"
+              placeholder="1234-5678"
               autoComplete="off"
+              inputMode="numeric"
+              pattern="[0-9]{4}-[0-9]{4}"
             />
           </div>
 

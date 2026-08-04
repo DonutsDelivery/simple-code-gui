@@ -4,6 +4,7 @@
 
 import type { HostConfig } from './types.js'
 import { LEGACY_STORAGE_KEY, STORAGE_KEY } from './constants.js'
+import { storeDeviceCredential } from '../../security/device-credentials.js'
 
 /**
  * Generate a unique ID for hosts
@@ -53,10 +54,14 @@ export function loadHosts(): HostConfig[] {
     const hosts = JSON.parse(stored) as HostConfig[]
 
     // Convert date strings back to Date objects
-    return hosts.map(host => ({
-      ...host,
-      lastConnected: host.lastConnected ? new Date(host.lastConnected) : undefined
-    }))
+    return hosts.map(host => {
+      if (host.token) void storeDeviceCredential(host.id, host.token)
+      return {
+        ...host,
+        token: '',
+        lastConnected: host.lastConnected ? new Date(host.lastConnected) : undefined
+      }
+    })
   } catch {
     return []
   }
@@ -65,9 +70,10 @@ export function loadHosts(): HostConfig[] {
 /**
  * Save hosts to localStorage
  */
-export function saveHosts(hosts: HostConfig[]): void {
+export async function saveHosts(hosts: HostConfig[]): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
+    await Promise.all(hosts.filter(host => host.token).map(host => storeDeviceCredential(host.id, host.token)))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts.map(host => ({ ...host, token: '' }))))
   } catch {
     // Ignore storage errors
   }
@@ -92,7 +98,7 @@ export function isValidPort(port: number): boolean {
 
 /**
  * Build WebSocket URL from host config
- * Token passed via query string for Capacitor WebView compatibility
+ * Authentication is supplied separately through a short-lived WebSocket ticket.
  */
 export function buildWebSocketUrl(host: HostConfig): string {
   // Validate port before building URL
@@ -103,7 +109,7 @@ export function buildWebSocketUrl(host: HostConfig): string {
   // Use wss:// if server has TLS enabled, otherwise ws:// for local networks
   // v3 servers always report secure flag; fallback to network-based for v2 compat
   const protocol = host.secure ?? !isLocalNetwork(host.host) ? 'wss' : 'ws'
-  return `${protocol}://${host.host}:${host.port}/ws?token=${encodeURIComponent(host.token)}`
+  return `${protocol}://${host.host}:${host.port}/ws`
 }
 
 /**

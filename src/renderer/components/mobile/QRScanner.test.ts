@@ -13,6 +13,23 @@ const payload = {
 }
 
 describe('DonutCode connection compatibility', () => {
+  it('parses credential-free signed pairing offers', () => {
+    const envelope = {
+      payload: {
+        expiresAt: Date.now() + 60_000,
+        endpointHints: ['http://192.168.1.20:38470'],
+        certificateFingerprint: 'server-fingerprint',
+      },
+      signature: 'verified-by-server-on-redemption',
+    }
+    const encoded = Buffer.from(JSON.stringify(envelope)).toString('base64url')
+    expect(parseConnectionUrl(`donutcode://pair/${encoded}`)).toMatchObject({
+      host: '192.168.1.20',
+      port: 38470,
+      pairingOffer: expect.stringContaining('donutcode://pair/'),
+    })
+  })
+
   it('parses newly emitted DonutCode QR payloads', () => {
     expect(parseConnectionUrl(JSON.stringify({ type: 'donutcode', ...payload }))).toMatchObject({
       host: payload.host,

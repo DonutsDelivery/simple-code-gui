@@ -4,12 +4,12 @@ import {
   attachRuntimeConnection,
   connectRuntimeServer,
   disconnectRuntimeServer,
-  rememberRuntimeCredential,
   removeRuntimeServer,
   runtimeConnectionRegistry,
 } from '../api/runtime-connections.js'
 import { useConnectionsStore } from '../stores/connections.js'
 import type { ServerConnectionStatus } from '../api/connection-registry.js'
+import { PairServerDialog, type PairedServerResult } from './Connections/PairServerDialog.js'
 
 export interface ConnectionsModalProps {
   activeServerId: string
@@ -17,11 +17,9 @@ export interface ConnectionsModalProps {
 }
 
 export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalProps): React.ReactElement {
-  const { connections, addConnection, removeConnection, renameConnection, hydrate } = useConnectionsStore()
+  const { connections, upsert, remove, rename, hydrate } = useConnectionsStore()
   const [statuses, setStatuses] = useState<Record<string, ServerConnectionStatus>>({})
-  const [host, setHost] = useState('127.0.0.1')
-  const [port, setPort] = useState('38470')
-  const [token, setToken] = useState('')
+  const [pairing, setPairing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -41,32 +39,34 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
 
   const ordered = useMemo(() => [...connections].sort((a, b) => a.displayName.localeCompare(b.displayName)), [connections])
 
-  const add = async (): Promise<void> => {
-    const numericPort = Number(port)
-    if (!host.trim() || !Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535 || !token) {
-      setError('Enter a host, valid port, and token.')
-      return
-    }
+  const paired = async (result: PairedServerResult): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
-      const endpoint = { host: host.trim(), port: numericPort }
-      const api = new HttpBackend({ ...endpoint, token })
-      const result = await api.testConnection()
-      if (!result.success) throw new Error(result.error || 'Connection failed')
+      const endpoint = {
+        host: result.endpoint.hostname,
+        port: Number(result.endpoint.port) || (result.endpoint.protocol === 'https:' ? 443 : 80),
+        secure: result.endpoint.protocol === 'https:',
+      }
+      const api = new HttpBackend({ ...endpoint, token: result.deviceCredential })
+      const connectionTest = await api.testConnection()
+      if (!connectionTest.success) throw new Error(connectionTest.error || 'Connection failed')
       const descriptor = api.getServerProtocol?.()
       if (!descriptor?.serverId) throw new Error('Server did not publish a stable identity')
+      if (descriptor.serverId !== result.serverId) throw new Error('Paired Server identity did not match the connected endpoint')
+      const capabilities = (Object.keys(descriptor.capabilities) as Array<keyof typeof descriptor.capabilities>)
+        .filter(capability => descriptor.capabilities[capability])
       const saved = {
         serverId: descriptor.serverId,
-        displayName: descriptor.serverName || descriptor.serverId,
+        displayName: descriptor.serverId,
         endpoints: [endpoint],
         credentialRef: `credential:${descriptor.serverId}`,
         lastSeenProtocolVersion: descriptor.protocolVersion,
-        capabilities: descriptor.capabilities.map(capability => capability.id),
+        capabilities,
       }
-      addConnection(saved)
-      await attachRuntimeConnection(saved, api, endpoint, token)
-      setToken('')
+      await upsert(saved)
+      await attachRuntimeConnection(saved, api, endpoint, result.deviceCredential)
+      setPairing(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -89,7 +89,7 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
               <article className="connection-card" key={connection.serverId}>
                 <label>
                   Server name
-                  <input value={connection.displayName} onChange={event => renameConnection(connection.serverId, event.target.value)} />
+                  <input value={connection.displayName} onChange={event => { void rename(connection.serverId, event.target.value) }} />
                 </label>
                 <div><strong>{status.state}</strong>{connection.serverId === activeServerId ? ' · active' : ''}</div>
                 <div>{endpoint?.host}:{endpoint?.port}</div>
@@ -101,27 +101,20 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
                     <button type="button" onClick={() => disconnectRuntimeServer(connection.serverId)}>Disconnect</button>
                   ) : (
                     <button type="button" onClick={() => {
-                      const credential = window.prompt('Server token')
-                      if (!credential) return
-                      rememberRuntimeCredential(connection.credentialRef, credential)
                       void connectRuntimeServer(connection.serverId).catch(cause => setError(cause instanceof Error ? cause.message : String(cause)))
                     }}>Reconnect</button>
                   )}
                   <button type="button" disabled={connection.serverId === activeServerId} onClick={() => {
                     removeRuntimeServer(connection.serverId)
-                    removeConnection(connection.serverId)
+                    void remove(connection.serverId)
                   }}>Remove</button>
                 </div>
               </article>
             )
           })}
-          <fieldset>
-            <legend>Add server</legend>
-            <label>Host<input value={host} onChange={event => setHost(event.target.value)} /></label>
-            <label>Port<input inputMode="numeric" value={port} onChange={event => setPort(event.target.value)} /></label>
-            <label>Token<input type="password" autoComplete="off" value={token} onChange={event => setToken(event.target.value)} /></label>
-            <button type="button" disabled={busy} onClick={() => void add()}>{busy ? 'Connecting…' : 'Add connection'}</button>
-          </fieldset>
+          {pairing
+            ? <PairServerDialog onCancel={() => setPairing(false)} onPaired={paired} />
+            : <button type="button" disabled={busy} onClick={() => setPairing(true)}>Pair Server</button>}
           {error && <div role="alert">{error}</div>}
         </div>
       </section>

@@ -137,11 +137,15 @@ declare global {
       // Mobile Server (phone app connectivity)
       mobileIsEnabled?: () => Promise<boolean>
       mobileSetEnabled?: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean }>
-      mobileGetConnectionInfo?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; nonceExpires: number }>
-      mobileRegenerateToken?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; nonceExpires: number }>
+      mobileGetConnectionInfo?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; pairingCode: string; nonceExpires: number }>
+      mobileRegenerateToken?: () => Promise<{ token: string; ips: string[]; port: number; fingerprint: string; formattedFingerprint: string; qrData: string; pairingCode: string; nonceExpires: number }>
       mobileIsRunning?: () => Promise<boolean>
       mobileListDevices?: () => Promise<Array<{ deviceId: string; name: string; createdAt: number; lastSeen: number; revoked: boolean }>>
       mobileRevokeDevice?: (deviceId: string) => Promise<{ revoked: number }>
+      secureCredentialsAvailable?: () => Promise<boolean>
+      storeSecureCredential?: (ref: string, credential: string) => Promise<boolean>
+      loadSecureCredential?: (ref: string) => Promise<string | null>
+      removeSecureCredential?: (ref: string) => Promise<void>
 
 
 

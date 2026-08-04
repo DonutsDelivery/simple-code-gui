@@ -111,11 +111,15 @@ export function FileBrowser({ host, basePath, initialPath, onClose }: FileBrowse
   const downloadFile = useCallback(async (file: FileEntry) => {
     setDownloading(file.name)
     try {
-      // Build URL with token and basePath for direct download (works in Android WebView)
-      const url = buildHttpUrl(host, `/api/files/download?path=${encodeURIComponent(file.path)}&basePath=${encodeURIComponent(basePath)}&token=${encodeURIComponent(host.token)}`)
-
-      // Open in new window - Android will handle the download
-      window.open(url, '_blank')
+      const url = buildHttpUrl(host, `/api/files/download?path=${encodeURIComponent(file.path)}&basePath=${encodeURIComponent(basePath)}`)
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${host.token}` } })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = file.name
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
     } catch (err) {
       setError(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {

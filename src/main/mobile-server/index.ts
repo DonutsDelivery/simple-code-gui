@@ -7,6 +7,7 @@ import express, { Express, Request, Response } from 'express'
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer as createHttpServer, Server as HttpServer } from 'http'
 import { createServer as createHttpsServer, Server as HttpsServer } from 'https'
+import { randomInt } from 'crypto'
 import {
   getClientIp,
   getOrCreateFingerprint,
@@ -29,6 +30,7 @@ import type {
   AgentSessionSignalMessage
 } from '../../common/agent-session-signal'
 import { createServerProtocolDescriptor } from '../../common/server-protocol'
+import { createPairingOffer, decodePairingOffer, encodePairingOffer, verifyPairingOffer } from '../../common/pairing-protocol'
 import type { EnvironmentCommandRouter } from '../environment-command-router.js'
 import type { SessionRuntimeRegistry } from '../session-runtime-registry.js'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
@@ -39,6 +41,8 @@ import {
   listDevices as listDevicesFn,
   type PairedDeviceInfo
 } from './device-registry'
+import { setupAuthRoutes } from './routes/auth'
+import { consumePairingOfferNonce } from '../pairing-offer-store.js'
 import { log, getRendererPath, getLocalIPs, getTailscaleHostname, tokensEqual } from './utils'
 import {
   setupCorsMiddleware,
@@ -100,6 +104,8 @@ export class MobileServer {
   private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
   private useTls: boolean = false // TODO: Enable once mobile app has cert pinning
   private certFingerprint: string = ''
+  private readonly pairingCode = `${randomInt(1000, 10_000)}-${randomInt(1000, 10_000)}`
+
 
   constructor(config: MobileServerConfig = {}) {
     this.port = config.port ?? DEFAULT_PORT
@@ -125,6 +131,33 @@ export class MobileServer {
   }
 
   private setupRoutes(): void {
+    setupAuthRoutes(this.app, {
+      serverId: this.serverId,
+      humanCode: this.pairingCode,
+      certificateFingerprint: () => this.certFingerprint,
+      endpointHints: () => getLocalIPs().map(ip => `${this.useTls ? 'https' : 'http'}://${ip}:${this.port}`),
+    })
+    this.app.post('/api/auth/pairing-offer/redeem', (req: Request, res: Response) => {
+      const { offer, deviceId, deviceName } = req.body ?? {}
+      if (![offer, deviceId, deviceName].every(value => typeof value === 'string' && value.length > 0)) {
+        return res.status(400).json({ error: 'Invalid pairing offer request' })
+      }
+      try {
+        const verified = verifyPairingOffer(decodePairingOffer(offer), this.token, this.certFingerprint)
+        if (verified.serverId !== this.serverId) throw new Error('Server identity mismatch')
+        if (!consumePairingOfferNonce(verified.nonce, verified.expiresAt)) throw new Error('Pairing offer already used')
+        log('Pairing offer approved', { deviceId, clientIp: getClientIp(req) })
+        res.json({
+          serverId: this.serverId,
+          deviceCredential: issueDeviceToken(deviceId, deviceName),
+          scopes: verified.requestedScopes,
+        })
+      } catch {
+        log('Pairing offer rejected', { deviceId, clientIp: getClientIp(req) })
+        res.status(403).json({ error: 'Pairing offer rejected' })
+      }
+    })
+
     // Health check (unauthenticated)
     this.app.get('/health', (req: Request, res: Response) => {
       log('Health check', { clientIp: getClientIp(req) })
@@ -134,17 +167,6 @@ export class MobileServer {
         serverId: this.serverId,
         ...(this.startupNonce ? { startupNonce: this.startupNonce } : {}),
       })
-    })
-
-    // WebSocket test
-    this.app.get('/ws-test', (req: Request, res: Response) => {
-      const token = req.query.token as string
-      log('WS test request', { providedToken: token?.slice(0, 8), expectedToken: this.token.slice(0, 8), clientIp: getClientIp(req) })
-      if (tokensEqual(token, this.token) || isDeviceTokenValid(token)) {
-        res.json({ ok: true, message: 'Token valid, WebSocket should work' })
-      } else {
-        res.status(403).json({ ok: false, message: 'Invalid token' })
-      }
     })
 
     // Connection info for QR code (unauthenticated)
@@ -157,6 +179,13 @@ export class MobileServer {
         certFingerprint: this.certFingerprint,
         secure: this.useTls
       })
+    })
+
+    // Authenticated clients can mint a credential-free offer for paste, SSH,
+    // trusted-device approval, or one-time pairing-file workflows.
+    this.app.post('/api/auth/pairing-offer', (_req: Request, res: Response) => {
+      const info = this.getConnectionInfo()
+      res.json({ offer: info.qrData, expiresAt: info.nonceExpires })
     })
 
     // Verify handshake nonce (unauthenticated)
@@ -376,6 +405,7 @@ export class MobileServer {
     nonce: string
     nonceExpires: number
     qrData: string
+    pairingCode: string
   } {
     const ips = getLocalIPs()
     const primaryIp = ips[0] || 'localhost'
@@ -385,27 +415,18 @@ export class MobileServer {
     const tailscaleHostname = getTailscaleHostname()
     const allHosts = tailscaleHostname ? [...ips, tailscaleHostname] : ips
 
-    // QR version 3: adds TLS certificate pinning
-    // - certFingerprint: SHA256 of server's TLS certificate (for pinning)
-    // - secure: true means use HTTPS/WSS
-    const qrPayload = {
-      type: 'donutcode',
-      version: 3,
-      host: primaryIp,
-      hosts: allHosts,
-      port: this.port,
-      token: this.token,
-      fingerprint, // Legacy app-level fingerprint
-      certFingerprint: this.certFingerprint, // TLS certificate fingerprint for pinning
-      secure: this.useTls,
-      nonce,
-      nonceExpires: expiresAt
-    }
+    const offer = createPairingOffer({
+      serverId: this.serverId,
+      endpointHints: allHosts.map(host => `${this.useTls ? 'https' : 'http'}://${host}:${this.port}`),
+      certificateFingerprint: this.certFingerprint || fingerprint,
+      requestedScopes: ['read', 'write'],
+      expiresAt,
+    }, this.token)
 
-    const protocol = this.useTls ? 'https' : 'http'
+    const encodedOffer = encodePairingOffer(offer)
     return {
-      url: `donutcode://${primaryIp}:${this.port}?token=${this.token}`,
-      token: this.token,
+      url: encodedOffer,
+      token: '',
       port: this.port,
       ips,
       fingerprint,
@@ -414,7 +435,8 @@ export class MobileServer {
       secure: this.useTls,
       nonce,
       nonceExpires: expiresAt,
-      qrData: JSON.stringify(qrPayload)
+      qrData: encodedOffer,
+      pairingCode: this.pairingCode
     }
   }
 
@@ -467,7 +489,6 @@ export class MobileServer {
           if (address && typeof address !== 'string') this.port = address.port
           const protocol = this.useTls ? 'HTTPS' : 'HTTP'
           log(`Started ${protocol} server on port ${this.port}`)
-          log(`Token: ${this.token.slice(0, 8)}...`)
           if (this.useTls) {
             log(`Cert fingerprint: ${this.certFingerprint.slice(0, 32)}...`)
           }

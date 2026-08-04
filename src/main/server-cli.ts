@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync } from 'fs'
+import { chmodSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from './headless-server.js'
+import { configureRuntimePaths } from './runtime-paths.js'
+import { loadOrCreateToken } from './mobile-server/token-manager.js'
 
 interface ServeOptions {
   dataDir: string
@@ -47,7 +49,8 @@ function printUsage(): void {
   console.log(`Usage:
   donutcode-server serve [--data-dir PATH] [--listen HOST] [--port PORT]
   donutcode-server status [--data-dir PATH]
-  donutcode-server stop [--data-dir PATH]`)
+  donutcode-server stop [--data-dir PATH]
+  donutcode-server pairing-offer [--data-dir PATH] [--output FILE]`)
 }
 
 async function serve(args: string[]): Promise<void> {
@@ -87,12 +90,37 @@ async function stop(args: string[]): Promise<void> {
   console.log(JSON.stringify({ stopping: true, pid: info.pid, serverId: info.serverId }))
 }
 
+async function pairingOffer(args: string[]): Promise<void> {
+  const dataDir = resolve(valueAfter(args, '--data-dir') || defaultDataDir())
+  const info = readRuntimeInfo(dataDir)
+  if (!info || !await isRuntimeInfoLive(info)) throw new Error('DonutCode Server is not running')
+
+  configureRuntimePaths({ dataDir, appPath: process.cwd() })
+  const token = loadOrCreateToken()
+  const response = await fetch(`${info.endpoint.replace(/\/$/, '')}/api/auth/pairing-offer`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(`Pairing offer request failed (${response.status})`)
+  const payload = await response.json() as { offer: string; expiresAt: number }
+  const output = valueAfter(args, '--output')
+  if (output) {
+    const path = resolve(output)
+    writeFileSync(path, `${JSON.stringify(payload)}\n`, { mode: 0o600 })
+    chmodSync(path, 0o600)
+    console.log(JSON.stringify({ written: path, expiresAt: payload.expiresAt }))
+    return
+  }
+  console.log(JSON.stringify(payload))
+}
+
 async function main(): Promise<void> {
   const [command, ...args] = process.argv.slice(2)
   switch (command) {
     case 'serve': await serve(args); break
     case 'status': await status(args); break
     case 'stop': await stop(args); break
+    case 'pairing-offer': await pairingOffer(args); break
     default:
       printUsage()
       process.exitCode = command ? 1 : 0

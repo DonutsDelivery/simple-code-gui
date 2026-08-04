@@ -24,6 +24,8 @@ export interface SavedHost {
   host: string
   hosts?: string[]
   port: number
-  token: string
+  credentialRef: string
+  /** Legacy migration input only; never written by current code. */
+  token?: string
   lastConnected: string
 }

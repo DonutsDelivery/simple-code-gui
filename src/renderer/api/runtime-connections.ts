@@ -4,6 +4,7 @@ import type { Api } from './types.js'
 import { clearApi, setApi } from './index.js'
 import { loadAuthoritativeWorkspace, resolveAuthoritativeEnvironmentEvent } from '../stores/workspace-persistence.js'
 import { useWorkspaceStore } from '../stores/workspace.js'
+import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } from '../security/device-credentials.js'
 
 const credentials = new Map<string, string>()
 const authoritySubscriptions = new Map<string, () => void>()
@@ -24,7 +25,7 @@ async function activateAuthorityProjection(serverId: string, api: Api): Promise<
 
 export const runtimeConnectionRegistry = new ConnectionRegistry(
   async credentialRef => {
-    const credential = credentials.get(credentialRef)
+    const credential = credentials.get(credentialRef) ?? await loadDeviceCredential(credentialRef)
     if (credential === undefined) throw new Error(`Credential ${credentialRef} is unavailable`)
     return credential
   },
@@ -33,6 +34,7 @@ export const runtimeConnectionRegistry = new ConnectionRegistry(
 
 export function rememberRuntimeCredential(credentialRef: string, token: string): void {
   credentials.set(credentialRef, token)
+  void storeDeviceCredential(credentialRef, token)
 }
 
 export async function attachRuntimeConnection(
@@ -68,5 +70,6 @@ export function removeRuntimeServer(serverId: string): void {
   authoritySubscriptions.delete(serverId)
   runtimeConnectionRegistry.remove(serverId)
   credentials.delete(`credential:${serverId}`)
+  void removeDeviceCredential(`credential:${serverId}`)
   clearApi(serverId)
 }

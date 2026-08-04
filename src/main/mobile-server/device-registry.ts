@@ -29,6 +29,7 @@ export interface PairedDevice {
   createdAt: number
   lastSeen: number
   revoked: boolean
+  scopes: Array<'read' | 'write'>
 }
 
 // Public view (never leak the raw token to the renderer device list)
@@ -38,6 +39,7 @@ export interface PairedDeviceInfo {
   createdAt: number
   lastSeen: number
   revoked: boolean
+  scopes: Array<'read' | 'write'>
 }
 
 let devices: Map<string, PairedDevice> | null = null
@@ -84,13 +86,18 @@ function persist(): void {
  * deviceId: re-pairing from the same device returns its existing, non-revoked
  * token so we don't accumulate stale credentials.
  */
-export function issueDeviceToken(deviceId: string, name: string): string {
+export function issueDeviceToken(
+  deviceId: string,
+  name: string,
+  scopes: Array<'read' | 'write'> = ['read', 'write'],
+): string {
   const map = load()
   const now = Date.now()
   for (const d of map.values()) {
     if (d.deviceId === deviceId && !d.revoked) {
       d.lastSeen = now
       if (name) d.name = name
+      d.scopes = scopes
       persist()
       return d.token
     }
@@ -102,7 +109,8 @@ export function issueDeviceToken(deviceId: string, name: string): string {
     name: name || 'Mobile device',
     createdAt: now,
     lastSeen: now,
-    revoked: false
+    revoked: false,
+    scopes
   })
   persist()
   log('Issued per-device token', { deviceId, name })
@@ -113,6 +121,12 @@ export function isDeviceTokenValid(token: string): boolean {
   if (!token) return false
   const d = load().get(token)
   return !!d && !d.revoked
+}
+
+export function deviceTokenAllows(token: string, scope: 'read' | 'write'): boolean {
+  const device = load().get(token)
+  if (!device || device.revoked) return false
+  return (device.scopes ?? ['read', 'write']).includes(scope)
 }
 
 export function touchDevice(token: string): void {
@@ -145,11 +159,12 @@ export function revokeDevice(deviceId: string): string[] {
 export function listDevices(): PairedDeviceInfo[] {
   return Array.from(load().values())
     .filter(d => !d.revoked)
-    .map(({ deviceId, name, createdAt, lastSeen, revoked }) => ({
+    .map(({ deviceId, name, createdAt, lastSeen, revoked, scopes }) => ({
       deviceId,
       name,
       createdAt,
       lastSeen,
-      revoked
+      revoked,
+      scopes: scopes ?? ['read', 'write']
     }))
 }

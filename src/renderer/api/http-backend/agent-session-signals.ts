@@ -7,6 +7,7 @@ import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAYS } from './constants'
 import type { EnvironmentEvent } from '../../../common/environment-protocol.js'
 import type { EventEnvelope } from '../../../common/server-protocol.js'
 import type { Workspace } from '../types.js'
+import { requestWebSocketTicket } from './websocket-ticket.js'
 
 const HEARTBEAT_INTERVAL = 30_000
 const HEARTBEAT_TIMEOUT = 10_000
@@ -19,6 +20,7 @@ export class AgentSessionSignalConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null
+  private connecting = false
 
   constructor(
     private wsBaseUrl: string,
@@ -85,8 +87,23 @@ export class AgentSessionSignalConnection {
     }
   }
 
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer || this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return
+    const delay = RECONNECT_DELAYS[Math.min(this.reconnectAttempts, RECONNECT_DELAYS.length - 1)]
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      this.reconnectAttempts += 1
+      this.connect()
+    }, delay)
+  }
+
   private connect(): void {
+    void this.connectWithTicket()
+  }
+
+  private async connectWithTicket(): Promise<void> {
     if (this.listeners.size === 0 && this.environmentListeners.size === 0) return
+    if (this.connecting) return
     if (
       this.socket
       && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)
@@ -94,8 +111,18 @@ export class AgentSessionSignalConnection {
       return
     }
 
-    const url = `${this.wsBaseUrl}/ws?token=${encodeURIComponent(this.token)}`
-    const socket = new WebSocket(url)
+    this.connecting = true
+    let ticket: string
+    try {
+      ticket = await requestWebSocketTicket(this.wsBaseUrl, this.token, '/ws')
+    } catch {
+      this.connecting = false
+      this.scheduleReconnect()
+      return
+    }
+    this.connecting = false
+    if (this.listeners.size === 0 && this.environmentListeners.size === 0) return
+    const socket = new WebSocket(`${this.wsBaseUrl}/ws`, [`ticket-${ticket}`])
     this.socket = socket
 
     socket.onopen = () => {

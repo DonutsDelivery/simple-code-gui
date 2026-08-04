@@ -4,11 +4,12 @@
 
 import { WebSocket, WebSocketServer } from 'ws'
 import { Server } from 'http'
-import { isDeviceTokenValid } from './device-registry'
 import { log, tokensEqual } from './utils'
 import { PendingFile, LocalPty } from './types'
 import type { SessionRuntimeRegistry } from '../session-runtime-registry'
 import type { EnvironmentSnapshot } from '../../common/environment-protocol'
+import { consumeWebSocketTicket } from './routes/auth'
+import { deviceTokenAllows, isDeviceTokenValid } from './device-registry'
 
 // L3: ceiling on simultaneous WebSocket connections (main + PTY streams) so a
 // client can't exhaust sockets/file descriptors by opening connections in a loop.
@@ -45,18 +46,17 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
     const url = new URL(req.url || '', `http://localhost:${deps.getPort()}`)
     const pathname = url.pathname
 
-    // Get token from Sec-WebSocket-Protocol header (preferred) or query string (fallback)
+    // WebSockets consume a short-lived single-purpose ticket. Durable device
+    // credentials never enter URLs or browser history.
     const protocolHeader = req.headers['sec-websocket-protocol'] as string | undefined
     const protocols = protocolHeader?.split(',').map(p => p.trim()) || []
-    const tokenFromProtocol = protocols.find(p => p.startsWith('token-'))?.slice(6)
-    const tokenFromQuery = url.searchParams.get('token')
-    const token = tokenFromProtocol || tokenFromQuery
+    const ticketFromProtocol = protocols.find(p => p.startsWith('ticket-'))?.slice(7)
+    const token = consumeWebSocketTicket(ticketFromProtocol || '', pathname)
 
     log('WebSocket upgrade request', {
-      // M3: never log the token query string — req.url contains ?token=<secret>
       pathname,
-      hasProtocolToken: !!tokenFromProtocol,
-      hasQueryToken: !!tokenFromQuery,
+      hasProtocolTicket: !!ticketFromProtocol,
+
       headers: {
         host: req.headers.host,
         origin: req.headers.origin,
@@ -67,7 +67,7 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
     // Validate token for all WebSocket connections. Accept the legacy shared
     // token (back-compat) or a valid per-device token (H3).
     if (!token || (!tokensEqual(token, deps.getToken()) && !isDeviceTokenValid(token))) {
-      log('WebSocket auth failed', { providedToken: token?.slice(0, 8) })
+      log('WebSocket ticket auth failed')
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
       return
@@ -239,6 +239,14 @@ function handlePtyStreamUpgrade(
     ws.on('message', (message: Buffer) => {
       try {
         const msg = JSON.parse(message.toString())
+        if (
+          (msg.type === 'input' || msg.type === 'resize')
+          && isDeviceTokenValid(authToken)
+          && !deviceTokenAllows(authToken, 'write')
+        ) {
+          ws.close(1008, 'Device credential lacks write scope')
+          return
+        }
 
         switch (msg.type) {
           case 'input':
