@@ -1,5 +1,9 @@
 # Agent workflow (Beads)
 
+## Unified DonutCode implementation plan
+
+Before changing runtime, server authority, connection management, pairing, repository transfer, artifacts, mobile parity, or packaging, read [`docs/plans/unified-environment-runtime-implementation.md`](docs/plans/unified-environment-runtime-implementation.md). Treat its checkpoint order, constraints, stop conditions, and in-progress handoff as the implementation source of truth. Do not begin a later checkpoint while an earlier checkpoint is marked incomplete.
+
 Use Beads (`bd`) for planning and task tracking. Do not invent TODO lists in markdown.
 
 Start of every session:
