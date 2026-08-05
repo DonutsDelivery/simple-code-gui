@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { EnvironmentRuntime, type EnvironmentRuntimeOptions } from './environment-runtime.js'
 import { runtimeHttpRequest } from './runtime-http.js'
@@ -20,6 +20,10 @@ export function getRuntimeInfoPath(dataDir: string): string {
   return join(dataDir, 'runtime-info.json')
 }
 
+function getRuntimeLockPath(dataDir: string): string {
+  return join(dataDir, 'runtime.lock')
+}
+
 export function isProcessAlive(pid: number): boolean {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false
   try {
@@ -33,7 +37,9 @@ export function isProcessAlive(pid: number): boolean {
 export async function isRuntimeInfoLive(info: RuntimeInfo): Promise<boolean> {
   if (!isProcessAlive(info.pid)) return false
   try {
-    const response = await runtimeHttpRequest(info, '/health', { timeoutMs: 1_000 })
+    const endpoint = new URL(info.endpoint)
+    if (endpoint.hostname === '0.0.0.0' || endpoint.hostname === '::') endpoint.hostname = '127.0.0.1'
+    const response = await runtimeHttpRequest({ ...info, endpoint: endpoint.toString() }, '/health', { timeoutMs: 1_000 })
     if (response.status < 200 || response.status >= 300) return false
     const health = response.json<{ serverId?: string; startupNonce?: string }>()
     return health.serverId === info.serverId && health.startupNonce === info.startupNonce
@@ -61,6 +67,39 @@ function writeRuntimeInfoAtomic(dataDir: string, info: RuntimeInfo): void {
   renameSync(temporaryPath, path)
 }
 
+function acquireRuntimeLock(dataDir: string, startupNonce: string): void {
+  const lockPath = getRuntimeLockPath(dataDir)
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 })
+  try {
+    writeFileSync(lockPath, `${JSON.stringify({ pid: process.pid, startupNonce })}\n`, { mode: 0o600, flag: 'wx' })
+    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    let ownerPid: number
+    try {
+      const owner = JSON.parse(readFileSync(lockPath, 'utf8')) as { pid?: unknown }
+      if (typeof owner.pid !== 'number') throw new Error('missing PID')
+      ownerPid = owner.pid
+    } catch {
+      throw new Error('DonutCode Server has an unreadable runtime lock; remove it only after confirming no server is running')
+    }
+    if (isProcessAlive(ownerPid)) throw new Error(`DonutCode Server is already running with PID ${ownerPid}`)
+    try { unlinkSync(lockPath) } catch { /* another owner may have claimed the lock */ }
+    acquireRuntimeLock(dataDir, startupNonce)
+  }
+}
+
+function releaseRuntimeLock(dataDir: string, startupNonce: string): void {
+  const lockPath = getRuntimeLockPath(dataDir)
+  try {
+    const owner = JSON.parse(readFileSync(lockPath, 'utf8')) as { startupNonce?: unknown }
+    if (owner.startupNonce !== startupNonce) return
+  } catch {
+    return
+  }
+  try { unlinkSync(lockPath) } catch { /* already removed */ }
+}
+
 export class HeadlessServer {
   readonly runtime: EnvironmentRuntime
   private runtimeInfo: RuntimeInfo | null = null
@@ -74,8 +113,10 @@ export class HeadlessServer {
     if (processClaims.has(this.options.dataDir)) {
       throw new Error(`DonutCode Server is already running with PID ${process.pid}`)
     }
+    acquireRuntimeLock(this.options.dataDir, this.startupNonce)
     const existing = readRuntimeInfo(this.options.dataDir)
     if (existing && await isRuntimeInfoLive(existing)) {
+      releaseRuntimeLock(this.options.dataDir, this.startupNonce)
       throw new Error(`DonutCode Server is already running with PID ${existing.pid}`)
     }
     if (existing || existsSync(getRuntimeInfoPath(this.options.dataDir))) {
@@ -88,6 +129,7 @@ export class HeadlessServer {
       endpoint = await this.runtime.start()
     } catch (error) {
       processClaims.delete(this.options.dataDir)
+      releaseRuntimeLock(this.options.dataDir, this.startupNonce)
       throw error
     }
     this.runtimeInfo = {
@@ -113,6 +155,7 @@ export class HeadlessServer {
       this.runtimeInfo = null
     } finally {
       processClaims.delete(this.options.dataDir)
+      releaseRuntimeLock(this.options.dataDir, this.startupNonce)
     }
   }
 }

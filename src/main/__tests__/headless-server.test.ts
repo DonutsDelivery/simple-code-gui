@@ -4,7 +4,7 @@ import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { EnvironmentRuntime } from '../environment-runtime'
-import { HeadlessServer, readRuntimeInfo } from '../headless-server'
+import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from '../headless-server'
 import { issueDeviceToken } from '../mobile-server/device-registry'
 import { runtimeHttpRequest } from '../runtime-http'
 
@@ -201,6 +201,25 @@ describe('EnvironmentRuntime headless lifecycle', () => {
     await server.stop()
     expect(readRuntimeInfo(dataDir)).toBeNull()
   }, 15_000)
+
+  it('reports an all-interface HTTPS runtime as live through loopback', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'donutcode-headless-any-'))
+    tempDirs.push(dataDir)
+    const server = new HeadlessServer({
+      dataDir,
+      appPath: process.cwd(),
+      version: 'test-version',
+      serverId: 'server-headless-any',
+      host: '0.0.0.0',
+      port: 0,
+      secure: true,
+    })
+    runtimes.push(server.runtime)
+
+    await expect(isRuntimeInfoLive(await server.start())).resolves.toBe(true)
+    await server.stop()
+    runtimes.splice(runtimes.indexOf(server.runtime), 1)
+  })
 
   it('serves HTTPS and rejects an unpinned certificate', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'donutcode-headless-tls-'))
