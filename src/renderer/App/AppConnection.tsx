@@ -82,8 +82,20 @@ export function AppConnection(): React.ReactElement | null {
 
   useEffect(() => {
     if (!isElectron) return
+    const frontendOnly = window.electronAPI?.isFrontendOnly === true
+      || window.localStorage.getItem('donutcode-frontend-only') === '1'
+      || new URLSearchParams(window.location.search).get('frontendOnly') === '1'
+    if (frontendOnly) {
+      setInitializingLocalServer(false)
+      return
+    }
     let cancelled = false
-    void window.electronAPI.mobileGetConnectionInfo()
+    const getConnectionInfo = window.electronAPI?.mobileGetConnectionInfo
+    if (!getConnectionInfo) {
+      setInitializingLocalServer(false)
+      return
+    }
+    void getConnectionInfo()
       .then(async info => {
         const localApi = new HttpBackend({ host: '127.0.0.1', port: info.port, token: info.token })
         const result = await localApi.testConnection()

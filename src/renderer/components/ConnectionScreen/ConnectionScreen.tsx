@@ -20,6 +20,7 @@ import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } f
 import { pairWithHumanCode, redeemPairingOffer } from '../../security/human-code-pairing.js'
 import { trustServerEndpoint } from '../../security/server-certificate-trust.js'
 import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer.js'
+import { PairServerDialog, type PairedServerResult } from '../Connections/PairServerDialog.js'
 
 /**
  * Connection screen for browser/Capacitor environments
@@ -309,6 +310,19 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
   }, [handleScan])
 
   /**
+   * Handle a signed offer redeemed through the shared pair dialog.
+   */
+  const handlePairedOffer = useCallback(async (result: PairedServerResult) => {
+    await handleConnect({
+      host: result.endpoint.hostname,
+      port: Number(result.endpoint.port) || (result.endpoint.protocol === 'https:' ? 443 : 80),
+      token: result.deviceCredential,
+      secure: result.endpoint.protocol === 'https:',
+      certFingerprint: result.fingerprint,
+    })
+  }, [handleConnect])
+
+  /**
    * Handle manual form submission
    */
   const handleManualSubmit = useCallback(async (e: React.FormEvent) => {
@@ -449,6 +463,27 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
           setView={setView}
           onSubmit={handleManualSubmit}
         />
+        <style>{connectionScreenStyles}</style>
+      </>
+    )
+  }
+
+  // Desktop and headless-capable clients pair by pasting a signed offer.
+  if (view === 'paste') {
+    return (
+      <>
+        <div className="app">
+          <div className="empty-state connection-pair-dialog">
+            <div className="mobile-logo">◇</div>
+            <PairServerDialog
+              onCancel={() => {
+                setError(null)
+                setView('welcome')
+              }}
+              onPaired={handlePairedOffer}
+            />
+          </div>
+        </div>
         <style>{connectionScreenStyles}</style>
       </>
     )

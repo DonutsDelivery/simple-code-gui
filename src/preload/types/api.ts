@@ -10,6 +10,9 @@ import type { CommandEnvelope, EventEnvelope } from '../../common/server-protoco
 import type { EnvironmentCommand } from '../../main/environment-command-router.js'
 
 export interface ElectronAPI {
+  // Launch mode for pure frontend against an external Server.
+  isFrontendOnly?: boolean
+
   // Workspace
   getWorkspace: () => Promise<Workspace>
   saveWorkspace: (workspace: Workspace) => Promise<void>

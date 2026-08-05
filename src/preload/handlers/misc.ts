@@ -3,6 +3,9 @@ import type { Settings } from '../types/settings.js'
 import type { Extension } from '../types/extension.js'
 
 export const miscHandlers = {
+  // Launch mode: Electron can act as a pure frontend against an external Server.
+  isFrontendOnly: process.argv.includes('--frontend-only') || process.env.DONUTCODE_FRONTEND_ONLY === '1',
+
   // Settings
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: Settings): Promise<void> => ipcRenderer.invoke('settings:save', settings),

@@ -177,4 +177,61 @@ export const connectionScreenStyles = `
     opacity: 1;
     color: #ef4444;
   }
+
+  .connection-pair-dialog {
+    width: min(100%, 420px);
+    max-width: 420px;
+  }
+
+  .connection-pair-dialog .pair-server-dialog {
+    width: 100%;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .connection-pair-dialog .pair-server-dialog [role="tablist"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .connection-pair-dialog .pair-server-dialog label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    opacity: 0.9;
+  }
+
+  .connection-pair-dialog .pair-server-dialog input,
+  .connection-pair-dialog .pair-server-dialog textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #444);
+    border-radius: 8px;
+    background: var(--input-bg, #1a1a1a);
+    color: var(--text-color, #fff);
+    font: inherit;
+  }
+
+  .connection-pair-dialog .pair-server-dialog button {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #444);
+    background: var(--accent-color, #007aff);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .connection-pair-dialog .pair-server-dialog button[aria-selected="false"],
+  .connection-pair-dialog .pair-server-dialog button:last-of-type {
+    background: transparent;
+    color: var(--text-color, #fff);
+  }
+
+  .connection-pair-dialog .pair-server-dialog [role="alert"] {
+    color: #ef4444;
+  }
 `

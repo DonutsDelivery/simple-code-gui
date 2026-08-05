@@ -59,7 +59,13 @@ export function WelcomeView({
         )}
 
         <div className="mobile-btn-group">
-          <button className="mobile-btn" onClick={() => setView('scanning')}>
+          <button className="mobile-btn" onClick={() => setView('paste')}>
+            Paste pairing link
+          </button>
+          <button
+            className="mobile-btn mobile-btn--secondary"
+            onClick={() => setView('scanning')}
+          >
             Scan QR Code
           </button>
           <button
@@ -71,7 +77,7 @@ export function WelcomeView({
         </div>
 
         <p className="install-note">
-          Click the mobile icon in your desktop app's sidebar to show the QR code.
+          Paste a signed pairing offer from <code>donutcode-server pairing-offer</code>, or scan the QR code from another device.
         </p>
       </div>
     </div>

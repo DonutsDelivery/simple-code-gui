@@ -4,7 +4,7 @@
 
 import type { HttpBackend } from '../../api/index.js'
 
-export type ViewState = 'welcome' | 'scanning' | 'manual' | 'connecting' | 'error'
+export type ViewState = 'welcome' | 'scanning' | 'manual' | 'paste' | 'connecting' | 'error'
 
 export interface ConnectionScreenProps {
   onConnected: (api: HttpBackend, config: ConnectionConfig) => void
