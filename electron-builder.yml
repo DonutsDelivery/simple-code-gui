@@ -10,6 +10,8 @@ extraResources:
     to: icon.png
   - from: resources/tada-samples
     to: tada-samples
+  - from: scripts/donutcode-server
+    to: bin/donutcode-server
 
 publish:
   provider: github

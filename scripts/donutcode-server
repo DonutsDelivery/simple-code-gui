@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+CONTENTS_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
+
+if [ -x "$CONTENTS_DIR/MacOS/DonutCode" ]; then
+  ELECTRON="$CONTENTS_DIR/MacOS/DonutCode"
+else
+  ELECTRON="$CONTENTS_DIR/donutcode"
+fi
+
+ASAR="$SCRIPT_DIR/../app.asar"
+if [ ! -x "$ELECTRON" ]; then
+  echo "DonutCode executable not found beside packaged resources" >&2
+  exit 1
+fi
+if [ ! -f "$ASAR" ]; then
+  echo "DonutCode application archive not found" >&2
+  exit 1
+fi
+
+export ELECTRON_RUN_AS_NODE=1
+exec "$ELECTRON" "$ASAR/dist/main/server-cli.js" "$@"
