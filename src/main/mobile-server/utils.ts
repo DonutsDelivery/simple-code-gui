@@ -111,9 +111,18 @@ export function getLocalIPs(): string[] {
 
 export function getTailscaleHostname(): string | null {
   try {
-    const { execSync } = require('child_process')
-    const output = execSync('tailscale status --json', { encoding: 'utf-8', timeout: 5000 })
-    const status = JSON.parse(output)
+    // Prefer spawnSync with quiet stdio. execSync under Electron can surface
+    // console EPIPE/modal freezes when a short-lived parent closes pipes.
+    const { spawnSync } = require('child_process') as typeof import('child_process')
+    const result = spawnSync('tailscale', ['status', '--json'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    if (result.status !== 0 || typeof result.stdout !== 'string' || !result.stdout.trim()) {
+      return null
+    }
+    const status = JSON.parse(result.stdout)
     // Get the DNS name for this machine
     if (status.Self && status.Self.DNSName) {
       // DNSName ends with a dot, remove it

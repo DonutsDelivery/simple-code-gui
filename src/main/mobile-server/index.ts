@@ -208,6 +208,19 @@ export class MobileServer {
       res.json({ offer: info.qrData, expiresAt: info.nonceExpires })
     })
 
+    // Headless operators and remote frontends manage paired devices over HTTP
+    // with the same per-device revoke semantics as the Electron IPC surface.
+    this.app.get('/api/auth/devices', (_req: Request, res: Response) => {
+      res.json({ devices: this.listDevices() })
+    })
+    this.app.post('/api/auth/devices/:deviceId/revoke', (req: Request, res: Response) => {
+      const deviceId = req.params.deviceId
+      if (typeof deviceId !== 'string' || deviceId.length === 0) {
+        return res.status(400).json({ error: 'Invalid device id' })
+      }
+      res.json(this.revokeDevice(deviceId))
+    })
+
     // Verify handshake nonce (unauthenticated)
     this.app.post('/verify-handshake', (req: Request, res: Response) => {
       const { nonce } = req.body

@@ -31,17 +31,19 @@ export function getApi(serverId: string): Api | null {
 
 /**
  * Initialize the API with the appropriate backend
- * - In Electron: Automatically uses ElectronBackend
- * - In browser/Capacitor: Requires config parameter for HttpBackend
+ * - Remote connection config always uses HttpBackend (including inside Electron
+ *   when pairing to an external Server)
+ * - Local Electron without config uses ElectronBackend
+ * - Browser/Capacitor requires config for HttpBackend
  */
 export function initializeApi(config?: { host: string; port: number; token: string; secure?: boolean }): Api {
+  if (config) {
+    return new HttpBackend(config)
+  }
   if (isElectronEnvironment()) {
     return new ElectronBackend()
-  } else if (config) {
-    return new HttpBackend(config)
-  } else {
-    throw new Error('HTTP backend requires connection config')
   }
+  throw new Error('HTTP backend requires connection config')
 }
 
 /**

@@ -128,6 +128,24 @@ describe('EnvironmentRuntime headless lifecycle', () => {
     })
     expect(unrelatedSnapshot.status).toBe(200)
 
+    const devicesBefore = await fetch(`${baseUrl}/api/auth/devices`, {
+      headers: { Authorization: `Bearer ${secondCredential}` },
+    })
+    expect(devicesBefore.status).toBe(200)
+    const listed = await devicesBefore.json() as { devices: Array<{ deviceId: string }> }
+    expect(listed.devices.some(device => device.deviceId === 'second-device')).toBe(true)
+
+    const httpRevoke = await fetch(`${baseUrl}/api/auth/devices/second-device/revoke`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secondCredential}` },
+    })
+    expect(httpRevoke.status).toBe(200)
+    await expect(httpRevoke.json()).resolves.toEqual({ revoked: 1 })
+    const revokedSecond = await fetch(`http://${endpoint.host}:${endpoint.port}/api/environment/snapshot`, {
+      headers: { Authorization: `Bearer ${secondCredential}` },
+    })
+    expect(revokedSecond.status).toBe(403)
+
     const readOnlyCredential = issueDeviceToken('read-only-device', 'Read-only device', ['read'])
     const readOnlySnapshot = await fetch(`http://${endpoint.host}:${endpoint.port}/api/environment/snapshot`, {
       headers: { Authorization: `Bearer ${readOnlyCredential}` },

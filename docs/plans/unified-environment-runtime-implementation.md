@@ -1046,6 +1046,43 @@ The four rows pass only when:
 
 A user can run DonutCode on Linux and macOS, start a backend on either host, and use either native desktop frontend against either backend with secure pairing, backend-owned projects/sessions, live PTY/workspace state, restart recovery, and revocation. The result is runnable from clean checkouts with a concise two-host runbook; final daemon installers, signing/notarization, and broader federation features remain later work.
 
+## Completed acceptance evidence — 2026-08-05
+
+### Packaging and lifecycle
+- Linux AppImage package + packaged `donutcode-server` launcher: PASS
+- Headless ownership lock rejects second live data-dir owner; status probes wildcard binds via loopback; stop owns real process: PASS (`4e03ec3`)
+- macOS `.app` / DMG / ZIP package with arm64 `node-pty` and `better-sqlite3`: PASS
+- macOS packaged server lifecycle (status / duplicate reject / stop / restart identity): PASS at `4e03ec3` and reconfirmed during Row A
+
+### Desktop pairing path
+- ConnectionScreen primary **Paste pairing link** via shared `PairServerDialog`: PASS (`9cc0c65`)
+- Electron `--frontend-only` skips local shared-token auto-bind: PASS
+
+### Row A — macOS Electron → macOS packaged headless backend: PASS
+- Exact commit exercised: `9cc0c651cf977dd41d48b1daf874ce895cf54cbb` plus three product fixes landed upstream after the Mac report
+- Frontend: macOS arm64 packaged Electron (`DonutCode.app`) with private user-data profile and `--frontend-only`
+- Backend: macOS arm64 packaged `donutcode-server`
+- Protocol: v1 over expected-pin HTTPS + ticketed WSS
+- serverId stable across backend restart
+- Paste signed offer + single Approve Server + host approval: PASS
+- Secure credential store (no durable token in ordinary localStorage) + FE restart reload: PASS
+- Ticketed WSS success + replay rejection: PASS
+- Backend-owned project path + real harness session + ordered terminal write ack: PASS
+- Backend restart reconnect with same identity: PASS
+- Second independent frontend profile pair: PASS
+- Revoke profile A closes A socket and rejects A; profile B remains authorized: PASS
+
+### Product fixes required by Row A (source-controlled)
+1. Remote connection config always initializes `HttpBackend` even inside Electron.
+2. Tailscale probe uses quiet `spawnSync` to avoid Electron console EPIPE freezes.
+3. Headless HTTP `GET /api/auth/devices` and `POST /api/auth/devices/:deviceId/revoke` match IPC revoke semantics.
+
+### Remaining matrix rows
+- Linux Electron → Linux packaged backend
+- Linux Electron → macOS packaged backend
+- macOS Electron → Linux packaged backend
+- Concise two-host runbook
+
 ---
 
 # Checkpoint 10 — Add repository identity and exact source materialization across servers

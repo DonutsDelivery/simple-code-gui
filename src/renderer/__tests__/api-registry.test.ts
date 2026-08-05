@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServerProtocolDescriptor } from '../../common/server-protocol'
-import { clearApi, getApi, getConnectedServerIds, setApi, type Api } from '../api'
+import { clearApi, getApi, getConnectedServerIds, initializeApi, setApi, type Api } from '../api'
+import { HttpBackend } from '../api/http-backend'
+import { ElectronBackend } from '../api/electron-backend'
 
 function api(serverId: string): Api {
   return {
@@ -11,6 +13,7 @@ function api(serverId: string): Api {
 describe('renderer API registry', () => {
   afterEach(() => {
     for (const serverId of getConnectedServerIds()) clearApi(serverId)
+    vi.unstubAllGlobals()
   })
 
   it('routes only by explicit immutable server ID', () => {
@@ -26,5 +29,17 @@ describe('renderer API registry', () => {
 
   it('rejects APIs that have not established server identity', () => {
     expect(() => setApi({} as Api)).toThrow('stable server ID')
+  })
+
+  it('uses HttpBackend for remote config even when Electron is available', () => {
+    vi.stubGlobal('window', {
+      electronAPI: {
+        getWorkspace: vi.fn(),
+      },
+    })
+
+    const backend = initializeApi({ host: '10.0.0.5', port: 38470, token: 'device-token', secure: true })
+    expect(backend).toBeInstanceOf(HttpBackend)
+    expect(backend).not.toBeInstanceOf(ElectronBackend)
   })
 })
