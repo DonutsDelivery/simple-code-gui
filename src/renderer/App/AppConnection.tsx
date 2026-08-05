@@ -119,35 +119,10 @@ export function AppConnection(): React.ReactElement | null {
     setIsConnected(false)
   }, [api])
 
-  // Try to restore saved connection on mount (browser/Capacitor only)
-  // Also check for token in URL query string (from server redirect)
+  // Validate the legacy local-storage connection on mount. Current credentials
+  // are restored through native secure storage by ConnectionScreen.
   useEffect(() => {
     if (isElectron || isConnected) return
-
-    // Check for token in URL (from server redirect)
-    const urlParams = new URLSearchParams(window.location.search)
-    const urlToken = urlParams.get('token')
-
-    if (urlToken) {
-      // We have a token from URL - extract host/port from current location
-      const host = window.location.hostname
-      const port = parseInt(window.location.port) || 38470
-
-      // Validate port before saving
-      if (!isValidPort(port)) {
-        console.error('[App] Invalid port from URL:', port)
-        return
-      }
-
-      // Save to localStorage so future reloads work
-      const config = { host, port, token: urlToken }
-      localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(config))
-
-      // Clear token from URL for cleaner appearance
-      window.history.replaceState({}, document.title, window.location.pathname)
-
-      console.log('[App] Connecting with URL token:', { host, port, tokenLength: urlToken.length })
-    }
 
     try {
       const saved = loadSavedConnection()
