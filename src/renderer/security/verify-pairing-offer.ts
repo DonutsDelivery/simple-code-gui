@@ -56,7 +56,9 @@ export async function verifyPairingOfferInBrowser(encodedOffer: string): Promise
     const unsupported = error instanceof DOMException
       ? error.name === 'NotSupportedError'
       : error instanceof Error && /algorithm.*(unrecognized|unsupported)/i.test(error.message)
-    if (!unsupported) throw error
+    const incompatibleBufferSource = error instanceof TypeError
+      && /ArrayBuffer|TypedArray|DataView/i.test(error.message)
+    if (!unsupported && !incompatibleBufferSource) throw error
 
     const spkiPrefix = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00]
     if (encodedPublicKey.length !== 44 || !spkiPrefix.every((value, index) => encodedPublicKey[index] === value)) {

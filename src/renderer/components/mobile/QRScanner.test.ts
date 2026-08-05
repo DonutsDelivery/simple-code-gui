@@ -92,9 +92,9 @@ describe('DonutCode connection compatibility', () => {
     })
   })
 
-  it('accepts both current and legacy deep-link schemes', () => {
+  it('rejects durable credentials in current and legacy deep-link URLs', () => {
     const query = 'token=test-token&nonce=single-use&fingerprint=server-fingerprint'
-    expect(parseDeepLink(`donutcode://192.168.1.20:38470?${query}`)?.host).toBe('192.168.1.20')
-    expect(parseDeepLink(`claude-terminal://192.168.1.20:38470?${query}`)?.host).toBe('192.168.1.20')
+    expect(parseDeepLink(`donutcode://192.168.1.20:38470?${query}`)).toBeNull()
+    expect(parseDeepLink(`claude-terminal://192.168.1.20:38470?${query}`)).toBeNull()
   })
 })

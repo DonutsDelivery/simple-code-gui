@@ -10,11 +10,12 @@ export function parseDeepLink(url: string): ParsedConnectionUrl | null {
 
     const [, host, portStr, queryStr] = match
     const params = new URLSearchParams(queryStr)
+    if (params.has('token')) return null
 
     return {
       host,
       port: parseInt(portStr, 10),
-      token: params.get('token') || '',
+      token: '',
       nonce: params.get('nonce') || undefined,
       fingerprint: params.get('fingerprint') || undefined,
       nonceExpires: params.get('nonceExpires') ? parseInt(params.get('nonceExpires')!, 10) : undefined,

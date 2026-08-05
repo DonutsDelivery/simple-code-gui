@@ -116,7 +116,7 @@ export function MobileApp(): React.ReactElement {
     if (!CapacitorApp) return // Skip on web
 
     function handleDeepLink(event: { url: string }): void {
-      console.log('[MobileApp] Deep link received:', event.url)
+      console.log('[MobileApp] Deep link received')
       const connection = parseDeepLink(event.url)
       if (connection) {
         handleScan(connection)
