@@ -994,6 +994,60 @@ The checkpoint is **complete**. Desktop, Android, and iOS acceptance cover signe
 
 ---
 
+# Fast-track Checkpoint 9F — Ship the Linux/macOS desktop and backend matrix
+
+This checkpoint is the immediate priority after CP9. Do not begin repository transfer, artifact transfer, coordination, Android packaging, or broader service packaging until this matrix is complete. Its purpose is a usable two-host product, not the final installer/service program from Checkpoint 14.
+
+## Bounded outcome
+
+Produce runnable DonutCode Electron frontends and headless `donutcode-server` backends on Linux and macOS, then prove all four supported frontend/backend directions against one pinned source revision:
+
+| Frontend | Backend |
+|---|---|
+| Linux Electron | Linux headless server |
+| Linux Electron | macOS headless server |
+| macOS Electron | Linux headless server |
+| macOS Electron | macOS headless server |
+
+Each row must use the real packaged/built frontend and backend for that host, not a browser-only approximation or an iOS/Android client.
+
+## Existing implementation surfaces
+
+- `src/main/server-cli.ts` and the `donutcode-server` bin entry;
+- `src/main/headless-server.ts`, `src/main/environment-runtime.ts`, and `src/main/runtime-paths.ts`;
+- `src/main/mobile-server/**` for pairing, protocol, workspace, PTY, HTTPS, and WSS authority;
+- `src/renderer/api/electron-backend.ts`, `src/renderer/api/http-backend.ts`, and the connection registry;
+- `src/renderer/components/ConnectionScreen/**` and `src/renderer/components/Connections/**`;
+- `electron.vite.config.ts`, `package.json`, and the current Electron build/package path.
+
+## Implementation order
+
+1. **Make clean native builds reproducible on each host.** Add explicit Linux and macOS build/package commands, rebuild native Node dependencies for each Electron target, and include every runtime file required by `server-cli.js`, `node-pty`, and `better-sqlite3`. A clean checkout on each host must produce both the Electron app and a runnable headless server entrypoint from the same commit.
+2. **Make backend startup host-correct.** Preserve a stable per-host `serverId`, TLS identity, secure credential state, runtime-info ownership, and native data paths across restart. Support explicit LAN/Tailscale listening without changing the secure loopback default. Status, pairing-offer, and stop must work on Linux and macOS.
+3. **Close frontend runtime parity.** The Linux and macOS Electron apps must both connect through the same versioned HTTP/WSS contract, store credentials in the host keychain/keyring path, retain independent saved Server entries, and never silently route a remote connection through local Electron IPC.
+4. **Exercise one real canonical session per row.** Pair the frontend, select the backend explicitly, create or attach one harness session on that backend, send input, receive ordered terminal output, observe authoritative workspace state, disconnect, restart the frontend, and reconnect without duplicating the harness process or canonical agent session.
+5. **Exercise cross-host ownership.** In Linux→macOS and macOS→Linux rows, create a project/session on the remote backend and prove all filesystem paths, process ownership, PTY execution, and workspace mutations remain on that backend. The frontend host must not substitute its own path or launch a local harness.
+6. **Publish a two-host runbook.** Record exact build, backend start, pairing, frontend launch, status, and stop commands for Linux and macOS. Keep systemd, LaunchAgent, signing/notarization, auto-update, Windows, mobile parity, repository materialization, artifact transfer, and agent coordination in their later checkpoints.
+
+## Focused acceptance
+
+For every matrix row, record frontend OS/architecture, backend OS/architecture, exact commit, `serverId`, protocol version, connection transport, and the backend-owned harness PID/session identity. Secrets, tickets, private keys, and complete credentials must not enter the report.
+
+The four rows pass only when:
+
+- pairing and secure credential recovery survive frontend restart;
+- expected-certificate HTTPS and ticketed WSS connect;
+- terminal input/output and workspace changes converge through backend authority;
+- backend restart preserves identity and allows reconnect;
+- revoking that frontend closes its active socket without affecting another paired frontend;
+- local-local and cross-host rows exercise the same product UI and protocol rather than separate compatibility code.
+
+## Stop condition
+
+A user can run DonutCode on Linux and macOS, start a backend on either host, and use either native desktop frontend against either backend with secure pairing, backend-owned projects/sessions, live PTY/workspace state, restart recovery, and revocation. The result is runnable from clean checkouts with a concise two-host runbook; final daemon installers, signing/notarization, and broader federation features remain later work.
+
+---
+
 # Checkpoint 10 — Add repository identity and exact source materialization across servers
 
 ## Create
