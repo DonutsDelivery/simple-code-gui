@@ -2,6 +2,17 @@ name: iOS acceptance
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/donutcode-unified-runtime
+    paths:
+      - 'ios/**'
+      - 'src/renderer/**'
+      - 'src/common/pairing-protocol.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.*'
+      - '.github/workflows/ios-acceptance.yml'
   pull_request:
     paths:
       - 'ios/**'
