@@ -971,7 +971,7 @@ Desktop and mobile frontends can manage and display multiple simultaneous server
 
 Desktop users never need a rear camera, and every onboarding method ends with the same verified server identity and revocable per-device credential.
 
-## In-progress acceptance evidence — 2026-08-05
+## Completed acceptance evidence — 2026-08-05
 
 - Signed offers use a persistent Ed25519 Server identity and are verified locally before endpoint hints are used.
 - Production Server startup uses HTTPS and publishes its SHA-256 certificate fingerprint; pinned CLI health and pairing-offer generation passed against a live self-signed Server.
@@ -987,9 +987,10 @@ Desktop users never need a rear camera, and every onboarding method ends with th
 - At `beabd8f`, Xcode's normal local signing produced a valid ad-hoc signature and a nonempty intermediate simulated application identifier, but effective `ENTITLEMENTS_ALLOWED=NO` caused the final codesign invocation to omit that generated entitlement. The Simulator acceptance rail now explicitly enables Xcode's generated Simulator entitlements at build time; it does not post-sign or inject credential values.
 - At `8841891`, effective `ENTITLEMENTS_ALLOWED=YES` still omitted the generated xcent because the target had no `CODE_SIGN_ENTITLEMENTS` input. The app target now owns an empty declarative entitlements file in Debug and Release, forcing Xcode to merge its generated application identifier and pass the resulting xcent to the original build-time codesign invocation.
 - At `0b82fce`, Xcode passed the declared empty `App.app.xcent` to final codesign while keeping the generated application identifier only in `App.app-Simulated.xcent`. The source entitlements now explicitly declare the standard variable-expanded application identifier and default Keychain access group, so device/team prefixes remain Xcode-supplied rather than hard-coded.
-- Full test gate: 60 files and 357 tests passed. Production build, Android Capacitor sync/build, production dependency audit, and `git diff --check` passed.
+- Final iOS acceptance at `5846cd0` used Xcode 26's Simulator entitlement model: strict original build-time signing passed, the universal artifact contained arm64, and resolved application-identifier/default-Keychain authorization was embedded in the executable's `__entitlements` and `__ents_der` sections. The unchanged artifact installed and proved SecureStorage write/read/remove, expected-pin HTTPS success, replacement-certificate HTTPS/WSS rejection with no mismatch upgrade, fresh single-use WSS ticket success and replay rejection, immediate socket closure on revocation, revoked-credential rejection, and SecureStorage-backed reconnect after force-stop/relaunch. Renderer persistence and logs remained free of credentials, tickets, and secret-bearing URLs.
+- Full test gate: 61 files and 359 tests passed. Production build, Android Capacitor sync/build, production dependency audit, and `git diff --check` passed.
 
-The checkpoint remains **in progress**. Android emulator verification now covers signed-offer onboarding, secure storage, connected UI, independent HTTPS/WSS pin behavior, and Play-enabled native scanner startup; decoding a physical QR target remains a device/manual row. The iOS code still needs an Xcode build and simulator/device HTTPS/WSS runtime pass. Isolated Electron runtime acceptance proved that the expected self-signed certificate succeeds and a replacement certificate at the same endpoint is rejected.
+The checkpoint is **complete**. Desktop, Android, and iOS acceptance cover signed multi-method onboarding, explicit approval, secure per-device credential storage, expected-certificate HTTPS/WSS operation, replacement-certificate rejection, single-use ticket replay rejection, revocation, and restart persistence without durable credentials in URLs or renderer metadata. Physical-camera QR decoding remains a manual device row rather than a security or checkpoint blocker. Repeated iOS approval presentation is tracked separately as a UX defect and does not weaken the accepted security behavior.
 
 ---
 
