@@ -56,4 +56,5 @@ jobs:
           -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           -derivedDataPath "$RUNNER_TEMP/DonutCodeDerivedData"
+          ENTITLEMENTS_ALLOWED=YES
           build
