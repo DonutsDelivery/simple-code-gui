@@ -1,4 +1,5 @@
-import { verifyAsync as verifyEd25519 } from '@noble/ed25519'
+import { etc as ed25519Helpers, verify as verifyEd25519 } from '@noble/ed25519'
+import { sha512 } from '@noble/hashes/sha512'
 
 interface BrowserPairingPayload {
   version: number
@@ -64,7 +65,8 @@ export async function verifyPairingOfferInBrowser(encodedOffer: string): Promise
     if (encodedPublicKey.length !== 44 || !spkiPrefix.every((value, index) => encodedPublicKey[index] === value)) {
       throw new Error('Invalid pairing offer signing key')
     }
-    valid = await verifyEd25519(signature, message, encodedPublicKey.slice(12))
+    ed25519Helpers.sha512Sync ??= (...messages) => sha512(ed25519Helpers.concatBytes(...messages))
+    valid = verifyEd25519(signature, message, encodedPublicKey.slice(12))
   }
   if (!valid) throw new Error('Invalid pairing offer signature')
 }
