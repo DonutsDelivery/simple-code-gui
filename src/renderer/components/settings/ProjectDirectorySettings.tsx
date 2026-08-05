@@ -6,6 +6,8 @@ interface ProjectDirectorySettingsProps {
 }
 
 export function ProjectDirectorySettings({ defaultProjectDir, onChange }: ProjectDirectorySettingsProps): React.ReactElement {
+  const canBrowse = typeof window.electronAPI?.selectDirectory === 'function'
+
   async function handleSelectDirectory(): Promise<void> {
     const dir = await window.electronAPI?.selectDirectory()
     if (dir) {
@@ -15,21 +17,24 @@ export function ProjectDirectorySettings({ defaultProjectDir, onChange }: Projec
 
   return (
     <div className="form-group">
-      <label>Default Project Directory</label>
+      <label htmlFor="default-project-directory">Default Project Directory</label>
       <div className="input-with-button">
         <input
+          id="default-project-directory"
           type="text"
           value={defaultProjectDir}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Select a directory..."
-          readOnly
+          placeholder={canBrowse ? 'Select a directory...' : '/path/on/connected/server'}
+          readOnly={canBrowse}
         />
-        <button className="browse-btn" onClick={handleSelectDirectory}>
-          Browse
-        </button>
+        {canBrowse && (
+          <button className="browse-btn" onClick={handleSelectDirectory}>
+            Browse
+          </button>
+        )}
       </div>
       <p className="form-hint">
-        New projects created with "Make Project" will be placed here.
+        New projects created with "Make Project" will be placed here{canBrowse ? '.' : ' on the connected server.'}
       </p>
     </div>
   )
