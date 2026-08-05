@@ -11,8 +11,8 @@ const credentials = new Map<string, string>()
 const authoritySubscriptions = new Map<string, () => void>()
 
 async function activateAuthorityProjection(serverId: string, api: Api): Promise<void> {
-  const snapshot = await loadAuthoritativeWorkspace(api, serverId)
-  useWorkspaceStore.getState().applyAuthoritativeWorkspace(serverId, snapshot.workspace)
+  const workspace = await loadAuthoritativeWorkspace(api, serverId)
+  useWorkspaceStore.getState().applyAuthoritativeWorkspace(serverId, workspace)
   authoritySubscriptions.get(serverId)?.()
   if (!api.onEnvironmentEvent) return
   authoritySubscriptions.set(serverId, api.onEnvironmentEvent(event => {

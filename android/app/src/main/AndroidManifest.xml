@@ -25,7 +25,15 @@
             </intent-filter>
 
             <!-- Deep link URL scheme -->
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="donutcode" android:host="pair" />
+            </intent-filter>
+
+            <!-- Legacy links remain accepted for existing installations. -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

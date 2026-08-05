@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 
 
@@ -25,6 +26,29 @@ interface QRScannerProps {
   onScan: (connection: ParsedConnectionUrl) => void
   onCancel: () => void
   onError?: (error: string) => void
+}
+
+type GoogleBarcodeModule = Pick<typeof BarcodeScanner,
+  'isGoogleBarcodeScannerModuleAvailable' | 'installGoogleBarcodeScannerModule'>
+
+export async function ensureGoogleBarcodeScannerModule(
+  scanner: GoogleBarcodeModule = BarcodeScanner,
+  platform = Capacitor.getPlatform(),
+  wait: (milliseconds: number) => Promise<void> = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds))
+): Promise<void> {
+  if (platform !== 'android') return
+
+  const { available } = await scanner.isGoogleBarcodeScannerModuleAvailable()
+  if (!available) {
+    await scanner.installGoogleBarcodeScannerModule()
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const status = await scanner.isGoogleBarcodeScannerModuleAvailable()
+      if (status.available) return
+      await wait(500)
+    }
+    throw new Error('Timed out installing the Google Barcode Scanner module')
+  }
 }
 
 /**
@@ -142,6 +166,8 @@ export function QRScanner({ onScan, onCancel, onError }: QRScannerProps): React.
 
   const doScan = useCallback(async () => {
     try {
+      await ensureGoogleBarcodeScannerModule()
+
       // Check camera permission
       const { camera } = await BarcodeScanner.checkPermissions()
 

@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { QRScanner, ParsedConnectionUrl } from '../mobile/QRScanner.js'
+import { App as CapacitorApp } from '@capacitor/app'
+import { QRScanner, ParsedConnectionUrl, parseConnectionUrl } from '../mobile/QRScanner.js'
 import { initializeApi, HttpBackend } from '../../api/index.js'
 import { loadSavedHostsAsync, saveSavedHostsAsync, generateHostId } from './storage.js'
 import { WelcomeView } from './views/WelcomeView.js'
@@ -83,6 +84,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
 
     let lastError: Error | null = null
     let successfulConfig: ConnectionConfig | null = null
+    let successfulApi: HttpBackend | null = null
 
     // Try each host in sequence
     for (const host of hostsToTry) {
@@ -90,7 +92,8 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       console.log(`[ConnectionScreen] Trying to connect to ${host}:${config.port}...`)
 
       try {
-        const { config: workingConfig } = await tryConnect(attemptConfig)
+        const { api, config: workingConfig } = await tryConnect(attemptConfig)
+        successfulApi = api
         successfulConfig = workingConfig
         console.log(`[ConnectionScreen] Successfully connected to ${host}:${config.port}`)
         break
@@ -100,7 +103,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       }
     }
 
-    if (!successfulConfig) {
+    if (!successfulConfig || !successfulApi) {
       console.error('[ConnectionScreen] All connection attempts failed')
       const triedHosts = hostsToTry.join(', ')
       setError(`Failed to connect to: ${triedHosts}\n${lastError?.message || 'Network unreachable'}`)
@@ -159,8 +162,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
 
       // Use the API directly. Durable credentials never enter URLs or browser history.
       console.log('[ConnectionScreen] Connected, using bundled UI')
-      const api = initializeApi(successfulConfig) as HttpBackend
-      onConnected(api, successfulConfig)
+      onConnected(successfulApi, successfulConfig)
     } catch (err) {
       console.error('[ConnectionScreen] Connection failed:', err)
       setError(err instanceof Error ? err.message : 'Connection failed')
@@ -275,6 +277,36 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
       setView('error')
     }
   }, [handleConnect])
+
+  useEffect(() => {
+    let active = true
+    let lastUrl = ''
+    let listener: { remove: () => Promise<void> } | undefined
+
+    const handleUrl = (url: string): void => {
+      if (!active || !url || url === lastUrl) return
+      lastUrl = url
+      const connection = parseConnectionUrl(url)
+      if (connection) {
+        void handleScan(connection)
+      } else {
+        setError('Invalid deep link URL')
+        setView('error')
+      }
+    }
+
+    void CapacitorApp.addListener('appUrlOpen', event => handleUrl(event.url)).then(handle => {
+      listener = handle
+    })
+    void CapacitorApp.getLaunchUrl().then(result => {
+      if (result?.url) handleUrl(result.url)
+    })
+
+    return () => {
+      active = false
+      void listener?.remove()
+    }
+  }, [handleScan])
 
   /**
    * Handle manual form submission

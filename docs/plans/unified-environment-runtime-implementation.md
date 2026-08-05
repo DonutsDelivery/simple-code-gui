@@ -971,16 +971,18 @@ Desktop and mobile frontends can manage and display multiple simultaneous server
 
 Desktop users never need a rear camera, and every onboarding method ends with the same verified server identity and revocable per-device credential.
 
-## In-progress acceptance evidence — 2026-08-04
+## In-progress acceptance evidence — 2026-08-05
 
 - Signed offers use a persistent Ed25519 Server identity and are verified locally before endpoint hints are used.
 - Production Server startup uses HTTPS and publishes its SHA-256 certificate fingerprint; pinned CLI health and pairing-offer generation passed against a live self-signed Server.
 - QR/paste and OPAQUE proofs create pending device requests. A credential is issued only after explicit approval in the Server UI; rejection and secret-protected status polling are implemented.
 - Replay is rejected across Server restart. Read-only credentials cannot mint PTY tickets, and revocation closes an already-open device WebSocket immediately.
 - Electron, Android, and iOS certificate probe/pin paths are implemented. Android `assembleDebug` passes on Java 21; iOS Capacitor sync passes on Linux.
-- Full test gate: 59 files and 354 tests passed. Production build and `git diff --check` passed.
+- API 35 Android emulator acceptance proved the current `donutcode://pair/...` deep link resolves into the rendered connection screen, verifies the signed offer through the guarded pure-JS Ed25519 fallback required by the target WebView, reaches host approval, stores the issued device credential through native secure storage, and renders the connected workspace UI.
+- Android native trust acceptance independently proved expected-pin HTTPS `200`, replacement-certificate HTTPS rejection, authenticated ticketed WSS connection, and replacement-certificate WSS rejection with no Server upgrade. The Google APIs emulator could request but not complete the downloadable barcode scanner module, so physical/Play-enabled camera acceptance remains outstanding.
+- Full test gate: 59 files and 356 tests passed. Production build, Android Capacitor sync/build, production dependency audit, and `git diff --check` passed.
 
-The checkpoint remains **in progress**. Physical Android/iOS verification must independently prove pinned HTTPS and WSS success/mismatch behavior, and the iOS code needs an Xcode build/runtime pass. Isolated Electron runtime acceptance proved that the expected self-signed certificate succeeds and a replacement certificate at the same endpoint is rejected.
+The checkpoint remains **in progress**. Android emulator verification now covers signed-offer onboarding, secure storage, connected UI, and independent HTTPS/WSS pin behavior, but physical or Play-enabled camera acceptance remains outstanding. The iOS code still needs an Xcode build and simulator/device HTTPS/WSS runtime pass. Isolated Electron runtime acceptance proved that the expected self-signed certificate succeeds and a replacement certificate at the same endpoint is rejected.
 
 ---
 

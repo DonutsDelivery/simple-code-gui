@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { ConnectionScreen } from '../components/ConnectionScreen'
+import { ConnectionScreen, type ConnectionConfig } from '../components/ConnectionScreen'
 import { MainApp } from './MainApp'
 import type { Api } from '../api'
 import { HttpBackend, isElectronEnvironment, setApi } from '../api'
@@ -52,19 +52,26 @@ export function AppConnection(): React.ReactElement | null {
 
   const registerConnection = useCallback(async (
     connectedApi: HttpBackend,
-    config: { host: string; port: number; token: string },
+    config: ConnectionConfig,
   ) => {
     const descriptor = connectedApi.getServerProtocol?.()
     if (!descriptor?.serverId) throw new Error('Server did not publish a stable identity')
     const savedConnection = {
       serverId: descriptor.serverId,
       displayName: descriptor.serverName || descriptor.serverId,
-      endpoints: [{ host: config.host, port: config.port }],
+      endpoints: [{
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        certFingerprint: config.certFingerprint,
+      }],
       credentialRef: `credential:${descriptor.serverId}`,
       lastSeenProtocolVersion: descriptor.protocolVersion,
-      capabilities: descriptor.capabilities.map(capability => capability.id),
+      capabilities: Object.entries(descriptor.capabilities)
+        .filter(([, supported]) => supported)
+        .map(([capability]) => capability),
     }
-    useConnectionsStore.getState().addConnection(savedConnection)
+    await useConnectionsStore.getState().upsert(savedConnection)
     await attachRuntimeConnection(savedConnection, connectedApi, savedConnection.endpoints[0], config.token)
     setApi(connectedApi)
     setApiState(connectedApi)
@@ -92,7 +99,7 @@ export function AppConnection(): React.ReactElement | null {
   }, [isElectron, registerConnection])
 
   // Handle successful connection from ConnectionScreen
-  const handleConnected = useCallback((connectedApi: HttpBackend, config: { host: string; port: number; token: string }) => {
+  const handleConnected = useCallback((connectedApi: HttpBackend, config: ConnectionConfig) => {
     void registerConnection(connectedApi, config).catch(error => {
       console.error('[App] Failed to register connection:', error)
     })

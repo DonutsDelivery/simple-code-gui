@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseConnectionUrl } from './QRScanner'
+import { ensureGoogleBarcodeScannerModule, parseConnectionUrl } from './QRScanner'
 import { parseDeepLink } from './MobileApp/helpers'
 import { generateKeyPairSync } from 'crypto'
 import { createPairingOffer, encodePairingOffer } from '../../../common/pairing-protocol'
@@ -16,6 +16,30 @@ const payload = {
 }
 
 describe('DonutCode connection compatibility', () => {
+  it('installs the Android barcode module when it is unavailable', async () => {
+    let installs = 0
+    let installed = false
+    await ensureGoogleBarcodeScannerModule({
+      isGoogleBarcodeScannerModuleAvailable: async () => ({ available: installed }),
+      installGoogleBarcodeScannerModule: async () => {
+        installs += 1
+        installed = true
+      },
+    }, 'android', async () => undefined)
+
+    expect(installs).toBe(1)
+  })
+
+  it('does not install the Android barcode module when it is available', async () => {
+    let installs = 0
+    await ensureGoogleBarcodeScannerModule({
+      isGoogleBarcodeScannerModuleAvailable: async () => ({ available: true }),
+      installGoogleBarcodeScannerModule: async () => { installs += 1 },
+    }, 'android')
+
+    expect(installs).toBe(0)
+  })
+
   it('parses credential-free signed pairing offers', () => {
     const envelope = {
       payload: {
