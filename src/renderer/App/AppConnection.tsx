@@ -73,6 +73,8 @@ export function AppConnection(): React.ReactElement | null {
     }
     await useConnectionsStore.getState().upsert(savedConnection)
     await attachRuntimeConnection(savedConnection, connectedApi, savedConnection.endpoints[0], config.token)
+    localStorage.removeItem(CONNECTION_STORAGE_KEY)
+    localStorage.removeItem(LEGACY_CONNECTION_STORAGE_KEY)
     setApi(connectedApi)
     setApiState(connectedApi)
     setIsConnected(true)

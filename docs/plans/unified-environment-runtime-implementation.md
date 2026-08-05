@@ -979,7 +979,7 @@ Desktop users never need a rear camera, and every onboarding method ends with th
 - Replay is rejected across Server restart. Read-only credentials cannot mint PTY tickets, and revocation closes an already-open device WebSocket immediately.
 - Electron, Android, and iOS certificate probe/pin paths are implemented. Android `assembleDebug` passes on Java 21; iOS Capacitor sync passes on Linux.
 - API 35 Android emulator acceptance proved the current `donutcode://pair/...` deep link resolves into the rendered connection screen, verifies the signed offer through the guarded pure-JS Ed25519 fallback required by the target WebView, reaches host approval, stores the issued device credential through native secure storage, and renders the connected workspace UI.
-- The retired browser redirect path no longer accepts `?token=` credentials; current production source contains no URL-query token import path.
+- The retired browser redirect path no longer accepts `?token=` credentials; current production source contains no URL-query token import path. Legacy local-storage credentials are deleted after successful migration into secure storage.
 - Android native trust acceptance independently proved expected-pin HTTPS `200`, replacement-certificate HTTPS rejection, authenticated ticketed WSS connection, and replacement-certificate WSS rejection with no Server upgrade. A separate API 35 Google Play emulator installed the downloadable barcode module and opened Google's native DonutCode scanner surface successfully; decoding a physical QR target remains a device/manual acceptance row.
 - Full test gate: 59 files and 356 tests passed. Production build, Android Capacitor sync/build, production dependency audit, and `git diff --check` passed.
 
