@@ -1,0 +1,57 @@
+name: iOS acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'src/renderer/**'
+      - 'src/common/pairing-protocol.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.*'
+      - '.github/workflows/ios-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile-ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Build production renderer
+        run: npm run build
+
+      - name: Synchronize Capacitor iOS project
+        run: npx cap sync ios
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios/App
+        run: pod install
+
+      - name: Compile iOS simulator application
+        working-directory: ios/App
+        run: >-
+          xcodebuild
+          -workspace App.xcworkspace
+          -scheme App
+          -configuration Debug
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/DonutCodeDerivedData"
+          CODE_SIGNING_ALLOWED=NO
+          build
