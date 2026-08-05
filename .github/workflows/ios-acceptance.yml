@@ -37,14 +37,20 @@ jobs:
         run: npm run build
 
       - name: Synchronize Capacitor iOS project
+        env:
+          DONUTCODE_IOS_SKIP_MLKIT: '1'
         run: npx cap sync ios
 
       - name: Install CocoaPods dependencies
         working-directory: ios/App
+        env:
+          DONUTCODE_IOS_SKIP_MLKIT: '1'
         run: pod install
 
       - name: Compile iOS simulator application
         working-directory: ios/App
+        env:
+          DONUTCODE_IOS_SKIP_MLKIT: '1'
         run: >-
           xcodebuild
           -workspace App.xcworkspace

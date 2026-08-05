@@ -12,12 +12,12 @@ const LEGACY_HOSTS_STORAGE_KEY = 'claude-terminal-saved-hosts'
 export async function loadSavedHostsAsync(): Promise<SavedHost[]> {
   try {
     let { value } = await Preferences.get({ key: HOSTS_STORAGE_KEY })
+    let loadedLegacy = false
     if (!value) {
       const legacy = await Preferences.get({ key: LEGACY_HOSTS_STORAGE_KEY })
       value = legacy.value
-      if (value) await Preferences.set({ key: HOSTS_STORAGE_KEY, value })
+      loadedLegacy = Boolean(value)
     }
-    console.log('[ConnectionScreen] Loading saved hosts from Preferences:', value)
     if (!value) return []
     const parsed = JSON.parse(value) as Array<SavedHost & { token?: string }>
     let migrated = false
@@ -31,7 +31,10 @@ export async function loadSavedHostsAsync(): Promise<SavedHost[]> {
       const { token: _legacyToken, ...metadata } = host
       hosts.push({ ...metadata, credentialRef })
     }
-    if (migrated) await saveSavedHostsAsync(hosts)
+    if (migrated || loadedLegacy) {
+      await Preferences.set({ key: HOSTS_STORAGE_KEY, value: JSON.stringify(hosts) })
+    }
+    if (loadedLegacy) await Preferences.remove({ key: LEGACY_HOSTS_STORAGE_KEY })
     console.log('[ConnectionScreen] Parsed saved hosts:', hosts.length, 'hosts')
     return hosts
   } catch (e) {
