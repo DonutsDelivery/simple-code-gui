@@ -69,6 +69,7 @@ import {
   broadcastTerminalData as wsBroadcastTerminalData,
   broadcastPtyExit as wsBroadcastPtyExit
 } from './websocket-manager'
+import { ArtifactUploadSink } from '../artifact-transfer'
 import {
   sendFileToMobile as filePushSendFile,
   getPendingFilesList,
@@ -402,7 +403,6 @@ export class MobileServer {
     if (!store) return null
     let sink = this.artifactSinks.get(clientKey)
     if (!sink) {
-      const { ArtifactUploadSink } = require('../artifact-transfer') as typeof import('../artifact-transfer')
       sink = new ArtifactUploadSink(store, { stagingDir: store.stagingDirFor(clientKey) })
       this.artifactSinks.set(clientKey, sink)
     }
