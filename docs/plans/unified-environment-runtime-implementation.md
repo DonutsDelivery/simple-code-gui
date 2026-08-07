@@ -1077,8 +1077,24 @@ A user can run DonutCode on Linux and macOS, start a backend on either host, and
 2. Tailscale probe uses quiet `spawnSync` to avoid Electron console EPIPE freezes.
 3. Headless HTTP `GET /api/auth/devices` and `POST /api/auth/devices/:deviceId/revoke` match IPC revoke semantics.
 
+### Row B — Linux Electron → Linux packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `fbbdb0f` (package rebuilt from it; `dist-build/DonutCode-1.3.58.AppImage`)
+- Frontend: Linux x64 packaged Electron (`dist-build/linux-unpacked/donutcode`) with scrubbed `env -i` launch + fresh `XDG_CONFIG_HOME`, `--frontend-only`, DEBUG_MODE
+- Backend: Linux x64 packaged `donutcode-server serve --data-dir /tmp/dc-ll-b --listen 0.0.0.0 --port 46545`
+- Protocol: v1 over expected-pin HTTPS + ticketed WSS; serverId `00334c7764806d12e1c0693d1304cea7`
+- Paste signed offer + Approve Server + host approval (in-memory machine-token decrypt): PASS
+- Keyring-backed credential persisted (`credential:<serverId>` file mode 0600; localStorage metadata-only; safeStorage session-type env vars): PASS
+- Backend-owned project + real harness session (PTY spawned by backend, `ct-hermes-client-*` under backend tree): PASS
+- **Session-footer Harness dropup switch (claude → hermes)**: PASS — backend log `PTY backend switched { oldId 97991de9 → newId 4129d25e, backend: 'hermes' }` → old stream closed → new stream connected; renderer tab re-pointed to `4129d25e`, terminal re-registered. (This was the user-reported failure; fixed by `fbbdb0f` — single transport path + surfaced errors.)
+- **Backend `stop` with connected frontend**: PASS — was unbounded hang (`server.close()` waits on open WSS); now `WebSocket client disconnected (main)` + process exit ~2s after `stop` (`6773d1d`).
+- Backend restart reconnect with same identity: PASS — serverId + cert fingerprint stable, 0 new pairing requests, main WSS auto-reconnected (backoff 1s→30s; verify after ~30s).
+- FE restart recovery (same profile): PASS earlier in row (`a7fd70d` era) — landed in MainApp, no re-pair, WSS + PTY stream re-attached.
+- Ordered terminal I/O via product API (echo → monotonic ack → visible in hermes TUI buffer): PASS
+- Second independent frontend profile pair (device B): PASS
+- **Revoke device A → A socket force-closed + device removed; device B WSS stays connected and authorized; host/operator token unaffected**: PASS — backend log `Revoked device { tokens: 1 }` → `WebSocket client disconnected (main)`.
+
 ### Remaining matrix rows
-- Linux Electron → Linux packaged backend
 - Linux Electron → macOS packaged backend
 - macOS Electron → Linux packaged backend
 - Concise two-host runbook
