@@ -331,7 +331,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         activeSessionId: activeSessionIdForServer,
       }).catch(error => {
         if (!(error instanceof EnvironmentCacheInvalidatedError)) {
-          console.error('Failed to save workspace:', error)
+          console.error(`Failed to save workspace (server ${targetServerId}):`, error)
         }
       })
     }

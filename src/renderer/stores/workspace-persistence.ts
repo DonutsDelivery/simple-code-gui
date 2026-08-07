@@ -223,10 +223,13 @@ export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace
       recordAuthoritativeBaseline(serverId, workspace)
     } catch (error) {
       // Never retry the stale full-workspace payload at a newer revision. Refresh
-      // only the disposable cursor/cache and let the caller reconcile explicitly.
+      // the cursor and cache from the server's current snapshot so a later
+      // state change can save at the fresh revision (without this, a single
+      // conflict leaves the cursor stale forever and every save fails).
       const snapshot = await api.getEnvironmentSnapshot()
       assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
       cacheEnvironmentSnapshot(snapshot)
+      state.cursor = { serverId, revision: snapshot.revision }
       throw error
     }
   })
