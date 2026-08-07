@@ -32,7 +32,12 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
     }
 
     void syncLiveSessionIds()
-    const interval = setInterval(syncLiveSessionIds, 1000)
+    // Poll slowly: the backend rate-limits API reads to 60/min per client
+    // (default endpoint budget). A 1s poll would consume the entire budget by
+    // itself and starve other requests (workspace saves, session discovery),
+    // which then 429 and let the authoritative snapshot revert local changes.
+    // 5s keeps /resume detection responsive at 12 req/min with room to spare.
+    const interval = setInterval(syncLiveSessionIds, 5000)
     return () => clearInterval(interval)
   }, [api, openTabs, updateTab])
 

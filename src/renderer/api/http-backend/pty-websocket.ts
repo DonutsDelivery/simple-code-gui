@@ -47,7 +47,17 @@ export class PtyWebSocketManager {
       ticket = await requestWebSocketTicket(this.wsBaseUrl, this.token, `/api/pty/${encodeURIComponent(ptyId)}/stream`)
     } catch {
       this.connecting.delete(ptyId)
-      setTimeout(() => this.connectPtyStream(ptyId), RECONNECT_DELAYS[0])
+      // Only retry while the pty is still tracked. A failed ticket fetch is
+      // often the server rate-limiting a reconnect storm — retrying blindly
+      // here (no ownership check, no attempt cap) is an unbounded loop that
+      // hammers the rate limiter and starves every other request. The tracked
+      // state still exists, so a bounded retry is fine; an abandoned/untracked
+      // pty must not reconnect at all.
+      const state = this.ptyWebsockets.get(ptyId)
+      if (state && state.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        state.reconnectAttempts += 1
+        setTimeout(() => this.connectPtyStream(ptyId), RECONNECT_DELAYS[0])
+      }
       return
     }
     this.connecting.delete(ptyId)
@@ -135,6 +145,16 @@ export class PtyWebSocketManager {
 
     ws.onclose = (event) => {
       console.log('[HttpBackend] PTY stream closed:', ptyId, event.code, event.reason)
+
+      // Only the currently-tracked socket may schedule a reconnect. If
+      // disconnectPtyStream() (e.g. after a harness switch or tab close) has
+      // already removed this pty's entry, this socket is orphaned — its close
+      // event is the tail end of a deliberate teardown and must NOT start a
+      // reconnect loop against the dead/old pty (each attempt burns a rate
+      // limit and keeps the stale tab alive).
+      if (this.ptyWebsockets.get(ptyId) !== state) {
+        return
+      }
 
       // Attempt reconnection if not a clean close and we still want this PTY
       if (!event.wasClean && state.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
