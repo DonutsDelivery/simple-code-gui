@@ -1111,9 +1111,21 @@ A user can run DonutCode on Linux and macOS, start a backend on either host, and
 - **Restart recovery cross-host (hermes tab)**: FE relaunch with same profile restored the hermes tab from the stale snapshot and re-spawned a fresh hermes PTY on the Mac (`Spawning hermes : hermes`) — harness restored correctly (fix `d663e9d`: restore now honors persisted `harnessId`; previously the stale tab re-spawned as claude and the server rejected the mismatched session)
 - Second profile pair + revocation isolation: shared same per-device revoke semantics as Rows A/B (code path exercised in Row B; not re-run cross-host)
 
+### Row D — macOS Electron → Linux packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `21a9de2` (Mac FE + Linux dev-build backend)
+- Frontend: macOS arm64 packaged Electron (`dist-build/mac-arm64/DonutCode.app`, `open -n` in the GUI session with `DEBUG_MODE=1` — direct binary launches hit `errKCInteractionNotAllowed (-25308)` and silently drop saved remote credentials; `--user-data-dir` IS honored on macOS → profile `/tmp/dc-rowd-cfg.G9z1Bm`)
+- Backend: Linux dev-build `node dist/main/server-cli.js serve --data-dir /tmp/dc-rowd --port 46547`, serverId `1e31c0bcf05930545f235ff3c83bd2fa`, cert fp `7ada48d90d0158d7`
+- Transport: Mac→Linux LAN is **blocked by nftables** (input policy drop, ssh/lo/icmp only; no passwordless sudo) → **SSH reverse tunnel** `ssh -N -R 127.0.0.1:46547:127.0.0.1:46547` is the canonical route (plain `-R 46547:` fails on macOS sshd — all-interface bind needs GatewayPorts; explicit `127.0.0.1:` bind succeeds)
+- **Cross-host pairing over the tunnel**: offer endpoint hints (192.168.0.253 / 100.64.170.92 / tailscale) are all unreachable from the Mac, so the **Human code** tab was used (host `127.0.0.1` + port 46547 + pairing code from `runtime-info.json`) → Approve dialog showed server `…d2fa` + fp `7ada48d9…` (exact match) → approve via machine token → "PAKE pairing proof accepted", per-device token, `WebSocket client connected (main)`. Requires `7e8fa80` (headless server now surfaces `pairingCode` in runtime-info — previously Electron-IPC-only)
+- **Backend-owned session cross-host**: clicking project `dc-rowd-proj` in the Mac FE spawned the PTY **on the Linux backend** (`Spawning claude : claude in /tmp/dc-rowd-proj`), FE tab registered with serverId `1e31c0bc…`, stream connected over the tunnel
+- **Footer Harness switch cross-host**: `PTY backend switched { … → … , backend: 'hermes' }` on the Linux backend log; `PTY recreated` event fired in the FE (fix `46f6dd4`: pty-recreated listener now subscribes to **every connected server**, not just the active one) and the replacement stream connected
+- Sidebar project-click routing fixed (`21c482b`): the session-open flow dropped the project's origin serverId, so a project on a remote server spawned against the ACTIVE (local) server ("Path is not within a registered project"); now threaded through
+- **Known limitation (documented)**: multi-server workspace persistence. Sessions opened on a paired non-active server land in the active (local) session; saving every server's slice (`3af4a0d`) caused a revision ping-pong save loop (revisions climbed to 3000+, backend crashed once) because cross-server sessions can't round-trip cleanly. Reverted to the validated single-server save (`21a9de2`); suppression scoping fix `0d5554f` retained. Harness switch + session creation over HTTP are unaffected; workspace persistence for non-active-server sessions needs a session-ownership-by-origin-server model before it is safe to enable
+- Keychain lesson: the packaged app must be launched via `open -n` so the user can approve the keychain prompt; `-25308` under direct launches silently drops saved remote connections on relaunch
+
 ### Remaining matrix rows
-- macOS Electron → Linux packaged backend
-- Concise two-host runbook (published: `docs/runbook-unified-runtime.md`)
+- (none — A/B/C/D complete; concise two-host runbook published: `docs/runbook-unified-runtime.md`)
 
 ---
 
