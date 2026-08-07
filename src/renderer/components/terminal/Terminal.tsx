@@ -31,13 +31,29 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [api])
 
   // Backend change handler — must use the RAW server pty id, not the
-  // renderer-prefixed tab id (serverId\0ptyId), or the main-process registry
+  // renderer-prefixed tab id (serverId\0ptyId), or the server registry
   // cannot resolve the process and the switch silently no-ops.
-  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
+  const handleBackendChange = useCallback(async (newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
     if (newBackend === 'default') return
     const rawPtyId = (ptyId.includes('\0') ? ptyId.split('\0').pop() : ptyId) || ptyId
-    api?.setPtyBackend?.(rawPtyId, newBackend)
-    window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
+    try {
+      // Single authoritative path: `api` routes to the connected server
+      // (HttpBackend → POST /api/pty/:id/backend, or ElectronBackend →
+      // pty:set-backend IPC). Never also fire the raw IPC here — that would
+      // double-switch in local mode and no-op against the wrong process in
+      // remote mode.
+      if (api?.setPtyBackend) {
+        await api.setPtyBackend(rawPtyId, newBackend)
+      } else {
+        await window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
+      }
+    } catch (error) {
+      // A stale ptyId (e.g. after a backend restart) makes the server 404 and
+      // the switch fail silently. Surface it instead of swallowing the error.
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`Failed to switch session to ${newBackend}:`, message)
+      alert(`Failed to switch to ${newBackend}:\n\n${message}\n\nIf the session was restarted, close this tab and reopen it.`)
+    }
   }, [api, ptyId])
 
   // Send backend-specific command
