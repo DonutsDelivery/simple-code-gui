@@ -336,12 +336,22 @@ describe('authoritative workspace persistence', () => {
     const api = identifiedApi('server-a', { getEnvironmentSnapshot })
 
     const loaded = await loadAuthoritativeWorkspace(api, 'server-a')
-    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify(loaded))
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify({
+      projects: loaded.projects ?? [],
+      categories: loaded.categories ?? [],
+      sessions: loaded.sessions ?? [],
+      activeSessionId: loaded.activeSessionId ?? null,
+    }))
 
     const executeEnvironmentCommand = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 1, result: { success: true }, replayed: false })
     const api2 = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
     await saveAuthoritativeWorkspace(api2, 'server-a', workspace)
-    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify(workspace))
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify({
+      projects: workspace.projects ?? [],
+      categories: workspace.categories ?? [],
+      sessions: workspace.sessions ?? [],
+      activeSessionId: workspace.activeSessionId ?? null,
+    }))
   })
 
   it('keeps a per-server baseline when another server applies', async () => {
@@ -355,6 +365,11 @@ describe('authoritative workspace persistence', () => {
     await loadAuthoritativeWorkspace(apiB, 'server-b')
 
     expect(getBaselineFingerprint('server-a')).toBe(baselineA)
-    expect(getBaselineFingerprint('server-b')).toBe(JSON.stringify(workspace))
+    expect(getBaselineFingerprint('server-b')).toBe(JSON.stringify({
+      projects: workspace.projects ?? [],
+      categories: workspace.categories ?? [],
+      sessions: workspace.sessions ?? [],
+      activeSessionId: workspace.activeSessionId ?? null,
+    }))
   })
 })

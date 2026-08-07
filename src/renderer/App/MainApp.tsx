@@ -312,14 +312,23 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       const savedCategories = categories
         .filter(category => category.serverId === targetServerId)
         .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
-      const sliceFingerprint = JSON.stringify({ projects: savedProjects, categories: savedCategories, sessions: savedSessions })
+      const activeSessionIdForServer = allSessions.find(session => session.id === activeSessionId && session.serverId === targetServerId)?.authoritySessionId ?? null
+      // Fingerprint must match the recorded baseline EXACTLY (same shape, same
+      // fields) — a shape mismatch (e.g. omitting activeSessionId) makes the
+      // guard never match and the save loops forever.
+      const sliceFingerprint = JSON.stringify({
+        projects: savedProjects,
+        categories: savedCategories,
+        sessions: savedSessions,
+        activeSessionId: activeSessionIdForServer,
+      })
       if (sliceFingerprint === getBaselineFingerprint(targetServerId)) continue
 
       void saveAuthoritativeWorkspace(targetApi, targetServerId, {
         projects: savedProjects,
         categories: savedCategories,
         sessions: savedSessions,
-        activeSessionId: allSessions.find(session => session.id === activeSessionId && session.serverId === targetServerId)?.authoritySessionId ?? null,
+        activeSessionId: activeSessionIdForServer,
       }).catch(error => {
         if (!(error instanceof EnvironmentCacheInvalidatedError)) {
           console.error('Failed to save workspace:', error)

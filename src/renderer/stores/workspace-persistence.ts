@@ -51,7 +51,15 @@ export function getBaselineFingerprint(serverId: string): string | undefined {
 }
 
 function fingerprintWorkspace(workspace: Workspace): string {
-  return JSON.stringify(workspace)
+  // Normalize to the exact shape the save effect compares — explicit key order
+  // and fields, so a server-side representation difference can never make the
+  // guard mismatch (which would loop the save forever).
+  return JSON.stringify({
+    projects: workspace.projects ?? [],
+    categories: workspace.categories ?? [],
+    sessions: workspace.sessions ?? [],
+    activeSessionId: workspace.activeSessionId ?? null,
+  })
 }
 
 export function markAuthoritativeSaveSuppressed(serverId: string): void {
