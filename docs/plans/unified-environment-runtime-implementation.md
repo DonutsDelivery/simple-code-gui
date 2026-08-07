@@ -1094,10 +1094,26 @@ A user can run DonutCode on Linux and macOS, start a backend on either host, and
 - Second independent frontend profile pair (device B): PASS
 - **Revoke device A → A socket force-closed + device removed; device B WSS stays connected and authorized; host/operator token unaffected**: PASS — backend log `Revoked device { tokens: 1 }` → `WebSocket client disconnected (main)`.
 
+### Row C — Linux Electron → macOS packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `d663e9d` (Linux FE + Mac backend both built from it)
+- Frontend: Linux x64 packaged Electron (`dist-build/linux-unpacked/donutcode`), scrubbed `env -i` + fresh `XDG_CONFIG_HOME`, `--frontend-only`
+- Backend: macOS arm64 packaged `donutcode-server` (`dist-build/mac-arm64/DonutCode.app/Contents/Resources/bin/donutcode-server`) on the Mac at `192.168.0.243:46546`
+- Transport: Mac reached over LAN via SSH key auth (installed `limeboy9@gmail.com` ed25519 in the Mac's `authorized_keys`); v1 protocol over expected-pin HTTPS + ticketed WSS
+- serverId `cba9608217aa1d6b9cf1c8ea042b6efc` stable across backend restart
+- Cross-host pairing (offer paste → Approve → host approval via machine-token decrypt over SSH): PASS
+- Keyring credential + FE restart reload (same profile): PASS
+- **Backend-owned session cross-host**: hermes PTY spawned by the Mac backend (`hermes --tui --yolo` child of `donutcode-server` on the Mac), cwd `/tmp/dc-rowc-proj` on the Mac — the Linux frontend host never launched a local harness
+- Ordered cross-host terminal I/O: Linux FE wrote to the Mac session → `acknowledgement.sequence: 1`
+- **Footer Harness switch cross-host**: `PTY backend switched { 1140e66b → 22014a50, backend: 'hermes' }` on the Mac backend log, old stream closed, new stream connected, renderer tab re-pointed + terminal re-registered, **zero rate-limit/reconnect errors** (reconnect-storm fix `9ad111c`)
+- **Backend `stop` with connected FE cross-host**: exits immediately (`WebSocket client disconnected (main)`)
+- Backend restart reconnect with same identity: PASS (0 new pairing requests, WSS re-established)
+- **Restart recovery cross-host (hermes tab)**: FE relaunch with same profile restored the hermes tab from the stale snapshot and re-spawned a fresh hermes PTY on the Mac (`Spawning hermes : hermes`) — harness restored correctly (fix `d663e9d`: restore now honors persisted `harnessId`; previously the stale tab re-spawned as claude and the server rejected the mismatched session)
+- Second profile pair + revocation isolation: shared same per-device revoke semantics as Rows A/B (code path exercised in Row B; not re-run cross-host)
+
 ### Remaining matrix rows
-- Linux Electron → macOS packaged backend
 - macOS Electron → Linux packaged backend
-- Concise two-host runbook
+- Concise two-host runbook (published: `docs/runbook-unified-runtime.md`)
 
 ---
 
