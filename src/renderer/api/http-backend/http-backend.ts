@@ -133,6 +133,10 @@ export class HttpBackend implements Api {
     this.ptyApi.killPty(id)
   }
 
+  setPtyBackend(id: string, backend: BackendId): Promise<void> {
+    return this.ptyApi.setPtyBackend(id, backend)
+  }
+
   writePty(id: string, data: string): void {
     this.ptyApi.writePty(id, data)
   }

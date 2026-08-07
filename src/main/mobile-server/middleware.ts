@@ -105,10 +105,13 @@ export function setupRateLimitMiddleware(app: Express): void {
     const rateLimit = checkRateLimit(clientIp)
 
     if (!rateLimit.allowed) {
-      return res.status(429).json({
-        error: 'Too many failed attempts. Please try again later.',
-        retryAfter: rateLimit.retryAfter
-      }).setHeader('Retry-After', String(rateLimit.retryAfter || 900))
+      return res
+        .setHeader('Retry-After', String(rateLimit.retryAfter || 900))
+        .status(429)
+        .json({
+          error: 'Too many failed attempts. Please try again later.',
+          retryAfter: rateLimit.retryAfter
+        })
     }
 
     next()
@@ -299,10 +302,13 @@ export function setupEndpointRateLimitMiddleware(app: Express): void {
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(result.resetIn / 1000)))
 
     if (!result.allowed) {
-      return res.status(429).json({
-        error: 'Too many requests. Please slow down.',
-        retryAfter: Math.ceil(result.resetIn / 1000)
-      }).setHeader('Retry-After', String(Math.ceil(result.resetIn / 1000)))
+      return res
+        .setHeader('Retry-After', String(Math.ceil(result.resetIn / 1000)))
+        .status(429)
+        .json({
+          error: 'Too many requests. Please slow down.',
+          retryAfter: Math.ceil(result.resetIn / 1000)
+        })
     }
 
     next()

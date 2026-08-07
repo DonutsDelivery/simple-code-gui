@@ -161,4 +161,44 @@ describe('PTY runtime authority routes', () => {
     expect(ptyManager.getProcess(responses[0].ptyId)).toBeUndefined()
     expect(router.getSnapshot().sessions[0].lifecycle).toBe('stopped')
   })
+
+  it('switches a live PTY to another harness and reports the replacement id', async () => {
+    const { baseUrl, ptyManager, router } = await startRoute()
+    const spawn = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectPath: '/tmp/donutcode-runtime-route-test',
+        sessionId: 'canonical-session',
+        agentSessionId: 'canonical-session',
+        backend: 'claude',
+      }),
+    }).then(response => response.json())
+
+    const switched = await fetch(`${baseUrl}/api/pty/${spawn.ptyId}/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'hermes' }),
+    }).then(response => response.json())
+
+    expect(switched).toMatchObject({ success: true, oldId: spawn.ptyId, backend: 'hermes' })
+    expect(switched.newId).not.toBe(spawn.ptyId)
+    // A harness change creates a distinct canonical session, not a resume.
+    expect(switched.sessionId).toBeUndefined()
+    expect(ptyManager.terminate).toHaveBeenCalledWith(spawn.ptyId)
+    expect(ptyManager.getProcess(switched.newId)).toBeTruthy()
+    expect(router.getSnapshot().sessions.map(s => s.harnessId)).toContain('hermes')
+
+    // Switching an unknown pty is rejected.
+    const missing = await fetch(`${baseUrl}/api/pty/nope/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'codex' }),
+    })
+    expect(missing.status).toBe(404)
+
+    // Unsupported harnesses are rejected.
+    const invalid = await fetch(`${baseUrl}/api/pty/${spawn.ptyId}/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'clippy' }),
+    })
+    expect(invalid.status).toBe(400)
+  })
 })

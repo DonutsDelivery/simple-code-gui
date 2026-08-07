@@ -204,6 +204,80 @@ export function setupPtyRoutes(
     }
   })
 
+  // Switch a PTY to another harness. Mirrors the desktop IPC
+  // (pty:set-backend): stop the old runtime, ensure a new runtime bound to the
+  // requested harness, then tell connected stream clients to re-attach. A
+  // harness change creates a distinct canonical session; the old runtime is
+  // stopped but its saved state remains under the original harness binding.
+  app.post('/api/pty/:id/backend', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params
+      const { backend } = req.body
+      const validBackends = ['claude', 'gemini', 'codex', 'opencode', 'aider', 'droid', 'hermes', 'grok']
+      if (typeof backend !== 'string' || !validBackends.includes(backend)) {
+        return res.status(400).json({ error: 'backend must be a supported harness' })
+      }
+
+      const ptyManager = getPtyManager()
+      const runtimeRegistry = getRuntimeRegistry()
+      if (!ptyManager || !runtimeRegistry) {
+        return res.status(500).json({ error: 'PTY manager not available' })
+      }
+
+      const process = ptyManager.getProcess(id)
+      if (!process) {
+        return res.status(404).json({ error: 'PTY not found' })
+      }
+
+      const { cwd, sessionId, backend: oldBackend } = process
+      const effectiveSessionId = oldBackend !== backend ? undefined : sessionId
+      const projectPath = cwd
+
+      installAgentSessionSignalInstructions(projectPath, backend as AIBackend)
+      await runtimeRegistry.stopRuntimeByPty(id)
+
+      const runtime = await runtimeRegistry.ensureRuntime({
+        nativeSessionId: effectiveSessionId,
+        projectId: projectPath,
+        harnessId: backend,
+      })
+      const newId = runtime.ptyId
+
+      // Wire the replacement PTY into the mobile-visible registry so its data
+      // and exit streams keep flowing to attached clients.
+      if (!getLocalPtys().has(newId)) {
+        const localPty: LocalPty = {
+          ptyId: newId,
+          projectPath,
+          dataCallbacks: new Set(),
+          exitCallbacks: new Set()
+        }
+        getLocalPtys().set(newId, localPty)
+        localPty.disposeExit = ptyManager.addExitListener(newId, (code: number) => {
+          log('PTY exited', { ptyId: newId, code })
+          broadcastPtyExit(newId, code)
+          getLocalPtys().delete(newId)
+        })
+      }
+
+      // Detach the old stream sockets: they are pointed at the stopped PTY.
+      // Clients re-attach against the replacement id.
+      const oldStreams = getPtyStreams().get(id)
+      if (oldStreams) {
+        for (const ws of oldStreams) {
+          if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'PTY recreated')
+        }
+        getPtyStreams().delete(id)
+      }
+
+      log('PTY backend switched', { oldId: id, newId, backend, projectPath })
+      res.json({ success: true, oldId: id, newId, backend, sessionId: effectiveSessionId })
+    } catch (error) {
+      log('PTY backend switch error', { error: String(error) })
+      res.status(500).json({ error: 'Internal server error' })
+    }
+  })
+
   // Detach a frontend. Pass ?stop=true only for an explicit host runtime stop.
   app.delete('/api/pty/:id', async (req: Request, res: Response) => {
     try {

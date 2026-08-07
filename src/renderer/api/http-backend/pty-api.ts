@@ -78,6 +78,39 @@ export class PtyApi {
     })
   }
 
+  /**
+   * Switch a live PTY to another harness on the Server. The Server stops the
+   * old runtime, creates a replacement bound to the requested harness, and
+   * returns the new pty id; local stream state is re-pointed so the open
+   * terminal keeps streaming. Mirrors the desktop IPC pty:set-backend.
+   */
+  async setPtyBackend(id: string, backend: BackendId): Promise<void> {
+    const result = await this.connection.fetchJson<{
+      success: boolean
+      oldId: string
+      newId: string
+      backend: BackendId
+      sessionId?: string
+    }>(`/api/pty/${encodeURIComponent(id)}/backend`, {
+      method: 'POST',
+      body: JSON.stringify({ backend }),
+    })
+    if (!result.success) throw new Error('Server rejected the harness switch')
+    if (result.newId !== id) {
+      // The old stream socket was closed by the Server; drop local state and
+      // notify renderers so tabs re-attach against the replacement pty.
+      this.wsManager.disconnectPtyStream(id)
+      this.attachedPtyIds.delete(id)
+      for (const cb of this.ptyRecreatedCallbacks) {
+        try {
+          cb({ oldId: result.oldId, newId: result.newId, backend: result.backend, sessionId: result.sessionId })
+        } catch (error) {
+          console.error('[HttpBackend] pty:recreated callback error:', error)
+        }
+      }
+    }
+  }
+
   writePty(id: string, data: string): void {
     // Prefer WebSocket if connected
     if (this.wsManager.sendToPty(id, { type: 'input', data })) {
