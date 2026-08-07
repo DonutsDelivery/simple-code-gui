@@ -61,7 +61,8 @@ import {
   setupTtsRoutes,
   setupProtocolRoutes,
   setupEnvironmentRoutes,
-  setupRepositoryRoutes
+  setupRepositoryRoutes,
+  setupArtifactRoutes
 } from './routes/index'
 import {
   setupWebSocket,
@@ -97,6 +98,8 @@ export class MobileServer {
   private sessionStore: any = null
   private voiceManager: any = null
   private repositoryRegistry: import('../repository-registry').RepositoryRegistry | null = null
+  private artifactStore: import('../artifact-store').ArtifactStore | null = null
+  private artifactSinks = new Map<string, import('../artifact-transfer').ArtifactUploadSink>()
 
   private localPtys: Map<string, LocalPty> = new Map()
   private pendingFiles: Map<string, PendingFile> = new Map()
@@ -281,6 +284,7 @@ export class MobileServer {
     setupWorkspaceRoutes(this.app, () => this.sessionStore, () => this.environmentRouter)
     setupEnvironmentRoutes(this.app, () => this.environmentRouter)
     setupRepositoryRoutes(this.app, () => this.repositoryRegistry, () => this.serverId)
+    setupArtifactRoutes(this.app, () => this.artifactStore, () => this.serverId, (clientKey) => this.getArtifactSink(clientKey))
 
     setupFilesRoutes(
       this.app,
@@ -384,6 +388,25 @@ export class MobileServer {
 
   setRepositoryRegistry(registry: import('../repository-registry').RepositoryRegistry): void {
     this.repositoryRegistry = registry
+  }
+
+  setArtifactStore(store: import('../artifact-store').ArtifactStore): void {
+    this.artifactStore = store
+    // Drop any partial uploads from a previous run.
+    this.artifactSinks.clear()
+  }
+
+  /** Get (or lazily create) the upload sink for a client key. */
+  private getArtifactSink(clientKey: string): import('../artifact-transfer').ArtifactUploadSink | null {
+    const store = this.artifactStore
+    if (!store) return null
+    let sink = this.artifactSinks.get(clientKey)
+    if (!sink) {
+      const { ArtifactUploadSink } = require('../artifact-transfer') as typeof import('../artifact-transfer')
+      sink = new ArtifactUploadSink(store, { stagingDir: store.stagingDirFor(clientKey) })
+      this.artifactSinks.set(clientKey, sink)
+    }
+    return sink
   }
 
   setVoiceManager(manager: any): void {

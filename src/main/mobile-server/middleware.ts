@@ -210,6 +210,11 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
     return method === 'GET' ? 'read' : 'write'
   }
 
+  // Artifact reads are read-only; publish/upload/download/expire are writes
+  if (path.startsWith('/api/artifacts')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
   // Project add needs write access
   if (path === '/api/project/add') {
     return 'write'

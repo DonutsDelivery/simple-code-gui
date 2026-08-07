@@ -6,6 +6,7 @@ import { getOrCreateFingerprint } from './mobile-security/index.js'
 import { MobileServer } from './mobile-server.js'
 import { PtyManager } from './pty-manager.js'
 import { configureRuntimePaths } from './runtime-paths.js'
+import { ArtifactStore } from './artifact-store.js'
 import { RepositoryRegistry } from './repository-registry.js'
 import { SessionRuntimeRegistry } from './session-runtime-registry.js'
 import { SessionStore } from './session-store.js'
@@ -42,6 +43,7 @@ export class EnvironmentRuntime {
   readonly environmentRouter: EnvironmentCommandRouter
   readonly runtimeRegistry: SessionRuntimeRegistry
   readonly repositoryRegistry: RepositoryRegistry
+  readonly artifactStore: ArtifactStore
   readonly server: MobileServer
 
   private started = false
@@ -73,6 +75,7 @@ export class EnvironmentRuntime {
     )
     this.runtimeRegistry = new SessionRuntimeRegistry(this.ptyManager, this.environmentRouter)
     this.repositoryRegistry = new RepositoryRegistry(this.dataDir, this.serverId)
+    this.artifactStore = new ArtifactStore({ dataDir: this.dataDir })
     this.server = new MobileServer({
       host: options.host ?? (this.sessionStore.getSettings().mobileAccessEnabled ? '0.0.0.0' : '127.0.0.1'),
       port: options.port,
@@ -86,6 +89,7 @@ export class EnvironmentRuntime {
     this.server.setSessionStore(this.sessionStore)
     this.server.setEnvironmentRouter(this.environmentRouter)
     this.server.setRepositoryRegistry(this.repositoryRegistry)
+    this.server.setArtifactStore(this.artifactStore)
     if (options.voiceManager) this.server.setVoiceManager(options.voiceManager)
   }
 
