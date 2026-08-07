@@ -260,14 +260,12 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   // Save workspace when state changes
   useEffect(() => {
     if (loading) return
-    // The authoritative event/catch-up/snapshot path marks this flag when it
-    // applied a server state to the store (MainApp's handler AND the
-    // runtime-connections subscriber both flow through it). Consume it so the
-    // server's own echo does not bounce a redundant save back (save loop).
-    // Suppression is per-server: an authoritative apply for one server must
-    // not suppress a genuine local state change for another connected server.
-    if (consumeAuthoritativeSaveSuppression(serverId)) return
-
+    // The authoritative event/catch-up/snapshot path marks a per-server flag
+    // when it applied that server's state to the store (MainApp's handler AND
+    // the runtime-connections subscriber both flow through it). Consume it per
+    // target server so the server's own echo does not bounce a redundant save
+    // back (save loop) — without letting one server's authoritative apply
+    // suppress a genuine local state change for another connected server.
     const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
     if (projects.length === 0 && hadProjects) {
       console.warn('Skipping save: projects empty but previously had projects (likely hot reload)')
@@ -287,6 +285,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     const connectedIds = getConnectedServerIds()
     const serverIds = connectedIds.includes(serverId) ? connectedIds : [...connectedIds, serverId]
     for (const targetServerId of serverIds) {
+      if (consumeAuthoritativeSaveSuppression(targetServerId)) continue
       const targetApi = targetServerId === serverId ? api : getApi(targetServerId)
       if (!targetApi) continue
       const targetProtocol = targetApi.getServerProtocol?.()
