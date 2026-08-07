@@ -34,6 +34,8 @@ export function Sidebar({
   onOpenMobileConnect,
   onTranscription,
   onDisconnect,
+  getApiForServer,
+  defaultHarnessId,
 }: SidebarProps): React.ReactElement | null {
   // Mobile detection
   const { isMobile } = useIsMobile()
@@ -48,6 +50,8 @@ export function Sidebar({
     onOpenSession,
     onSwitchToTab,
     onUpdateProject,
+    getApiForServer,
+    defaultHarnessId,
   })
 
   // Initialize effects
@@ -95,6 +99,8 @@ export function Sidebar({
         sessions={state.sessions[project.path] || []}
         dropTarget={state.dropTarget}
         editInputRef={state.editInputRef}
+        harnessId={state.harnessByProject[project.path] || state.getEffectiveHarness(project.path)}
+        onHarnessChange={(harnessId) => state.setHarnessForProject(project.path, harnessId)}
         onToggleExpand={(e) => callbacks.handleProjectToggleExpand(e, project.path)}
         onOpenSession={(options) =>
           callbacks.handleProjectOpenSession(project.path, { ...options, serverId: project.serverId })

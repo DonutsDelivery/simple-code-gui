@@ -1,5 +1,6 @@
 import { Project } from '../../stores/workspace.js'
 import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
+import type { BackendId, Session } from '../../api/types'
 
 export interface ClaudeSession {
   sessionId: string
@@ -45,6 +46,11 @@ export interface SidebarProps {
   onTranscription: (text: string) => void
   // Mobile disconnect
   onDisconnect?: () => void     // Disconnects from desktop host (mobile only)
+  // Multi-server: resolve the API for a project's origin server so session
+  // discovery and spawning run on the connected server.
+  getApiForServer?: (serverId: string) => { discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]> } | null | undefined
+  // Global default harness from settings, used when no per-project override exists.
+  defaultHarnessId?: string
 }
 
 export interface ProjectSettingsModalState {

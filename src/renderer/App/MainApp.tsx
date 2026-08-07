@@ -440,6 +440,8 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
             setTimeout(() => tabApi.writePty(ptyId, '\r'), 100)
           }}
           onDisconnect={onDisconnect}
+          getApiForServer={getApiForServer}
+          defaultHarnessId={settings?.defaultHarnessId ?? settings?.backend ?? 'default'}
         />
 
         {/* Mobile: each terminal as its own slide */}

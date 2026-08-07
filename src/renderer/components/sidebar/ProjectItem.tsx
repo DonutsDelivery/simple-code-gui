@@ -56,10 +56,11 @@ export const ProjectItem = React.memo(function ProjectItem({
   onEditingChange,
   onRenameSubmit,
   onRenameKeyDown,
-}: ProjectItemProps) {
+  harnessId,
+  onHarnessChange,
+}: ProjectItemProps & { harnessId?: string; onHarnessChange?: (harnessId: string) => void }) {
   const connections = useConnectionsStore(state => state.connections)
   const [newServerId, setNewServerId] = React.useState(project.serverId)
-  const [newHarnessId, setNewHarnessId] = React.useState(project.backend && project.backend !== 'default' ? project.backend : 'claude')
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
 
@@ -74,7 +75,7 @@ export const ProjectItem = React.memo(function ProjectItem({
         onDragStart={(e) => {
           // Carry the sidebar's selected harness with the drag so dropped
           // sessions spawn with it instead of falling back to claude.
-          e.dataTransfer.setData('application/x-sidebar-harness', newHarnessId)
+          e.dataTransfer.setData('application/x-sidebar-harness', harnessId || 'claude')
           onDragStart(e)
         }}
         onDragEnd={onDragEnd}
@@ -159,7 +160,11 @@ export const ProjectItem = React.memo(function ProjectItem({
           </label>
           <label className="session-launch-option">
             Harness
-            <select value={newHarnessId} onClick={event => event.stopPropagation()} onChange={event => setNewHarnessId(event.target.value)}>
+            <select
+              value={harnessId || 'claude'}
+              onClick={event => event.stopPropagation()}
+              onChange={event => onHarnessChange?.(event.target.value)}
+            >
               {['claude', 'hermes', 'codex', 'gemini', 'opencode', 'aider', 'droid', 'grok'].map(harness => (
                 <option key={harness} value={harness}>{harness}</option>
               ))}
@@ -169,7 +174,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             className="session-item new-session"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenSession({ forceNewSession: true, serverId: newServerId, harnessId: newHarnessId as OpenSessionOptions['harnessId'] })
+              onOpenSession({ forceNewSession: true, serverId: newServerId, harnessId: (harnessId || 'claude') as OpenSessionOptions['harnessId'] })
             }}
           >
             <span>+</span>
