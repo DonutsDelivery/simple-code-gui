@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { Api } from '../api'
+import { getApi } from '../api'
 import type { BackendId } from '../api/types'
 import type { OpenTab } from '../stores/workspace'
 
@@ -54,13 +55,16 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
       const claimedSessions = new Set(openTabs.filter(t => t.sessionId).map(t => t.sessionId!))
       const sessionDiscoveryCache = new Map<string, Awaited<ReturnType<Api['discoverSessions']>>>()
 
-      const discoverSessionsForTab = async (tab: OpenTab) => {
-        const effectiveBackend = (tab.backend || 'claude') as BackendId
+      const discoverSessionsForTab = async (tab: OpenTab, effectiveBackend: BackendId) => {
         const key = `${effectiveBackend}\0${tab.projectPath}`
         const cached = sessionDiscoveryCache.get(key)
         if (cached) return cached
 
-        const sessions = await api.discoverSessions(tab.projectPath, effectiveBackend)
+        // Discover on the tab's ORIGIN server, not the active one — a tab may
+        // live on a paired remote server while another server is active.
+        const originApi = tab.serverId ? getApi(tab.serverId) : null
+        const tabApi = originApi ?? api
+        const sessions = await tabApi.discoverSessions(tab.projectPath, effectiveBackend)
         sessionDiscoveryCache.set(key, sessions)
         return sessions
       }
@@ -68,7 +72,8 @@ export function useSessionPolling({ api, projects, openTabs, updateTab }: UseSes
       try {
         await Promise.all(openTabs.map(async (tab) => {
           try {
-            const discovered = await discoverSessionsForTab(tab)
+            const effectiveBackend = (tab.backend || 'claude') as BackendId
+            const discovered = await discoverSessionsForTab(tab, effectiveBackend)
             const tabCwd = tab.projectPath.replace(/[/\\]+$/, '')
             const sessions = discovered.filter(session =>
               (session.cwd || tab.projectPath).replace(/[/\\]+$/, '') === tabCwd
