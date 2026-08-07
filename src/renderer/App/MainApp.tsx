@@ -33,7 +33,7 @@ import {
   useAgentNotifications,
   useProjectHandlers,
 } from '../hooks'
-import { getApi, type Api } from '../api'
+import { getApi, getConnectedServerIds, type Api } from '../api'
 import { InstallationPrompt } from './InstallationPrompt'
 import { MobileConnectModal } from './MobileConnectModal'
 import { ConnectionsModal } from '../components/ConnectionsModal'
@@ -265,8 +265,6 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     // runtime-connections subscriber both flow through it). Consume it so the
     // server's own echo does not bounce a redundant save back (save loop).
     if (consumeAuthoritativeSaveSuppression()) return
-    const protocol = api.getServerProtocol?.()
-    if (protocol && !protocol.capabilities.workspaceWrite) return
 
     const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
     if (projects.length === 0 && hadProjects) {
@@ -278,30 +276,47 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       sessionStorage.setItem('hadProjects', 'true')
     }
 
+    // Save the workspace slice of every connected server, not just the active
+    // one. Sessions can be created on a paired remote server while another
+    // server is active (sidebar project click carries the origin serverId);
+    // without a per-server save those sessions never persist to their server
+    // and the next authoritative snapshot wipes the tab.
     const allSessions = useWorkspaceStore.getState().sessions
-    const savedSessions = serializeSessionsForSave(allSessions, serverId)
-    const serverPrefix = `${serverId}\0`
-    const toAuthorityId = (id: string): string => id.startsWith(serverPrefix) ? id.slice(serverPrefix.length) : id
-    const savedProjects = projects
-      .filter(project => project.serverId === serverId)
-      .map(({ serverId: _serverId, ...project }) => ({
-        ...project,
-        categoryId: project.categoryId ? toAuthorityId(project.categoryId) : undefined,
-      }))
-    const savedCategories = categories
-      .filter(category => category.serverId === serverId)
-      .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
+    const connectedIds = getConnectedServerIds()
+    const serverIds = connectedIds.includes(serverId) ? connectedIds : [...connectedIds, serverId]
+    for (const targetServerId of serverIds) {
+      const targetApi = targetServerId === serverId ? api : getApi(targetServerId)
+      if (!targetApi) continue
+      const targetProtocol = targetApi.getServerProtocol?.()
+      if (targetProtocol && !targetProtocol.capabilities.workspaceWrite) continue
+      const hasContent = projects.some(project => project.serverId === targetServerId)
+        || allSessions.some(session => session.serverId === targetServerId)
+      if (!hasContent) continue
 
-    void saveAuthoritativeWorkspace(api, serverId, {
-      projects: savedProjects,
-      categories: savedCategories,
-      sessions: savedSessions,
-      activeSessionId: allSessions.find(session => session.id === activeSessionId && session.serverId === serverId)?.authoritySessionId ?? null,
-    }).catch(error => {
-      if (!(error instanceof EnvironmentCacheInvalidatedError)) {
-        console.error('Failed to save workspace:', error)
-      }
-    })
+      const savedSessions = serializeSessionsForSave(allSessions, targetServerId)
+      const serverPrefix = `${targetServerId}\0`
+      const toAuthorityId = (id: string): string => id.startsWith(serverPrefix) ? id.slice(serverPrefix.length) : id
+      const savedProjects = projects
+        .filter(project => project.serverId === targetServerId)
+        .map(({ serverId: _serverId, ...project }) => ({
+          ...project,
+          categoryId: project.categoryId ? toAuthorityId(project.categoryId) : undefined,
+        }))
+      const savedCategories = categories
+        .filter(category => category.serverId === targetServerId)
+        .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
+
+      void saveAuthoritativeWorkspace(targetApi, targetServerId, {
+        projects: savedProjects,
+        categories: savedCategories,
+        sessions: savedSessions,
+        activeSessionId: allSessions.find(session => session.id === activeSessionId && session.serverId === targetServerId)?.authoritySessionId ?? null,
+      }).catch(error => {
+        if (!(error instanceof EnvironmentCacheInvalidatedError)) {
+          console.error('Failed to save workspace:', error)
+        }
+      })
+    }
   }, [api, serverId, projects, openTabs, activeTabId, loading, activeTileTree, categories, sessions, activeSessionId])
 
   // Workspace switcher handlers
