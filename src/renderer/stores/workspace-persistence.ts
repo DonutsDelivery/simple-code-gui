@@ -24,18 +24,23 @@ interface EnvironmentPersistenceState {
  * not bounce a redundant replace-workspace back — which would emit another
  * event and loop forever (observed ~50 commands/sec).
  *
- * A counter, not a boolean: both subscribers may apply the same snapshot in
- * separate microtask ticks, and each effect run must be suppressed once.
+ * A counter per server (not a single global boolean): both subscribers may
+ * apply the same snapshot in separate microtask ticks, each effect run must
+ * be suppressed once, and the save effect iterates every connected server —
+ * an authoritative apply for server A must not suppress a genuine local state
+ * change for server B.
  */
-let suppressAuthoritativeSave = 0
+const suppressAuthoritativeSaveByServer = new Map<string, number>()
 
-export function markAuthoritativeSaveSuppressed(): void {
-  suppressAuthoritativeSave += 1
+export function markAuthoritativeSaveSuppressed(serverId: string): void {
+  suppressAuthoritativeSaveByServer.set(serverId, (suppressAuthoritativeSaveByServer.get(serverId) ?? 0) + 1)
 }
 
-export function consumeAuthoritativeSaveSuppression(): boolean {
-  if (suppressAuthoritativeSave > 0) {
-    suppressAuthoritativeSave -= 1
+export function consumeAuthoritativeSaveSuppression(serverId: string): boolean {
+  const count = suppressAuthoritativeSaveByServer.get(serverId) ?? 0
+  if (count > 0) {
+    if (count === 1) suppressAuthoritativeSaveByServer.delete(serverId)
+    else suppressAuthoritativeSaveByServer.set(serverId, count - 1)
     return true
   }
   return false
@@ -84,6 +89,7 @@ export function getEnvironmentCursor(serverId: string): EnvironmentCursor | null
 
 export function resetEnvironmentPersistenceForTests(): void {
   environmentPersistenceByServer.clear()
+  suppressAuthoritativeSaveByServer.clear()
 }
 
 export function observeEnvironmentRevision(serverId: string, revision: number): boolean {
@@ -101,7 +107,7 @@ export async function loadAuthoritativeWorkspace(api: Api, serverId: string): Pr
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
-  markAuthoritativeSaveSuppressed()
+  markAuthoritativeSaveSuppressed(serverId)
   return snapshot.workspace
 }
 
@@ -127,7 +133,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     && eventSnapshot.revision === event.revision
   ) {
     cacheEnvironmentSnapshot(eventSnapshot)
-    markAuthoritativeSaveSuppressed()
+    markAuthoritativeSaveSuppressed(serverId)
     return eventSnapshot
   }
 
@@ -139,7 +145,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     if (snapshot) {
       assertServerIdentity(serverId, snapshot.serverId, 'Environment catch-up')
       cacheEnvironmentSnapshot(snapshot)
-      markAuthoritativeSaveSuppressed()
+      markAuthoritativeSaveSuppressed(serverId)
       return snapshot
     }
   }
@@ -148,7 +154,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
-  markAuthoritativeSaveSuppressed()
+  markAuthoritativeSaveSuppressed(serverId)
   return snapshot
 }
 

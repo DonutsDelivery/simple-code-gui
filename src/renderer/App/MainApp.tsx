@@ -264,7 +264,9 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     // applied a server state to the store (MainApp's handler AND the
     // runtime-connections subscriber both flow through it). Consume it so the
     // server's own echo does not bounce a redundant save back (save loop).
-    if (consumeAuthoritativeSaveSuppression()) return
+    // Suppression is per-server: an authoritative apply for one server must
+    // not suppress a genuine local state change for another connected server.
+    if (consumeAuthoritativeSaveSuppression(serverId)) return
 
     const hadProjects = sessionStorage.getItem('hadProjects') === 'true' || hadProjectsRef.current
     if (projects.length === 0 && hadProjects) {

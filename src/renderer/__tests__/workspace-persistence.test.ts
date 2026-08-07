@@ -2,7 +2,9 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import {
   EnvironmentCacheInvalidatedError,
   cacheEnvironmentSnapshot,
+  consumeAuthoritativeSaveSuppression,
   getEnvironmentCursor,
+  markAuthoritativeSaveSuppressed,
   resetEnvironmentPersistenceForTests,
   resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
@@ -311,5 +313,19 @@ describe('authoritative workspace persistence', () => {
     })
     expect(() => saveAuthoritativeWorkspace(wrongApi, 'server-a', workspace))
       .toThrow('expected server-a')
+  })
+
+  it('scopes authoritative-save suppression per server', () => {
+    // An authoritative apply for server-a must not suppress a genuine state
+    // change for server-b (multi-server: pairing/attach applies each server's
+    // snapshot independently, while the save effect iterates every server).
+    markAuthoritativeSaveSuppressed('server-a')
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(true)
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(false)
+
+    markAuthoritativeSaveSuppressed('server-a')
+    expect(consumeAuthoritativeSaveSuppression('server-b')).toBe(false)
+    // server-a's pending suppression survives a probe of server-b.
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(true)
   })
 })
