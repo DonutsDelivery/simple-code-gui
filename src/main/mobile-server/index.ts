@@ -104,6 +104,11 @@ export class MobileServer {
   private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
   private useTls: boolean
   private certFingerprint: string = ''
+  /** Raw TCP sockets accepted by the HTTP(S) server. `server.close()` waits
+   * for every open socket (including upgraded WebSockets) before its callback
+   * fires, so stop() would hang forever while a frontend is connected unless
+   * these are forcibly destroyed. */
+  private sockets = new Set<import('net').Socket>()
   private readonly pairingCode = `${randomInt(1000, 10_000)}-${randomInt(1000, 10_000)}`
   private readonly pairingSigningKeys = loadOrCreatePairingSigningKeyPair()
   private readonly pairingRequests = new PairingRequestStore()
@@ -527,6 +532,11 @@ export class MobileServer {
       this.setupWebSocket()
       startNonceCleanup()
 
+      this.server.on('connection', (socket) => {
+        this.sockets.add(socket)
+        socket.on('close', () => this.sockets.delete(socket))
+      })
+
       this.rateLimitCleanupInterval = setInterval(() => {
         cleanupEndpointRateLimits()
       }, 2 * 60 * 1000)
@@ -584,12 +594,24 @@ export class MobileServer {
     }
 
     if (this.wss) {
+      // Terminate open WebSocket sessions so the HTTP server can actually
+      // finish closing. `server.close()` waits for every open socket; an idle
+      // frontend connection would otherwise block stop() indefinitely.
+      for (const client of this.wss.clients) {
+        try { client.terminate() } catch { /* already closed */ }
+      }
       this.wss.close()
       this.wss = null
     }
     if (this.server) {
       const server = this.server
       this.server = null
+      // Destroy tracked sockets (keep-alive HTTP connections that never
+      // upgraded) so server.close()'s callback fires instead of waiting forever.
+      for (const socket of this.sockets) {
+        try { socket.destroy() } catch { /* already closed */ }
+      }
+      this.sockets.clear()
       await new Promise<void>(resolve => server.close(() => resolve()))
     }
     log('Stopped')
