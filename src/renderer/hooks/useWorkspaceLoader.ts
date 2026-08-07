@@ -75,8 +75,10 @@ export async function spawnSessionTabs(
       let projectPathToRestore = savedTab.projectPath
 
       const projectForTab = projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
-      const savedBackend = savedTab.backend && savedTab.backend !== 'default'
-        ? savedTab.backend
+      // Tabs are persisted with `harnessId` (normalizeTabForSave strips the
+      // `backend` field and writes `harnessId: backend`), so honor both names.
+      const savedBackend = (savedTab.backend ?? savedTab.harnessId) && (savedTab.backend ?? savedTab.harnessId) !== 'default'
+        ? (savedTab.backend ?? savedTab.harnessId)
         : undefined
       let effectiveBackend = (savedBackend
         || (projectForTab?.backend && projectForTab.backend !== 'default'
