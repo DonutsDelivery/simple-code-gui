@@ -15,12 +15,15 @@ export function setupAppConfig(): void {
   app.commandLine.appendSwitch('enable-gpu-rasterization')
   app.commandLine.appendSwitch('enable-zero-copy')
 
-  // Configure crash reporter for packaged builds
-  if (app.isPackaged) {
+  // Configure crash reporter for packaged builds. Only start the handler when
+  // a real collection endpoint is configured: an empty submitURL makes the
+  // local crashpad handler stall the main process on some Linux setups, and
+  // there is nothing to upload anyway.
+  if (app.isPackaged && process.env.DONUTCODE_CRASH_SUBMIT_URL) {
     crashReporter.start({
       productName: DONUTCODE_APP_NAME,
-      submitURL: '', // Set to crash collection server URL when available
-      uploadToServer: false // Enable when submitURL is configured
+      submitURL: process.env.DONUTCODE_CRASH_SUBMIT_URL,
+      uploadToServer: true,
     })
   }
 }
