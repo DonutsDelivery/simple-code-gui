@@ -65,4 +65,105 @@ describe('authoritative workspace cache', () => {
     expect(state.sessions[1].openTabs[0]).toMatchObject({ serverId: 'server-a', id: 'server-a\0new-pty', authorityTabId: 'new-pty', sessionId: 'agent-1' })
     expect(state.attentionByTabId).toEqual({ ['server-old\0old-pty']: 'completed', ['server-a\0new-pty']: 'needs-input' })
   })
+
+  it('preserves unsaved local tabs and sessions when the snapshot predates them', () => {
+    // A local session was created (ensureSessionForServer) and a tab added
+    // (addTab) before the authoritative snapshot that lacks both — e.g. the
+    // snapshot comes from a save issued before the tab landed, or from the
+    // runtime registry's create-session/attach-session commits. The apply must
+    // not wipe them; the next save effect run persists them.
+    useWorkspaceStore.setState({
+      projects: [{ serverId: 'server-a', path: '/repo', name: 'Canonical' }],
+      categories: [],
+      sessions: [{
+        serverId: 'server-a',
+        authoritySessionId: 'local-session',
+        id: 'server-a\0local-session',
+        name: 'Local',
+        openTabs: [{ serverId: 'server-a', authorityTabId: 'local-pty', id: 'server-a\0local-pty', ptyId: 'local-pty', projectPath: '/repo', title: 'Local tab' }],
+        activeTabId: 'server-a\0local-pty',
+        activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
+        isRestored: false,
+      }],
+      activeSessionId: 'server-a\0local-session',
+      openTabs: [{ serverId: 'server-a', authorityTabId: 'local-pty', id: 'server-a\0local-pty', ptyId: 'local-pty', projectPath: '/repo', title: 'Local tab' }],
+      activeTabId: 'server-a\0local-pty',
+      activeTileTree: null,
+      activeCanvasScene: createEmptyCanvasScene(),
+      activeView: 'tiles',
+      attentionByTabId: {},
+    })
+
+    useWorkspaceStore.getState().applyAuthoritativeWorkspace('server-a', {
+      projects: [{ path: '/repo', name: 'Canonical' }],
+      categories: [],
+      sessions: [],
+      activeSessionId: null,
+    })
+
+    const state = useWorkspaceStore.getState()
+    // The unsaved local session and its tab must survive the apply.
+    expect(state.sessions.find(session => session.serverId === 'server-a')?.id).toBe('server-a\0local-session')
+    expect(state.sessions.find(session => session.serverId === 'server-a')?.openTabs.map(tab => tab.authorityTabId)).toEqual(['local-pty'])
+    expect(state.sessions.find(session => session.serverId === 'server-a')?.isRestored).toBe(false)
+  })
+
+  it('merges local tabs into a session the snapshot does contain', () => {
+    useWorkspaceStore.setState({
+      projects: [{ serverId: 'server-a', path: '/repo', name: 'Canonical' }],
+      categories: [],
+      sessions: [{
+        serverId: 'server-a',
+        authoritySessionId: 'workspace-server',
+        id: 'server-a\0workspace-server',
+        name: 'Server workspace',
+        openTabs: [
+          { serverId: 'server-a', authorityTabId: 'new-pty', id: 'server-a\0new-pty', ptyId: 'new-pty', projectPath: '/repo', title: 'Canonical' },
+          { serverId: 'server-a', authorityTabId: 'local-pty', id: 'server-a\0local-pty', ptyId: 'local-pty', projectPath: '/repo', title: 'Local tab' },
+        ],
+        activeTabId: 'server-a\0new-pty',
+        activeTileTree: null,
+        canvasScene: createEmptyCanvasScene(),
+        activeView: 'tiles',
+        isRestored: true,
+      }],
+      activeSessionId: 'server-a\0workspace-server',
+      openTabs: [
+        { serverId: 'server-a', authorityTabId: 'new-pty', id: 'server-a\0new-pty', ptyId: 'new-pty', projectPath: '/repo', title: 'Canonical' },
+        { serverId: 'server-a', authorityTabId: 'local-pty', id: 'server-a\0local-pty', ptyId: 'local-pty', projectPath: '/repo', title: 'Local tab' },
+      ],
+      activeTabId: 'server-a\0new-pty',
+      activeTileTree: null,
+      activeCanvasScene: createEmptyCanvasScene(),
+      activeView: 'tiles',
+      attentionByTabId: {},
+    })
+
+    useWorkspaceStore.getState().applyAuthoritativeWorkspace('server-a', {
+      projects: [{ path: '/repo', name: 'Canonical' }],
+      categories: [],
+      sessions: [{
+        id: 'workspace-server',
+        name: 'Server workspace',
+        openTabs: [{
+          id: 'new-pty',
+          ptyId: 'new-pty',
+          projectPath: '/repo',
+          sessionId: 'agent-1',
+          title: 'Canonical session',
+          harnessId: 'hermes',
+        }],
+        activeTabId: 'new-pty',
+        activeView: 'tiles',
+      }],
+      activeSessionId: 'workspace-server',
+    })
+
+    const state = useWorkspaceStore.getState()
+    const session = state.sessions.find(session => session.serverId === 'server-a')
+    // The snapshot's canonical tab AND the unsaved local tab must both be present.
+    expect(session?.openTabs.map(tab => tab.authorityTabId).sort()).toEqual(['local-pty', 'new-pty'])
+  })
 })

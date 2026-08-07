@@ -223,6 +223,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   applyAuthoritativeWorkspace: (serverId, workspace) => {
     set((state) => {
+      const existingForServer = state.sessions.filter(session => session.serverId === serverId)
       const sessions: WorkspaceSession[] = (workspace.sessions ?? []).map((saved) => {
         const tabIdMapping = new Map(saved.openTabs.map(tab => [tab.id, serverResourceKey(serverId, tab.id)]))
         const openTabs: OpenTab[] = saved.openTabs.map(tab => ({
@@ -233,6 +234,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           ptyId: tab.ptyId || tab.id,
           harnessId: tab.harnessId ?? tab.backend,
         }))
+        // Merge in local tabs the authoritative snapshot doesn't know about yet.
+        // These are unsaved renderer-side additions (e.g. addTab ran after the
+        // save that produced this snapshot, or the snapshot predates the tab);
+        // dropping them here would wipe a freshly opened tab before its save
+        // lands. The next save effect run persists them.
+        const authoritativeTabIds = new Set(openTabs.map(tab => tab.authorityTabId))
+        const existing = existingForServer.find(session => session.authoritySessionId === saved.id)
+        for (const tab of existing?.openTabs ?? []) {
+          const authorityTabId = tab.authorityTabId ?? tab.ptyId
+          if (authorityTabId && !authoritativeTabIds.has(authorityTabId)) {
+            openTabs.push(tab)
+            tabIdMapping.set(authorityTabId, tab.id)
+          }
+        }
         const savedTree = (saved.tileTree ?? null) as TileNode | null
         const activeTileTree = savedTree ? remapTabIds(savedTree, tabIdMapping) : null
         const generatedScene = generateCanvasScene(toCanvasTabs(openTabs), { tileTree: activeTileTree })
@@ -263,6 +278,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           isRestored: true,
         }
       })
+      // Preserve local sessions the authoritative snapshot doesn't have (freshly
+      // created via ensureSessionForServer and not yet saved); they persist on
+      // the next save effect run instead of being wiped by the apply.
+      const authoritativeSessionIds = new Set(sessions.map(session => session.authoritySessionId))
+      const unsavedLocalSessions = existingForServer.filter(session => !authoritativeSessionIds.has(session.authoritySessionId))
       const authoritativeActiveId = workspace.activeSessionId
         ? serverResourceKey(serverId, workspace.activeSessionId)
         : null
@@ -270,7 +290,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? authoritativeActiveId
         : sessions[0]?.id ?? null
       const siblingSessions = state.sessions.filter(session => session.serverId !== serverId)
-      const mergedSessions = [...siblingSessions, ...sessions]
+      const mergedSessions = [...siblingSessions, ...sessions, ...unsavedLocalSessions]
       const activeSessionId = state.activeSessionId && mergedSessions.some(session => session.id === state.activeSessionId)
         ? state.activeSessionId
         : serverActiveId

@@ -287,7 +287,14 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     const connectedIds = getConnectedServerIds()
     const serverIds = connectedIds.includes(serverId) ? connectedIds : [...connectedIds, serverId]
     for (const targetServerId of serverIds) {
-      if (consumeAuthoritativeSaveSuppression(targetServerId)) continue
+      // Drain the suppression flag (it can accumulate from authoritative
+      // applies), but don't skip on it alone: a genuine user change right
+      // after an authoritative apply — e.g. addTab after a PTY spawn, whose
+      // runtime-registry commits mark the server suppressed — must still save.
+      // The fingerprint check below is the real echo-loop guard: after an
+      // apply, the slice matches the recorded baseline and is skipped; a real
+      // change differs and saves.
+      consumeAuthoritativeSaveSuppression(targetServerId)
       const targetApi = targetServerId === serverId ? api : getApi(targetServerId)
       if (!targetApi) continue
       const targetProtocol = targetApi.getServerProtocol?.()
