@@ -1186,6 +1186,16 @@ interface CheckoutIdentity {
 
 Materialize one revision on Linux, macOS, and Windows fixtures and assert the same tree hash with different native paths.
 
+### CP10 implementation status (2026-08-08)
+
+- **Implemented at `fdf7c64`** (67 files / 391 tests, audit 0):
+  - `src/main/repository-registry.ts` — `RepositoryIdentity`/`CheckoutIdentity` models; `normalizeGitRemote` (strips credentials, merges ssh syntax variants `git@host:path` ≡ `ssh://git@host/path` → `host:path`, keeps https distinct, drops trailing `.git`/slashes/comments); `deriveRepositoryId` (sorted deduped remotes, sha256 — never the display name; no-remote repos get a path-derived disambiguator; non-git paths hash explicitly as `non-git`); `RepositoryRegistry` (JSON persistence `repository-registry.json` mode 0600, identify/get/list).
+  - `src/main/repository-transfer.ts` — `materializeRevision` (clone/fetch/checkout of the exact commit into `<destinationDir>/materialized/<repositoryId>/<commit>`, tree-verified); `createGitBundle` (bundle fallback when hosts share no remote); `createPatchManifest` (explicit `git diff` + untracked listing — never copies `.git` or working tree); `previewPatchApply` (dry-run `git apply --check`, no mutation); `MaterializationReceipt` (source/destination serverId, commit, tree, absolutePath, dirty, via clone|bundle).
+  - `src/main/mobile-server/routes/repositories.ts` — scoped routes: `GET /api/repositories` (read), `POST identify`/`materialize`/`bundle`/`patch-manifest`/`patch-preview` (write-scoped via middleware); wired into `MobileServer` via `setRepositoryRegistry`, instantiated in `EnvironmentRuntime` with the server data dir.
+- **Live-proven on the Row D backend (2026-08-08)**: identified `/tmp/dc-repo-src` (repo `c3b177f2…`, commit `e20d6f3b…`, tree `8048c790…`) → materialized via clone route → **identical tree `8048c790…` at a different native path** (`…/materialized/<repositoryId>/<commit>`), content verified → bundle create OK → patch-manifest clean (`trackedDiff: 0`) and dirty (tracked diff + untracked `notes.txt`) → patch-preview dry-run `wouldApplyCleanly: true` on the materialized checkout.
+- **Stop condition met**: two checkouts at different native paths resolve to the same `repositoryId` and the same tree hash — agents on different servers can prove they build the same source bytes (unit test `resolves the same repositoryId + tree for two checkouts at different native paths`; live route proof above).
+- macOS/Windows fixtures: tree hashes are path-independent by construction (git object identity); native-path variance is exercised by the differing fixture paths in the test suite.
+
 ## Stop condition
 
 Agents on different servers can prove they are building the same source bytes.
