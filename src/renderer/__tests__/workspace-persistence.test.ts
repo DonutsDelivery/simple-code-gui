@@ -4,6 +4,7 @@ import {
   cacheEnvironmentSnapshot,
   consumeAuthoritativeSaveSuppression,
   getBaselineFingerprint,
+  recordAuthoritativeBaseline,
   getEnvironmentCursor,
   loadAuthoritativeWorkspace,
   markAuthoritativeSaveSuppressed,
@@ -224,6 +225,28 @@ describe('authoritative workspace persistence', () => {
 
     expect(executeEnvironmentCommand).toHaveBeenCalledTimes(1)
     expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 5 })
+  })
+
+  it('retries once when a revision conflict came from runtime-registry commits (workspace content unchanged)', async () => {
+    // Baseline recorded from a prior successful save at revision 4.
+    cacheEnvironmentSnapshot({ serverId: 'server-a', revision: 4, workspace, sessions: [], ptys: [] })
+    recordAuthoritativeBaseline('server-a', workspace)
+
+    // First command attempt conflicts: the server's runtime registry advanced
+    // the revision (create/attach-session) without changing workspace content.
+    const getEnvironmentSnapshot = vi.fn()
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 6, workspace, sessions: [], ptys: [] })
+    const executeEnvironmentCommand = vi.fn()
+      .mockRejectedValueOnce(new Error('Expected environment revision 4, current revision is 6'))
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 7, replayed: false, events: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
+
+    await expect(saveAuthoritativeWorkspace(api, 'server-a', workspace)).resolves.toBeUndefined()
+
+    expect(executeEnvironmentCommand).toHaveBeenCalledTimes(2)
+    // Second attempt must carry the refreshed cursor.
+    expect(executeEnvironmentCommand.mock.calls[1][0].expectedRevision).toBe(6)
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 7 })
   })
 
   it('applies the next broadcast snapshot and catches up across an event gap', async () => {

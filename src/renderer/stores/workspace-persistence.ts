@@ -50,6 +50,10 @@ export function getBaselineFingerprint(serverId: string): string | undefined {
   return baselineFingerprintByServer.get(serverId)
 }
 
+function isRevisionConflict(error: unknown): boolean {
+  return error instanceof Error && /^Expected environment revision \d+, current revision is \d+$/.test(error.message)
+}
+
 function fingerprintWorkspace(workspace: Workspace): string {
   // Normalize to the exact shape the save effect compares — explicit key order
   // and fields, so a server-side representation difference can never make the
@@ -209,28 +213,47 @@ export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace
       cacheEnvironmentSnapshot(snapshot)
     }
     if (requestedEpoch !== state.epoch) throw new EnvironmentCacheInvalidatedError()
-    const cursor = state.cursor!
-    try {
-      const response = await api.executeEnvironmentCommand({
-        clientId: rendererClientId,
-        commandId: crypto.randomUUID(),
-        serverId,
-        expectedRevision: cursor.revision,
-        command: { type: 'replace-workspace', workspace },
-      })
-      assertServerIdentity(serverId, response.serverId, 'Environment command')
-      state.cursor = { serverId, revision: response.revision }
-      recordAuthoritativeBaseline(serverId, workspace)
-    } catch (error) {
-      // Never retry the stale full-workspace payload at a newer revision. Refresh
-      // the cursor and cache from the server's current snapshot so a later
-      // state change can save at the fresh revision (without this, a single
-      // conflict leaves the cursor stale forever and every save fails).
-      const snapshot = await api.getEnvironmentSnapshot()
-      assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
-      cacheEnvironmentSnapshot(snapshot)
-      state.cursor = { serverId, revision: snapshot.revision }
-      throw error
+
+    // The server's own runtime registry commits create-session/attach-session
+    // (and stop-session) as it spawns PTYs, advancing the revision without the
+    // renderer seeing it first. Those commits do NOT change workspace content
+    // (they write the top-level sessions array), so a revision conflict here is
+    // almost always that race — retry once at the freshly-read cursor. If the
+    // workspace content really changed under us, the retry conflicts again and
+    // we stop, preserving the "never replay a stale payload" guarantee.
+    let attempts = 0
+    for (;;) {
+      try {
+        const cursor = state.cursor!
+        const response = await api.executeEnvironmentCommand({
+          clientId: rendererClientId,
+          commandId: crypto.randomUUID(),
+          serverId,
+          expectedRevision: cursor.revision,
+          command: { type: 'replace-workspace', workspace },
+        })
+        assertServerIdentity(serverId, response.serverId, 'Environment command')
+        state.cursor = { serverId, revision: response.revision }
+        recordAuthoritativeBaseline(serverId, workspace)
+        break
+      } catch (error) {
+        if (attempts >= 1) throw error
+        attempts += 1
+        // Refresh the cursor from the server's current snapshot so subsequent
+        // saves work even if we stop here. Without this, a single conflict
+        // leaves the cursor stale forever and every later save fails.
+        const snapshot = await api.getEnvironmentSnapshot()
+        assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
+        cacheEnvironmentSnapshot(snapshot)
+        // Retry only for revision conflicts that came from the server's own
+        // runtime-registry commits (create/attach/stop-session advance the
+        // revision without touching workspace content). If the workspace
+        // CONTENT changed since our last successful save, another client wrote
+        // it — replaying our payload would clobber that write, so stop (never
+        // replay a stale payload).
+        if (!isRevisionConflict(error)) throw error
+        if (fingerprintWorkspace(snapshot.workspace) !== getBaselineFingerprint(serverId)) throw error
+      }
     }
   })
   state.saveQueue = operation.catch(() => undefined)
