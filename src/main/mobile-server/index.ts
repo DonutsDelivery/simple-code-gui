@@ -60,7 +60,8 @@ import {
   setupPtyRoutes,
   setupTtsRoutes,
   setupProtocolRoutes,
-  setupEnvironmentRoutes
+  setupEnvironmentRoutes,
+  setupRepositoryRoutes
 } from './routes/index'
 import {
   setupWebSocket,
@@ -95,6 +96,7 @@ export class MobileServer {
   private environmentRouter: EnvironmentCommandRouter | null = null
   private sessionStore: any = null
   private voiceManager: any = null
+  private repositoryRegistry: import('../repository-registry').RepositoryRegistry | null = null
 
   private localPtys: Map<string, LocalPty> = new Map()
   private pendingFiles: Map<string, PendingFile> = new Map()
@@ -278,6 +280,7 @@ export class MobileServer {
 
     setupWorkspaceRoutes(this.app, () => this.sessionStore, () => this.environmentRouter)
     setupEnvironmentRoutes(this.app, () => this.environmentRouter)
+    setupRepositoryRoutes(this.app, () => this.repositoryRegistry, () => this.serverId)
 
     setupFilesRoutes(
       this.app,
@@ -377,6 +380,10 @@ export class MobileServer {
         if (client.readyState === WebSocket.OPEN) client.send(message)
       }
     })
+  }
+
+  setRepositoryRegistry(registry: import('../repository-registry').RepositoryRegistry): void {
+    this.repositoryRegistry = registry
   }
 
   setVoiceManager(manager: any): void {

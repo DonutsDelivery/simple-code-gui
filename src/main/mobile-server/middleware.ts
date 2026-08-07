@@ -205,6 +205,11 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
     return method === 'GET' ? 'read' : 'write'
   }
 
+  // Repository identity reads are read-only; identify/materialize/bundle/patch are writes
+  if (path.startsWith('/api/repositories')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
   // Project add needs write access
   if (path === '/api/project/add') {
     return 'write'
