@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Api } from '../api'
+import { getApi, getConnectedServerIds } from '../api'
 import type { BackendId } from '../api/types'
 import type { AppSettings } from './useSettings'
 import type { TileNode } from '../components/tile-tree'
@@ -156,32 +157,44 @@ export function useApiListeners({
   const tileTreeRef = useRef(tileTree)
   tileTreeRef.current = tileTree
 
-  // Listen for PTY recreation events
+  // Listen for PTY recreation events on every connected server. A harness
+  // switch can target a non-active server (e.g. a project opened from a
+  // paired remote server while another server is active), so subscriptions
+  // must cover all connected apis, not just the active one.
   useEffect(() => {
-    const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
-      console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
-      // Match the tab by its raw server pty id. The recreation event carries
-      // the raw ptyId; tabs created from session-open use a composite
-      // renderer id (`serverId\0ptyId`) while API-created tabs use the raw id.
-      const tab = useWorkspaceStore.getState().openTabs.find(
-        (t) => t.serverId === serverId && (t.ptyId === oldId || t.authorityTabId === oldId || t.id === oldId)
-      )
-      if (tab) {
-        const isComposite = tab.id !== oldId
-        // Composite tabs embed the old pty id in their renderer id; rebuild
-        // the composite around the new pty id. Raw-id tabs become the new id.
-        const newTabId = isComposite ? serverResourceKey(serverId, newId) : newId
-        updateTab(tab.id, { id: newTabId, ptyId: newId, authorityTabId: newId, backend, sessionId })
-        // Update tile tree so tabIds stay in sync
-        if (tileTree) {
-          setTileTree(replaceTabIdInTree(tileTree, tab.id, newTabId))
+    const serverApis = getConnectedServerIds()
+      .map(serverId => ({ serverId, api: getApi(serverId) }))
+      .filter((entry): entry is { serverId: string; api: Api } => entry.api !== null)
+    if (!serverApis.some(entry => entry.serverId === serverId)) {
+      serverApis.push({ serverId, api })
+    }
+
+    const unsubscribes = serverApis.map(({ serverId: originServerId, api: originApi }) =>
+      originApi.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
+        console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
+        // Match the tab by its raw server pty id. The recreation event carries
+        // the raw ptyId; tabs created from session-open use a composite
+        // renderer id (`serverId\0ptyId`) while API-created tabs use the raw id.
+        const tab = useWorkspaceStore.getState().openTabs.find(
+          (t) => t.serverId === originServerId && (t.ptyId === oldId || t.authorityTabId === oldId || t.id === oldId)
+        )
+        if (tab) {
+          const isComposite = tab.id !== oldId
+          // Composite tabs embed the old pty id in their renderer id; rebuild
+          // the composite around the new pty id. Raw-id tabs become the new id.
+          const newTabId = isComposite ? serverResourceKey(originServerId, newId) : newId
+          updateTab(tab.id, { id: newTabId, ptyId: newId, authorityTabId: newId, backend, sessionId })
+          // Update tile tree so tabIds stay in sync
+          if (tileTree) {
+            setTileTree(replaceTabIdInTree(tileTree, tab.id, newTabId))
+          }
+          // If it was the active tab, update the active tab ID
+          if (useWorkspaceStore.getState().activeTabId === tab.id) {
+            setActiveTab(newTabId)
+          }
         }
-        // If it was the active tab, update the active tab ID
-        if (useWorkspaceStore.getState().activeTabId === tab.id) {
-          setActiveTab(newTabId)
-        }
-      }
-    })
-    return unsubscribe
-  }, [api, updateTab, setActiveTab, tileTree, setTileTree])
+      })
+    )
+    return () => unsubscribes.forEach(unsubscribe => unsubscribe())
+  }, [api, serverId, updateTab, setActiveTab, tileTree, setTileTree])
 }

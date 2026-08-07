@@ -4,6 +4,17 @@ import { useApiListeners } from './useApiListeners'
 import { useWorkspaceStore } from '../stores/workspace'
 import type { Api } from '../api'
 
+// The pty-recreated listener enumerates all connected servers via the api
+// registry; mock it so tests can exercise multi-server subscriptions.
+const apiRegistry: { ids: string[]; get: (serverId: string) => Api | null } = {
+  ids: [],
+  get: () => null,
+}
+vi.mock('../api', () => ({
+  getApi: (serverId: string) => apiRegistry.get(serverId),
+  getConnectedServerIds: () => apiRegistry.ids,
+}))
+
 const SERVER_ID = 'server-1'
 const RAW_OLD_PTY = 'old-raw-pty-id'
 const RAW_NEW_PTY = 'new-raw-pty-id'
@@ -130,5 +141,56 @@ describe('useApiListeners pty recreated', () => {
       sessionId: undefined,
     })
     expect(setActiveTab).toHaveBeenCalledWith(RAW_NEW_PTY)
+  })
+
+  it('subscribes pty recreated on every connected server, not just the active one', () => {
+    const REMOTE_PTY = 'remote-pty'
+    const NEW_REMOTE_PTY = 'remote-pty-2'
+    const REMOTE_SERVER = 'server-2'
+    useWorkspaceStore.setState({
+      openTabs: [
+        {
+          serverId: REMOTE_SERVER,
+          id: `${REMOTE_SERVER}\u0000${REMOTE_PTY}`,
+          ptyId: REMOTE_PTY,
+          projectPath: '/remote',
+          title: 'remote',
+        },
+      ],
+      activeTabId: null,
+    })
+    const updateTab = vi.fn()
+
+    let remoteCallback: ((e: { oldId: string; newId: string; backend: string; sessionId?: string }) => void) | null = null
+    const remoteApi = makeApi({
+      onPtyRecreated: vi.fn((cb: typeof remoteCallback) => {
+        remoteCallback = cb
+        return () => {}
+      }),
+    })
+    const activeApi = makeApi()
+    apiRegistry.ids = [SERVER_ID, REMOTE_SERVER]
+    apiRegistry.get = (serverId: string) => (serverId === REMOTE_SERVER ? remoteApi : activeApi)
+
+    renderHook(() => useApiListeners({
+      api: activeApi,
+      serverId: SERVER_ID,
+      projects: [],
+      settings: null,
+      addTab: vi.fn(),
+      updateTab,
+      setActiveTab: vi.fn(),
+      setTileTree: vi.fn(),
+      tileTree: null,
+      openTabs: useWorkspaceStore.getState().openTabs,
+    }))
+
+    // A switch on the REMOTE server (not the active one) must still re-point the tab.
+    remoteCallback!({ oldId: REMOTE_PTY, newId: NEW_REMOTE_PTY, backend: 'hermes' })
+    expect(updateTab).toHaveBeenCalledWith(`${REMOTE_SERVER}\u0000${REMOTE_PTY}`, expect.objectContaining({
+      id: `${REMOTE_SERVER}\u0000${NEW_REMOTE_PTY}`,
+      ptyId: NEW_REMOTE_PTY,
+      backend: 'hermes',
+    }))
   })
 })
