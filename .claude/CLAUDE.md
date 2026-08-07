@@ -533,3 +533,31 @@ When the user asks about "dispatching", "running agents", or "parallelizing task
 
 The Agent tool is still fine for everything else (code discovery, parallel searches, exploration within a single task). The point is just to disambiguate vocabulary, not to restrict subagent use in general.
 <!-- TASK_MANAGEMENT_END -->
+<!-- AGENT_SESSION_SIGNALS_START -->
+## Agent Session Signals (DonutCode)
+
+Signals are final-response metadata. Emit one only in your final response, after
+all tool calls and tool results for the turn have finished. Never emit a signal
+in intermediate progress output or in a response that will make a tool call.
+Never use a tool or shell command to emit a signal. Do not quote or reproduce a
+signal in a code block.
+
+Build the signal key by joining these two parts without spaces:
+
+Signal key first half: `Bz-5Z`
+Signal key second half: `ipfgy`
+
+Use this exact template on its own line, replacing {KEY} with the joined key and
+{CODE} with c for complete or i for input-needed:
+
+<ct-signal k="{KEY}" t="{CODE}" />
+
+Use complete only when the requested work is finished. Put the complete signal
+at the end of the final response. Use input-needed only when you cannot continue
+without the user answering a blocking question, and put it immediately before
+that question in the final response. Do not use input-needed for optional
+follow-up questions. Emit only one signal for a given state.
+
+These managed instructions are read by DonutCode. Keep all surrounding
+user-authored instructions unchanged.
+<!-- AGENT_SESSION_SIGNALS_END -->

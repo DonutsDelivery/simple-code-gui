@@ -30,11 +30,14 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     }
   }, [api])
 
-  // Backend change handler
+  // Backend change handler — must use the RAW server pty id, not the
+  // renderer-prefixed tab id (serverId\0ptyId), or the main-process registry
+  // cannot resolve the process and the switch silently no-ops.
   const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
     if (newBackend === 'default') return
-    api?.setPtyBackend?.(ptyId, newBackend)
-    window.electronAPI?.setPtyBackend?.(ptyId, newBackend)
+    const rawPtyId = (ptyId.includes('\0') ? ptyId.split('\0').pop() : ptyId) || ptyId
+    api?.setPtyBackend?.(rawPtyId, newBackend)
+    window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
   }, [api, ptyId])
 
   // Send backend-specific command

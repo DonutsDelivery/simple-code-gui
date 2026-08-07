@@ -103,13 +103,13 @@ export function useSessions({
 
   const handleOpenSession = useCallback(
     (projectPath: string, options: OpenSessionOptions = {}) => {
-      const { sessionId, slug, forceNewSession, resumeCwd } = options
+      const { sessionId, slug, forceNewSession, resumeCwd, harnessId } = options
       if (sessionId) {
         const discoveredCwd = resumeCwd ?? sessions[projectPath]?.find(session => session.sessionId === sessionId)?.cwd
-        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd })
+        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd, harnessId })
       } else if (forceNewSession) {
         // Explicit "New Session" click - always create a new session
-        onOpenSession(projectPath, { forceNewSession: true })
+        onOpenSession(projectPath, { forceNewSession: true, harnessId })
       } else {
         openMostRecentSession(projectPath)
       }

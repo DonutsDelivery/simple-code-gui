@@ -54,8 +54,23 @@ export function setPortableBinDirs(dirs: string[]): void {
   portableBinDirs = dirs
 }
 
+// Portable deps are shipped as x64 binaries (portable-deps.ts hardcodes
+// *-x64 URLs on every platform). Prepending an x64 node to the PATH of a
+// backend running on an arm64 host forces Rosetta for any node-driven
+// build step — e.g. Hermes's TUI build, whose esbuild ships only
+// darwin-arm64 — and that build then fails, killing the session. Only
+// prepend portable dirs whose architecture matches the host.
+function portableDirsMatchingHost(dirs: string[]): string[] {
+  const hostIsArm = process.arch === 'arm64' || process.arch === 'arm'
+  return dirs.filter(dir => {
+    const isX64Dir = /x64|x86_64/i.test(dir)
+    return !(hostIsArm && isX64Dir)
+  })
+}
+
 export function getEnhancedPathWithPortable(): string {
   const additionalPaths = getAdditionalPaths()
   const currentPath = process.env.PATH || ''
-  return [...portableBinDirs, ...additionalPaths, currentPath].join(PATH_SEP)
+  const matchingPortable = portableDirsMatchingHost(portableBinDirs)
+  return [...matchingPortable, ...additionalPaths, currentPath].join(PATH_SEP)
 }

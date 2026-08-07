@@ -40,7 +40,7 @@ interface TileTerminalProps {
   onFocusTab: (id: string) => void
   onSwitchSubTab: (leafId: string, tabId: string) => void
   onReorderSubTab: (leafId: string, tabId: string, toIndex: number) => void
-  onAddTab?: (projectPath: string, tileId: string) => void
+  onAddTab?: (projectPath: string, tileId: string, backend?: string) => void
   onDragStart: (e: React.DragEvent, tileId: string) => void
   onSubTabDragStart: (e: React.DragEvent, tabId: string, tileId: string) => void
   onDragEnd: () => void
@@ -145,8 +145,9 @@ export function TileTerminal({
     e.stopPropagation()
     e.preventDefault()
     const projectPath = tabs[0]?.projectPath
+    const backend = tabs[0]?.backend
     if (projectPath && onAddTab) {
-      onAddTab(projectPath, leafId)
+      onAddTab(projectPath, leafId, backend)
     }
   }, [tabs, onAddTab, leafId])
 
@@ -393,7 +394,10 @@ export function TileTerminal({
           >
             <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
               <Terminal
-                ptyId={tab.id}
+                // The server tracks PTYs by their raw id; tab.id is the
+                // renderer-scoped key (serverId\0ptyId) and would make the
+                // data stream lookup fail, leaving a blank terminal.
+                ptyId={tab.ptyId || tab.authorityTabId || tab.id}
                 isActive={tab.id === activeSubTabId}
                 theme={theme}
                 onFocus={() => onFocusTab(tab.id)}

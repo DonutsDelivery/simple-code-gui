@@ -189,8 +189,23 @@ export class PtyApi {
 
   onPtyRecreated(callback: PtyRecreatedCallback): Unsubscribe {
     this.ptyRecreatedCallbacks.add(callback)
+
+    // In Electron the backend switch is executed by the main process over
+    // IPC (pty:set-backend), which replies with a 'pty:recreated' event on
+    // the native bridge. Bridge that event into the HTTP-side callback set
+    // so the tile's pty id/backend stay in sync with the new runtime.
+    let unsubscribeBridge: (() => void) | null = null
+    if (window.electronAPI?.onPtyRecreated) {
+      unsubscribeBridge = window.electronAPI.onPtyRecreated((data) => {
+        for (const cb of this.ptyRecreatedCallbacks) {
+          try { cb(data) } catch (error) { console.error('[HttpBackend] pty:recreated callback error:', error) }
+        }
+      })
+    }
+
     return () => {
       this.ptyRecreatedCallbacks.delete(callback)
+      unsubscribeBridge?.()
     }
   }
 }

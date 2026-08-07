@@ -56,8 +56,14 @@ export class PtyWebSocketManager {
 
     const ws = new WebSocket(url, [`ticket-${ticket}`])
 
-    // Reuse existing state if available (preserves callbacks), otherwise create new
-    const state: PtyWebSocketState = existing || {
+    // Reuse the CURRENT state if available, otherwise create new. Note: the
+    // `existing` snapshot taken before the ticket fetch is deliberately NOT
+    // used here — the async ticket round-trip gives onPtyData/onPtyExit a
+    // window to register callbacks on a fresh state entry (created with
+    // ws:null), and reusing the stale snapshot would replace that entry with
+    // an empty one, silently losing the callbacks and leaving the terminal
+    // blank (data would buffer forever with no subscriber).
+    const state: PtyWebSocketState = this.ptyWebsockets.get(ptyId) || {
       ws,
       dataCallbacks: new Set(),
       exitCallbacks: new Set(),
@@ -67,7 +73,7 @@ export class PtyWebSocketManager {
     }
     // Update the WebSocket reference
     state.ws = ws
-    state.reconnectAttempts = existing?.reconnectAttempts || 0
+    state.reconnectAttempts = state.reconnectAttempts || 0
 
     ws.onopen = () => {
       console.log('[HttpBackend] PTY stream connected:', ptyId)

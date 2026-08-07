@@ -56,8 +56,8 @@ interface UseProjectHandlersReturn {
   handleAddProject: () => Promise<void>
   handleAddProjectsFromParent: () => Promise<void>
   handleOpenSession: (projectPath: string, options?: OpenSessionOptions) => Promise<void>
-  handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null) => Promise<void>
-  handleAddTabToTile: (projectPath: string, tileId: string) => Promise<void>
+  handleOpenSessionAtPosition: (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null, harnessId?: string) => Promise<void>
+  handleAddTabToTile: (projectPath: string, tileId: string, backend?: string) => Promise<void>
   handleCloseTab: (tabId: string) => void
   handleCloseProjectTabs: (projectPath: string) => void
   handleProjectCreated: (projectPath: string, projectName: string) => void
@@ -202,11 +202,11 @@ export function useProjectHandlers({
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
       const errorMsg = e?.message || String(e)
-      alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
+      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
     }
   }, [addTab, getApiForServer, openTabs, projects, serverId, setActiveTab, settings?.backend, setTileTree])
 
-  const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null) => {
+  const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null, harnessId?: string) => {
     const treeToUse = currentTree !== undefined ? currentTree : tileTreeRef.current
 
     if (!projectPath || projectPath === 'pending') {
@@ -215,11 +215,13 @@ export function useProjectHandlers({
     }
 
     const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
-    const effectiveBackend = (project?.backend && project.backend !== 'default'
-      ? project.backend
-      : (settings?.backend && settings.backend !== 'default'
-        ? settings.backend
-        : 'claude')) as BackendId
+    const effectiveBackend = (harnessId && harnessId !== 'default'
+      ? harnessId
+      : (project?.backend && project.backend !== 'default'
+        ? project.backend
+        : (settings?.backend && settings.backend !== 'default'
+          ? settings.backend
+          : 'claude'))) as BackendId
 
     const projectName = projectPath.split(/[/\\]/).pop() || projectPath
     const title = `${projectName} - New`
@@ -280,18 +282,19 @@ export function useProjectHandlers({
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
       const errorMsg = e?.message || String(e)
-      alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
+      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
     }
   }, [api, addTab, projects, openTabs, settings?.backend, setTileTree])
 
-  const handleAddTabToTile = useCallback(async (projectPath: string, tileId: string) => {
+  const handleAddTabToTile = useCallback(async (projectPath: string, tileId: string, backend?: string) => {
     const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
-    const effectiveBackend = (project?.backend && project.backend !== 'default'
-      ? project.backend
-      : (settings?.backend && settings.backend !== 'default'
-        ? settings.backend
-        : 'claude')) as BackendId
-
+    const effectiveBackend = (backend && backend !== 'default'
+      ? backend
+      : (project?.backend && project.backend !== 'default'
+        ? project.backend
+        : (settings?.backend && settings.backend !== 'default'
+          ? settings.backend
+          : 'claude'))) as BackendId
     const projectName = projectPath.split(/[/\\]/).pop() || projectPath
     const title = `${projectName} - New`
 
@@ -320,7 +323,7 @@ export function useProjectHandlers({
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
       const errorMsg = e?.message || String(e)
-      alert(`Failed to start Claude session:\n\n${errorMsg}\n\nPlease ensure Claude Code is installed and try restarting the application.`)
+      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
     }
   }, [api, addTab, projects, settings?.backend, setTileTree])
 

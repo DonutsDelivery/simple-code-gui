@@ -177,6 +177,12 @@ export class MobileServer {
       if (!this.pairingRequests.reject(req.params.requestId)) return res.status(409).json({ error: 'Pairing request cannot be rejected' })
       res.json({ rejected: true })
     })
+    this.app.get('/api/auth/devices', (_req: Request, res: Response) => {
+      res.json({ devices: this.listDevices() })
+    })
+    this.app.post('/api/auth/devices/:deviceId/revoke', (req: Request, res: Response) => {
+      res.json(this.revokeDevice(req.params.deviceId))
+    })
 
     // Health check (unauthenticated)
     this.app.get('/health', (req: Request, res: Response) => {
@@ -394,6 +400,15 @@ export class MobileServer {
 
   listDevices(): PairedDeviceInfo[] {
     return listDevicesFn()
+  }
+
+  /**
+   * Local-only credential for the renderer's embedded-server auto-connect.
+   * Never placed in URLs, QR payloads, or connection info (those intentionally
+   * carry an empty token); this value is delivered over IPC to the local UI.
+   */
+  getLocalToken(): string {
+    return this.token
   }
 
   listPairingRequests() {

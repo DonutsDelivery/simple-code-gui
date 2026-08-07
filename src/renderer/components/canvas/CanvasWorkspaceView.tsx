@@ -60,7 +60,7 @@ interface CanvasWorkspaceViewProps {
   onCloseTab: (id: string) => void
   onResumeTab?: (id: string) => Promise<void>
   onRenameTab: (id: string, title: string) => void
-  onDropProject?: (projectPath: string, point: CanvasPoint) => void
+  onDropProject?: (projectPath: string, point: CanvasPoint, harnessId?: string) => void
   api?: Api
   getApiForServer?: (serverId: string) => Api | undefined
   isWorkspaceActive?: boolean
@@ -288,7 +288,7 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
           <ErrorBoundary componentName={`Canvas terminal (${cardTitle})`}>
             <React.Suspense fallback={<div className="canvas-node__terminal-loading" aria-label="Loading terminal" />}>
               <LazyTerminal
-                ptyId={tab.id}
+                ptyId={tab.ptyId || tab.authorityTabId || tab.id}
                 isActive={workspaceActive && focused && detail === 'full'}
                 theme={theme}
                 onFocus={() => onActivate(tab.id)}
@@ -846,6 +846,7 @@ export function CanvasWorkspaceView({
   const handleCanvasDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
     const types = event.dataTransfer.types
     if (types.includes('application/x-sidebar-project') ||
+      types.includes('application/x-sidebar-harness') ||
       types.includes('application/x-subtab') ||
       types.includes('application/x-sidebar-session') ||
       types.includes('application/x-canvas-tab') ||
@@ -859,10 +860,11 @@ export function CanvasWorkspaceView({
     const surface = surfaceRef.current
     if (!surface) return
     const projectPath = event.dataTransfer.getData('application/x-sidebar-project')
+    const harnessId = event.dataTransfer.getData('application/x-sidebar-harness')
     const point = screenToWorld(eventPoint(event, surface), sceneRef.current.camera)
     if (projectPath) {
       event.preventDefault()
-      onDropProject?.(projectPath, point)
+      onDropProject?.(projectPath, point, harnessId || undefined)
       return
     }
 

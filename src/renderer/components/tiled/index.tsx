@@ -323,6 +323,7 @@ export function TiledTerminalView({
     e.preventDefault()
 
     const sidebarProjectPath = e.dataTransfer.getData('application/x-sidebar-project')
+    const sidebarHarness = e.dataTransfer.getData('application/x-sidebar-harness')
     const isSidebarDrag = e.dataTransfer.types.includes('application/x-sidebar-project')
     const isSubTabDrag = e.dataTransfer.types.includes('application/x-subtab')
     const textPlainData = e.dataTransfer.getData('text/plain')
@@ -344,8 +345,8 @@ export function TiledTerminalView({
     const projectPath = sidebarProjectPath || (isSidebarDrag ? textPlainData : null)
 
     if (projectPath && onOpenSessionAtPosition) {
-      console.log('[TiledDrop] sidebar drop → onOpenSessionAtPosition, zone:', dropZone?.type)
-      onOpenSessionAtPosition(projectPath, dropZone, containerSizeRef.current, tileTreeRef.current)
+      console.log('[TiledDrop] sidebar drop → onOpenSessionAtPosition, zone:', dropZone?.type, 'harness:', sidebarHarness)
+      onOpenSessionAtPosition(projectPath, dropZone, containerSizeRef.current, tileTreeRef.current, sidebarHarness)
       setDraggedSidebarProject(null)
       setDropTarget(null)
       setCurrentDropZone(null)

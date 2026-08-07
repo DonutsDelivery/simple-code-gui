@@ -87,15 +87,20 @@ export class WorkspaceApi {
   // Project Management
 
   async addProject(): Promise<string | null> {
-    // HTTP backend cannot open a native file dialog on the desktop
-    // Instead, mobile clients should browse/select paths differently
-    // This could be implemented via a file browser endpoint in the future
+    // Desktop renderers talk to the embedded backend over HTTP but can still
+    // open the native folder dialog through the preload bridge. Pure HTTP
+    // clients (mobile/browser) have no dialog and stay null.
+    if (window.electronAPI?.addProject) {
+      return window.electronAPI.addProject()
+    }
     console.warn('[HttpBackend] addProject() - Native dialogs not available via HTTP')
     return null
   }
 
   async addProjectsFromParent(): Promise<Array<{ path: string; name: string }> | null> {
-    // HTTP backend cannot open a native file dialog on the desktop
+    if (window.electronAPI?.addProjectsFromParent) {
+      return window.electronAPI.addProjectsFromParent()
+    }
     console.warn('[HttpBackend] addProjectsFromParent() - Native dialogs not available via HTTP')
     return null
   }

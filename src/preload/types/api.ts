@@ -193,7 +193,10 @@ export interface ElectronAPI {
     nonceExpires: number
     qrData: string
     pairingCode: string
+    secure?: boolean
+    certFingerprint?: string
   }>
+  mobileGetLocalToken: () => Promise<string>
   mobileRegenerateToken: () => Promise<{
     token: string
     url: string

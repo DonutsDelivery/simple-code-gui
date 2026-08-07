@@ -17,6 +17,30 @@ interface EnvironmentPersistenceState {
   epoch: number
 }
 
+/**
+ * Set when an authoritative server snapshot was just applied to the store.
+ * The workspace-save effect consumes this so that applying the server's own
+ * echo (including from a second subscriber such as runtime-connections) does
+ * not bounce a redundant replace-workspace back — which would emit another
+ * event and loop forever (observed ~50 commands/sec).
+ *
+ * A counter, not a boolean: both subscribers may apply the same snapshot in
+ * separate microtask ticks, and each effect run must be suppressed once.
+ */
+let suppressAuthoritativeSave = 0
+
+export function markAuthoritativeSaveSuppressed(): void {
+  suppressAuthoritativeSave += 1
+}
+
+export function consumeAuthoritativeSaveSuppression(): boolean {
+  if (suppressAuthoritativeSave > 0) {
+    suppressAuthoritativeSave -= 1
+    return true
+  }
+  return false
+}
+
 const environmentPersistenceByServer = new Map<string, EnvironmentPersistenceState>()
 const rendererClientId = `renderer-${crypto.randomUUID()}`
 
@@ -77,6 +101,7 @@ export async function loadAuthoritativeWorkspace(api: Api, serverId: string): Pr
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
+  markAuthoritativeSaveSuppressed()
   return snapshot.workspace
 }
 
@@ -102,6 +127,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     && eventSnapshot.revision === event.revision
   ) {
     cacheEnvironmentSnapshot(eventSnapshot)
+    markAuthoritativeSaveSuppressed()
     return eventSnapshot
   }
 
@@ -113,6 +139,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     if (snapshot) {
       assertServerIdentity(serverId, snapshot.serverId, 'Environment catch-up')
       cacheEnvironmentSnapshot(snapshot)
+      markAuthoritativeSaveSuppressed()
       return snapshot
     }
   }
@@ -121,6 +148,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
+  markAuthoritativeSaveSuppressed()
   return snapshot
 }
 

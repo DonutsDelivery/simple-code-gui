@@ -18,6 +18,7 @@ import {
   EnvironmentCacheInvalidatedError,
   resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
+  consumeAuthoritativeSaveSuppression,
   serializeSessionsForSave,
 } from '../stores/workspace-persistence'
 import { useVoice } from '../contexts/VoiceContext'
@@ -206,7 +207,6 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   const [showFileBrowser, setShowFileBrowser] = useState(false)
   const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const hadProjectsRef = useRef(false)
-  const suppressAuthoritativeSaveRef = useRef(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -220,7 +220,6 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       void resolveAuthoritativeEnvironmentEvent(api, serverId, event)
         .then((snapshot) => {
           if (!mounted || !snapshot) return
-          suppressAuthoritativeSaveRef.current = true
           applyAuthoritativeWorkspace(serverId, snapshot.workspace)
         })
         .catch(error => console.error('Failed to synchronize server environment:', error))
@@ -261,10 +260,11 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   // Save workspace when state changes
   useEffect(() => {
     if (loading) return
-    if (suppressAuthoritativeSaveRef.current) {
-      suppressAuthoritativeSaveRef.current = false
-      return
-    }
+    // The authoritative event/catch-up/snapshot path marks this flag when it
+    // applied a server state to the store (MainApp's handler AND the
+    // runtime-connections subscriber both flow through it). Consume it so the
+    // server's own echo does not bounce a redundant save back (save loop).
+    if (consumeAuthoritativeSaveSuppression()) return
     const protocol = api.getServerProtocol?.()
     if (protocol && !protocol.capabilities.workspaceWrite) return
 
@@ -343,12 +343,14 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
   }, [restoreSession, moveTabsToSession])
 
-  const handleDropProjectOnCanvas = useCallback(async (projectPath: string, point: CanvasPoint) => {
+  const handleDropProjectOnCanvas = useCallback(async (projectPath: string, point: CanvasPoint, harnessId?: string) => {
     const before = new Set(useWorkspaceStore.getState().openTabs.map(tab => tab.id))
     await handleOpenSessionAtPosition(
       projectPath,
       null,
-      { width: window.innerWidth, height: window.innerHeight }
+      { width: window.innerWidth, height: window.innerHeight },
+      undefined,
+      harnessId
     )
 
     const state = useWorkspaceStore.getState()
@@ -455,7 +457,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
             <div className="mobile-slide-content">
               <ErrorBoundary componentName={`Terminal (${tab.title || tab.id})`}>
                 <Terminal
-                  ptyId={tab.id}
+                  ptyId={tab.ptyId || tab.authorityTabId || tab.id}
                   isActive={true}
                   theme={currentTheme}
                   onFocus={() => setLastFocusedTabId(tab.id)}
@@ -473,7 +475,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         {/* Desktop */}
         {!isMobile && (
           <div className="main-content">
-            {claudeInstalled === false || gitBashInstalled === false ? (
+            {claudeInstalled === false && (settings?.defaultHarnessId ?? settings?.backend ?? 'default') === 'claude' ? (
               <InstallationPrompt
                 claudeInstalled={claudeInstalled}
                 npmInstalled={npmInstalled}

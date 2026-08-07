@@ -39,6 +39,9 @@ export function registerServerHandlers(
     return { enabled: next, running: mobileServer.isRunning() }
   })
   ipcMain.handle('mobile:getConnectionInfo', () => mobileServer.getConnectionInfo())
+  // Local-only: the embedded-server token for the renderer's auto-connect.
+  // Kept off connection-info/URLs; delivered over IPC to the app's own UI.
+  ipcMain.handle('mobile:getLocalToken', () => mobileServer.getLocalToken())
   ipcMain.handle('mobile:regenerateToken', () => {
     mobileServer.regenerateToken()
     return mobileServer.getConnectionInfo()

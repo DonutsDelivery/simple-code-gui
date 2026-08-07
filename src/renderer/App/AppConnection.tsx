@@ -5,6 +5,7 @@ import type { Api } from '../api'
 import { HttpBackend, isElectronEnvironment, setApi } from '../api'
 import { attachRuntimeConnection, disconnectRuntimeServer } from '../api/runtime-connections'
 import { useConnectionsStore } from '../stores/connections'
+import { trustServerEndpoint } from '../security/server-certificate-trust'
 
 const CONNECTION_STORAGE_KEY = 'donutcode-connection'
 const LEGACY_CONNECTION_STORAGE_KEY = 'claude-terminal-connection'
@@ -97,11 +98,27 @@ export function AppConnection(): React.ReactElement | null {
     }
     void getConnectionInfo()
       .then(async info => {
-        const localApi = new HttpBackend({ host: '127.0.0.1', port: info.port, token: info.token })
+        // The embedded backend serves HTTPS on loopback with a pinned cert.
+        // Trust it (same path as remote pairing), then connect over HTTPS so
+        // the auto-connect does not fall back to the pairing screen.
+        if (info.secure && info.certFingerprint) {
+          await trustServerEndpoint(`https://127.0.0.1:${info.port}`, info.certFingerprint)
+        }
+        // Connection info intentionally carries no token; fetch the local
+        // credential over IPC instead (never in URLs/QR payloads).
+        const localToken = window.electronAPI?.mobileGetLocalToken
+          ? await window.electronAPI.mobileGetLocalToken()
+          : info.token
+        const localApi = new HttpBackend({
+          host: '127.0.0.1',
+          port: info.port,
+          token: localToken,
+          secure: info.secure !== false,
+        })
         const result = await localApi.testConnection()
         if (cancelled) return
         if (!result.success) throw new Error(result.error || 'Local DonutCode Server connection failed')
-        await registerConnection(localApi, { host: '127.0.0.1', port: info.port, token: info.token })
+        await registerConnection(localApi, { host: '127.0.0.1', port: info.port, token: localToken })
       })
       .catch(error => {
         if (!cancelled) console.error('[App] Local server connection failed:', error)

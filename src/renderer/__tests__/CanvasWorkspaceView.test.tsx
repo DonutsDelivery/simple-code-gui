@@ -260,14 +260,14 @@ describe('CanvasWorkspaceView', () => {
     expect(moved.nodes[1].rect).toMatchObject({ x: 760, y: 0 })
 
     const projectTransfer = {
-      types: ['application/x-sidebar-project'],
+      types: ['application/x-sidebar-project', 'application/x-sidebar-harness'],
       dropEffect: 'none',
-      getData: (type: string) => type === 'application/x-sidebar-project' ? '/beta' : '',
+      getData: (type: string) => type === 'application/x-sidebar-project' ? '/beta' : (type === 'application/x-sidebar-harness' ? 'hermes' : ''),
     }
     const projectDrop = new MouseEvent('drop', { clientX: 200, clientY: 140, bubbles: true, cancelable: true })
     Object.defineProperty(projectDrop, 'dataTransfer', { value: projectTransfer })
     fireEvent(surface, projectDrop)
-    expect(onDropProject).toHaveBeenCalledWith('/beta', { x: 200, y: 140 })
+    expect(onDropProject).toHaveBeenCalledWith('/beta', { x: 200, y: 140 }, 'hermes')
   })
 
   // AC: @canvas-content-objects ac-2

@@ -71,7 +71,12 @@ export const ProjectItem = React.memo(function ProjectItem({
         className={`project-item ${isExpanded ? 'expanded' : ''} ${hasOpenTab ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''} ${project.color ? 'has-color' : ''} ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''}`}
         style={project.color ? { backgroundColor: `${project.color}20` } : undefined}
         draggable={!isEditing}
-        onDragStart={onDragStart}
+        onDragStart={(e) => {
+          // Carry the sidebar's selected harness with the drag so dropped
+          // sessions spawn with it instead of falling back to claude.
+          e.dataTransfer.setData('application/x-sidebar-harness', newHarnessId)
+          onDragStart(e)
+        }}
         onDragEnd={onDragEnd}
         onDragOver={onDragOver}
         onDrop={onDrop}

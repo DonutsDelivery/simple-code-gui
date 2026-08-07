@@ -39,6 +39,7 @@ export const miscHandlers = {
   mobileSetEnabled: (enabled: boolean): Promise<{ enabled: boolean; running: boolean }> =>
     ipcRenderer.invoke('mobile:setEnabled', enabled),
   mobileGetConnectionInfo: () => ipcRenderer.invoke('mobile:getConnectionInfo'),
+  mobileGetLocalToken: (): Promise<string> => ipcRenderer.invoke('mobile:getLocalToken'),
   mobileRegenerateToken: () => ipcRenderer.invoke('mobile:regenerateToken'),
   mobileIsRunning: () => ipcRenderer.invoke('mobile:isRunning'),
   mobileSendFile: (filePath: string, message?: string) => ipcRenderer.invoke('mobile:sendFile', filePath, message),

@@ -283,6 +283,15 @@ export function setupEndpointRateLimitMiddleware(app: Express): void {
     }
 
     const clientIp = getClientIp(req)
+
+    // The embedded desktop renderer and the pairing UI live on loopback and
+    // drive frequent workspace commands (project adds, tile changes). Rate
+    // limiting protects the host from LAN/remote abuse; loopback is the
+    // trusted local user, so exempt it from the per-endpoint budget.
+    if (classifyIp(clientIp) === 'localhost') {
+      return next()
+    }
+
     const result = checkEndpointRateLimit(clientIp, req.method, req.path)
 
     // Add rate limit headers
