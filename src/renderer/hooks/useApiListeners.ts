@@ -10,7 +10,7 @@ import {
   findLeafById,
   generateTileId,
 } from '../components/tile-tree'
-import { useWorkspaceStore, OpenTab, Project } from '../stores/workspace'
+import { useWorkspaceStore, OpenTab, Project, serverResourceKey } from '../stores/workspace'
 
 function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileNode {
   if (node.type === 'leaf') {
@@ -160,18 +160,25 @@ export function useApiListeners({
   useEffect(() => {
     const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
       console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
-      // Find the tab with the old ID
-      const tab = useWorkspaceStore.getState().openTabs.find((t) => t.serverId === serverId && t.id === oldId)
+      // Match the tab by its raw server pty id. The recreation event carries
+      // the raw ptyId; tabs created from session-open use a composite
+      // renderer id (`serverId\0ptyId`) while API-created tabs use the raw id.
+      const tab = useWorkspaceStore.getState().openTabs.find(
+        (t) => t.serverId === serverId && (t.ptyId === oldId || t.authorityTabId === oldId || t.id === oldId)
+      )
       if (tab) {
-        // Update the tab with the new ID and backend
-        updateTab(oldId, { id: newId, ptyId: newId, backend, sessionId })
+        const isComposite = tab.id !== oldId
+        // Composite tabs embed the old pty id in their renderer id; rebuild
+        // the composite around the new pty id. Raw-id tabs become the new id.
+        const newTabId = isComposite ? serverResourceKey(serverId, newId) : newId
+        updateTab(tab.id, { id: newTabId, ptyId: newId, authorityTabId: newId, backend, sessionId })
         // Update tile tree so tabIds stay in sync
         if (tileTree) {
-          setTileTree(replaceTabIdInTree(tileTree, oldId, newId))
+          setTileTree(replaceTabIdInTree(tileTree, tab.id, newTabId))
         }
         // If it was the active tab, update the active tab ID
-        if (useWorkspaceStore.getState().activeTabId === oldId) {
-          setActiveTab(newId)
+        if (useWorkspaceStore.getState().activeTabId === tab.id) {
+          setActiveTab(newTabId)
         }
       }
     })
