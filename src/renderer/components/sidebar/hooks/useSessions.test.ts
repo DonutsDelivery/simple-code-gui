@@ -65,4 +65,22 @@ describe('useSessions multi-server discovery', () => {
     // repo-b: project backend hermes wins over the global default
     expect(result.current.getEffectiveHarness('/repo-b')).toBe('hermes')
   })
+
+  it('threads the project origin serverId through session open on a remote project', async () => {
+    const discoverSessions = vi.fn(async () => [])
+    const onOpenSession = vi.fn()
+    const { result } = renderHook(() => useSessions({
+      projects,
+      openTabs: [],
+      onOpenSession,
+      onSwitchToTab: vi.fn(),
+      getApiForServer: (serverId: string) => (serverId === 'server-2' ? { discoverSessions } as any : null),
+    }))
+
+    // Clicking a project on server-2 (no explicit options) opens a new session
+    // and must carry server-2 so the spawn does not fall back to the active server.
+    await act(async () => { await result.current.handleOpenSession('/repo-b') })
+    expect(discoverSessions).toHaveBeenCalledWith('/repo-b', 'hermes')
+    expect(onOpenSession).toHaveBeenCalledWith('/repo-b', expect.objectContaining({ serverId: 'server-2' }))
+  })
 })

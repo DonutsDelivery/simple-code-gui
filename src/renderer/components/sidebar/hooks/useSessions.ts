@@ -127,9 +127,10 @@ export function useSessions({
           sessionId: mostRecent.sessionId,
           slug: mostRecent.slug,
           resumeCwd: mostRecent.cwd,
+          serverId: project?.serverId,
         })
       } else {
-        onOpenSession(projectPath, { forceNewSession: true, harnessId: effectiveBackend as OpenSessionOptions['harnessId'] })
+        onOpenSession(projectPath, { forceNewSession: true, harnessId: effectiveBackend as OpenSessionOptions['harnessId'], serverId: project?.serverId })
       }
     },
     [openTabs, projects, sessions, onSwitchToTab, onOpenSession, getApiForServer, getEffectiveHarness]
@@ -137,18 +138,20 @@ export function useSessions({
 
   const handleOpenSession = useCallback(
     (projectPath: string, options: OpenSessionOptions = {}) => {
-      const { sessionId, slug, forceNewSession, resumeCwd, harnessId } = options
+      const { sessionId, slug, forceNewSession, resumeCwd, harnessId, serverId } = options
+      const project = projects.find((item) => item.path === projectPath)
+      const originServerId = serverId || project?.serverId
       if (sessionId) {
         const discoveredCwd = resumeCwd ?? sessions[projectPath]?.find(session => session.sessionId === sessionId)?.cwd
-        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd, harnessId })
+        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd, harnessId, serverId: originServerId })
       } else if (forceNewSession) {
         // Explicit "New Session" click - always create a new session
-        onOpenSession(projectPath, { forceNewSession: true, harnessId })
+        onOpenSession(projectPath, { forceNewSession: true, harnessId, serverId: originServerId })
       } else {
         openMostRecentSession(projectPath)
       }
     },
-    [onOpenSession, openMostRecentSession, sessions]
+    [onOpenSession, openMostRecentSession, sessions, projects]
   )
 
   return {
