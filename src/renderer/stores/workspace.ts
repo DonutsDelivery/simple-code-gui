@@ -127,6 +127,7 @@ interface WorkspaceState {
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
   addSession: (serverId: string, name?: string) => string
+  ensureSessionForServer: (serverId: string) => string
   removeSession: (id: string) => void
   renameSession: (id: string, name: string) => void
   reorderSessions: (id: string, toIndex: number) => void
@@ -351,6 +352,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeView: 'tiles',
     }))
     return id
+  },
+
+  ensureSessionForServer: (serverId) => {
+    const { sessions, activeSessionId } = get()
+    // Prefer the active session when it already belongs to the target server.
+    const active = sessions.find(s => s.id === activeSessionId)
+    if (active && active.serverId === serverId) return active.id
+    // Otherwise find-or-create a session owned by the target server and make
+    // it active. Tabs for a server must live in that server's session so the
+    // per-server workspace slice round-trips cleanly.
+    const existing = sessions.find(s => s.serverId === serverId)
+    if (existing) {
+      get().switchSession(existing.id)
+      return existing.id
+    }
+    return get().addSession(serverId)
   },
 
   removeSession: (id) => {

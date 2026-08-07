@@ -3,7 +3,9 @@ import {
   EnvironmentCacheInvalidatedError,
   cacheEnvironmentSnapshot,
   consumeAuthoritativeSaveSuppression,
+  getBaselineFingerprint,
   getEnvironmentCursor,
+  loadAuthoritativeWorkspace,
   markAuthoritativeSaveSuppressed,
   resetEnvironmentPersistenceForTests,
   resolveAuthoritativeEnvironmentEvent,
@@ -327,5 +329,32 @@ describe('authoritative workspace persistence', () => {
     expect(consumeAuthoritativeSaveSuppression('server-b')).toBe(false)
     // server-a's pending suppression survives a probe of server-b.
     expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(true)
+  })
+
+  it('records a baseline fingerprint on authoritative apply and save', async () => {
+    const getEnvironmentSnapshot = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot })
+
+    const loaded = await loadAuthoritativeWorkspace(api, 'server-a')
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify(loaded))
+
+    const executeEnvironmentCommand = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 1, result: { success: true }, replayed: false })
+    const api2 = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
+    await saveAuthoritativeWorkspace(api2, 'server-a', workspace)
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify(workspace))
+  })
+
+  it('keeps a per-server baseline when another server applies', async () => {
+    const getEnvironmentSnapshot = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot })
+    await loadAuthoritativeWorkspace(api, 'server-a')
+    const baselineA = getBaselineFingerprint('server-a')
+
+    const getEnvironmentSnapshotB = vi.fn().mockResolvedValue({ serverId: 'server-b', revision: 0, workspace, sessions: [], ptys: [] })
+    const apiB = identifiedApi('server-b', { getEnvironmentSnapshot: getEnvironmentSnapshotB })
+    await loadAuthoritativeWorkspace(apiB, 'server-b')
+
+    expect(getBaselineFingerprint('server-a')).toBe(baselineA)
+    expect(getBaselineFingerprint('server-b')).toBe(JSON.stringify(workspace))
   })
 })
