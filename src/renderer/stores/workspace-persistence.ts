@@ -32,6 +32,27 @@ interface EnvironmentPersistenceState {
  */
 const suppressAuthoritativeSaveByServer = new Map<string, number>()
 
+/**
+ * Serialized fingerprint of each server's workspace slice as last applied from
+ * an authoritative snapshot (or last saved). The save effect skips a server
+ * whose slice is unchanged — this stops the cross-server save ping-pong where
+ * server A's save echo re-triggers a redundant save of server B, whose echo
+ * re-triggers A, forever. A user mutation changes the slice and is saved once.
+ */
+const baselineFingerprintByServer = new Map<string, string>()
+
+export function recordAuthoritativeBaseline(serverId: string, workspace: Workspace): void {
+  baselineFingerprintByServer.set(serverId, fingerprintWorkspace(workspace))
+}
+
+export function getBaselineFingerprint(serverId: string): string | undefined {
+  return baselineFingerprintByServer.get(serverId)
+}
+
+function fingerprintWorkspace(workspace: Workspace): string {
+  return JSON.stringify(workspace)
+}
+
 export function markAuthoritativeSaveSuppressed(serverId: string): void {
   suppressAuthoritativeSaveByServer.set(serverId, (suppressAuthoritativeSaveByServer.get(serverId) ?? 0) + 1)
 }
@@ -90,6 +111,7 @@ export function getEnvironmentCursor(serverId: string): EnvironmentCursor | null
 export function resetEnvironmentPersistenceForTests(): void {
   environmentPersistenceByServer.clear()
   suppressAuthoritativeSaveByServer.clear()
+  baselineFingerprintByServer.clear()
 }
 
 export function observeEnvironmentRevision(serverId: string, revision: number): boolean {
@@ -107,6 +129,7 @@ export async function loadAuthoritativeWorkspace(api: Api, serverId: string): Pr
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
+  recordAuthoritativeBaseline(serverId, snapshot.workspace)
   markAuthoritativeSaveSuppressed(serverId)
   return snapshot.workspace
 }
@@ -133,6 +156,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     && eventSnapshot.revision === event.revision
   ) {
     cacheEnvironmentSnapshot(eventSnapshot)
+    recordAuthoritativeBaseline(serverId, eventSnapshot.workspace)
     markAuthoritativeSaveSuppressed(serverId)
     return eventSnapshot
   }
@@ -145,6 +169,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
     if (snapshot) {
       assertServerIdentity(serverId, snapshot.serverId, 'Environment catch-up')
       cacheEnvironmentSnapshot(snapshot)
+      recordAuthoritativeBaseline(serverId, snapshot.workspace)
       markAuthoritativeSaveSuppressed(serverId)
       return snapshot
     }
@@ -154,6 +179,7 @@ export async function resolveAuthoritativeEnvironmentEvent(
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
+  recordAuthoritativeBaseline(serverId, snapshot.workspace)
   markAuthoritativeSaveSuppressed(serverId)
   return snapshot
 }
@@ -185,6 +211,7 @@ export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace
       })
       assertServerIdentity(serverId, response.serverId, 'Environment command')
       state.cursor = { serverId, revision: response.revision }
+      recordAuthoritativeBaseline(serverId, workspace)
     } catch (error) {
       // Never retry the stale full-workspace payload at a newer revision. Refresh
       // only the disposable cursor/cache and let the caller reconcile explicitly.

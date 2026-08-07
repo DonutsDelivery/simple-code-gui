@@ -19,6 +19,7 @@ import {
   resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
   consumeAuthoritativeSaveSuppression,
+  getBaselineFingerprint,
   serializeSessionsForSave,
 } from '../stores/workspace-persistence'
 import { useVoice } from '../contexts/VoiceContext'
@@ -294,9 +295,13 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         || allSessions.some(session => session.serverId === targetServerId)
       if (!hasContent) continue
 
-      const savedSessions = serializeSessionsForSave(allSessions, targetServerId)
+      // Skip when the slice is unchanged from the last authoritative snapshot
+      // or save (cross-server save ping-pong guard): a save of server A echoes
+      // back as an authoritative apply, which would otherwise re-trigger a
+      // redundant save of server B, whose echo re-triggers A, forever.
       const serverPrefix = `${targetServerId}\0`
       const toAuthorityId = (id: string): string => id.startsWith(serverPrefix) ? id.slice(serverPrefix.length) : id
+      const savedSessions = serializeSessionsForSave(allSessions, targetServerId)
       const savedProjects = projects
         .filter(project => project.serverId === targetServerId)
         .map(({ serverId: _serverId, ...project }) => ({
@@ -306,6 +311,8 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       const savedCategories = categories
         .filter(category => category.serverId === targetServerId)
         .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
+      const sliceFingerprint = JSON.stringify({ projects: savedProjects, categories: savedCategories, sessions: savedSessions })
+      if (sliceFingerprint === getBaselineFingerprint(targetServerId)) continue
 
       void saveAuthoritativeWorkspace(targetApi, targetServerId, {
         projects: savedProjects,
