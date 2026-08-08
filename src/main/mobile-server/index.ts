@@ -62,7 +62,8 @@ import {
   setupProtocolRoutes,
   setupEnvironmentRoutes,
   setupRepositoryRoutes,
-  setupArtifactRoutes
+  setupArtifactRoutes,
+  setupCoordinationRoutes
 } from './routes/index'
 import {
   setupWebSocket,
@@ -101,6 +102,7 @@ export class MobileServer {
   private repositoryRegistry: import('../repository-registry').RepositoryRegistry | null = null
   private artifactStore: import('../artifact-store').ArtifactStore | null = null
   private artifactSinks = new Map<string, import('../artifact-transfer').ArtifactUploadSink>()
+  private coordinationRouter: import('../coordination-router').CoordinationRouter | null = null
 
   private localPtys: Map<string, LocalPty> = new Map()
   private pendingFiles: Map<string, PendingFile> = new Map()
@@ -286,6 +288,7 @@ export class MobileServer {
     setupEnvironmentRoutes(this.app, () => this.environmentRouter)
     setupRepositoryRoutes(this.app, () => this.repositoryRegistry, () => this.serverId)
     setupArtifactRoutes(this.app, () => this.artifactStore, () => this.serverId, (clientKey) => this.getArtifactSink(clientKey))
+    setupCoordinationRoutes(this.app, () => this.coordinationRouter)
 
     setupFilesRoutes(
       this.app,
@@ -395,6 +398,10 @@ export class MobileServer {
     this.artifactStore = store
     // Drop any partial uploads from a previous run.
     this.artifactSinks.clear()
+  }
+
+  setCoordinationRouter(router: import('../coordination-router').CoordinationRouter): void {
+    this.coordinationRouter = router
   }
 
   /** Get (or lazily create) the upload sink for a client key. */

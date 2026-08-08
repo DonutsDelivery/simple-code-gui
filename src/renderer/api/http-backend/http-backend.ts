@@ -179,6 +179,14 @@ export class HttpBackend implements Api {
     return this.workspaceApi.expireArtifact(artifactId)
   }
 
+  getCoordinationSnapshot() {
+    return this.workspaceApi.getCoordinationSnapshot()
+  }
+
+  sendCoordinationMessage(message: Record<string, unknown>) {
+    return this.workspaceApi.sendCoordinationMessage(message)
+  }
+
   // Workspace Management
 
   getWorkspace(): Promise<Workspace> {

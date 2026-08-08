@@ -7,6 +7,8 @@ import { MobileServer } from './mobile-server.js'
 import { PtyManager } from './pty-manager.js'
 import { configureRuntimePaths } from './runtime-paths.js'
 import { ArtifactStore } from './artifact-store.js'
+import { CoordinationRouter } from './coordination-router.js'
+import { CoordinationStore } from './coordination-store.js'
 import { RepositoryRegistry } from './repository-registry.js'
 import { SessionRuntimeRegistry } from './session-runtime-registry.js'
 import { SessionStore } from './session-store.js'
@@ -44,6 +46,8 @@ export class EnvironmentRuntime {
   readonly runtimeRegistry: SessionRuntimeRegistry
   readonly repositoryRegistry: RepositoryRegistry
   readonly artifactStore: ArtifactStore
+  readonly coordinationStore: CoordinationStore
+  readonly coordinationRouter: CoordinationRouter
   readonly server: MobileServer
 
   private started = false
@@ -76,6 +80,8 @@ export class EnvironmentRuntime {
     this.runtimeRegistry = new SessionRuntimeRegistry(this.ptyManager, this.environmentRouter)
     this.repositoryRegistry = new RepositoryRegistry(this.dataDir, this.serverId)
     this.artifactStore = new ArtifactStore({ dataDir: this.dataDir })
+    this.coordinationStore = new CoordinationStore(this.dataDir, this.serverId)
+    this.coordinationRouter = new CoordinationRouter(this.serverId, this.coordinationStore, this.runtimeRegistry)
     this.server = new MobileServer({
       host: options.host ?? (this.sessionStore.getSettings().mobileAccessEnabled ? '0.0.0.0' : '127.0.0.1'),
       port: options.port,
@@ -90,6 +96,7 @@ export class EnvironmentRuntime {
     this.server.setEnvironmentRouter(this.environmentRouter)
     this.server.setRepositoryRegistry(this.repositoryRegistry)
     this.server.setArtifactStore(this.artifactStore)
+    this.server.setCoordinationRouter(this.coordinationRouter)
     if (options.voiceManager) this.server.setVoiceManager(options.voiceManager)
   }
 

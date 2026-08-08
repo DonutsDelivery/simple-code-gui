@@ -215,6 +215,10 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
     return method === 'GET' ? 'read' : 'write'
   }
 
+  if (path.startsWith('/api/coordination')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
   // Project add needs write access
   if (path === '/api/project/add') {
     return 'write'
