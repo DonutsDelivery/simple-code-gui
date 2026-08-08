@@ -1314,6 +1314,13 @@ interface CoordinationMessage {
 
 A Linux coordinator assigns one exact tree to an existing macOS build session and a Windows test session. Both acknowledge once, materialize the tree, return platform-specific receipts and artifacts, and every connected frontend displays the same assignment state.
 
+### CP12 implementation status (2026-08-08)
+
+- **Implemented at `68fe56a`**: shared exact-address protocol, atomic JSON-backed coordination ledger, strict per-assignment sequence enforcement, message-id deduplication, durable assignment/progress/result/artifact receipts, supported runtime input delivery through `SessionRuntimeRegistry.writeInput`, authenticated read/write routes, renderer API methods, and `CoordinationPanel`.
+- **Automated verification**: 70 test files / 408 tests pass, including six focused coordination tests for exact delivery, dedupe, ordering, offline durability, authority rejection, and artifact receipt accumulation; production build passes; production dependency audit reports zero vulnerabilities.
+- **Live headless verification**: the Linux server accepted assignment `live-cp12-assignment` for exact recipient `1e31c0bc…/offline-worker-session`, persisted it while no frontend or worker was attached (`delivered=false`), returned `duplicate=true` without advancing revision on replay, and restored revision 1 / one message / requested assignment after a full backend restart.
+- **Native matrix limitation**: Linux↔macOS exact-session delivery can be exercised when the existing Mac build worker is running; no Windows native host is available in this environment. The product implementation is complete, but the three-host focused-check row remains an integrated-acceptance item rather than fabricated evidence.
+
 ## Stop condition
 
 Linux, Windows, and macOS agents coordinate durable work without sharing a native conversation or depending on an open GUI.
