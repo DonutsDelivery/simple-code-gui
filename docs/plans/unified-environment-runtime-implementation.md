@@ -1440,6 +1440,15 @@ npm run android:debug
 
 Run platform-native package commands only on their native hosts and record `(serverId, OS, source commit, artifact path, artifact hash)`.
 
+### Final runnable acceptance status (2026-08-08)
+
+- Final source: `ce40b78` on `feat/donutcode-unified-runtime`; all implementation and evidence commits are pushed.
+- Canonical commands pass from a clean tracked worktree: 72 test files / 413 tests, production build, Java 21 `android:debug`, and production dependency audit with zero vulnerabilities.
+- Android debug artifact: `android/app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `239cd6ced92fd13cdd24abcf033b5d24a141ba2d48390a5de1565f171268a582`.
+- Linux native service acceptance passes: install/enable/start, HTTPS health, stable identity across service restart, changed startup nonce, explicit logs, stop/disable/uninstall. Earlier checkpoint evidence also covers multi-frontend authority, exact Git-tree materialization, content-addressed artifact hash/resume, and durable coordination persistence/deduplication.
+- Apple Silicon Mac source is synchronized through the CP14 implementation. Renderer/mobile compilation and iOS asset/plugin copy pass. The remaining Xcode simulator/device row is blocked by missing CocoaPods plus system Ruby 2.6; current CocoaPods dependencies cannot be installed user-locally on that Ruby. Code-sign/notarization credentials are also unavailable.
+- No Windows host, Android emulator/device, iOS device, Android release keystore, or Apple signing/notarization credentials are available. Their native runtime/signature rows are explicitly unexecuted; no synthetic PASS is recorded. All implementation, fixture tests, deterministic packaging rails, and CI-native jobs that do not require those unavailable machines or credentials are complete.
+
 ## Definition of done
 
 - The product is visibly branded DonutCode, and legacy Simple Code GUI/Claude Terminal data and pairing records migrate without loss.
