@@ -1364,6 +1364,12 @@ Linux, Windows, and macOS agents coordinate durable work without sharing a nativ
 
 A clean checkout can produce a current, source-attributed, release-signed Android client that connects to multiple servers and observes the same canonical state as desktop clients.
 
+### CP13 implementation status (2026-08-08)
+
+- **Implemented at `d372d72`**: Capacitor CLI/runtime/platform aligned on 8.5.0; deterministic `mobile:sync`, `android:debug`, and externally signed `android:release` scripts; Android version name/code generated from `package.json`; Gradle release signing accepts only external keystore/password/alias inputs; template tests replaced by DonutCode package/version and real `MainActivity` launch smoke tests; native credentials use `@aparajita/capacitor-secure-storage` (Android Keystore-backed) with focused proof that localStorage is never called; release CI builds signed APK+AAB, records source commit and SHA-256 manifests, and uploads them without repository secrets.
+- **Local evidence**: `mobile:sync` completed against Capacitor 8.5.0; Java 21 Gradle `testDebugUnitTest assembleDebug` passed; debug APK produced at 28,264,104 bytes with SHA-256 `c419f1ce…`; 71 test files / 410 tests and production build pass; production dependency audit reports zero vulnerabilities.
+- **Signing/device limitation**: no Android release keystore, signing credentials, or attached emulator/device are available here. `android:release` intentionally exits 2 and names every missing external signing input instead of emitting an unsigned or debug-signed release. The instrumented launch/connection row and signed artifact hash remain native CI/device acceptance, not fabricated local evidence.
+
 ---
 
 # Checkpoint 14 — Add native service packaging and iOS client parity
