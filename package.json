@@ -29,6 +29,10 @@
     "cap:init": "cap init",
     "build:mobile": "electron-vite build",
     "cap:sync": "cap sync",
+    "mobile:version": "node scripts/sync-mobile-version.mjs",
+    "mobile:sync": "npm run build:mobile && npm run mobile:version && cap sync",
+    "android:debug": "npm run mobile:sync && cd android && ./gradlew clean assembleDebug",
+    "android:release": "npm run mobile:sync && node scripts/build-android-release.mjs",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios"
   },
@@ -37,7 +41,6 @@
     "@capacitor-mlkit/barcode-scanning": "^8.0.0",
     "@capacitor/android": "^8.0.1",
     "@capacitor/app": "^8.0.0",
-    "@capacitor/cli": "^7.4.5",
     "@capacitor/core": "^8.0.1",
     "@capacitor/ios": "^8.0.1",
     "@capacitor/preferences": "^8.0.0",
@@ -62,6 +65,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@types/cors": "^2.8.19",
