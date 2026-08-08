@@ -167,6 +167,18 @@ export class HttpBackend implements Api {
     return this.workspaceApi.discoverSessions(projectPath, backend)
   }
 
+  listArtifacts(filter?: { producerServerId?: string; kind?: string }) {
+    return this.workspaceApi.listArtifacts(filter)
+  }
+
+  downloadArtifact(artifactId: string) {
+    return this.workspaceApi.downloadArtifact(artifactId)
+  }
+
+  expireArtifact(artifactId: string) {
+    return this.workspaceApi.expireArtifact(artifactId)
+  }
+
   // Workspace Management
 
   getWorkspace(): Promise<Workspace> {

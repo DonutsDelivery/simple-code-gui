@@ -15,6 +15,7 @@ import {
 import { ConnectionManager } from './connection'
 import type { CommandEnvelope } from '../../../common/server-protocol.js'
 import type { EnvironmentCommandResult, EnvironmentEventsResult, EnvironmentSnapshot } from '../../../common/environment-protocol.js'
+import type { ArtifactManifest } from '../../../common/artifacts.js'
 import type { EnvironmentCommand } from '../../../main/environment-command-router.js'
 
 export class WorkspaceApi {
@@ -156,5 +157,32 @@ export class WorkspaceApi {
     return () => {
       this.apiOpenSessionCallbacks.delete(callback)
     }
+  }
+
+  // Artifacts (Checkpoint 11)
+
+  async listArtifacts(filter?: { producerServerId?: string; kind?: string }): Promise<ArtifactManifest[]> {
+    const params = new URLSearchParams()
+    if (filter?.producerServerId) params.set('producerServerId', filter.producerServerId)
+    if (filter?.kind) params.set('kind', filter.kind)
+    const query = params.toString()
+    const data = await this.connection.fetchJson<{ artifacts: ArtifactManifest[] }>(
+      `/api/artifacts${query ? `?${query}` : ''}`
+    )
+    return data.artifacts
+  }
+
+  async downloadArtifact(artifactId: string): Promise<{ filePath: string; sha256: string } | null> {
+    const response = await this.connection.fetch(`/api/artifacts/${encodeURIComponent(artifactId)}/download`)
+    if (!response.ok) return null
+    const blob = await response.blob()
+    const sha256 = response.headers.get('X-Artifact-Sha256') ?? ''
+    return { filePath: URL.createObjectURL(blob), sha256 }
+  }
+
+  async expireArtifact(artifactId: string): Promise<{ removed: boolean }> {
+    return this.connection.fetchJson<{ removed: boolean }>(`/api/artifacts/${encodeURIComponent(artifactId)}`, {
+      method: 'DELETE'
+    })
   }
 }

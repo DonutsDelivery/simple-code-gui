@@ -11,6 +11,7 @@ import type { ServerProtocolDescriptor } from '../../common/server-protocol.js'
 import type { CommandEnvelope, EventEnvelope } from '../../common/server-protocol.js'
 import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResult, EnvironmentSnapshot } from '../../common/environment-protocol.js'
 import type { EnvironmentCommand } from '../../main/environment-command-router.js'
+import type { ArtifactManifest } from '../../common/artifacts.js'
 export type {
   AgentSessionSignalEvent,
   AgentSessionSignalMessage,
@@ -339,6 +340,17 @@ export interface Api {
    * @param backend Optional backend type ('claude', 'gemini', 'codex', 'opencode', or 'aider')
    */
   discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]>
+
+  // ==========================================================================
+  // Artifacts (content-addressed store)
+  // ==========================================================================
+
+  /** List artifacts on the connected server (optional: absent on non-server backends). */
+  listArtifacts?: (filter?: { producerServerId?: string; kind?: string }) => Promise<ArtifactManifest[]>
+  /** Download an artifact's bytes; resolves to a local file path when the backend materializes it. */
+  downloadArtifact?: (artifactId: string) => Promise<{ filePath: string; sha256: string } | null>
+  /** Expire/delete an artifact. */
+  expireArtifact?: (artifactId: string) => Promise<{ removed: boolean }>
 
   // ==========================================================================
   // PTY Management

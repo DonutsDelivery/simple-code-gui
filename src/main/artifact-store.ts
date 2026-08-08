@@ -2,6 +2,9 @@ import { createHash } from 'crypto'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { createInterface } from 'readline'
 import { basename, join } from 'path'
+import type { ArtifactKind, ArtifactManifest } from '../common/artifacts.js'
+
+export type { ArtifactKind, ArtifactManifest } from '../common/artifacts.js'
 
 /**
  * Checkpoint 11 — content-addressed artifact store.
@@ -12,27 +15,7 @@ import { basename, join } from 'path'
  * the exact source bytes. Bytes are never auto-run on download.
  */
 
-export const ARTIFACT_KINDS = ['source', 'package', 'log', 'screenshot', 'test-report', 'cache'] as const
-export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
-
-export interface ArtifactManifest {
-  artifactId: string
-  sha256: string
-  size: number
-  filename: string
-  mediaType: string
-  producerServerId: string
-  repositoryId?: string
-  commit?: string
-  tree?: string
-  dirtyPatchId?: string
-  platform: string
-  architecture: string
-  buildCommand?: string
-  kind: ArtifactKind
-  createdAt: number
-  expiresAt?: number
-}
+export const ARTIFACT_KINDS: readonly ArtifactKind[] = ['source', 'package', 'log', 'screenshot', 'test-report', 'cache']
 
 export interface ArtifactStoreConfig {
   /** Server-owned data directory. Artifacts live in <dataDir>/artifacts/. */
