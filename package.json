@@ -33,6 +33,7 @@
     "mobile:sync": "npm run build:mobile && npm run mobile:version && cap sync",
     "android:debug": "npm run mobile:sync && cd android && ./gradlew clean assembleDebug",
     "android:release": "npm run mobile:sync && node scripts/build-android-release.mjs",
+    "ios:sync": "npm run mobile:sync",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios"
   },

@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { App as CapacitorApp } from '@capacitor/app'
 import { ConnectionScreen, type ConnectionConfig } from '../components/ConnectionScreen'
 import { MainApp } from './MainApp'
 import type { Api } from '../api'
 import { HttpBackend, isElectronEnvironment, setApi } from '../api'
-import { attachRuntimeConnection, disconnectRuntimeServer } from '../api/runtime-connections'
+import { attachRuntimeConnection, connectRuntimeServer, disconnectRuntimeServer } from '../api/runtime-connections'
 import { useConnectionsStore } from '../stores/connections'
 import { trustServerEndpoint } from '../security/server-certificate-trust'
 
@@ -128,6 +129,32 @@ export function AppConnection(): React.ReactElement | null {
       })
     return () => { cancelled = true }
   }, [isElectron, registerConnection])
+
+  // iOS suspends WebViews and networking while backgrounded. On foreground,
+  // perform one bounded health check and reconnect through the saved Keychain
+  // credential if needed; never run an unbounded background retry loop.
+  useEffect(() => {
+    if (!isCapacitor || !api) return
+    let removed = false
+    let listener: { remove: () => Promise<void> } | undefined
+    void CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
+      if (!isActive || removed) return
+      const result = await api.testConnection()
+      if (result.success) return
+      const serverId = api.getServerProtocol?.()?.serverId
+      if (!serverId) return
+      try {
+        const reconnected = await connectRuntimeServer(serverId)
+        if (!removed) setApiState(reconnected)
+      } catch (error) {
+        if (!removed) console.error('[App] Foreground reconnect failed:', error)
+      }
+    }).then(handle => { listener = handle })
+    return () => {
+      removed = true
+      void listener?.remove()
+    }
+  }, [api, isCapacitor])
 
   // Handle successful connection from ConnectionScreen
   const handleConnected = useCallback((connectedApi: HttpBackend, config: ConnectionConfig) => {

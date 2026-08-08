@@ -10,6 +10,8 @@ import {
 import { useConnectionsStore } from '../stores/connections.js'
 import type { ServerConnectionStatus } from '../api/connection-registry.js'
 import { PairServerDialog, type PairedServerResult } from './Connections/PairServerDialog.js'
+import { ArtifactPanel } from './Artifacts/ArtifactPanel.js'
+import { CoordinationPanel } from './Coordination/CoordinationPanel.js'
 
 export interface ConnectionsModalProps {
   activeServerId: string
@@ -22,6 +24,7 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
   const [pairing, setPairing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [serverTool, setServerTool] = useState<{ serverId: string; kind: 'artifacts' | 'coordination' } | null>(null)
 
   useEffect(() => { void hydrate() }, [hydrate])
   useEffect(() => {
@@ -109,6 +112,8 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
                     removeRuntimeServer(connection.serverId)
                     void remove(connection.serverId)
                   }}>Remove</button>
+                  {status.state === 'connected' && <button type="button" onClick={() => setServerTool({ serverId: connection.serverId, kind: 'artifacts' })}>Artifacts</button>}
+                  {status.state === 'connected' && <button type="button" onClick={() => setServerTool({ serverId: connection.serverId, kind: 'coordination' })}>Coordination</button>}
                 </div>
               </article>
             )
@@ -117,6 +122,13 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
             ? <PairServerDialog onCancel={() => setPairing(false)} onPaired={paired} />
             : <button type="button" disabled={busy} onClick={() => setPairing(true)}>Pair Server</button>}
           {error && <div role="alert">{error}</div>}
+          {serverTool && (() => {
+            const api = runtimeConnectionRegistry.get(serverTool.serverId)
+            const name = connections.find(connection => connection.serverId === serverTool.serverId)?.displayName
+            return serverTool.kind === 'artifacts'
+              ? <ArtifactPanel api={api} serverName={name} onClose={() => setServerTool(null)} />
+              : <CoordinationPanel api={api} serverName={name} onClose={() => setServerTool(null)} />
+          })()}
         </div>
       </section>
     </div>

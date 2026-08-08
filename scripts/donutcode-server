@@ -21,4 +21,5 @@ if [ ! -f "$ASAR" ]; then
 fi
 
 export ELECTRON_RUN_AS_NODE=1
+export DONUTCODE_SERVER_EXECUTABLE="$0"
 exec "$ELECTRON" "$ASAR/dist/main/server-cli.js" "$@"

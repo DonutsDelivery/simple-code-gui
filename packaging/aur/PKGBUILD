@@ -1,0 +1,31 @@
+pkgname=donutcode
+pkgver=1.3.58
+pkgrel=1
+pkgdesc='Distributed AI development workspace and headless server'
+arch=('x86_64')
+url='https://github.com/DonutsDelivery/simple-code-gui'
+license=('custom')
+depends=('nodejs' 'git' 'tmux')
+makedepends=('npm')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "simple-code-gui-$pkgver"
+  npm ci
+  npm run build
+}
+
+package() {
+  cd "simple-code-gui-$pkgver"
+  install -d "$pkgdir/usr/lib/donutcode" "$pkgdir/usr/bin" "$pkgdir/usr/lib/systemd/user" "$pkgdir/usr/share/licenses/$pkgname"
+  cp -a dist/main "$pkgdir/usr/lib/donutcode/"
+  cp package.json "$pkgdir/usr/lib/donutcode/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 packaging/systemd/donutcode-server.service "$pkgdir/usr/lib/systemd/user/donutcode-server.service"
+  cat > "$pkgdir/usr/bin/donutcode-server" <<'EOF'
+#!/bin/sh
+exec node /usr/lib/donutcode/main/server-cli.js --app-path /usr/lib/donutcode "$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/donutcode-server"
+}

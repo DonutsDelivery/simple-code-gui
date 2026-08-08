@@ -6,6 +6,7 @@ import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from './headless-s
 import { configureRuntimePaths } from './runtime-paths.js'
 import { loadOrCreateToken } from './mobile-server/token-manager.js'
 import { runtimeHttpRequest } from './runtime-http.js'
+import { installNativeService, nativeServiceInstalled, uninstallNativeService } from './native-service.js'
 
 interface ServeOptions {
   dataDir: string
@@ -51,7 +52,32 @@ function printUsage(): void {
   donutcode-server serve [--data-dir PATH] [--listen HOST] [--port PORT]
   donutcode-server status [--data-dir PATH]
   donutcode-server stop [--data-dir PATH]
+  donutcode-server service install|uninstall|status [--data-dir PATH] [--listen HOST] [--port PORT]
   donutcode-server pairing-offer [--data-dir PATH] [--output FILE]`)
+}
+
+async function service(args: string[]): Promise<void> {
+  const [action, ...serviceArgs] = args
+  const options = parseServeOptions(serviceArgs)
+  const nativeOptions = {
+    executable: resolve(process.env.DONUTCODE_SERVER_EXECUTABLE || process.argv[1]),
+    dataDir: options.dataDir,
+    host: options.host,
+    port: options.port,
+  }
+  if (action === 'install') {
+    const definition = installNativeService(nativeOptions)
+    console.log(JSON.stringify({ installed: true, definitionPath: definition.definitionPath, logPath: definition.logPath }))
+  } else if (action === 'uninstall') {
+    uninstallNativeService(nativeOptions)
+    console.log(JSON.stringify({ installed: false }))
+  } else if (action === 'status') {
+    const installed = nativeServiceInstalled(nativeOptions)
+    console.log(JSON.stringify({ installed }))
+    if (!installed) process.exitCode = 1
+  } else {
+    throw new Error('service requires install, uninstall, or status')
+  }
 }
 
 async function serve(args: string[]): Promise<void> {
@@ -100,7 +126,7 @@ async function pairingOffer(args: string[]): Promise<void> {
   const token = loadOrCreateToken()
   const response = await runtimeHttpRequest(info, '/api/auth/pairing-offer', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: 'Bearer ' + token },
   })
   if (response.status < 200 || response.status >= 300) throw new Error(`Pairing offer request failed (${response.status})`)
   const payload = response.json<{ offer: string; expiresAt: number }>()
@@ -121,6 +147,7 @@ async function main(): Promise<void> {
     case 'serve': await serve(args); break
     case 'status': await status(args); break
     case 'stop': await stop(args); break
+    case 'service': await service(args); break
     case 'pairing-offer': await pairingOffer(args); break
     default:
       printUsage()
