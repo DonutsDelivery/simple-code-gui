@@ -1393,6 +1393,13 @@ A clean checkout can produce a current, source-attributed, release-signed Androi
 
 Windows, macOS, Linux, Android, and iOS frontends use the same server contract, terminology, and canonical state semantics.
 
+### CP14 implementation status (2026-08-08)
+
+- **Implemented at `21a76d7`**: cross-platform `donutcode-server service install|status|uninstall`; hardened user-systemd service and AUR package metadata; macOS LaunchAgent and Windows limited user-logon task definitions with persistent user-owned logs; packaged-helper self-identification; hardened-runtime/notarization packaging configuration; iOS version/build derived from `package.json`; Keychain-backed credentials; one bounded foreground reconnect after iOS suspension; and shared Connections UI entry points for server artifacts and durable coordination on desktop, Android, and iOS. The packaged CLI pairing-offer authorization line was also repaired after an earlier source-redaction corruption.
+- **Linux native evidence**: an isolated user-systemd install enabled and started successfully, served HTTPS on loopback, and survived `systemctl --user restart` with the same stable server ID and a new startup nonce. Uninstall stopped the server and removed the unit. Native-service definition tests cover Linux, macOS, and Windows ownership/logging contracts.
+- **Integrated evidence**: 72 test files / 413 tests pass, production build passes, production dependency audit reports zero vulnerabilities, and Capacitor 8 sync updates Android and iOS from the same renderer and protocol implementation.
+- **Available macOS evidence and explicit limit**: the Apple Silicon Mac worktree was fast-forwarded to `21a76d7`; renderer/mobile build and iOS asset/plugin copy completed. Native dependency resolution then stopped because the host has no CocoaPods and only system Ruby 2.6; user-local CocoaPods installation is blocked by current gem Ruby requirements. Therefore simulator/device launch, code signing, notarization, and LaunchAgent runtime acceptance remain native-host/toolchain/credential rows—not fabricated evidence. No Windows host is available for the user-logon-task runtime row.
+
 ---
 
 # Final integrated acceptance
