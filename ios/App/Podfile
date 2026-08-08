@@ -12,7 +12,12 @@ def capacitor_pods
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
   pod 'AparajitaCapacitorSecureStorage', :path => '../../node_modules/@aparajita/capacitor-secure-storage'
-  pod 'CapacitorMlkitBarcodeScanning', :path => '../../node_modules/@capacitor-mlkit/barcode-scanning'
+  # Google's ML Kit binary pods do not ship an arm64-simulator slice. Keep QR
+  # scanning in device/release builds, while allowing Apple Silicon simulator
+  # acceptance to use the existing manual-code pairing path.
+  unless ENV['DONUTCODE_IOS_SIMULATOR'] == '1'
+    pod 'CapacitorMlkitBarcodeScanning', :path => '../../node_modules/@capacitor-mlkit/barcode-scanning'
+  end
   pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
 end
