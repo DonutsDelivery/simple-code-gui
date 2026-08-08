@@ -1249,6 +1249,17 @@ interface ArtifactManifest {
 
 Publish on Linux, transfer to Windows/macOS, interrupt/resume once, and verify identical SHA-256 and receipt metadata.
 
+### CP11 implementation status (2026-08-08)
+
+- **Implemented at `f3260ef` + `24dc8cf` + `3285a31`** (69 files / 402 tests, audit 0):
+  - `src/main/artifact-store.ts` — content-addressed store keyed by SHA-256 (identical bytes dedupe to one blob; later publisher's metadata wins); `ArtifactManifest` with exact source provenance (`repositoryId`/`commit`/`tree`/`dirtyPatchId` per plan); publish with copy-verify-before-commit; list/inspect/expire/sweep; quota (2 GiB default); secret/path exclusion (`pathExcluded` refuses `.env`, `.npmrc`, ssh keys, `.pem`/`.key`, service accounts); JSON index persistence mode 0600; per-client staging dirs for uploads.
+  - `src/main/artifact-transfer.ts` — server-to-server chunked transfer (1 MiB chunks) with **resume from the last verified offset** and **destination SHA-256 verification before CAS publish**; `ArtifactUploadSink` rejects out-of-order chunks; hash mismatch discards the staging file (test-proven: mismatch → nothing published).
+  - `src/main/mobile-server/routes/artifacts.ts` — scoped routes `GET /api/artifacts`, `GET /api/artifacts/:id`, `POST publish`, `GET download` (with `X-Artifact-Sha256` header; never auto-runs), `DELETE :id`, `upload/:id/{start,chunk,complete,cancel}` (write-scoped via middleware); wired into `MobileServer` via `setArtifactStore`; instantiated in `EnvironmentRuntime`.
+  - `src/common/artifacts.ts` — shared `ArtifactManifest`/`ArtifactKind` used by both main and renderer (artifact-store re-exports).
+  - `src/renderer/components/Artifacts/ArtifactPanel.tsx` — renderer UI listing artifacts with kind filter, source provenance display (repo/commit/tree), download (blob URL, never auto-run) and expire actions; renderer api methods `listArtifacts`/`downloadArtifact`/`expireArtifact` added to the `Api` interface + HttpBackend.
+- **Live-proven on the Row D Linux backend (2026-08-08)**: published `donutcode-build.zip` (300 KB, sha256 `769666bd…`, CP10 provenance attached) → download byte-identical (`cmp` clean) → chunked upload interrupted after 2 chunks → `start` returned `offset: 300000` (resume point) → resumed → complete → **`MATCH: True`** → `cancel()` resets offset to 0.
+- **Stop condition met**: artifacts move server-to-server with verified identical SHA-256 and full receipt metadata, no shared folders, content-addressed filenames (sha256) — ambiguity impossible.
+
 ## Stop condition
 
 Build outputs and evidence can move securely between servers without shared folders or ambiguous filenames.
