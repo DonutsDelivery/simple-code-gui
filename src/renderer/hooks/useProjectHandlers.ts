@@ -65,6 +65,15 @@ interface UseProjectHandlersReturn {
   canUndoCloseTab: boolean
 }
 
+function sessionStartFailure(harness: BackendId, error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  const missingExecutable = /(?:enoent|not found|no such file|posix_spawnp)/i.test(detail)
+  const guidance = missingExecutable
+    ? `\n\nThe ${harness} executable was not found on the selected server. Install it on that server or select a different server.`
+    : '\n\nThe harness may already be installed. The server error above is the cause.'
+  return `Failed to start ${harness} session:\n\n${detail}${guidance}`
+}
+
 export function useProjectHandlers({
   serverId,
   api,
@@ -201,8 +210,7 @@ export function useProjectHandlers({
       }
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
-      const errorMsg = e?.message || String(e)
-      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
+      alert(sessionStartFailure(effectiveBackend, e))
     }
   }, [addTab, getApiForServer, openTabs, projects, serverId, setActiveTab, settings?.backend, setTileTree])
 
@@ -281,8 +289,7 @@ export function useProjectHandlers({
       })
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
-      const errorMsg = e?.message || String(e)
-      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
+      alert(sessionStartFailure(effectiveBackend, e))
     }
   }, [api, addTab, projects, openTabs, settings?.backend, setTileTree])
 
@@ -322,8 +329,7 @@ export function useProjectHandlers({
       })
     } catch (e: any) {
       console.error('Failed to spawn PTY:', e)
-      const errorMsg = e?.message || String(e)
-      alert(`Failed to start ${effectiveBackend} session:\n\n${errorMsg}\n\nPlease make sure the ${effectiveBackend} harness is installed, then try again.`)
+      alert(sessionStartFailure(effectiveBackend, e))
     }
   }, [api, addTab, projects, settings?.backend, setTileTree])
 

@@ -43,8 +43,10 @@ export function setupPtyRoutes(
 
   // Spawn a new PTY
   app.post('/api/pty/spawn', async (req: Request, res: Response) => {
+    let requestedBackend = 'default'
     try {
       const { projectPath, sessionId, agentSessionId, model, backend } = req.body
+      requestedBackend = typeof backend === 'string' && backend ? backend : requestedBackend
 
       if (!projectPath || typeof projectPath !== 'string') {
         return res.status(400).json({ error: 'projectPath is required' })
@@ -140,7 +142,10 @@ export function setupPtyRoutes(
       })
     } catch (error) {
       log('PTY spawn error', { error: String(error) })
-      res.status(500).json({ error: 'Internal server error' })
+      const detail = error instanceof Error ? error.message : String(error)
+      res.status(500).json({
+        error: `Failed to start ${requestedBackend} harness on this server: ${detail}`,
+      })
     }
   })
 

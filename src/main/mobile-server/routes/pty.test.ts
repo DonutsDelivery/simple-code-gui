@@ -101,6 +101,24 @@ async function startRoute(): Promise<{
 }
 
 describe('PTY runtime authority routes', () => {
+  it('returns the server-side harness launch error to the authenticated client', async () => {
+    const { baseUrl, ptyManager } = await startRoute()
+    ptyManager.spawn.mockImplementationOnce(() => {
+      throw new Error('posix_spawnp failed: No such file or directory')
+    })
+
+    const response = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectPath, backend: 'hermes' }),
+    })
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to start hermes harness on this server: posix_spawnp failed: No such file or directory',
+    })
+  })
+
   it('atomically attaches concurrent clients, orders input, and detaches without stopping', async () => {
     const { baseUrl, ptyManager, router } = await startRoute()
     const request = {
