@@ -43,7 +43,7 @@ import {
 import { setupAuthRoutes } from './routes/auth'
 import { loadOrCreatePairingSigningKeyPair } from '../pairing-signing-key.js'
 import { PairingRequestStore } from '../pairing-requests.js'
-import { log, getRendererPath, getLocalIPs, getTailscaleHostname, tokensEqual } from './utils'
+import { log, getRendererPath, getLocalIPs, getLocalDiscoveryHostname, getTailscaleHostname, tokensEqual } from './utils'
 import {
   setupCorsMiddleware,
   setupStaticMiddleware,
@@ -151,7 +151,9 @@ export class MobileServer {
       serverId: this.serverId,
       humanCode: this.pairingCode,
       certificateFingerprint: () => this.certFingerprint,
-      endpointHints: () => getLocalIPs().map(ip => `${this.useTls ? 'https' : 'http'}://${ip}:${this.port}`),
+      endpointHints: () => [...getLocalIPs(), getLocalDiscoveryHostname(), getTailscaleHostname()]
+        .filter((host): host is string => Boolean(host))
+        .map(host => `${this.useTls ? 'https' : 'http'}://${host}:${this.port}`),
       createPairingRequest: (deviceId, deviceName) => this.pairingRequests.createPake(deviceId, deviceName),
     })
     this.app.post('/api/auth/pairing-offer/request', (req: Request, res: Response) => {
@@ -503,7 +505,7 @@ export class MobileServer {
     const { nonce, expiresAt } = createNonce()
 
     const tailscaleHostname = getTailscaleHostname()
-    const allHosts = tailscaleHostname ? [...ips, tailscaleHostname] : ips
+    const allHosts = [...new Set([...ips, getLocalDiscoveryHostname(), ...(tailscaleHostname ? [tailscaleHostname] : [])])]
 
     const offer = createPairingOffer({
       serverId: this.serverId,

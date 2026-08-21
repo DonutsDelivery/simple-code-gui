@@ -374,6 +374,124 @@ html, body, #root {
   transform: scale(1.05);
 }
 
+.project-item--remote {
+  border-left: 3px solid var(--server-color);
+  background: color-mix(in srgb, var(--server-color) 7%, transparent);
+}
+
+.backend-origin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 92px;
+  padding: 2px 6px;
+  overflow: hidden;
+  color: var(--server-color);
+  background: color-mix(in srgb, var(--server-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--server-color) 30%, transparent);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.backend-origin-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  background: var(--server-color);
+  border-radius: 50%;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--server-color) 65%, transparent);
+}
+
+.workspace-tab--remote {
+  border-top: 2px solid var(--server-color) !important;
+  background: color-mix(in srgb, var(--server-color) 9%, var(--bg-surface)) !important;
+}
+
+.workspace-tab--remote.active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--server-color) 35%, transparent);
+}
+
+.workspace-origin-icon {
+  margin-right: 5px;
+  color: var(--server-color);
+  font-weight: 800;
+}
+
+.connections-modal .settings-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.connections-modal .settings-header h2 { margin: 0; }
+.connections-modal .settings-header button {
+  width: 30px;
+  height: 30px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  font-size: 22px;
+  cursor: pointer;
+}
+.connections-modal .settings-header button:hover { color: var(--text-primary); background: var(--bg-hover); }
+
+.connections-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border-subtle));
+  border-radius: 12px;
+}
+.connections-intro__icon { display: grid; place-items: center; width: 42px; height: 42px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 11px; font-size: 22px; }
+.connections-intro strong, .connections-intro span { display: block; }
+.connections-intro span { margin-top: 3px; color: var(--text-secondary); font-size: 12px; }
+.connection-card { display: grid; gap: 12px; padding: 16px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.connection-card__heading { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: end; gap: 10px; }
+.connection-card__heading label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 11px; }
+.connection-card__heading input { padding: 8px 10px; color: var(--text-primary); background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: 7px; font: inherit; }
+.connection-status-dot { width: 9px; height: 9px; margin-bottom: 10px; background: var(--text-muted); border-radius: 50%; }
+.connection-status-dot--connected { background: #39d98a; box-shadow: 0 0 9px rgba(57,217,138,.65); }
+.connection-status-dot--connecting { background: #f5b942; }
+.connection-status-dot--error { background: #ff5d68; }
+.connection-state-label { padding-bottom: 7px; color: var(--text-secondary); font-size: 11px; text-transform: capitalize; }
+.connection-card__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+.connection-capabilities { max-height: 34px; overflow: hidden; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.connection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.connection-actions button {
+  min-height: 30px;
+  padding: 6px 11px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  font: inherit;
+  font-size: 11px;
+}
+.connection-actions button:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-default));
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-elevated));
+}
+.connection-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.connection-entry-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.connection-entry-actions button { display: grid; grid-template-columns: 38px 1fr; grid-template-rows: auto auto; gap: 2px 10px; align-items: center; padding: 14px; color: var(--text-primary); text-align: left; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 11px; }
+.connection-entry-actions button > span { grid-row: 1 / 3; display: grid; place-items: center; width: 38px; height: 38px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 9px; font-size: 20px; }
+.connection-entry-actions button small { color: var(--text-secondary); }
+.connection-entry-actions button:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-default)); background: color-mix(in srgb, var(--accent) 7%, var(--bg-surface)); }
+
+@media (max-width: 620px) { .connection-entry-actions { grid-template-columns: 1fr; } }
+
 .project-icon.emoji {
   display: flex;
   align-items: center;
@@ -2031,6 +2149,19 @@ html, body, #root {
   padding: var(--space-xl);
 }
 
+.mobile-connect-modal {
+  max-height: min(85vh, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-connect-modal .modal-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .modal-footer {
   display: flex;
   justify-content: space-between;
@@ -3028,6 +3159,14 @@ html, body, #root {
   min-height: 0;
   word-wrap: break-word;
   overflow-wrap: break-word;
+}
+
+/* Connections uses settings-content rather than modal-content. Keep the
+   actions and approval controls reachable on shorter desktop displays. */
+.settings-modal .settings-content {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .settings-modal .form-hint {

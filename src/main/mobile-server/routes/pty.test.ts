@@ -54,6 +54,8 @@ async function startRoute(): Promise<{
   baseUrl: string
   ptyManager: FakePtyManager
   router: EnvironmentCommandRouter
+  registry: SessionRuntimeRegistry
+  localPtys: Map<string, LocalPty>
 }> {
   mkdirSync(projectPath, { recursive: true })
   const state = new EnvironmentState('server-http', {
@@ -97,7 +99,7 @@ async function startRoute(): Promise<{
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Expected TCP server address')
-  return { baseUrl: `http://127.0.0.1:${address.port}`, ptyManager, router }
+  return { baseUrl: `http://127.0.0.1:${address.port}`, ptyManager, router, registry, localPtys }
 }
 
 describe('PTY runtime authority routes', () => {
@@ -200,5 +202,66 @@ describe('PTY runtime authority routes', () => {
       body: JSON.stringify({ backend: 'clippy' }),
     })
     expect(invalid.status).toBe(400)
+  })
+
+  it('lets the authority HTTP client resize a host-owned desktop PTY', async () => {
+    const { baseUrl, ptyManager, registry, localPtys } = await startRoute()
+    const runtime = await registry.ensureRuntime({
+      agentSessionId: 'desktop-session',
+      projectId: projectPath,
+      harnessId: 'claude',
+    })
+
+    const attached = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectPath,
+        sessionId: 'desktop-session',
+        agentSessionId: 'desktop-session',
+        backend: 'claude',
+      }),
+    }).then(response => response.json())
+    expect(attached).toMatchObject({ ptyId: runtime.ptyId, attached: true })
+    expect(localPtys.has(runtime.ptyId)).toBe(false)
+
+    const resized = await fetch(`${baseUrl}/api/pty/${runtime.ptyId}/resize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols: 42, rows: 18 }),
+    }).then(response => response.json())
+    expect(resized).toEqual({ success: true, applied: true })
+    expect(ptyManager.resize).toHaveBeenCalledWith(runtime.ptyId, 42, 18)
+  })
+
+  it('keeps a desktop HTTP spawn under authority resize ownership', async () => {
+    const { baseUrl, ptyManager, localPtys } = await startRoute()
+    const spawned = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectPath, agentSessionId: 'remote-session', backend: 'claude' }),
+    }).then(response => response.json())
+    expect(spawned.attached).toBe(false)
+    expect(localPtys.has(spawned.ptyId)).toBe(false)
+
+    const resized = await fetch(`${baseUrl}/api/pty/${spawned.ptyId}/resize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols: 100, rows: 36 }),
+    }).then(response => response.json())
+    expect(resized).toEqual({ success: true, applied: true })
+    expect(ptyManager.resize).toHaveBeenCalledWith(spawned.ptyId, 100, 36)
+  })
+
+  it('does not apply the remote 16-session cap to host desktop spawns', async () => {
+    const { baseUrl, localPtys } = await startRoute()
+    const ids = new Set<string>()
+    for (let i = 0; i < 18; i += 1) {
+      const spawned = await fetch(`${baseUrl}/api/pty/spawn`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath, agentSessionId: `desktop-${i}`, backend: 'claude' }),
+      }).then(response => response.json())
+      expect(spawned.ptyId).toBeTruthy()
+      expect(spawned.error).toBeUndefined()
+      ids.add(spawned.ptyId)
+    }
+    expect(ids.size).toBe(18)
+    expect(localPtys.size).toBe(0)
   })
 })

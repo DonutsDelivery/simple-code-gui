@@ -230,12 +230,25 @@ describe('SessionRuntimeRegistry', () => {
       runtimeId: runtime.runtimeId,
       sequence: 2,
     })
-    registry.resize(runtime.ptyId, 120, 40)
+    expect(registry.resize(runtime.ptyId, 120, 40)).toBe(true)
 
     expect(ptyManager.writeUserInput.mock.calls).toEqual([
       [runtime.ptyId, 'first'],
       [runtime.ptyId, 'second'],
     ])
     expect(ptyManager.resize).toHaveBeenCalledWith(runtime.ptyId, 120, 40)
+  })
+
+  it('ignores a stale resize after the PTY runtime has disappeared', async () => {
+    const runtime = await registry.ensureRuntime({
+      agentSessionId: 'stale-resize-session',
+      projectId: '/repo',
+      harnessId: 'claude',
+    })
+    await registry.stopRuntimeByPty(runtime.ptyId)
+    ptyManager.resize.mockClear()
+
+    expect(registry.resize(runtime.ptyId, 80, 24)).toBe(false)
+    expect(ptyManager.resize).not.toHaveBeenCalled()
   })
 })

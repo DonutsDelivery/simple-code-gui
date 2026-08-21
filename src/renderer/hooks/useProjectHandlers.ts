@@ -178,7 +178,8 @@ export function useProjectHandlers({
       await targetApi.ttsInstallInstructions?.(workingPath, effectiveBackend)
 
       const ptyId = await targetApi.spawnPty(workingPath, sessionId, undefined, effectiveBackend, agentSessionId)
-      const rendererTabId = serverResourceKey(targetServerId, ptyId)
+      const canonicalTabId = agentSessionId || sessionId || ptyId
+      const rendererTabId = serverResourceKey(targetServerId, canonicalTabId)
 
       // Add leaf to tree — single operation, no race condition
       const currentTree = tileTreeRef.current
@@ -188,9 +189,9 @@ export function useProjectHandlers({
       addTab({
         serverId: targetServerId,
         id: rendererTabId,
-        authorityTabId: ptyId,
+        authorityTabId: canonicalTabId,
         projectPath: workingPath,
-        agentSessionId: agentSessionId || sessionId || ptyId,
+        agentSessionId: canonicalTabId,
         sessionId,
         title,
         ptyId,
@@ -363,7 +364,11 @@ export function useProjectHandlers({
   }, [api, openTabs, removeTab, setTileTree])
 
   const handleCloseProjectTabs = useCallback((projectPath: string) => {
-    const tabsToClose = openTabs.filter(tab => tab.serverId === serverId && tab.projectPath === projectPath)
+    // Close every open tile for this project path, including ones that live
+    // on a paired remote authority. Filtering by the currently viewed server
+    // left Linux PTYs running after the user closed the project from Mac,
+    // so slots never freed.
+    const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
     let currentTree = tileTreeRef.current
     for (const tab of tabsToClose) {
       closedTabsRef.current.push({

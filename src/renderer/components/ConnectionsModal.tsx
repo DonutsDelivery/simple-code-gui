@@ -16,9 +16,10 @@ import { CoordinationPanel } from './Coordination/CoordinationPanel.js'
 export interface ConnectionsModalProps {
   activeServerId: string
   onClose: () => void
+  onOpenHostPairing?: () => void
 }
 
-export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalProps): React.ReactElement {
+export function ConnectionsModal({ activeServerId, onClose, onOpenHostPairing }: ConnectionsModalProps): React.ReactElement {
   const { connections, upsert, remove, rename, hydrate } = useConnectionsStore()
   const [statuses, setStatuses] = useState<Record<string, ServerConnectionStatus>>({})
   const [pairing, setPairing] = useState(false)
@@ -46,12 +47,17 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
     setBusy(true)
     setError(null)
     try {
-      const endpoint = {
-        host: result.endpoint.hostname,
-        port: Number(result.endpoint.port) || (result.endpoint.protocol === 'https:' ? 443 : 80),
-        secure: result.endpoint.protocol === 'https:',
+      const endpointFromUrl = (url: URL) => ({
+        host: url.hostname,
+        port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
+        secure: url.protocol === 'https:',
         certFingerprint: result.fingerprint,
-      }
+      })
+      const endpoint = endpointFromUrl(result.endpoint)
+      const endpoints = [result.endpoint.toString(), ...result.endpointHints]
+        .map(value => endpointFromUrl(new URL(value)))
+        .filter((candidate, index, all) => all.findIndex(other =>
+          other.host === candidate.host && other.port === candidate.port && other.secure === candidate.secure) === index)
       const api = new HttpBackend({ ...endpoint, token: result.deviceCredential })
       const connectionTest = await api.testConnection()
       if (!connectionTest.success) throw new Error(connectionTest.error || 'Connection failed')
@@ -63,7 +69,7 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
       const saved = {
         serverId: descriptor.serverId,
         displayName: descriptor.serverId,
-        endpoints: [endpoint],
+        endpoints,
         credentialRef: `credential:${descriptor.serverId}`,
         lastSeenProtocolVersion: descriptor.protocolVersion,
         capabilities,
@@ -86,19 +92,22 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
           <button type="button" onClick={onClose} aria-label="Close connections">×</button>
         </header>
         <div className="settings-content">
+          <div className="connections-intro">
+            <div className="connections-intro__icon" aria-hidden="true">⌁</div>
+            <div><strong>Connected environments</strong><span>Projects and workspaces stay on their owning machine and synchronize here.</span></div>
+          </div>
           {ordered.map(connection => {
             const status = statuses[connection.serverId] ?? { serverId: connection.serverId, state: 'disconnected' as const }
             const endpoint = connection.endpoints[0]
             return (
               <article className="connection-card" key={connection.serverId}>
-                <label>
-                  Server name
-                  <input value={connection.displayName} onChange={event => { void rename(connection.serverId, event.target.value) }} />
-                </label>
-                <div><strong>{status.state}</strong>{connection.serverId === activeServerId ? ' · active' : ''}</div>
-                <div>{endpoint?.host}:{endpoint?.port}</div>
-                <div>{status.platform || 'unknown platform'} · {status.serverVersion || 'unknown version'}{status.latencyMs !== undefined ? ` · ${Math.round(status.latencyMs)} ms` : ''}</div>
-                <div>{connection.capabilities.join(', ') || 'No advertised capabilities'}</div>
+                <div className="connection-card__heading">
+                  <span className={`connection-status-dot connection-status-dot--${status.state}`} aria-hidden="true" />
+                  <label>Server name<input value={connection.displayName} onChange={event => { void rename(connection.serverId, event.target.value) }} /></label>
+                  <span className="connection-state-label"><strong>{status.state}</strong>{connection.serverId === activeServerId ? ' · active' : ''}</span>
+                </div>
+                <div className="connection-card__meta"><span>{endpoint?.host}:{endpoint?.port}</span><span>{status.platform || 'unknown platform'} · {status.serverVersion || 'unknown version'}{status.latencyMs !== undefined ? ` · ${Math.round(status.latencyMs)} ms` : ''}</span></div>
+                <div className="connection-capabilities">{connection.capabilities.join(', ') || 'No advertised capabilities'}</div>
                 {status.error && <div role="alert">{status.error}</div>}
                 <div className="connection-actions">
                   {status.state === 'connected' ? (
@@ -120,7 +129,12 @@ export function ConnectionsModal({ activeServerId, onClose }: ConnectionsModalPr
           })}
           {pairing
             ? <PairServerDialog onCancel={() => setPairing(false)} onPaired={paired} />
-            : <button type="button" disabled={busy} onClick={() => setPairing(true)}>Pair Server</button>}
+            : (
+                <div className="connection-entry-actions">
+                  <button type="button" disabled={busy} onClick={() => setPairing(true)}><span aria-hidden="true">↗</span><strong>Pair Server</strong><small>Connect this frontend to another backend</small></button>
+                  {onOpenHostPairing && <button type="button" onClick={onOpenHostPairing}><span aria-hidden="true">⌁</span><strong>Share This Device</strong><small>Approve access to this machine</small></button>}
+                </div>
+              )}
           {error && <div role="alert">{error}</div>}
           {serverTool && (() => {
             const api = runtimeConnectionRegistry.get(serverTool.serverId)

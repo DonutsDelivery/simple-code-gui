@@ -164,13 +164,24 @@ export function formatPathsForBackend(paths: string[], backend?: 'default' | 'cl
 }
 
 // Custom paste handler for xterm
-export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok', currentLineInputRef?: MutableRefObject<string>): Promise<void> {
+export async function handlePaste(
+  term: XTerm,
+  ptyId: string,
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok',
+  currentLineInputRef?: MutableRefObject<string>,
+  writePty?: (id: string, data: string) => void,
+): Promise<void> {
+  const send = writePty ?? window.electronAPI?.writePty
+  if (!send) {
+    console.error('Paste failed: no PTY writer is available')
+    return
+  }
   try {
     // Check if clipboard has an image or file
     const imageResult = await window.electronAPI?.readClipboardImage()
     if (imageResult?.success && imageResult.hasImage && imageResult.path) {
       const formatted = formatPathForBackend(imageResult.path, backend)
-      window.electronAPI?.writePty(ptyId, formatted)
+      send(ptyId, formatted)
       if (currentLineInputRef) currentLineInputRef.current += formatted
       return
     }
@@ -187,7 +198,7 @@ export async function handlePaste(term: XTerm, ptyId: string, backend?: 'default
           .join(' ')
       }
       const pasteText = cleanText || text
-      window.electronAPI?.writePty(ptyId, pasteText)
+      send(ptyId, pasteText)
       if (currentLineInputRef) currentLineInputRef.current += pasteText
     }
   } catch (e) {

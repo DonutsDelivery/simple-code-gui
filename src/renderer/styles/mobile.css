@@ -1774,3 +1774,70 @@ body.is-mobile-app .terminal-bar-btn--primary:active {
   border-color: #ef4444;
   color: white;
 }
+
+/* Pair Server shares Connect a Device's elevated card language. */
+.pair-server-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg, 24px);
+  box-sizing: border-box;
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: var(--space-xl, 32px);
+  color: var(--text-primary, #fff);
+  background: var(--bg-surface, #2a2a2a);
+  border: 1px solid var(--border-subtle, #3a3a3d);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .28);
+}
+.pair-server-dialog__header { display: flex; align-items: center; gap: var(--space-md, 16px); }
+.pair-server-dialog__header h3, .pair-server-dialog__header p { margin: 0; }
+.pair-server-dialog__header h3 { font-size: 1.25rem; font-weight: 600; }
+.pair-server-dialog__header p { margin-top: 4px; color: var(--text-secondary, #999); font-size: .9rem; }
+.pair-server-dialog__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  color: var(--accent-primary, #8b5cf6);
+  background: color-mix(in srgb, var(--accent-primary, #8b5cf6) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #8b5cf6) 35%, transparent);
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.pair-server-dialog__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-elevated, #202023);
+  border: 1px solid var(--border-subtle, #3a3a3d);
+  border-radius: 10px;
+}
+.pair-server-dialog__tabs button { min-width: 0; padding: 9px 8px; color: var(--text-secondary, #999); background: transparent; border: 0; border-radius: 7px; }
+.pair-server-dialog__tabs button[aria-selected="true"] { color: var(--text-primary, #fff); background: var(--bg-surface, #343438); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.pair-server-dialog label { display: grid; gap: 7px; margin-bottom: 14px; color: var(--text-secondary, #aaa); font-size: .85rem; font-weight: 500; }
+.pair-server-dialog input, .pair-server-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 12px;
+  color: var(--text-primary, #fff);
+  background: var(--bg-elevated, #202023);
+  border: 1px solid var(--border-default, #48484d);
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+.pair-server-dialog input:focus, .pair-server-dialog textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent-primary, #8b5cf6) 55%, transparent); outline-offset: 1px; }
+.pair-server-dialog dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; margin: 0; padding: 16px; background: var(--bg-elevated, #202023); border-radius: 8px; }
+.pair-server-dialog dt { color: var(--text-secondary, #999); }
+.pair-server-dialog dd { margin: 0; overflow-wrap: anywhere; }
+.pair-server-dialog__actions { display: flex; gap: 10px; }
+.pair-server-dialog__actions button { flex: 1; padding: 11px 16px; color: var(--text-primary, #fff); background: var(--bg-elevated, #353539); border: 1px solid var(--border-default, #4a4a50); border-radius: 8px; font-weight: 600; }
+.pair-server-dialog__actions .pair-server-dialog__primary { color: white; background: var(--accent-primary, #7c5cff); border-color: transparent; }
+
+@media (max-width: 620px) {
+  .pair-server-dialog { padding: 20px; }
+  .pair-server-dialog__tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

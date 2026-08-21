@@ -1,8 +1,11 @@
 import { Preferences } from '@capacitor/preferences'
 import { create } from 'zustand'
 import type { SavedServerConnection, ServerConnectionStatus } from '../api/connection-registry'
+import { loadDeviceCredential, storeDeviceCredential } from '../security/device-credentials'
 
 const CONNECTIONS_STORAGE_KEY = 'donutcode-server-connections-v1'
+const CONNECTIONS_DURABLE_KEY = 'connection-catalog-v1'
+let hydrationPromise: Promise<void> | null = null
 
 interface ConnectionsState {
   connections: SavedServerConnection[]
@@ -16,10 +19,15 @@ interface ConnectionsState {
 }
 
 async function persist(connections: SavedServerConnection[]): Promise<void> {
+  const value = JSON.stringify(connections)
   await Preferences.set({
     key: CONNECTIONS_STORAGE_KEY,
-    value: JSON.stringify(connections),
+    value,
   })
+  // Chromium's web Preferences fallback can lose recent LevelDB writes when
+  // Electron is terminated. Keep the non-secret endpoint catalog beside the
+  // durable encrypted device credentials so paired servers survive crashes.
+  await storeDeviceCredential(CONNECTIONS_DURABLE_KEY, value)
 }
 
 function normalizeConnection(value: unknown): SavedServerConnection | null {
@@ -51,24 +59,33 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   hydrated: false,
 
   hydrate: async () => {
-    const { value } = await Preferences.get({ key: CONNECTIONS_STORAGE_KEY })
-    let connections: SavedServerConnection[] = []
-    if (value) {
-      try {
-        const parsed = JSON.parse(value)
-        if (Array.isArray(parsed)) {
-          connections = parsed
-            .map(normalizeConnection)
-            .filter((connection): connection is SavedServerConnection => connection !== null)
+    if (get().hydrated) return
+    if (!hydrationPromise) {
+      hydrationPromise = (async () => {
+        const durableValue = await loadDeviceCredential(CONNECTIONS_DURABLE_KEY)
+        const { value: preferenceValue } = await Preferences.get({ key: CONNECTIONS_STORAGE_KEY })
+        const value = durableValue ?? preferenceValue
+        let connections: SavedServerConnection[] = []
+        if (value) {
+          try {
+            const parsed = JSON.parse(value)
+            if (Array.isArray(parsed)) {
+              connections = parsed
+                .map(normalizeConnection)
+                .filter((connection): connection is SavedServerConnection => connection !== null)
+            }
+          } catch (error) {
+            console.warn('[Connections] Ignoring invalid saved connection data:', error)
+          }
         }
-      } catch (error) {
-        console.warn('[Connections] Ignoring invalid saved connection data:', error)
-      }
+        set({ connections, hydrated: true })
+      })().finally(() => { hydrationPromise = null })
     }
-    set({ connections, hydrated: true })
+    await hydrationPromise
   },
 
   upsert: async connection => {
+    if (!get().hydrated) await get().hydrate()
     const normalized = normalizeConnection(connection)
     if (!normalized) throw new Error('Invalid server connection')
     const connections = [...get().connections]
@@ -80,6 +97,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   remove: async serverId => {
+    if (!get().hydrated) await get().hydrate()
     const connections = get().connections.filter(connection => connection.serverId !== serverId)
     const statuses = { ...get().statuses }
     delete statuses[serverId]
@@ -88,6 +106,7 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   },
 
   rename: async (serverId, displayName) => {
+    if (!get().hydrated) await get().hydrate()
     const name = displayName.trim()
     if (!name) return
     const connections = get().connections.map(connection =>

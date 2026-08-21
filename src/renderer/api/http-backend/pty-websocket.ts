@@ -7,6 +7,16 @@
 import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAYS } from './constants'
 import { PtyWebSocketState } from './types'
 import { requestWebSocketTicket } from './websocket-ticket.js'
+import type { PtyGeometry } from '../../../common/pty-geometry.js'
+
+function readGeometry(value: unknown): PtyGeometry | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<PtyGeometry>
+  if (!Number.isInteger(candidate.cols) || !Number.isInteger(candidate.rows)
+    || !Number.isInteger(candidate.generation) || typeof candidate.canResize !== 'boolean') return null
+  if ((candidate.cols ?? 0) < 1 || (candidate.rows ?? 0) < 1) return null
+  return candidate as PtyGeometry
+}
 
 export class PtyWebSocketManager {
   private ptyWebsockets: Map<string, PtyWebSocketState> = new Map()
@@ -77,6 +87,8 @@ export class PtyWebSocketManager {
       ws,
       dataCallbacks: new Set(),
       exitCallbacks: new Set(),
+      geometryCallbacks: new Set(),
+      geometry: null,
       reconnectAttempts: 0,
       reconnectTimer: null,
       dataBuffer: []
@@ -116,7 +128,12 @@ export class PtyWebSocketManager {
             this.ptyWebsockets.delete(ptyId)
             break
 
-          case 'connected':
+          case 'connected': {
+            const geometry = readGeometry(msg.geometry)
+            if (geometry) {
+              state.geometry = geometry
+              state.geometryCallbacks.forEach(callback => callback(geometry))
+            }
             console.log(
               '[HttpBackend] PTY stream confirmed:',
               ptyId,
@@ -126,6 +143,16 @@ export class PtyWebSocketManager {
               state.dataBuffer.length
             )
             break
+          }
+
+          case 'geometry': {
+            const geometry = readGeometry(msg.geometry)
+            if (geometry && (!state.geometry || geometry.generation >= state.geometry.generation)) {
+              state.geometry = geometry
+              state.geometryCallbacks.forEach(callback => callback(geometry))
+            }
+            break
+          }
 
           case 'pong':
             // Keep-alive response, nothing to do

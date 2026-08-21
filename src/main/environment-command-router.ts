@@ -262,7 +262,7 @@ export class EnvironmentCommandRouter {
 
     switch (command.type) {
       case 'replace-workspace':
-        return { next: { workspace: structuredClone(command.workspace), sessions, ptys }, result }
+        return { next: { workspace: preserveCanonicalTabIdentity(current.workspace, command.workspace), sessions, ptys }, result }
       case 'create-workspace':
         if ((workspace.sessions ?? []).some(candidate => candidate.id === command.workspace.id)) {
           throw new Error(`Workspace ${command.workspace.id} already exists`)
@@ -336,6 +336,18 @@ export class EnvironmentCommandRouter {
         session.runtimeId = command.runtimeId
         session.ptyId = command.ptyId
         session.lifecycle = 'running'
+        // Workspace tabs keep stable canonical identity while PTY identity is
+        // replaced after a backend restart. Publish that runtime rebind in the
+        // same authoritative mutation so every frontend attaches to the new
+        // PTY instead of repeatedly saving the stale one back.
+        for (const workspaceSession of workspace.sessions ?? []) {
+          for (const tab of workspaceSession.openTabs ?? []) {
+            if (tab.agentSessionId === command.agentSessionId || tab.id === command.agentSessionId) {
+              tab.agentSessionId = command.agentSessionId
+              tab.ptyId = command.ptyId
+            }
+          }
+        }
         const existingPty = ptys.find(candidate => candidate.ptyId === command.ptyId)
         if (!existingPty) {
           ptys.push({
@@ -384,4 +396,25 @@ export class EnvironmentCommandRouter {
 
     return { next: { workspace, sessions, ptys }, result }
   }
+}
+
+function preserveCanonicalTabIdentity(current: Workspace, replacement: Workspace): Workspace {
+  const next = structuredClone(replacement)
+  const currentSessions = new Map((current.sessions ?? []).map(session => [session.id, session]))
+  for (const session of next.sessions ?? []) {
+    const previous = currentSessions.get(session.id)
+    if (!previous) continue
+    const previousTabs = new Map((previous.openTabs ?? []).map(tab => [tab.agentSessionId ?? tab.id, tab]))
+    session.openTabs = (session.openTabs ?? []).map(tab => {
+      const old = previousTabs.get(tab.agentSessionId ?? tab.id)
+      if (!old) return tab
+      return {
+        ...tab,
+        agentSessionId: old.agentSessionId ?? tab.agentSessionId,
+        sessionId: old.sessionId ?? tab.sessionId,
+        harnessId: old.harnessId ?? tab.harnessId,
+      }
+    })
+  }
+  return next
 }

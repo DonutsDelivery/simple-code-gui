@@ -71,9 +71,13 @@ export class SessionRuntimeRegistry {
     return { runtimeId: runtime.runtimeId, sequence }
   }
 
-  resize(ptyId: string, cols: number, rows: number): void {
-    if (!this.getRuntimeByPty(ptyId)) throw new Error(`Runtime for PTY ${ptyId} not found`)
+  resize(ptyId: string, cols: number, rows: number): boolean {
+    // ResizeObserver callbacks can arrive after an authoritative reconnect has
+    // rebound the tab to a replacement PTY. A stale viewport resize is neither
+    // user input nor a lifecycle command; ignore it instead of crashing main.
+    if (!this.getRuntimeByPty(ptyId)) return false
     this.ptyManager.resize(ptyId, cols, rows)
+    return true
   }
 
   async ensureRuntime(spec: RuntimeSpawnSpec): Promise<SessionRuntimeHandle> {

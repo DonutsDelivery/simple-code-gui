@@ -12,10 +12,22 @@ import type { SessionRuntimeRegistry } from '../../session-runtime-registry'
 import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions'
 import type { AIBackend } from '../../ipc/instruction-files'
 import { resolveMobileSpawnSettings } from './spawn-settings'
+import { isDeviceTokenValid } from '../device-registry'
 
-// L3: cap how many backends a mobile client can spawn so a runaway/abusive
-// client can't exhaust host resources by spawning unbounded PTY processes.
+// L3: cap how many backends a *remote/phone* client can spawn so a runaway
+// device can't exhaust host resources. The host desktop now uses this same
+// /api/pty/spawn route after the multi-backend runtime unification, so the
+// cap must not count desktop-owned sessions.
 const MAX_MOBILE_PTYS = 16
+
+function bearerToken(req: Request): string {
+  const header = req.headers.authorization
+  return header?.startsWith('Bearer ') ? header.slice(7) : ''
+}
+
+function isRemoteClientSpawn(req: Request): boolean {
+  return isDeviceTokenValid(bearerToken(req))
+}
 
 export function setupPtyRoutes(
   app: Express,
@@ -78,8 +90,19 @@ export function setupPtyRoutes(
       const existingRuntime = canonicalSessionId
         ? runtimeRegistry.getRuntime(canonicalSessionId)
         : null
-      if (!existingRuntime && getLocalPtys().size >= MAX_MOBILE_PTYS) {
-        log('PTY spawn rejected: cap reached', { active: getLocalPtys().size })
+      const remoteSpawn = isRemoteClientSpawn(req)
+      // Drop map entries whose process already died. Closing a tile used to
+      // detach without deleting this entry, so the 16-slot cap stayed full
+      // even after every visible session was gone.
+      const localPtys = getLocalPtys()
+      for (const [id, entry] of localPtys) {
+        if (!ptyManager.getProcess(id)) {
+          entry.disposeExit?.()
+          localPtys.delete(id)
+        }
+      }
+      if (remoteSpawn && !existingRuntime && localPtys.size >= MAX_MOBILE_PTYS) {
+        log('PTY spawn rejected: cap reached', { active: localPtys.size })
         return res.status(429).json({ error: 'Too many active sessions. Close one before starting another.' })
       }
 
@@ -111,7 +134,10 @@ export function setupPtyRoutes(
       })
       const ptyId = runtime.ptyId
 
-      if (!getLocalPtys().has(ptyId)) {
+      // Only a runtime actually created through this remote route is remotely
+      // size-owned. Attaching to a host desktop PTY must not let a smaller
+      // phone/tablet viewport resize the canonical TUI for every frontend.
+      if (remoteSpawn && runtime.created && !getLocalPtys().has(ptyId)) {
         const localPty: LocalPty = {
           ptyId,
           projectPath: safeProjectPath,
@@ -195,9 +221,14 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
+      if (isRemoteClientSpawn(req) && !getLocalPtys().has(id)) {
+        log('Ignored projection resize for host-owned PTY', { ptyId: id, cols, rows })
+        return res.json({ success: true, applied: false })
+      }
+
       getRuntimeRegistry()?.resize(id, cols, rows)
       log('PTY resize', { ptyId: id, cols, rows })
-      res.json({ success: true })
+      res.json({ success: true, applied: true })
     } catch (error) {
       log('PTY resize error', { error: String(error) })
       res.status(500).json({ error: 'Internal server error' })

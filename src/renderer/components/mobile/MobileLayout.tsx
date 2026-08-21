@@ -11,6 +11,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { OpenTab } from '../../stores/workspace'
 import { Terminal } from '../Terminal'
+import { resolveTerminalBackend } from '../terminal/types'
 import { Theme } from '../../themes'
 import { Api } from '../../api'
 
@@ -202,7 +203,7 @@ export function MobileLayout({
                 isActive={currentSlide === index + 1}
                 theme={theme}
                 projectPath={tab.projectPath}
-                backend={tab.backend}
+                backend={resolveTerminalBackend(tab)}
                 api={api}
               />
             </div>

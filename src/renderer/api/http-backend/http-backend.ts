@@ -13,6 +13,7 @@ import {
   Session,
   PtyDataCallback,
   PtyExitCallback,
+  PtyGeometryCallback,
   PtyRecreatedCallback,
   AgentSessionSignalCallback,
   ApiOpenSessionCallback,
@@ -147,6 +148,10 @@ export class HttpBackend implements Api {
 
   onPtyData(id: string, callback: PtyDataCallback): Unsubscribe {
     return this.ptyApi.onPtyData(id, callback)
+  }
+
+  onPtyGeometry(id: string, callback: PtyGeometryCallback): Unsubscribe {
+    return this.ptyApi.onPtyGeometry(id, callback)
   }
 
   onPtyExit(id: string, callback: PtyExitCallback): Unsubscribe {

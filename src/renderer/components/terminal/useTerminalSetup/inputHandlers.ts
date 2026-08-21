@@ -8,6 +8,14 @@ interface InputHandlerState {
   inputFlushTimeout: ReturnType<typeof setTimeout> | null
 }
 
+export function isHermesMouseMotionReport(data: string): boolean {
+  // SGR mouse protocol; xterm may batch several reports into one onData call.
+  const reports = [...data.matchAll(/\x1b\[<(\d+);\d+;\d+[Mm]/g)]
+  return reports.length > 0
+    && reports.map(match => match[0]).join('') === data
+    && reports.every(match => (Number(match[1]) & 32) !== 0)
+}
+
 /**
  * Sets up IME composition event handlers to prevent duplicate input on mobile.
  * See: https://github.com/xtermjs/xterm.js/issues/3600
@@ -38,7 +46,8 @@ export function createDataHandler(
   onUserInput: (data: string) => void,
   currentLineInputRef: MutableRefObject<string>,
   state: InputHandlerState,
-  inputSuppressedRef: MutableRefObject<boolean>
+  inputSuppressedRef: MutableRefObject<boolean>,
+  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 ): (data: string) => void {
   const flushInput = () => {
     // Discard buffered input while suppressed (during /clear or /compact button operations)
@@ -61,8 +70,15 @@ export function createDataHandler(
     // Notify TTS hook of user input
     onUserInput(data)
 
-    // Ignore terminal control sequences
+    // Ignore terminal control responses. Hermes does not consume mouse input,
+    // but a stale alternate-screen replay can leave xterm's mouse-tracking mode
+    // enabled. Pointer movement then emits concatenated SGR mouse reports which
+    // prompt_toolkit inserts as printable garbage. Never forward those reports
+    // to Hermes; normal keyboard escape sequences remain untouched.
     if (data.startsWith('\x1b[') && (data.endsWith('R') || data === '\x1b[I' || data === '\x1b[O')) {
+      return
+    }
+    if (backend === 'hermes' && isHermesMouseMotionReport(data)) {
       return
     }
 
@@ -112,7 +128,7 @@ export function createKeyEventHandler(
   writePty: (id: string, data: string) => void,
   ptyId: string,
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok',
-  currentLineInputRef?: MutableRefObject<string>
+  currentLineInputRef?: MutableRefObject<string>,
 ): (event: KeyboardEvent) => boolean {
   return (event: KeyboardEvent) => {
     if (event.type !== 'keydown') return true
@@ -140,8 +156,16 @@ export function createKeyEventHandler(
 
     if (event.ctrlKey && (event.key === 'V' || event.key === 'v')) {
       event.preventDefault()
-      handlePaste(terminal, ptyId, backend, currentLineInputRef)
+      handlePaste(terminal, ptyId, backend, currentLineInputRef, writePty)
       return false
+    }
+
+    if (event.key === 'PageUp' || event.key === 'PageDown') {
+      if (backend === 'hermes') {
+        writePty(ptyId, event.key === 'PageUp' ? '\x1b[5~' : '\x1b[6~')
+        return false
+      }
+      return true
     }
 
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {

@@ -41,13 +41,19 @@ const suppressAuthoritativeSaveByServer = new Map<string, number>()
  * the slices are disjoint, so the fingerprint stabilizes after one save.
  */
 const baselineFingerprintByServer = new Map<string, string>()
+const authoritativeActiveSessionByServer = new Map<string, string | null>()
 
 export function recordAuthoritativeBaseline(serverId: string, workspace: Workspace): void {
   baselineFingerprintByServer.set(serverId, fingerprintWorkspace(workspace))
+  authoritativeActiveSessionByServer.set(serverId, workspace.activeSessionId ?? null)
 }
 
 export function getBaselineFingerprint(serverId: string): string | undefined {
   return baselineFingerprintByServer.get(serverId)
+}
+
+export function getAuthoritativeActiveSessionId(serverId: string): string | null {
+  return authoritativeActiveSessionByServer.get(serverId) ?? null
 }
 
 function isRevisionConflict(error: unknown): boolean {
@@ -125,6 +131,7 @@ export function resetEnvironmentPersistenceForTests(): void {
   environmentPersistenceByServer.clear()
   suppressAuthoritativeSaveByServer.clear()
   baselineFingerprintByServer.clear()
+  authoritativeActiveSessionByServer.clear()
 }
 
 export function observeEnvironmentRevision(serverId: string, revision: number): boolean {
@@ -294,21 +301,23 @@ export function serializeSessionsForSave(
         activeView: s.savedData.activeView ?? 'tiles',
       }
     }
-    const openTabs = s.openTabs
+    const serverTabs = [...new Map(s.openTabs
       .filter(tab => tab.serverId === serverId)
+      .map(tab => [tab.authorityTabId ?? tab.id, tab])).values()]
+    const openTabs = serverTabs
       .map(t => normalizeTabForSave({
         serverId: t.serverId,
         authorityTabId: t.authorityTabId,
         id: t.id,
         projectPath: t.projectPath,
+        agentSessionId: t.agentSessionId,
         sessionId: t.sessionId,
         title: t.title,
         customTitle: t.customTitle || undefined,
         ptyId: t.ptyId,
         harnessId: t.harnessId ?? t.backend,
       })) as OpenTab[]
-    const tabIdMapping = new Map(s.openTabs
-      .filter(tab => tab.serverId === serverId)
+    const tabIdMapping = new Map(serverTabs
       .map(tab => [tab.id, tab.authorityTabId ?? tab.id]))
     const tileTree = s.activeTileTree?.type ? remapTabIds(s.activeTileTree, tabIdMapping) : s.activeTileTree || undefined
     const canvasScene = s.preservedCanvasScene

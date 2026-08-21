@@ -8,9 +8,11 @@ import {
 } from '../../security/human-code-pairing.js'
 import { trustServerEndpoint } from '../../security/server-certificate-trust.js'
 import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer.js'
+import { getPairingDeviceId } from '../../security/pairing-device-identity.js'
 
 export interface PairedServerResult extends HumanCodePairingResult {
   endpoint: URL
+  endpointHints: string[]
   fingerprint: string
 }
 
@@ -70,11 +72,17 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
     if (!accepted) throw new Error('Pairing approval was cancelled')
 
     let lastError: unknown
+    const deviceId = await getPairingDeviceId()
     for (const endpoint of parsed.endpointHints) {
       try {
         await trustServerEndpoint(endpoint, parsed.fingerprint || '')
-        const paired = await redeemPairingOffer(offer, endpoint, crypto.randomUUID(), navigator.userAgent)
-        await onPaired({ ...paired, endpoint: new URL(endpoint), fingerprint: parsed.fingerprint || '' })
+        const paired = await redeemPairingOffer(offer, endpoint, deviceId, navigator.userAgent)
+        await onPaired({
+          ...paired,
+          endpoint: new URL(endpoint),
+          endpointHints: parsed.endpointHints,
+          fingerprint: parsed.fingerprint || '',
+        })
         return
       } catch (cause) {
         lastError = cause
@@ -90,20 +98,24 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
     }
     if (!/^\d{4}-\d{4}$/.test(humanCode.trim())) throw new Error('Pairing code must use 1234-5678 format')
     let fingerprint = ''
+    let endpointHints = [`https://${host.trim()}:${numericPort}`]
+    const deviceId = await getPairingDeviceId()
     const paired = await pairWithHumanCode(
       host.trim(),
       numericPort,
       humanCode.trim(),
-      crypto.randomUUID(),
+      deviceId,
       navigator.userAgent,
       details => {
         fingerprint = details.certificateFingerprint
+        endpointHints = details.endpointHints
         return requestApproval(details)
       },
     )
     await onPaired({
       ...paired,
       endpoint: new URL(`https://${host.trim()}:${numericPort}`),
+      endpointHints,
       fingerprint,
     })
   }
@@ -124,7 +136,10 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
   if (approval) {
     return (
       <section className="pair-server-dialog" role="dialog" aria-modal="true" aria-labelledby="pair-server-approval-title">
-        <h3 id="pair-server-approval-title">Approve Server</h3>
+        <header className="pair-server-dialog__header">
+          <div className="pair-server-dialog__icon" aria-hidden="true">✓</div>
+          <div><h3 id="pair-server-approval-title">Approve Server</h3><p>Confirm the server identity before granting access.</p></div>
+        </header>
         <dl>
           <dt>Server ID</dt><dd>{approval.serverId}</dd>
           <dt>Fingerprint</dt><dd><code>{approval.certificateFingerprint || 'Not available'}</code></dd>
@@ -132,16 +147,21 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
           <dt>Scopes</dt><dd>{approval.requestedScopes.join(', ') || 'None'}</dd>
         </dl>
         <p>Compare this fingerprint with the trusted Server before approving.</p>
-        <button type="button" onClick={() => approve(true)}>Approve</button>
-        <button type="button" onClick={() => approve(false)}>Reject</button>
+        <div className="pair-server-dialog__actions">
+          <button className="pair-server-dialog__primary" type="button" onClick={() => approve(true)}>Approve</button>
+          <button type="button" onClick={() => approve(false)}>Reject</button>
+        </div>
       </section>
     )
   }
 
   return (
     <section className="pair-server-dialog" role="dialog" aria-modal="true" aria-labelledby="pair-server-title">
-      <h3 id="pair-server-title">Pair a Server</h3>
-      <div role="tablist" aria-label="Pairing method">
+      <header className="pair-server-dialog__header">
+        <div className="pair-server-dialog__icon" aria-hidden="true">↗</div>
+        <div><h3 id="pair-server-title">Pair a Server</h3><p>Connect to another DonutCode environment.</p></div>
+      </header>
+      <div className="pair-server-dialog__tabs" role="tablist" aria-label="Pairing method">
         {(['paste', 'code', 'ssh', 'file'] as PairingMethod[]).map(value => (
           <button key={value} type="button" role="tab" aria-selected={method === value} onClick={() => setMethod(value)}>
             {value === 'paste' ? 'Paste link' : value === 'code' ? 'Human code' : value === 'ssh' ? 'SSH bootstrap' : 'Pairing file'}
@@ -181,8 +201,10 @@ export function PairServerDialog({ onCancel, onPaired }: PairServerDialogProps):
       )}
 
       {error && <div role="alert">{error}</div>}
-      <button type="button" disabled={busy} onClick={() => void submit()}>{busy ? 'Pairing…' : 'Continue'}</button>
-      <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
+      <div className="pair-server-dialog__actions">
+        <button className="pair-server-dialog__primary" type="button" disabled={busy} onClick={() => void submit()}>{busy ? 'Pairing…' : 'Continue'}</button>
+        <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
     </section>
   )
 }

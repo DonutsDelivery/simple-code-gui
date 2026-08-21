@@ -112,4 +112,29 @@ describe('PtyWebSocketManager reconnect ownership', () => {
     // No WebSocket was ever created (every ticket fetch failed).
     expect(instances.length).toBe(0)
   })
+
+  it('publishes canonical geometry and ignores stale generations', async () => {
+    vi.useFakeTimers()
+    stubFetch()
+    stubWebSocket()
+
+    const manager = new PtyWebSocketManager('wss://localhost', 'token')
+    manager.connectPtyStream('pty-geometry')
+    await vi.advanceTimersByTimeAsync(0)
+    const state = manager.getPtyWebsockets().get('pty-geometry')!
+    const observed: unknown[] = []
+    state.geometryCallbacks.add(geometry => observed.push(geometry))
+
+    instances[0].onmessage?.({ data: JSON.stringify({
+      type: 'connected',
+      geometry: { cols: 319, rows: 73, generation: 4, canResize: false },
+    }) })
+    instances[0].onmessage?.({ data: JSON.stringify({
+      type: 'geometry',
+      geometry: { cols: 80, rows: 24, generation: 3, canResize: false },
+    }) })
+
+    expect(observed).toEqual([{ cols: 319, rows: 73, generation: 4, canResize: false }])
+    expect(state.geometry).toEqual({ cols: 319, rows: 73, generation: 4, canResize: false })
+  })
 })

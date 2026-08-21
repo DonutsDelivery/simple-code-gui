@@ -3,6 +3,15 @@ import type { FitAddon } from '@xterm/addon-fit'
 import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
 
+export type TerminalBackend = 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+
+export function resolveTerminalBackend(tab: { harnessId?: string; backend?: string }): TerminalBackend | undefined {
+  const selected = tab.harnessId ?? tab.backend
+  if (selected === 'claude-codex') return 'claude'
+  const supported: TerminalBackend[] = ['default', 'claude', 'gemini', 'codex', 'opencode', 'aider', 'droid', 'hermes', 'grok']
+  return supported.includes(selected as TerminalBackend) ? selected as TerminalBackend : undefined
+}
+
 // Window extension for HMR globals
 export interface TerminalGlobals {
   __TERMINAL_BUFFERS__?: Map<string, string[]>
@@ -16,7 +25,7 @@ export interface TerminalProps {
   theme: Theme
   onFocus?: () => void
   projectPath?: string | null
-  backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
+  backend?: TerminalBackend
   api?: Api  // API abstraction for PTY operations (uses electronAPI if not provided)
   isMobile?: boolean  // Whether running on mobile (for mobile-specific UI)
   onOpenFileBrowser?: () => void  // Callback to open file browser (mobile only)

@@ -38,6 +38,20 @@ export interface WebSocketManagerDeps {
   getLocalPtys?: () => Map<string, LocalPty>
 }
 
+/** Remote views may size runtimes they created, but attached projections must
+ * not resize a PTY owned by the host desktop's viewport. */
+export function canRemoteResizePty(ptyId: string, deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>): boolean {
+  return deps.getLocalPtys?.().has(ptyId) === true
+}
+
+export function canClientResizePty(
+  ptyId: string,
+  authToken: string,
+  deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>,
+): boolean {
+  return !isDeviceTokenValid(authToken) || canRemoteResizePty(ptyId, deps)
+}
+
 export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true })
 
@@ -192,7 +206,9 @@ function handlePtyStreamUpgrade(
     }
     ptyStreams.get(ptyId)!.add(ws)
 
-    ws.send(JSON.stringify({ type: 'connected', ptyId }))
+    const canResize = canClientResizePty(ptyId, authToken, deps)
+    const geometry = ptyManager.getGeometry?.(ptyId) ?? { cols: 120, rows: 30, generation: 0 }
+    ws.send(JSON.stringify({ type: 'connected', ptyId, geometry: { ...geometry, canResize } }))
 
     // Replay buffered raw bytes so a late-attaching client (e.g. phone
     // attaching to a desktop-owned PTY) reconstructs the current screen.
@@ -205,6 +221,7 @@ function handlePtyStreamUpgrade(
         type: 'data',
         data: replayBytes,
         sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+        geometryGeneration: geometry.generation,
         snapshot: true,
       }))
     }
@@ -222,6 +239,7 @@ function handlePtyStreamUpgrade(
               type: 'data',
               data,
               sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+              geometryGeneration: ptyManager.getGeometry?.(ptyId)?.generation ?? geometry.generation,
             }))
           }
         })
@@ -234,7 +252,13 @@ function handlePtyStreamUpgrade(
           }
         })
       : (() => {})
-
+    const disposeResize = ptyManager.addResizeListener
+      ? ptyManager.addResizeListener(ptyId, (cols: number, rows: number, generation: number) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'geometry', ptyId, geometry: { cols, rows, generation, canResize } }))
+          }
+        })
+      : (() => {})
 
     ws.on('message', (message: Buffer) => {
       try {
@@ -261,10 +285,12 @@ function handlePtyStreamUpgrade(
             break
 
           case 'resize':
-            if (msg.cols && msg.rows && ptyManager) {
+            if (msg.cols && msg.rows && ptyManager && canResize) {
               const registry = deps.getRuntimeRegistry?.()
               if (!registry) throw new Error('Runtime authority is not available')
               registry.resize(ptyId, msg.cols, msg.rows)
+            } else if (msg.cols && msg.rows) {
+              log('Ignored remote resize for host-owned PTY', { ptyId, cols: msg.cols, rows: msg.rows })
             }
             break
 
@@ -284,6 +310,7 @@ function handlePtyStreamUpgrade(
       log('PTY stream disconnected', { ptyId })
       disposeData()
       disposeExit()
+      disposeResize()
       ptyStreams.get(ptyId)?.delete(ws)
       if (ptyStreams.get(ptyId)?.size === 0) {
         ptyStreams.delete(ptyId)
@@ -294,6 +321,7 @@ function handlePtyStreamUpgrade(
       log('PTY stream error', { error: String(err), ptyId })
       disposeData()
       disposeExit()
+      disposeResize()
       ptyStreams.get(ptyId)?.delete(ws)
     })
   })
@@ -340,10 +368,12 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
         ws.send(JSON.stringify({ type: 'authorization-error', requiredScope: 'write' }))
         break
       }
-      if (msg.ptyId && msg.cols && msg.rows && ptyManager) {
+      if (msg.ptyId && msg.cols && msg.rows && ptyManager && canRemoteResizePty(msg.ptyId, deps)) {
         const registry = deps.getRuntimeRegistry?.()
         if (!registry) throw new Error('Runtime authority is not available')
         registry.resize(msg.ptyId, msg.cols, msg.rows)
+      } else if (msg.ptyId && msg.cols && msg.rows) {
+        log('Ignored remote resize for host-owned PTY', { ptyId: msg.ptyId, cols: msg.cols, rows: msg.rows })
       }
       break
 

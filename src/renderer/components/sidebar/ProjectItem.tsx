@@ -7,6 +7,7 @@ import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 import { useConnectionsStore } from '../../stores/connections.js'
 
 interface ProjectItemProps {
+  localServerId: string
   project: Project
   isExpanded: boolean
   isFocused: boolean
@@ -33,6 +34,7 @@ interface ProjectItemProps {
 }
 
 export const ProjectItem = React.memo(function ProjectItem({
+  localServerId,
   project,
   isExpanded,
   isFocused,
@@ -60,6 +62,9 @@ export const ProjectItem = React.memo(function ProjectItem({
   onHarnessChange,
 }: ProjectItemProps & { harnessId?: string; onHarnessChange?: (harnessId: string) => void }) {
   const connections = useConnectionsStore(state => state.connections)
+  const isRemote = project.serverId !== localServerId
+  const originName = connections.find(connection => connection.serverId === project.serverId)?.displayName || project.serverId.slice(0, 8)
+  const serverHue = [...project.serverId].reduce((value, char) => (value * 31 + char.charCodeAt(0)) % 360, 0)
   const [newServerId, setNewServerId] = React.useState(project.serverId)
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
@@ -69,8 +74,8 @@ export const ProjectItem = React.memo(function ProjectItem({
       {showDropBefore && <div className="drop-indicator" />}
 
       <div
-        className={`project-item ${isExpanded ? 'expanded' : ''} ${hasOpenTab ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''} ${project.color ? 'has-color' : ''} ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''}`}
-        style={project.color ? { backgroundColor: `${project.color}20` } : undefined}
+        className={`project-item ${isRemote ? 'project-item--remote' : 'project-item--local'} ${isExpanded ? 'expanded' : ''} ${hasOpenTab ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''} ${project.color ? 'has-color' : ''} ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''}`}
+        style={{ ...(project.color ? { backgroundColor: `${project.color}20` } : {}), '--server-color': `hsl(${serverHue} 72% 62%)` } as React.CSSProperties}
         draggable={!isEditing}
         onDragStart={(e) => {
           // Carry the sidebar's selected harness with the drag so dropped
@@ -116,6 +121,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             </div>
           )}
         </div>
+        {isRemote && <span className="backend-origin-badge" title={`Runs on ${originName}`}><span aria-hidden="true">⌁</span>{originName}</span>}
 
         {project.executable && (
           <button
@@ -148,7 +154,7 @@ export const ProjectItem = React.memo(function ProjectItem({
       {isExpanded && (
         <div className="sessions-list">
           <div className="session-origin" aria-label={`Project origin server ${project.serverId}`}>
-            Origin: {connections.find(connection => connection.serverId === project.serverId)?.displayName || project.serverId}
+            <span className="backend-origin-dot" aria-hidden="true" /> Origin: {originName}{isRemote ? ' · remote' : ' · local'}
           </div>
           <label className="session-launch-option">
             Server

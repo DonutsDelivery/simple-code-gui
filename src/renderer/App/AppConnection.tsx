@@ -97,8 +97,12 @@ export function AppConnection(): React.ReactElement | null {
       setInitializingLocalServer(false)
       return
     }
-    void getConnectionInfo()
-      .then(async info => {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let attempt = 0
+    const retryDelays = [250, 500, 1_000, 2_000, 5_000, 10_000]
+    const connectLocalServer = async (): Promise<void> => {
+      try {
+        const info = await getConnectionInfo()
         // The embedded backend serves HTTPS on loopback with a pinned cert.
         // Trust it (same path as remote pairing), then connect over HTTPS so
         // the auto-connect does not fall back to the pairing screen.
@@ -120,14 +124,23 @@ export function AppConnection(): React.ReactElement | null {
         if (cancelled) return
         if (!result.success) throw new Error(result.error || 'Local DonutCode Server connection failed')
         await registerConnection(localApi, { host: '127.0.0.1', port: info.port, token: localToken })
-      })
-      .catch(error => {
-        if (!cancelled) console.error('[App] Local server connection failed:', error)
-      })
-      .finally(() => {
         if (!cancelled) setInitializingLocalServer(false)
-      })
-    return () => { cancelled = true }
+      } catch (error) {
+        if (cancelled) return
+        console.error('[App] Local server connection failed:', error)
+        const delay = retryDelays[attempt++]
+        if (delay === undefined) {
+          setInitializingLocalServer(false)
+          return
+        }
+        retryTimer = setTimeout(() => { void connectLocalServer() }, delay)
+      }
+    }
+    void connectLocalServer()
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
   }, [isElectron, registerConnection])
 
   // iOS suspends WebViews and networking while backgrounded. On foreground,

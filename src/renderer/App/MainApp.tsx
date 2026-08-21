@@ -2,23 +2,26 @@ import React, { useEffect, useState, useCallback, useRef, RefObject } from 'reac
 import { TitleBar } from '../components/TitleBar'
 import { Sidebar } from '../components/Sidebar'
 import { Terminal } from '../components/terminal/Terminal'
+import { resolveTerminalBackend } from '../components/terminal/types'
 import { TiledTerminalView } from '../components/tiled/index.js'
 import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
 import { WorkspaceViewToggle } from '../components/WorkspaceViewToggle'
 import { CanvasWorkspaceView } from '../components/canvas/CanvasWorkspaceView'
 import type { CanvasPoint } from '../components/canvas/scene-model'
-import { getAllTabIds, createLeaf, createBranch, generateTileId, findLeafById, remapTabIds } from '../components/tile-tree'
+import { getAllTabIds, createLeaf, createBranch, generateTileId, findLeafById, remapTabIds, filterTabs } from '../components/tile-tree'
 import { SettingsModal } from '../components/SettingsModal'
 import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
-import { serverResourceKey, tabResourceKey, useWorkspaceStore } from '../stores/workspace'
+import { markPendingRuntimeRebind, serverResourceKey, tabResourceKey, useWorkspaceStore } from '../stores/workspace'
+import type { BackendId } from '../api/types'
 import {
   EnvironmentCacheInvalidatedError,
   resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
   consumeAuthoritativeSaveSuppression,
+  getAuthoritativeActiveSessionId,
   getBaselineFingerprint,
   serializeSessionsForSave,
 } from '../stores/workspace-persistence'
@@ -38,6 +41,8 @@ import { getApi, getConnectedServerIds, type Api } from '../api'
 import { InstallationPrompt } from './InstallationPrompt'
 import { MobileConnectModal } from './MobileConnectModal'
 import { ConnectionsModal } from '../components/ConnectionsModal'
+import { connectRuntimeServer, runtimeConnectionRegistry, subscribeAuthorityProjection } from '../api/runtime-connections'
+import { useConnectionsStore } from '../stores/connections'
 
 export interface MainAppProps {
   serverId: string
@@ -50,6 +55,8 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   const isMobile = !isElectron
   const getApiForServer = useCallback((targetServerId: string): Api | undefined =>
     getApi(targetServerId) || undefined, [])
+
+  useEffect(() => subscribeAuthorityProjection(serverId, api), [serverId, api])
   const {
     projects,
     openTabs,
@@ -78,6 +85,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     reorderSessions,
     switchSession,
     setSessionSavedData,
+    rebindSessionRuntime,
     moveTabsToSession,
   } = useWorkspaceStore()
 
@@ -209,6 +217,70 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   const [fileBrowserPath, setFileBrowserPath] = useState<string | null>(null)
   const hadProjectsRef = useRef(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+  const pendingActiveSessionByServerRef = useRef(new Map<string, string>())
+
+  // Restore every paired authority at startup. ConnectionsModal used to own
+  // hydration, so remote projects vanished until that modal was opened and a
+  // server was manually reconnected.
+  useEffect(() => {
+    // The local workspace loader clears and rebuilds the projection while it
+    // restores PTYs. Connect remotes only after that destructive initialization
+    // finishes, otherwise their freshly applied projects/sessions are wiped.
+    if (loading) return
+    let cancelled = false
+    let retrying = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let retryDelay = 1_000
+    const pendingServerIds = new Set<string>()
+    const scheduleRetry = (): void => {
+      if (cancelled || retryTimer || pendingServerIds.size === 0) return
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        void retryPendingConnections()
+      }, retryDelay)
+      retryDelay = Math.min(retryDelay * 2, 30_000)
+    }
+    const retryPendingConnections = async (): Promise<void> => {
+      if (cancelled || retrying) return
+      retrying = true
+      try {
+        for (const serverId of [...pendingServerIds]) {
+          try {
+            await connectRuntimeServer(serverId)
+            pendingServerIds.delete(serverId)
+          } catch (error) {
+            if (!cancelled) console.warn(`[Connections] Could not restore server ${serverId}:`, error)
+          }
+        }
+      } finally {
+        retrying = false
+        scheduleRetry()
+      }
+    }
+    const restoreConnections = async (): Promise<void> => {
+      await useConnectionsStore.getState().hydrate()
+      if (cancelled) return
+      for (const connection of useConnectionsStore.getState().connections) {
+        if (connection.serverId === serverId) continue
+        runtimeConnectionRegistry.register(connection)
+        pendingServerIds.add(connection.serverId)
+      }
+      await retryPendingConnections()
+    }
+    const handleOnline = (): void => {
+      retryDelay = 1_000
+      if (retryTimer) clearTimeout(retryTimer)
+      retryTimer = null
+      void retryPendingConnections()
+    }
+    window.addEventListener('online', handleOnline)
+    void restoreConnections()
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [serverId, loading])
 
   useEffect(() => {
     voiceOutputEnabledRef.current = voiceOutputEnabled
@@ -231,16 +303,29 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     }
   }, [api, applyAuthoritativeWorkspace, serverId])
 
-  // Orphan healer: every openTab in the active session must appear in its tileTree
+  // Keep the tree exact: stale leaves must be removed before new tabs are
+  // appended, otherwise invisible leaves retain their ratios and newly opened
+  // tiles occupy only part of the available viewport.
   useEffect(() => {
     const tabIds = openTabs.map(t => t.id)
-    if (tabIds.length === 0) return
+    if (tabIds.length === 0) {
+      if (activeTileTree) setActiveTileTree(null)
+      return
+    }
     const tabsInTree = activeTileTree ? getAllTabIds(activeTileTree) : new Set<string>()
+    const validTabIds = new Set(tabIds)
+    const hasStaleTabs = [...tabsInTree].some(id => !validTabIds.has(id))
+    const prunedTree = activeTileTree && hasStaleTabs
+      ? filterTabs(activeTileTree, validTabIds)
+      : activeTileTree
     const orphanIds = tabIds.filter(id => !tabsInTree.has(id))
-    if (orphanIds.length === 0) return
+    if (orphanIds.length === 0) {
+      if (prunedTree !== activeTileTree) setActiveTileTree(prunedTree)
+      return
+    }
     const orphanLeaf = createLeaf(generateTileId(), orphanIds, orphanIds[0])
-    const newTree = activeTileTree
-      ? createBranch(generateTileId(), 'horizontal', [activeTileTree, orphanLeaf])
+    const newTree = prunedTree
+      ? createBranch(generateTileId(), 'horizontal', [prunedTree, orphanLeaf])
       : orphanLeaf
     setActiveTileTree(newTree)
   }, [openTabs, activeTileTree, setActiveTileTree])
@@ -319,7 +404,12 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       const savedCategories = categories
         .filter(category => category.serverId === targetServerId)
         .map(({ serverId: _serverId, ...category }) => ({ ...category, id: toAuthorityId(category.id) }))
-      const activeSessionIdForServer = allSessions.find(session => session.id === activeSessionId && session.serverId === targetServerId)?.authoritySessionId ?? null
+      // Active selection is written only for an explicit local switch/create.
+      // Merely rendering different workspaces on two frontends must not make
+      // them continuously overwrite each other's activeSessionId.
+      const pendingActiveSessionId = pendingActiveSessionByServerRef.current.get(targetServerId)
+      const activeSessionIdForServer = pendingActiveSessionId
+        ?? getAuthoritativeActiveSessionId(targetServerId)
       // Fingerprint must match the recorded baseline EXACTLY (same shape, same
       // fields) — a shape mismatch (e.g. omitting activeSessionId) makes the
       // guard never match and the save loops forever.
@@ -336,6 +426,11 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         categories: savedCategories,
         sessions: savedSessions,
         activeSessionId: activeSessionIdForServer,
+      }).then(() => {
+        if (pendingActiveSessionId
+          && pendingActiveSessionByServerRef.current.get(targetServerId) === pendingActiveSessionId) {
+          pendingActiveSessionByServerRef.current.delete(targetServerId)
+        }
       }).catch(error => {
         if (!(error instanceof EnvironmentCacheInvalidatedError)) {
           console.error(`Failed to save workspace (server ${targetServerId}):`, error)
@@ -350,12 +445,42 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     const session = state.sessions.find(s => s.id === id)
     if (!session) return
 
-    if (!session.isRestored) {
-      // Lazy restore before switching
-      await restoreSession(id)
-    }
+    // Selection is a local UI action and must never be blocked by network/runtime
+    // recovery. Previously we switched only after listPtys + every respawn
+    // completed, so one stale/dead PTY made a valid workspace appear unclickable.
+    pendingActiveSessionByServerRef.current.set(session.serverId, session.authoritySessionId)
     switchSession(id)
-  }, [restoreSession, switchSession])
+
+    try {
+      if (!session.isRestored) {
+        // Lazy restore after selecting so the user gets immediate feedback.
+        await restoreSession(id)
+      }
+      const targetApi = getApiForServer(session.serverId)
+      if (!targetApi) return
+      const currentSession = useWorkspaceStore.getState().sessions.find(candidate => candidate.id === id)
+      const livePtyIds = new Set((await targetApi.listPtys()).map(pty => pty.id))
+      for (const tab of currentSession?.openTabs ?? []) {
+        if (livePtyIds.has(tab.ptyId)) continue
+        const authorityTabId = tab.agentSessionId ?? tab.authorityTabId ?? tab.id
+        const selectedHarness = tab.harnessId ?? tab.backend
+        const harness = (selectedHarness === 'default' || selectedHarness === 'claude-codex'
+          ? 'claude'
+          : selectedHarness) as BackendId | undefined
+        const ptyId = await targetApi.spawnPty(
+          tab.projectPath,
+          tab.sessionId,
+          undefined,
+          harness,
+          authorityTabId,
+        )
+        markPendingRuntimeRebind(session.serverId, authorityTabId, ptyId)
+        rebindSessionRuntime(id, authorityTabId, ptyId)
+      }
+    } catch (error) {
+      console.error(`Failed to restore workspace "${session.name}":`, error)
+    }
+  }, [getApiForServer, rebindSessionRuntime, restoreSession, switchSession])
 
   // Move a sub-tab or whole tile from the active session into another workspace session
   const handleMoveTabs = useCallback(async (
@@ -408,9 +533,14 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
   }, [handleOpenSessionAtPosition, setActiveCanvasScene])
 
   const handleAddSession = useCallback(() => {
-    addSession(serverId)
+    // New workspaces belong to the authority currently being viewed. Using the
+    // local desktop's server ID here made the global "+" silently create a Mac
+    // workspace even when the selected workspace was owned by Linux.
+    const targetServerId = sessions.find(session => session.id === activeSessionId)?.serverId ?? serverId
+    const createdId = addSession(targetServerId)
+    pendingActiveSessionByServerRef.current.set(targetServerId, createdId)
     setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-  }, [addSession, serverId])
+  }, [activeSessionId, addSession, serverId, sessions])
 
   const handleRemoveSession = useCallback((id: string) => {
     const state = useWorkspaceStore.getState()
@@ -504,7 +634,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
                   theme={currentTheme}
                   onFocus={() => setLastFocusedTabId(tab.id)}
                   projectPath={tab.projectPath}
-                  backend={tab.backend}
+                  backend={resolveTerminalBackend(tab)}
                   api={getApiForServer(tab.serverId)}
                   isMobile={true}
                   onOpenFileBrowser={() => handleOpenFileBrowser(tab.projectPath || undefined)}
@@ -533,6 +663,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
               <>
                 <div className="workspace-top-bar">
                   <WorkspaceSwitcher
+                    localServerId={serverId}
                     sessions={sessions}
                     activeSessionId={activeSessionId}
                     onSwitch={handleSwitchSession}
@@ -639,7 +770,14 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
         )}
 
         {connectionsOpen && (
-          <ConnectionsModal activeServerId={serverId} onClose={() => setConnectionsOpen(false)} />
+          <ConnectionsModal
+            activeServerId={serverId}
+            onClose={() => setConnectionsOpen(false)}
+            onOpenHostPairing={() => {
+              setConnectionsOpen(false)
+              setMobileConnectOpen(true)
+            }}
+          />
         )}
 
         {isMobile && showFileBrowser && fileBrowserPath && (() => {

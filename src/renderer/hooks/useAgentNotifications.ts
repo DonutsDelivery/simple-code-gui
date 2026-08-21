@@ -14,18 +14,61 @@ interface UseAgentNotificationsOptions {
   isMobile: boolean
 }
 
+const EXHAUSTED_SIGNAL_IDS_KEY = 'donutcode.exhausted-agent-signal-ids.v1'
+const MAX_EXHAUSTED_SIGNAL_IDS = 512
+const exhaustedSignalIds = new Set<string>()
+
+function restoreExhaustedSignalIds(): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const stored = localStorage.getItem(EXHAUSTED_SIGNAL_IDS_KEY)
+    if (stored === null) {
+      exhaustedSignalIds.clear()
+      return
+    }
+    const saved = JSON.parse(stored)
+    if (!Array.isArray(saved)) return
+    exhaustedSignalIds.clear()
+    for (const id of saved.slice(-MAX_EXHAUSTED_SIGNAL_IDS)) {
+      if (typeof id === 'string') exhaustedSignalIds.add(id)
+    }
+  } catch {
+    // Corrupt optional history must not break notifications.
+  }
+}
+
+function exhaustSignalId(id: string): void {
+  exhaustedSignalIds.add(id)
+  while (exhaustedSignalIds.size > MAX_EXHAUSTED_SIGNAL_IDS) {
+    const oldest = exhaustedSignalIds.values().next().value
+    if (typeof oldest !== 'string') break
+    exhaustedSignalIds.delete(oldest)
+  }
+  try {
+    localStorage.setItem(EXHAUSTED_SIGNAL_IDS_KEY, JSON.stringify([...exhaustedSignalIds]))
+  } catch {
+    // In-memory exhaustion still protects this renderer lifetime.
+  }
+}
+
 export function useAgentNotifications({ serverId, api, settings, isMobile }: UseAgentNotificationsOptions): void {
   const tabTopology = useWorkspaceStore(useShallow(
     state => state.sessions.map(session => session.openTabs),
   ))
   const activeSessionId = useWorkspaceStore(state => state.activeSessionId)
   const pendingSignals = useRef(new Map<string, AgentSessionSignalEvent>())
+  restoreExhaustedSignalIds()
 
   const handleSignal = (event: AgentSessionSignalEvent): boolean => {
+    const signalId = event.id ?? `${serverId}:${event.ptyId}`
+    if (exhaustedSignalIds.has(signalId)) return true
     const state = useWorkspaceStore.getState()
     const attentionKey = findTabByPtyId(state.sessions, serverId, event.ptyId)
     if (!attentionKey) return false
 
+    // Consume before side effects so redraw, remount, WebSocket replay and
+    // reentrant delivery cannot play this signal twice.
+    exhaustSignalId(signalId)
     const kind: AgentAttentionKind = event.type === 'complete' ? 'completed' : 'needs-input'
     if (settings?.notificationSoundsEnabled !== false) {
       playAgentNotificationSound(kind, settings?.notificationVolume ?? 0.65)

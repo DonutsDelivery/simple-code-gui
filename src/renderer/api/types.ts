@@ -13,6 +13,8 @@ import type { EnvironmentCommandResult, EnvironmentEvent, EnvironmentEventsResul
 import type { EnvironmentCommand } from '../../main/environment-command-router.js'
 import type { ArtifactManifest } from '../../common/artifacts.js'
 import type { CoordinationReceipt, CoordinationSnapshot } from '../../common/coordination-protocol.js'
+import type { PtyGeometryCallback } from '../../common/pty-geometry.js'
+export type { PtyGeometry, PtyGeometryCallback } from '../../common/pty-geometry.js'
 export type {
   AgentSessionSignalEvent,
   AgentSessionSignalMessage,
@@ -392,6 +394,9 @@ export interface Api {
    * Subscribe to PTY output
    */
   onPtyData: (id: string, callback: (data: string) => void) => Unsubscribe
+
+  /** Canonical host geometry and whether this frontend owns resize authority. */
+  onPtyGeometry?: (id: string, callback: PtyGeometryCallback) => Unsubscribe
 
   /**
    * Subscribe to PTY exit

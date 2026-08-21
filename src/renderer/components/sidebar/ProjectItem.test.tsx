@@ -9,6 +9,7 @@ describe('ProjectItem session actions', () => {
 
     render(
       <ProjectItem
+        localServerId="server-a"
         project={{ serverId: 'server-a', path: '/project', name: 'project' }}
         isExpanded
         isFocused={false}

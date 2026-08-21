@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Api } from '../api'
 import type { BackendId, PtySession } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { useWorkspaceStore, WorkspaceSession, OpenTab, serverResourceKey, type WorkspaceView } from '../stores/workspace'
+import { markPendingRuntimeRebind, useWorkspaceStore, WorkspaceSession, OpenTab, serverResourceKey, type WorkspaceView } from '../stores/workspace'
 import {
   generateCanvasScene,
   loadCanvasScene,
@@ -87,7 +87,7 @@ export async function spawnSessionTabs(
             ? settings.backend
             : 'claude'))) as BackendId
       const attachedPty = livePtysById.get(savedTab.ptyId) || livePtysById.get(savedTab.id)
-      if (attachedPty) {
+      if (attachedPty?.backend) {
         effectiveBackend = attachedPty.backend
       }
 
@@ -192,6 +192,15 @@ export async function spawnSessionTabs(
         }
       }
 
+      // Hermes discovery is intentionally incomplete/ephemeral. An empty list
+      // is not evidence that a persisted native session ID is stale; only the
+      // authority may reject that exact resume. Preserve the ID rather than
+      // silently branching the conversation into a fresh session.
+      if (!attachedPty && savedTab.sessionId && effectiveBackend === 'hermes') {
+        sessionIdToRestore = savedTab.sessionId
+        sessionIdForSpawn = savedTab.sessionId
+      }
+
       const ptyId = attachedPty
         ? attachedPty.id
         : await api.spawnPty(
@@ -201,16 +210,20 @@ export async function spawnSessionTabs(
           effectiveBackend,
           savedTab.agentSessionId || savedTab.sessionId || savedTab.id,
         )
+      const canonicalTabId = savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId
+      const rendererTabId = serverResourceKey(serverId, canonicalTabId)
+      markPendingRuntimeRebind(serverId, canonicalTabId, ptyId)
 
       if (savedTab.id) {
-        idMapping.set(savedTab.id, ptyId)
+        idMapping.set(savedTab.id, rendererTabId)
       }
 
       const tab: OpenTab = {
         serverId,
-        id: ptyId,
+        id: rendererTabId,
+        authorityTabId: canonicalTabId,
         projectPath: projectPathToRestore,
-        agentSessionId: savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId,
+        agentSessionId: canonicalTabId,
         sessionId: sessionIdToRestore,
         title: titleToRestore,
         customTitle: savedTab.customTitle || undefined,
@@ -359,6 +372,7 @@ export function useWorkspaceLoader({
     initSessions,
     setSessionSavedData,
     setSessionLiveData,
+    rebindSessionRuntime,
     markSessionRestored,
     switchSession,
     clearAllTabs,
@@ -408,7 +422,12 @@ export function useWorkspaceLoader({
       : restoredTabs[0]?.id ?? null
 
     setSessionLiveData(sessionId, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
-  }, [api, markSessionRestored, setSessionLiveData])
+    setTimeout(() => {
+      for (const tab of restoredTabs) {
+        rebindSessionRuntime(sessionId, tab.authorityTabId ?? tab.id, tab.ptyId)
+      }
+    }, 1500)
+  }, [api, markSessionRestored, rebindSessionRuntime, setSessionLiveData])
 
   useEffect(() => {
     if (initRef.current) return
@@ -545,6 +564,11 @@ export function useWorkspaceLoader({
             : restoredTabs[0]?.id ?? null
 
           setSessionLiveData(activeClientSessionId!, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
+          setTimeout(() => {
+            for (const tab of restoredTabs) {
+              rebindSessionRuntime(activeClientSessionId!, tab.authorityTabId ?? tab.id, tab.ptyId)
+            }
+          }, 1500)
           switchSession(activeClientSessionId!)
         } else {
           markSessionRestored(activeClientSessionId!)
@@ -560,7 +584,7 @@ export function useWorkspaceLoader({
     }
 
     loadWorkspace()
-  }, [api, checkInstallation, clearAllTabs, initSessions, markSessionRestored, setCategories, setProjects, setSessionLiveData, setSessionSavedData, switchSession])
+  }, [api, checkInstallation, clearAllTabs, initSessions, markSessionRestored, rebindSessionRuntime, setCategories, setProjects, setSessionLiveData, setSessionSavedData, switchSession])
 
   return {
     loading,

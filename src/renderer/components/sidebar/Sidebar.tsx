@@ -89,6 +89,7 @@ export function Sidebar({
     (project: Project) => (
       <ProjectItem
         key={serverResourceKey(project.serverId, project.path)}
+        localServerId={serverId}
         project={project}
         isExpanded={state.expandedProject === project.path}
         isFocused={state.focusedProjectPath === project.path}

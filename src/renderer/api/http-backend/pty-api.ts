@@ -15,6 +15,7 @@ import {
 import { ConnectionManager } from './connection'
 import { PtyWebSocketManager } from './pty-websocket'
 import { PtyWebSocketState } from './types'
+import type { PtyGeometryCallback } from '../../../common/pty-geometry.js'
 
 export class PtyApi {
   private connection: ConnectionManager
@@ -73,7 +74,7 @@ export class PtyApi {
     }
 
     // Then send kill request (fire and forget)
-    this.connection.fetch(`/api/pty/${id}`, { method: 'DELETE' }).catch((err) => {
+    this.connection.fetch(`/api/pty/${encodeURIComponent(id)}?stop=true`, { method: 'DELETE' }).catch((err) => {
       console.error('[HttpBackend] Failed to kill PTY:', err)
     })
   }
@@ -156,6 +157,8 @@ export class PtyApi {
         ws: null as any, // Will be set by connectPtyStream
         dataCallbacks: new Set(),
         exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
         reconnectAttempts: 0,
         reconnectTimer: null,
         dataBuffer: []
@@ -194,6 +197,28 @@ export class PtyApi {
     }
   }
 
+  onPtyGeometry(id: string, callback: PtyGeometryCallback): Unsubscribe {
+    const ptyWebsockets = this.wsManager.getPtyWebsockets()
+    let state = ptyWebsockets.get(id)
+    if (!state) {
+      state = {
+        ws: null as any,
+        dataCallbacks: new Set(),
+        exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
+        reconnectAttempts: 0,
+        reconnectTimer: null,
+        dataBuffer: [],
+      }
+      ptyWebsockets.set(id, state)
+    }
+    state.geometryCallbacks.add(callback)
+    if (state.geometry) callback(state.geometry)
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) this.wsManager.connectPtyStream(id)
+    return () => { state?.geometryCallbacks.delete(callback) }
+  }
+
   onPtyExit(id: string, callback: PtyExitCallback): Unsubscribe {
     const ptyWebsockets = this.wsManager.getPtyWebsockets()
 
@@ -203,6 +228,8 @@ export class PtyApi {
         ws: null as any,
         dataCallbacks: new Set(),
         exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
         reconnectAttempts: 0,
         reconnectTimer: null,
         dataBuffer: []
