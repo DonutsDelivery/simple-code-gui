@@ -31,6 +31,13 @@ function isValidPort(port: number): boolean {
   return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
+export function isFrontendOnlyLaunch(
+  electronFlag: boolean | undefined,
+  search: string,
+): boolean {
+  return electronFlag === true || new URLSearchParams(search).get('frontendOnly') === '1'
+}
+
 export function AppConnection(): React.ReactElement | null {
   // Check if we're running in Electron or browser/Capacitor
   const isElectron = isElectronEnvironment()
@@ -83,9 +90,13 @@ export function AppConnection(): React.ReactElement | null {
 
   useEffect(() => {
     if (!isElectron) return
-    const frontendOnly = window.electronAPI?.isFrontendOnly === true
-      || window.localStorage.getItem('donutcode-frontend-only') === '1'
-      || new URLSearchParams(window.location.search).get('frontendOnly') === '1'
+    // Frontend-only is an explicit per-launch mode. Never persist it in the
+    // application profile: a prior matrix/test launch must not turn ordinary
+    // desktop launches into connection-only clients forever.
+    const frontendOnly = isFrontendOnlyLaunch(
+      window.electronAPI?.isFrontendOnly,
+      window.location.search,
+    )
     if (frontendOnly) {
       setInitializingLocalServer(false)
       return

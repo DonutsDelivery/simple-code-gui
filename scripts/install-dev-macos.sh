@@ -43,7 +43,17 @@ if pgrep -f "$canonical_pid_pattern" >/dev/null; then
   done
 fi
 if pgrep -f "$canonical_pid_pattern" >/dev/null; then
-  echo "The canonical DonutCode process did not stop; app was not replaced" >&2
+  # Electron can finish its graceful server shutdown yet remain resident on
+  # macOS. Kill only the verified canonical executable so `open` cannot reuse
+  # that serverless process after the bundle is replaced.
+  pkill -KILL -f "$canonical_pid_pattern"
+  for _ in {1..20}; do
+    pgrep -f "$canonical_pid_pattern" >/dev/null || break
+    sleep 0.1
+  done
+fi
+if pgrep -f "$canonical_pid_pattern" >/dev/null; then
+  echo "The canonical DonutCode process could not be stopped; app was not replaced" >&2
   exit 1
 fi
 
