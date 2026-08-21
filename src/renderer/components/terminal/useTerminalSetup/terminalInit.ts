@@ -58,6 +58,7 @@ interface InitState {
   firstData: boolean
   replayPending: boolean
   markerCarry: string
+  mouseModeCarry: string
 }
 
 const AGENT_SIGNAL_PREFIX = '<ct-signal'
@@ -86,9 +87,25 @@ const HERMES_MOUSE_RESET = [...XTERM_MOUSE_MODES].map(mode => `\x1b[?${mode}l`).
 
 /** Hermes is keyboard-driven in DonutCode. Keeping xterm mouse tracking off
  * preserves native viewport scrolling and ordinary drag selection. */
-export function disableHermesMouseTracking(data: string, backend?: BackendType): string {
+export function disableHermesMouseTracking(
+  data: string,
+  backend?: BackendType,
+  state?: Pick<InitState, 'mouseModeCarry'>,
+): string {
   if (backend !== 'hermes') return data
-  return data.replace(/\x1b\[\?([0-9;]+)([hl])/g, (_sequence, params: string, action: string) => {
+  let combined = `${state?.mouseModeCarry ?? ''}${data}`
+  if (state) state.mouseModeCarry = ''
+
+  const escapeIndex = combined.lastIndexOf('\x1b')
+  if (escapeIndex >= 0) {
+    const tail = combined.slice(escapeIndex)
+    if (tail === '\x1b' || tail === '\x1b[' || /^\x1b\[\?[0-9;]*$/.test(tail)) {
+      if (state) state.mouseModeCarry = tail
+      combined = combined.slice(0, escapeIndex)
+    }
+  }
+
+  return combined.replace(/\x1b\[\?([0-9;]+)([hl])/g, (_sequence, params: string, action: string) => {
     const retained = params.split(';').filter(param => !XTERM_MOUSE_MODES.has(param))
     return retained.length > 0 ? `\x1b[?${retained.join(';')}${action}` : ''
   })
@@ -270,7 +287,8 @@ function setupEventHandlers(
     ptyOperations.resizePty,
     ptyId,
     ptyOperations.writePty,
-    options.backend
+    options.backend,
+    ptyOperations.getGeometry,
   )
   terminal.attachCustomWheelEventHandler(wheelHandler)
 
@@ -711,7 +729,7 @@ export function handlePtyData(
   let displayData = hideStreamingAgentSignals(data, state)
     .replace(TTS_GUILLEMET_REGEX, '')
     .replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
-  displayData = disableHermesMouseTracking(displayData, backend)
+  displayData = disableHermesMouseTracking(displayData, backend, state)
 
   // Handle OSC 52 clipboard escape sequences (used by opencode, tmux, etc.)
   // Format: ESC ] 52 ; <clipboard> ; <base64> BEL|ST
@@ -871,6 +889,7 @@ export function createInitState(): InitState {
     firstData: true,
     replayPending: false,
     markerCarry: '',
+    mouseModeCarry: '',
   }
 }
 

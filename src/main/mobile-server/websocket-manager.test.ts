@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket, type WebSocketServer } from 'ws'
-import { canClientResizePty, canRemoteResizePty, setupWebSocket } from './websocket-manager'
+import { canClientResizePty, canOwnedRemoteResizePty, setupWebSocket } from './websocket-manager'
 import { issueWebSocketTicket } from './routes/auth'
 
 vi.mock('./utils', async (importOriginal) => {
@@ -77,11 +77,11 @@ describe('main WebSocket environment synchronization', () => {
 
 describe('remote PTY resize ownership', () => {
   it('allows only remotely created PTYs to accept remote viewport dimensions', () => {
-    const localPtys = new Map([['remote-created', {} as any]])
+    const localPtys = new Map([['remote-created', { ownerToken: 'device-a' } as any]])
     const deps = { getLocalPtys: () => localPtys }
-    expect(canRemoteResizePty('remote-created', deps)).toBe(true)
-    expect(canRemoteResizePty('desktop-owned', deps)).toBe(false)
-    expect(canRemoteResizePty('unknown', {})).toBe(false)
+    expect(canOwnedRemoteResizePty('remote-created', 'device-a', deps)).toBe(true)
+    expect(canOwnedRemoteResizePty('remote-created', 'device-b', deps)).toBe(false)
+    expect(canOwnedRemoteResizePty('desktop-owned', 'device-a', deps)).toBe(false)
   })
 
   it('always lets the authority token resize its canonical PTY', () => {

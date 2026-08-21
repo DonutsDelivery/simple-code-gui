@@ -30,4 +30,11 @@ describe('disableHermesMouseTracking', () => {
     expect(disableHermesMouseTracking('\x1b[?25;1003hframe', 'hermes')).toBe('\x1b[?25hframe')
     expect(disableHermesMouseTracking('\x1b[?1000hframe', 'claude')).toBe('\x1b[?1000hframe')
   })
+
+  it('carries a split Hermes mouse-mode sequence across PTY chunks', () => {
+    const state = { mouseModeCarry: '' }
+    expect(disableHermesMouseTracking('\x1b[?100', 'hermes', state)).toBe('')
+    expect(disableHermesMouseTracking('6hvisible', 'hermes', state)).toBe('visible')
+    expect(state.mouseModeCarry).toBe('')
+  })
 })

@@ -11,23 +11,7 @@ import {
   findLeafById,
   generateTileId,
 } from '../components/tile-tree'
-import { useWorkspaceStore, OpenTab, Project, serverResourceKey } from '../stores/workspace'
-
-function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileNode {
-  if (node.type === 'leaf') {
-    const idx = node.tabIds.indexOf(oldId)
-    if (idx === -1) return node
-    const tabIds = [...node.tabIds]
-    tabIds[idx] = newId
-    return {
-      ...node,
-      tabIds,
-      activeTabId: node.activeTabId === oldId ? newId : node.activeTabId
-    }
-  }
-  const children = node.children.map(c => replaceTabIdInTree(c, oldId, newId))
-  return { ...node, children }
-}
+import { useWorkspaceStore, OpenTab, Project } from '../stores/workspace'
 
 interface UseApiListenersOptions {
   serverId: string
@@ -179,19 +163,7 @@ export function useApiListeners({
           (t) => t.serverId === originServerId && (t.ptyId === oldId || t.authorityTabId === oldId || t.id === oldId)
         )
         if (tab) {
-          const isComposite = tab.id !== oldId
-          // Composite tabs embed the old pty id in their renderer id; rebuild
-          // the composite around the new pty id. Raw-id tabs become the new id.
-          const newTabId = isComposite ? serverResourceKey(originServerId, newId) : newId
-          updateTab(tab.id, { id: newTabId, ptyId: newId, authorityTabId: newId, backend, sessionId })
-          // Update tile tree so tabIds stay in sync
-          if (tileTree) {
-            setTileTree(replaceTabIdInTree(tileTree, tab.id, newTabId))
-          }
-          // If it was the active tab, update the active tab ID
-          if (useWorkspaceStore.getState().activeTabId === tab.id) {
-            setActiveTab(newTabId)
-          }
+          updateTab(tab.id, { ptyId: newId, backend, sessionId })
         }
       })
     )

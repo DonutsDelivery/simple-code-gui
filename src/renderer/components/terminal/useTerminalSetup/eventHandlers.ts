@@ -57,7 +57,8 @@ export function createWheelHandler(
   resizePty: (id: string, cols: number, rows: number) => void,
   ptyId: string,
   writePty: (id: string, data: string) => void,
-  backend?: BackendType
+  backend?: BackendType,
+  getGeometry: () => PtyGeometry | null = () => null,
 ): (e: WheelEvent) => boolean {
   return (e: WheelEvent) => {
     // Ctrl+scroll = zoom font size
@@ -69,11 +70,17 @@ export function createWheelHandler(
       if (newSize !== currentSize) {
         terminal.options.fontSize = newSize
         localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(newSize))
-        // Refit terminal after font size change
-        fitAddon.fit()
-        const dims = fitAddon.proposeDimensions()
-        if (dims && dims.cols > 0 && dims.rows > 0) {
-          resizePty(ptyId, dims.cols, dims.rows)
+        const geometry = getGeometry()
+        if (geometry && !geometry.canResize) {
+          terminal.resize(geometry.cols, geometry.rows)
+          terminal.refresh(0, terminal.rows - 1)
+        } else {
+          // Only the geometry owner may refit and publish a new canonical grid.
+          fitAddon.fit()
+          const dims = fitAddon.proposeDimensions()
+          if (dims && dims.cols > 0 && dims.rows > 0) {
+            resizePty(ptyId, dims.cols, dims.rows)
+          }
         }
       }
       return false

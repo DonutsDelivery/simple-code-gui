@@ -81,17 +81,13 @@ describe('useApiListeners pty recreated', () => {
 
     callback!({ oldId: RAW_OLD_PTY, newId: RAW_NEW_PTY, backend: 'hermes' })
 
-    // The tab whose raw ptyId matched gets re-pointed: composite renderer id
-    // rebuilt around the new pty id, raw pty identity updated.
-    const NEW_COMPOSITE = `${SERVER_ID}\u0000${RAW_NEW_PTY}`
+    // The stable logical tab identity stays unchanged; only its runtime PTY moves.
     expect(updateTab).toHaveBeenCalledWith(COMPOSITE_TAB_ID, {
-      id: NEW_COMPOSITE,
       ptyId: RAW_NEW_PTY,
-      authorityTabId: RAW_NEW_PTY,
       backend: 'hermes',
       sessionId: undefined,
     })
-    expect(setActiveTab).toHaveBeenCalledWith(NEW_COMPOSITE)
+    expect(setActiveTab).not.toHaveBeenCalled()
   })
 
   it('re-points API-created tabs that use the raw pty id', () => {
@@ -134,13 +130,11 @@ describe('useApiListeners pty recreated', () => {
     callback!({ oldId: RAW_OLD_PTY, newId: RAW_NEW_PTY, backend: 'codex' })
 
     expect(updateTab).toHaveBeenCalledWith(RAW_OLD_PTY, {
-      id: RAW_NEW_PTY,
       ptyId: RAW_NEW_PTY,
-      authorityTabId: RAW_NEW_PTY,
       backend: 'codex',
       sessionId: undefined,
     })
-    expect(setActiveTab).toHaveBeenCalledWith(RAW_NEW_PTY)
+    expect(setActiveTab).not.toHaveBeenCalled()
   })
 
   it('subscribes pty recreated on every connected server, not just the active one', () => {
@@ -188,7 +182,6 @@ describe('useApiListeners pty recreated', () => {
     // A switch on the REMOTE server (not the active one) must still re-point the tab.
     remoteCallback!({ oldId: REMOTE_PTY, newId: NEW_REMOTE_PTY, backend: 'hermes' })
     expect(updateTab).toHaveBeenCalledWith(`${REMOTE_SERVER}\u0000${REMOTE_PTY}`, expect.objectContaining({
-      id: `${REMOTE_SERVER}\u0000${NEW_REMOTE_PTY}`,
       ptyId: NEW_REMOTE_PTY,
       backend: 'hermes',
     }))

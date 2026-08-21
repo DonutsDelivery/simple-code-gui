@@ -162,6 +162,7 @@ export function createKeyEventHandler(
 
     if (event.key === 'PageUp' || event.key === 'PageDown') {
       if (backend === 'hermes') {
+        event.preventDefault()
         writePty(ptyId, event.key === 'PageUp' ? '\x1b[5~' : '\x1b[6~')
         return false
       }

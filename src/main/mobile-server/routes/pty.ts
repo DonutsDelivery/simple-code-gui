@@ -5,7 +5,7 @@
 import { Express, Request, Response } from 'express'
 import { WebSocket } from 'ws'
 import { validateWithinProjectRoots } from '../../mobile-security'
-import { log, getProjectRoots } from '../utils'
+import { log, getProjectRoots, tokensEqual } from '../utils'
 import { LocalPty } from '../types'
 import type { SessionStore } from '../../session-store'
 import type { SessionRuntimeRegistry } from '../../session-runtime-registry'
@@ -141,6 +141,7 @@ export function setupPtyRoutes(
         const localPty: LocalPty = {
           ptyId,
           projectPath: safeProjectPath,
+          ownerToken: bearerToken(req),
           dataCallbacks: new Set(),
           exitCallbacks: new Set()
         }
@@ -221,8 +222,10 @@ export function setupPtyRoutes(
         return res.status(404).json({ error: 'PTY not found' })
       }
 
-      if (isRemoteClientSpawn(req) && !getLocalPtys().has(id)) {
-        log('Ignored projection resize for host-owned PTY', { ptyId: id, cols, rows })
+      const remoteResize = isRemoteClientSpawn(req)
+      const localPty = getLocalPtys().get(id)
+      if (remoteResize && !tokensEqual(localPty?.ownerToken, bearerToken(req))) {
+        log('Ignored projection resize without geometry ownership', { ptyId: id, cols, rows })
         return res.json({ success: true, applied: false })
       }
 
@@ -280,6 +283,7 @@ export function setupPtyRoutes(
         const localPty: LocalPty = {
           ptyId: newId,
           projectPath,
+          ownerToken: bearerToken(req),
           dataCallbacks: new Set(),
           exitCallbacks: new Set()
         }

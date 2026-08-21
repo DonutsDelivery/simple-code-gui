@@ -23,6 +23,8 @@ export interface TerminalSubscription {
 export interface LocalPty {
   ptyId: string
   projectPath: string
+  /** Device credential that created and owns this PTY's canonical geometry. */
+  ownerToken: string
   dataCallbacks: Set<(data: string) => void>
   exitCallbacks: Set<(code: number) => void>
   disposeExit?: () => void

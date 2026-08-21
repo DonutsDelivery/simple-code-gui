@@ -42,9 +42,13 @@ describe('Hermes terminal paging', () => {
   it('forwards PageUp and PageDown to the Hermes TUI', () => {
     const writePty = vi.fn()
     const handler = createKeyEventHandler({ getSelection: () => '' } as any, writePty, 'pty-1', 'hermes')
+    const pageUp = { type: 'keydown', key: 'PageUp', preventDefault: vi.fn() } as unknown as KeyboardEvent
+    const pageDown = { type: 'keydown', key: 'PageDown', preventDefault: vi.fn() } as unknown as KeyboardEvent
 
-    expect(handler({ type: 'keydown', key: 'PageUp' } as KeyboardEvent)).toBe(false)
-    expect(handler({ type: 'keydown', key: 'PageDown' } as KeyboardEvent)).toBe(false)
+    expect(handler(pageUp)).toBe(false)
+    expect(handler(pageDown)).toBe(false)
+    expect(pageUp.preventDefault).toHaveBeenCalled()
+    expect(pageDown.preventDefault).toHaveBeenCalled()
     expect(writePty.mock.calls).toEqual([
       ['pty-1', '\x1b[5~'],
       ['pty-1', '\x1b[6~'],

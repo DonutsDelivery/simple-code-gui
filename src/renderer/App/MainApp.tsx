@@ -8,17 +8,16 @@ import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
 import { WorkspaceViewToggle } from '../components/WorkspaceViewToggle'
 import { CanvasWorkspaceView } from '../components/canvas/CanvasWorkspaceView'
 import type { CanvasPoint } from '../components/canvas/scene-model'
-import { getAllTabIds, createLeaf, createBranch, generateTileId, findLeafById, remapTabIds, filterTabs } from '../components/tile-tree'
+import { getAllTabIds, createLeaf, createBranch, generateTileId, findLeafById, filterTabs } from '../components/tile-tree'
 import { SettingsModal } from '../components/SettingsModal'
 import { MakeProjectModal } from '../components/MakeProjectModal'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FileBrowser } from '../components/mobile/FileBrowser'
 import type { HostConfig } from '../hooks/useHostConnection'
-import { markPendingRuntimeRebind, serverResourceKey, tabResourceKey, useWorkspaceStore } from '../stores/workspace'
+import { markPendingRuntimeRebind, tabResourceKey, useWorkspaceStore } from '../stores/workspace'
 import type { BackendId } from '../api/types'
 import {
   EnvironmentCacheInvalidatedError,
-  resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
   consumeAuthoritativeSaveSuppression,
   getAuthoritativeActiveSessionId,
@@ -196,19 +195,13 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
       backend,
       tab.agentSessionId || tab.sessionId || tab.authorityTabId || id,
     )
-    const rendererTabId = serverResourceKey(tab.serverId, newPtyId)
-
+    const canonicalTabId = tab.agentSessionId || tab.authorityTabId || tab.sessionId || id
+    markPendingRuntimeRebind(tab.serverId, canonicalTabId, newPtyId)
     updateTab(id, {
-      id: rendererTabId,
-      authorityTabId: newPtyId,
       ptyId: newPtyId,
-      agentSessionId: tab.agentSessionId || tab.sessionId || tab.authorityTabId || id,
+      agentSessionId: canonicalTabId,
     })
-    if (activeTileTree) {
-      setActiveTileTree(remapTabIds(activeTileTree, new Map([[id, rendererTabId]])))
-    }
-    setActiveTab(rendererTabId)
-  }, [activeTileTree, getApiForServer, setActiveTab, setActiveTileTree, updateTab])
+  }, [getApiForServer, updateTab])
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [mobileConnectOpen, setMobileConnectOpen] = useState(false)
@@ -286,22 +279,6 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     voiceOutputEnabledRef.current = voiceOutputEnabled
   }, [voiceOutputEnabled])
 
-  useEffect(() => {
-    if (!api.onEnvironmentEvent) return
-    let mounted = true
-    const unsubscribe = api.onEnvironmentEvent((event) => {
-      void resolveAuthoritativeEnvironmentEvent(api, serverId, event)
-        .then((snapshot) => {
-          if (!mounted || !snapshot) return
-          applyAuthoritativeWorkspace(serverId, snapshot.workspace)
-        })
-        .catch(error => console.error('Failed to synchronize server environment:', error))
-    })
-    return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [api, applyAuthoritativeWorkspace, serverId])
 
   // Keep the tree exact: stale leaves must be removed before new tabs are
   // appended, otherwise invisible leaves retain their ratios and newly opened
@@ -547,7 +524,7 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
     const session = state.sessions.find(s => s.id === id)
     if (session) {
       for (const tab of session.openTabs) {
-        getApiForServer(tab.serverId)?.killPty(tab.id)
+        getApiForServer(tab.serverId)?.killPty(tab.ptyId)
       }
     }
     removeSession(id)
@@ -773,10 +750,10 @@ export function MainApp({ serverId, api, isElectron, onDisconnect }: MainAppProp
           <ConnectionsModal
             activeServerId={serverId}
             onClose={() => setConnectionsOpen(false)}
-            onOpenHostPairing={() => {
+            onOpenHostPairing={isElectron ? () => {
               setConnectionsOpen(false)
               setMobileConnectOpen(true)
-            }}
+            } : undefined}
           />
         )}
 

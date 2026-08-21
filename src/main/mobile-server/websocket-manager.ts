@@ -38,10 +38,12 @@ export interface WebSocketManagerDeps {
   getLocalPtys?: () => Map<string, LocalPty>
 }
 
-/** Remote views may size runtimes they created, but attached projections must
- * not resize a PTY owned by the host desktop's viewport. */
-export function canRemoteResizePty(ptyId: string, deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>): boolean {
-  return deps.getLocalPtys?.().has(ptyId) === true
+export function canOwnedRemoteResizePty(
+  ptyId: string,
+  authToken: string,
+  deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>,
+): boolean {
+  return tokensEqual(deps.getLocalPtys?.().get(ptyId)?.ownerToken, authToken)
 }
 
 export function canClientResizePty(
@@ -49,7 +51,7 @@ export function canClientResizePty(
   authToken: string,
   deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>,
 ): boolean {
-  return !isDeviceTokenValid(authToken) || canRemoteResizePty(ptyId, deps)
+  return !isDeviceTokenValid(authToken) || canOwnedRemoteResizePty(ptyId, authToken, deps)
 }
 
 export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebSocketServer {
@@ -368,7 +370,7 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
         ws.send(JSON.stringify({ type: 'authorization-error', requiredScope: 'write' }))
         break
       }
-      if (msg.ptyId && msg.cols && msg.rows && ptyManager && canRemoteResizePty(msg.ptyId, deps)) {
+      if (msg.ptyId && msg.cols && msg.rows && ptyManager && canClientResizePty(msg.ptyId, authToken, deps)) {
         const registry = deps.getRuntimeRegistry?.()
         if (!registry) throw new Error('Runtime authority is not available')
         registry.resize(msg.ptyId, msg.cols, msg.rows)
