@@ -31,6 +31,15 @@ export class PtyApi {
     this.wsManager = wsManager
   }
 
+  private releaseStreamIfUnused(id: string, state: PtyWebSocketState | undefined): void {
+    if (!state) return
+    if (state.dataCallbacks.size === 0
+      && state.exitCallbacks.size === 0
+      && state.geometryCallbacks.size === 0) {
+      this.wsManager.disconnectPtyStream(id)
+    }
+  }
+
   async listPtys(): Promise<PtySession[]> {
     const list = await this.connection.fetchJson<{ ptys: PtySession[] }>('/api/pty/list', { method: 'GET' })
     return list.ptys || []
@@ -104,7 +113,13 @@ export class PtyApi {
       this.attachedPtyIds.delete(id)
       for (const cb of this.ptyRecreatedCallbacks) {
         try {
-          cb({ oldId: result.oldId, newId: result.newId, backend: result.backend, sessionId: result.sessionId })
+          cb({
+            oldId: result.oldId,
+            newId: result.newId,
+            harnessId: result.backend,
+            backend: result.backend,
+            sessionId: result.sessionId,
+          })
         } catch (error) {
           console.error('[HttpBackend] pty:recreated callback error:', error)
         }
@@ -193,6 +208,7 @@ export class PtyApi {
       const s = ptyWebsockets.get(id)
       if (s) {
         s.dataCallbacks.delete(callback)
+        this.releaseStreamIfUnused(id, s)
       }
     }
   }
@@ -216,7 +232,10 @@ export class PtyApi {
     state.geometryCallbacks.add(callback)
     if (state.geometry) callback(state.geometry)
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) this.wsManager.connectPtyStream(id)
-    return () => { state?.geometryCallbacks.delete(callback) }
+    return () => {
+      state?.geometryCallbacks.delete(callback)
+      this.releaseStreamIfUnused(id, state)
+    }
   }
 
   onPtyExit(id: string, callback: PtyExitCallback): Unsubscribe {
@@ -243,6 +262,7 @@ export class PtyApi {
       const s = ptyWebsockets.get(id)
       if (s) {
         s.exitCallbacks.delete(callback)
+        this.releaseStreamIfUnused(id, s)
       }
     }
   }

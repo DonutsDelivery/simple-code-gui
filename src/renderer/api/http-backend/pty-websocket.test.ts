@@ -113,6 +113,31 @@ describe('PtyWebSocketManager reconnect ownership', () => {
     expect(instances.length).toBe(0)
   })
 
+  it('keeps an exhausted tombstone so remounts cannot restart a dead PTY loop', async () => {
+    vi.useFakeTimers()
+    stubFetch()
+    stubWebSocket()
+
+    const manager = new PtyWebSocketManager('wss://localhost', 'token')
+    manager.connectPtyStream('pty-dead')
+    await vi.advanceTimersByTimeAsync(0)
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const socket = instances.at(-1)
+      if (!socket || socket.readyState === FakeWebSocket.CLOSED) break
+      socket.close(1006)
+      await vi.advanceTimersByTimeAsync(60_000)
+    }
+
+    const attemptsAfterExhaustion = instances.length
+    manager.connectPtyStream('pty-dead')
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+
+    expect(attemptsAfterExhaustion).toBeLessThanOrEqual(6)
+    expect(instances.length).toBe(attemptsAfterExhaustion)
+    expect(manager.getPtyWebsockets().has('pty-dead')).toBe(true)
+  })
+
   it('publishes canonical geometry and ignores stale generations', async () => {
     vi.useFakeTimers()
     stubFetch()

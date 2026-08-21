@@ -49,6 +49,10 @@ export class PtyWebSocketManager {
     ) {
       return
     }
+    // Keep an exhausted tombstone until explicit disconnect. Otherwise a
+    // remount or authority poll recreates the dead PTY state and starts another
+    // complete retry cycle forever.
+    if (existing && existing.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return
     if (this.connecting.has(ptyId)) return
 
     this.connecting.add(ptyId)
@@ -190,13 +194,15 @@ export class PtyWebSocketManager {
         console.log(`[HttpBackend] Reconnecting PTY stream in ${delay}ms...`)
 
         state.reconnectTimer = setTimeout(() => {
+          state.reconnectTimer = null
           state.reconnectAttempts++
           this.connectPtyStream(ptyId)
         }, delay)
       } else if (event.code !== 1000) {
         // Exit callback for abnormal closure
         state.exitCallbacks.forEach((cb) => cb(-1))
-        this.ptyWebsockets.delete(ptyId)
+        state.reconnectAttempts = MAX_RECONNECT_ATTEMPTS
+        state.reconnectTimer = null
       }
     }
 
