@@ -23,6 +23,7 @@
     "package": "electron-builder",
     "package:linux": "npm run build && electron-builder --linux AppImage --publish never",
     "package:mac": "npm run build && electron-builder --mac dmg zip --publish never",
+    "dev:install:mac": "npm run build && bash scripts/install-dev-macos.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
