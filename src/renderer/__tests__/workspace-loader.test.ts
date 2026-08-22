@@ -32,6 +32,36 @@ function createApi(discoveredSessions: Array<{ sessionId: string; slug: string; 
 }
 
 describe('spawnSessionTabs', () => {
+  it('restores an exact canonical Hermes session without scanning recent history', async () => {
+    const api = createApi([{ sessionId: 'wrong-recent-session', slug: 'recent' }])
+
+    const result = await spawnSessionTabs(
+      api,
+      'test-server',
+      [savedTab({
+        agentSessionId: 'agent-hermes-1',
+        sessionId: '20260822_021716_c8f1ea',
+        backend: 'hermes',
+      })],
+      [{ path: projectPath, backend: 'hermes' }],
+      null,
+      () => {},
+    )
+
+    expect(api.discoverSessions).not.toHaveBeenCalled()
+    expect(api.spawnPty).toHaveBeenCalledWith(
+      projectPath,
+      '20260822_021716_c8f1ea',
+      undefined,
+      'hermes',
+      'agent-hermes-1',
+    )
+    expect(result.restoredTabs[0]).toMatchObject({
+      agentSessionId: 'agent-hermes-1',
+      sessionId: '20260822_021716_c8f1ea',
+    })
+  })
+
   // AC: @session-discovery ac-3
   it('uses the discovered worktree cwd when a saved session id is stale', async () => {
     const worktreePath = `${projectPath}/.claude/worktrees/latest`
@@ -48,7 +78,12 @@ describe('spawnSessionTabs', () => {
     )
 
     expect(api.spawnPty).toHaveBeenCalledWith(worktreePath, 'most-recent', undefined, 'codex', 'ses_stale')
-    expect(result.restoredTabs[0]).toMatchObject({ sessionId: 'most-recent', projectPath: worktreePath })
+    expect(result.restoredTabs[0]).toMatchObject({
+      id: 'test-server\0new-pty',
+      authorityTabId: 'new-pty',
+      sessionId: 'most-recent',
+      projectPath: worktreePath,
+    })
     expect(addedTabs[0].sessionId).toBe('most-recent')
   })
 
@@ -110,7 +145,8 @@ describe('spawnSessionTabs', () => {
     expect(api.discoverSessions).not.toHaveBeenCalled()
     expect(api.spawnPty).not.toHaveBeenCalled()
     expect(result.restoredTabs[0]).toMatchObject({
-      id: 'saved-pty',
+      id: 'test-server\0saved-pty',
+      authorityTabId: 'saved-pty',
       ptyId: 'saved-pty',
       sessionId: undefined,
       backend: 'codex',

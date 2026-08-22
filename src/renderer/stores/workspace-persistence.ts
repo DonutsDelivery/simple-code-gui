@@ -233,6 +233,7 @@ export function serializeSessionsForSave(
         authorityTabId: t.authorityTabId,
         id: t.id,
         projectPath: t.projectPath,
+        agentSessionId: t.agentSessionId,
         sessionId: t.sessionId,
         title: t.title,
         customTitle: t.customTitle || undefined,

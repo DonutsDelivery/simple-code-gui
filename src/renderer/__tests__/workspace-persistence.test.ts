@@ -86,7 +86,7 @@ describe('serializeSessionsForSave', () => {
         serverId: 'server-a', authoritySessionId: 'ws-1',
         id: 'ws-1',
         name: 'Workspace 1',
-        openTabs: [tab({ id: 'live-1', ptyId: 'live-1', projectPath: '/proj/x' })],
+        openTabs: [tab({ id: 'server-a\0live-1', authorityTabId: 'live-1', ptyId: 'live-1', agentSessionId: 'agent-1', projectPath: '/proj/x' })],
         activeTabId: 'live-1',
         activeTileTree: null,
         canvasScene: createEmptyCanvasScene(),
@@ -100,6 +100,8 @@ describe('serializeSessionsForSave', () => {
     expect(result[0].openTabs).toHaveLength(1)
     expect(result[0].openTabs[0].projectPath).toBe('/proj/x')
     expect(result[0].openTabs[0].ptyId).toBe('live-1')
+    expect(result[0].openTabs[0].agentSessionId).toBe('agent-1')
+    expect(result[0].openTabs[0].id).toBe('live-1')
   })
 
   it('falls back to empty when an unrestored session has no savedData', () => {

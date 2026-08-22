@@ -99,7 +99,10 @@ export async function spawnSessionTabs(
         : savedTab.sessionId
       let sessionIdForSpawn = sessionIdToRestore
 
-      if (!attachedPty) {
+      // A fully persisted canonical/native identity is authoritative. Avoid an
+      // expensive discovery scan (notably Hermes history) and never replace an
+      // exact saved conversation with whichever session happens to be newest.
+      if (!attachedPty && !(savedTab.agentSessionId && savedTab.sessionId)) {
         let sessionsForProject = sessionsCache.get(savedTab.projectPath)
         if (!sessionsForProject) {
           const list = await api.discoverSessions(savedTab.projectPath, effectiveBackend)
@@ -202,14 +205,16 @@ export async function spawnSessionTabs(
           effectiveBackend,
           savedTab.agentSessionId || savedTab.sessionId || savedTab.id,
         )
+      const rendererTabId = serverResourceKey(serverId, ptyId)
 
       if (savedTab.id) {
-        idMapping.set(savedTab.id, ptyId)
+        idMapping.set(savedTab.id, rendererTabId)
       }
 
       const tab: OpenTab = {
         serverId,
-        id: ptyId,
+        id: rendererTabId,
+        authorityTabId: ptyId,
         projectPath: projectPathToRestore,
         agentSessionId: savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId,
         sessionId: sessionIdToRestore,

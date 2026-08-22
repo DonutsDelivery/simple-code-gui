@@ -33,9 +33,9 @@ export const runtimeConnectionRegistry = new ConnectionRegistry(
   (endpoint, token) => new HttpBackend({ host: endpoint.host, port: endpoint.port, token, secure: endpoint.secure }),
 )
 
-export function rememberRuntimeCredential(credentialRef: string, token: string): void {
+export function rememberRuntimeCredential(credentialRef: string, token: string, persist = true): void {
   credentials.set(credentialRef, token)
-  void storeDeviceCredential(credentialRef, token)
+  if (persist) void storeDeviceCredential(credentialRef, token)
 }
 
 export async function attachRuntimeConnection(
@@ -43,9 +43,10 @@ export async function attachRuntimeConnection(
   api: Api,
   endpoint: ConnectionEndpoint,
   token?: string,
+  persistCredential = true,
 ): Promise<void> {
   runtimeConnectionRegistry.register(saved)
-  if (token !== undefined) rememberRuntimeCredential(saved.credentialRef, token)
+  if (token !== undefined) rememberRuntimeCredential(saved.credentialRef, token, persistCredential)
   await runtimeConnectionRegistry.attach(saved.serverId, api as ConnectableApi, endpoint)
   setApi(api)
   await activateAuthorityProjection(saved.serverId, api)

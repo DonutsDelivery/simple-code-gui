@@ -61,6 +61,7 @@ export function AppConnection(): React.ReactElement | null {
   const registerConnection = useCallback(async (
     connectedApi: HttpBackend,
     config: ConnectionConfig,
+    persistCredential = true,
   ) => {
     const descriptor = connectedApi.getServerProtocol?.()
     if (!descriptor?.serverId) throw new Error('Server did not publish a stable identity')
@@ -80,7 +81,7 @@ export function AppConnection(): React.ReactElement | null {
         .map(([capability]) => capability),
     }
     await useConnectionsStore.getState().upsert(savedConnection)
-    await attachRuntimeConnection(savedConnection, connectedApi, savedConnection.endpoints[0], config.token)
+    await attachRuntimeConnection(savedConnection, connectedApi, savedConnection.endpoints[0], config.token, persistCredential)
     localStorage.removeItem(CONNECTION_STORAGE_KEY)
     localStorage.removeItem(LEGACY_CONNECTION_STORAGE_KEY)
     setApi(connectedApi)
@@ -129,7 +130,11 @@ export function AppConnection(): React.ReactElement | null {
         const result = await localApi.testConnection()
         if (cancelled) return
         if (!result.success) throw new Error(result.error || 'Local DonutCode Server connection failed')
-        await registerConnection(localApi, { host: '127.0.0.1', port: info.port, token: localToken })
+        await registerConnection(
+          localApi,
+          { host: '127.0.0.1', port: info.port, token: localToken },
+          false,
+        )
       })
       .catch(error => {
         if (!cancelled) console.error('[App] Local server connection failed:', error)
