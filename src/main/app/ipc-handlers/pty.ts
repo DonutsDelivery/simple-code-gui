@@ -12,6 +12,7 @@ import { installSelfCompactionInstructions } from '../../ipc/self-compaction-ins
 import { installAgentSessionSignalInstructions } from '../../ipc/agent-session-signal-instructions.js'
 import type { AIBackend } from '../../ipc/instruction-files.js'
 import type { HermesBackupManager } from '../../hermes-backup-manager.js'
+import { isTerminalControlInput } from '../../terminal-control-input.js'
 
 const DEBUG_LOG = '/tmp/auto-accept-debug.log'
 const SCROLL_DEBUG_LOG = join(homedir(), 'scroll-debug.log')
@@ -100,7 +101,7 @@ function maybeRespondToCursorPositionRequest(
 }
 
 export function isTerminalDeviceResponse(data: string): boolean {
-  return /^(?:\x1b\[\??\d+(?:;\d+)*R)+$/.test(data)
+  return isTerminalControlInput(data)
 }
 
 export function registerPtyHandlers(

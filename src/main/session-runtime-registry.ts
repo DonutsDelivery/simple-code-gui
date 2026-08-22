@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import type { Backend, PtyManager } from './pty-manager.js'
 import type { EnvironmentCommand, EnvironmentCommandRouter } from './environment-command-router.js'
+import { isTerminalControlInput } from './terminal-control-input.js'
 
 export interface RuntimeSpawnSpec {
   agentSessionId?: string
@@ -66,7 +67,7 @@ export class SessionRuntimeRegistry {
     if (!runtime) throw new Error(`Runtime for PTY ${ptyId} not found`)
     const sequence = (this.inputSequenceByRuntime.get(runtime.runtimeId) ?? 0) + 1
     this.inputSequenceByRuntime.set(runtime.runtimeId, sequence)
-    if (terminalDeviceResponse) this.ptyManager.write(ptyId, data)
+    if (terminalDeviceResponse || isTerminalControlInput(data)) this.ptyManager.write(ptyId, data)
     else this.ptyManager.writeUserInput(ptyId, data)
     return { runtimeId: runtime.runtimeId, sequence }
   }

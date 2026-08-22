@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AgentSessionSignalDetector } from '../agent-session-signal-detector'
+import { AgentSessionSignalDetector, AgentSessionSignalOutputFilter } from '../agent-session-signal-detector'
 import { formatAgentSessionSignal } from '../agent-session-signal-protocol'
 
 const PROJECT_PATH = '/test/project'
@@ -124,5 +124,21 @@ describe('AgentSessionSignalDetector', () => {
     expect(detector.push(`${INPUT_NEEDED_TAG}\n${COMPLETE_TAG}\n`)).toEqual([
       'input-needed',
     ])
+  })
+})
+
+describe('AgentSessionSignalOutputFilter', () => {
+  it('hides managed tags even when they span PTY chunks', () => {
+    const filter = new AgentSessionSignalOutputFilter(PROJECT_PATH)
+    const splitIndex = Math.floor(COMPLETE_TAG.length / 2)
+
+    expect(filter.push(`before\n${COMPLETE_TAG.slice(0, splitIndex)}`)).toBe('before\n')
+    expect(filter.push(`${COMPLETE_TAG.slice(splitIndex)}\nafter`)).toBe('\nafter')
+  })
+
+  it('preserves ordinary angle-bracket output', () => {
+    const filter = new AgentSessionSignalOutputFilter(PROJECT_PATH)
+
+    expect(filter.push('<div>hello</div>')).toBe('<div>hello</div>')
   })
 })

@@ -11,7 +11,7 @@ import {
   getAdditionalPaths,
 } from './platform'
 import { getPortableBinDirs } from './portable-deps'
-import { AgentSessionSignalDetector } from './agent-session-signal-detector'
+import { AgentSessionSignalDetector, AgentSessionSignalOutputFilter } from './agent-session-signal-detector'
 import type { AgentSessionSignalEvent } from '../common/agent-session-signal'
 
 // Full-screen TUIs that are sensitive to rapid resize during startup.
@@ -158,6 +158,7 @@ interface ClaudeProcess {
   lastResizeRows?: number
   outputBuffer: OutputBuffer
   signalDetector: AgentSessionSignalDetector
+  signalOutputFilter: AgentSessionSignalOutputFilter
   replayBuffer: ReplayBuffer
   outputSequence: number
   /** Resize-sensitive TUIs: suppress output until the first settled resize */
@@ -968,6 +969,7 @@ export class PtyManager {
       spawnedAt: Date.now(),
       outputBuffer: new OutputBuffer(),
       signalDetector: new AgentSessionSignalDetector(cwd),
+      signalOutputFilter: new AgentSessionSignalOutputFilter(cwd),
       replayBuffer: new ReplayBuffer(),
       outputSequence: 0,
       hermesRuntimeDir,
@@ -983,8 +985,10 @@ export class PtyManager {
 
     // Store disposables from onData/onExit for proper cleanup
     const dataDisposable = shell.onData(data => {
-      proc.outputBuffer.append(data)
       this.detectAgentSessionSignals(proc, data)
+      data = proc.signalOutputFilter.push(data)
+      if (!data) return
+      proc.outputBuffer.append(data)
       if (proc.suppressOutput) return // swallow until first resize
       proc.replayBuffer.append(data)
       proc.outputSequence += 1
@@ -1055,14 +1059,17 @@ export class PtyManager {
           spawnedAt: Date.now(),
           outputBuffer: new OutputBuffer(),
           signalDetector: new AgentSessionSignalDetector(cwd),
+          signalOutputFilter: new AgentSessionSignalOutputFilter(cwd),
           replayBuffer: new ReplayBuffer(),
           outputSequence: 0,
         }
         this.processes.set(id, retryProc)
 
         const retryDataDisp = retryShell.onData(data => {
-          retryProc.outputBuffer.append(data)
           this.detectAgentSessionSignals(retryProc, data)
+          data = retryProc.signalOutputFilter.push(data)
+          if (!data) return
+          retryProc.outputBuffer.append(data)
           retryProc.replayBuffer.append(data)
           retryProc.outputSequence += 1
           const cb = this.dataCallbacks.get(id)

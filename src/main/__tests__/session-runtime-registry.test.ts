@@ -238,4 +238,17 @@ describe('SessionRuntimeRegistry', () => {
     ])
     expect(ptyManager.resize).toHaveBeenCalledWith(runtime.ptyId, 120, 40)
   })
+
+  it('does not rearm session signals for terminal mouse-wheel reports', async () => {
+    const runtime = await registry.ensureRuntime({
+      agentSessionId: 'session-a',
+      projectId: '/repo',
+      harnessId: 'hermes',
+    })
+
+    registry.writeInput(runtime.ptyId, '\x1b[<64;120;30M')
+
+    expect(ptyManager.write).toHaveBeenCalledWith(runtime.ptyId, '\x1b[<64;120;30M')
+    expect(ptyManager.writeUserInput).not.toHaveBeenCalled()
+  })
 })

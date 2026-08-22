@@ -677,6 +677,17 @@ describe('PtyManager', () => {
       expect(listener).toHaveBeenLastCalledWith({ ptyId: id, type: 'input-needed' })
     })
 
+    it('does not forward managed signal tags to terminal consumers', () => {
+      const id = manager.spawn(projectPath)
+      const output = vi.fn()
+      manager.onData(id, output)
+
+      dataCallback?.(`before\r\n${completeSignal.slice(0, 18)}`)
+      dataCallback?.(`${completeSignal.slice(18)}\r\nafter`)
+
+      expect(output.mock.calls.map(([data]) => data).join('')).toBe('before\r\n\r\nafter')
+    })
+
     // AC: @agent-session-notifications ac-1
     it('detects signals from the replacement PTY after a quick resume retry', () => {
       const id = manager.spawn(projectPath, 'stale-session')

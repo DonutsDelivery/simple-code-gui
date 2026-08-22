@@ -138,3 +138,44 @@ export class AgentSessionSignalDetector {
     this.textColumn = 1
   }
 }
+
+/** Removes managed signal tags from the stream before terminal rendering. */
+export class AgentSessionSignalOutputFilter {
+  private readonly signalTags: string[]
+  private pending = ''
+
+  constructor(projectPath: string) {
+    this.signalTags = [
+      formatAgentSessionSignal(projectPath, 'complete'),
+      formatAgentSessionSignal(projectPath, 'input-needed'),
+    ]
+  }
+
+  push(chunk: string): string {
+    let output = ''
+    for (const char of chunk) {
+      let current = char
+      while (current) {
+        if (!this.pending) {
+          if (current === '<') this.pending = current
+          else output += current
+          current = ''
+          continue
+        }
+
+        const candidate = this.pending + current
+        if (this.signalTags.some(tag => tag.startsWith(candidate))) {
+          this.pending = candidate
+          current = ''
+          if (this.signalTags.includes(this.pending)) this.pending = ''
+          continue
+        }
+
+        output += this.pending
+        this.pending = ''
+        // Reprocess a second '<' as the beginning of another candidate.
+      }
+    }
+    return output
+  }
+}
