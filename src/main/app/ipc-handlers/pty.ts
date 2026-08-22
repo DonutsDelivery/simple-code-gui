@@ -322,7 +322,12 @@ export function registerPtyHandlers(
     })
     desktopSubscriptions.set(newId, [disposeData, disposeExit])
 
-    mainWindow?.webContents.send('pty:recreated', { oldId, newId, backend: newBackend, sessionId: effectiveSessionId })
+    mainWindow?.webContents.send('pty:recreated', {
+      oldId,
+      newId,
+      backend: newBackend,
+      sessionId: runtime.agentSessionId,
+    })
   })
 
   // Auto-accept toggle

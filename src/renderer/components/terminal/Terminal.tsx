@@ -36,8 +36,10 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
     if (newBackend === 'default') return
     const rawPtyId = (ptyId.includes('\0') ? ptyId.split('\0').pop() : ptyId) || ptyId
-    api?.setPtyBackend?.(rawPtyId, newBackend)
-    window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
+    const changeBackend = api?.setPtyBackend
+      ? api.setPtyBackend(rawPtyId, newBackend)
+      : window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
+    changeBackend?.catch((error) => console.error('Failed to change harness:', error))
   }, [api, ptyId])
 
   // Send backend-specific command

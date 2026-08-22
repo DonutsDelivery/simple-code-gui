@@ -10,7 +10,7 @@ import {
   findLeafById,
   generateTileId,
 } from '../components/tile-tree'
-import { useWorkspaceStore, OpenTab, Project } from '../stores/workspace'
+import { useWorkspaceStore, OpenTab, Project, serverResourceKey } from '../stores/workspace'
 
 function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileNode {
   if (node.type === 'leaf') {
@@ -26,6 +26,20 @@ function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileN
   }
   const children = node.children.map(c => replaceTabIdInTree(c, oldId, newId))
   return { ...node, children }
+}
+
+export function getPtyRecreationTabIds(
+  serverId: string,
+  tab: Pick<OpenTab, 'serverId' | 'id' | 'ptyId' | 'authorityTabId'>,
+  oldPtyId: string,
+  newPtyId: string
+): { oldRendererId: string; newRendererId: string } | null {
+  if (tab.serverId !== serverId) return null
+  if (tab.ptyId !== oldPtyId && tab.authorityTabId !== oldPtyId && tab.id !== oldPtyId) return null
+  return {
+    oldRendererId: tab.id,
+    newRendererId: serverResourceKey(serverId, newPtyId),
+  }
 }
 
 interface UseApiListenersOptions {
@@ -163,17 +177,27 @@ export function useApiListeners({
     const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
       console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
       // Find the tab with the old ID
-      const tab = useWorkspaceStore.getState().openTabs.find((t) => t.serverId === serverId && t.id === oldId)
-      if (tab) {
+      const match = useWorkspaceStore.getState().openTabs
+        .map((tab) => ({ tab, ids: getPtyRecreationTabIds(serverId, tab, oldId, newId) }))
+        .find(({ ids }) => ids !== null)
+      if (match?.ids) {
+        const { oldRendererId, newRendererId } = match.ids
         // Update the tab with the new ID and backend
-        updateTab(oldId, { id: newId, ptyId: newId, backend, sessionId })
+        updateTab(oldRendererId, {
+          id: newRendererId,
+          authorityTabId: newId,
+          ptyId: newId,
+          backend,
+          sessionId,
+          agentSessionId: sessionId,
+        })
         // Update tile tree so tabIds stay in sync
         if (tileTree) {
-          setTileTree(replaceTabIdInTree(tileTree, oldId, newId))
+          setTileTree(replaceTabIdInTree(tileTree, oldRendererId, newRendererId))
         }
         // If it was the active tab, update the active tab ID
-        if (useWorkspaceStore.getState().activeTabId === oldId) {
-          setActiveTab(newId)
+        if (useWorkspaceStore.getState().activeTabId === oldRendererId) {
+          setActiveTab(newRendererId)
         }
       }
     })
