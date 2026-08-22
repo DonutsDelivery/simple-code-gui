@@ -58,6 +58,10 @@ if pgrep -f "$canonical_pid_pattern" >/dev/null; then
 fi
 
 ditto "$built_app" "$stage_app"
+# electron-builder's unsigned directory output can retain a partial framework
+# signature that macOS rejects after the first launch. Apply a complete ad-hoc
+# signature so the canonical development bundle reliably relaunches.
+codesign --force --deep --sign - "$stage_app"
 if [[ -d "$canonical_app" ]]; then
   mv "$canonical_app" "$backup_app"
 fi

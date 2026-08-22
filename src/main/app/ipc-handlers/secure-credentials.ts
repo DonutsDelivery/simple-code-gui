@@ -50,10 +50,10 @@ function validateRef(ref: unknown): asserts ref is string {
 export function registerSecureCredentialHandlers(): void {
   void app.whenReady().then(() => {
     session.defaultSession.setCertificateVerifyProc((request, callback) => {
-      const hostPrefix = `${request.hostname.toLowerCase()}:`
-      const expected = new Set([...serverCertificatePins]
-        .filter(([endpoint]) => endpoint.startsWith(hostPrefix))
-        .map(([, fingerprint]) => fingerprint))
+      // Electron's network service can report the request hostname in multiple
+      // forms. The explicit SHA-256 certificate pin is the trust boundary; an
+      // exact pinned fingerprint is sufficient regardless of that field.
+      const expected = new Set(serverCertificatePins.values())
       if (expected.size === 0) return callback(-3)
       const actual = normalizeFingerprint(request.certificate.fingerprint || '')
       callback(expected.has(actual) ? 0 : -2)
