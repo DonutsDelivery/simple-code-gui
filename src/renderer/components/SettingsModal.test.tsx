@@ -59,4 +59,33 @@ describe('SettingsModal notification persistence', () => {
       voiceOutputEnabled: true,
     }))
   })
+
+  it('loads and saves the canonical global Hermes harness selection', async () => {
+    const settings = {
+      defaultProjectDir: '/projects',
+      theme: 'default',
+      defaultHarnessId: 'hermes',
+    }
+    const api = {
+      getSettings: vi.fn().mockResolvedValue(settings),
+      saveSettings: vi.fn().mockResolvedValue(undefined),
+    } as any
+    const { container } = render(
+      <SettingsModal
+        isOpen
+        api={api}
+        settings={settings as any}
+        onClose={vi.fn()}
+        onThemeChange={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByDisplayValue('hermes')).toBeChecked()
+    fireEvent.click(container.querySelector('.modal-footer .btn-primary') as HTMLButtonElement)
+
+    await waitFor(() => expect(api.saveSettings).toHaveBeenCalledOnce())
+    expect(api.saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      defaultHarnessId: 'hermes',
+    }))
+  })
 })

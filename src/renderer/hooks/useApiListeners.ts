@@ -63,10 +63,12 @@ export function useApiListeners({
       // Get project and determine effective backend
       const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
 
-      const effectiveBackend = (project?.backend && project.backend !== 'default'
-        ? project.backend
-        : (settings?.backend && settings.backend !== 'default'
-          ? settings.backend
+      const projectHarness = project?.harnessId ?? project?.backend
+      const globalHarness = settings?.defaultHarnessId ?? settings?.backend
+      const effectiveBackend = (projectHarness && projectHarness !== 'default'
+        ? projectHarness
+        : (globalHarness && globalHarness !== 'default'
+          ? globalHarness
           : 'claude')) as BackendId
 
       try {
@@ -89,7 +91,7 @@ export function useApiListeners({
     })
 
     return unsubscribe
-  }, [api, addTab, projects, settings?.backend])
+  }, [api, addTab, projects, settings?.defaultHarnessId, settings?.backend])
 
   // Listen for orchestrator-created sessions (MCP create_session tool)
   useEffect(() => {

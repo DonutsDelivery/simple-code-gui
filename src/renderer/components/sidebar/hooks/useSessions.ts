@@ -41,8 +41,9 @@ export function useSessions({
       if (expandedProject) {
         try {
           const project = projects.find((item) => item.path === expandedProject)
-          const backend = ((project?.backend && project.backend !== 'default')
-            ? project.backend
+          const projectHarness = project?.harnessId ?? project?.backend
+          const backend = ((projectHarness && projectHarness !== 'default')
+            ? projectHarness
             : 'claude') as BackendId
           const projectSessions = (await window.electronAPI?.discoverSessions(
             expandedProject,
@@ -67,7 +68,9 @@ export function useSessions({
       const existingTab = openTabs.find((tab) => tab.projectPath === projectPath)
       const project = projects.find((item) => item.path === projectPath)
       const effectiveBackend =
-        project?.backend && project.backend !== 'default' ? project.backend : 'claude'
+        (project?.harnessId ?? project?.backend) && (project?.harnessId ?? project?.backend) !== 'default'
+          ? (project?.harnessId ?? project?.backend) as BackendId
+          : 'claude'
 
       if (existingTab) {
         onSwitchToTab(existingTab.id)

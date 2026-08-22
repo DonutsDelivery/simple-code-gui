@@ -98,12 +98,14 @@ export function useProjectHandlers({
   /** Resolve project → effective AI backend, used for instruction file injection */
   const getEffectiveBackend = useCallback((projectPath: string): BackendId => {
     const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
-    return (project?.backend && project.backend !== 'default'
-      ? project.backend
-      : (settings?.backend && settings.backend !== 'default'
-        ? settings.backend
+    const projectHarness = project?.harnessId ?? project?.backend
+    const globalHarness = settings?.defaultHarnessId ?? settings?.backend
+    return (projectHarness && projectHarness !== 'default'
+      ? projectHarness
+      : (globalHarness && globalHarness !== 'default'
+        ? globalHarness
         : 'claude')) as BackendId
-  }, [projects, settings?.backend])
+  }, [projects, settings?.defaultHarnessId, settings?.backend])
 
   const handleAddProject = useCallback(async () => {
     const path = await api.addProject()
@@ -145,10 +147,12 @@ export function useProjectHandlers({
 
     // Get project and determine effective backend
     const project = projects.find((p) => p.serverId === targetServerId && p.path === projectPath)
-    const effectiveBackend = (options.harnessId || (project?.backend && project.backend !== 'default'
-      ? project.backend
-      : (settings?.backend && settings.backend !== 'default'
-        ? settings.backend
+    const projectHarness = project?.harnessId ?? project?.backend
+    const globalHarness = settings?.defaultHarnessId ?? settings?.backend
+    const effectiveBackend = (options.harnessId || (projectHarness && projectHarness !== 'default'
+      ? projectHarness
+      : (globalHarness && globalHarness !== 'default'
+        ? globalHarness
         : 'claude'))) as BackendId
 
     // Only discover sessions if no specific sessionId was requested
@@ -212,7 +216,7 @@ export function useProjectHandlers({
       console.error('Failed to spawn PTY:', e)
       alert(sessionStartFailure(effectiveBackend, e))
     }
-  }, [addTab, getApiForServer, openTabs, projects, serverId, setActiveTab, settings?.backend, setTileTree])
+  }, [addTab, getApiForServer, openTabs, projects, serverId, setActiveTab, settings?.defaultHarnessId, settings?.backend, setTileTree])
 
   const handleOpenSessionAtPosition = useCallback(async (projectPath: string, dropZone: DropZone | null, containerSize: { width: number; height: number }, currentTree?: TileNode | null, harnessId?: string) => {
     const treeToUse = currentTree !== undefined ? currentTree : tileTreeRef.current
@@ -223,12 +227,14 @@ export function useProjectHandlers({
     }
 
     const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
+    const projectHarness = project?.harnessId ?? project?.backend
+    const globalHarness = settings?.defaultHarnessId ?? settings?.backend
     const effectiveBackend = (harnessId && harnessId !== 'default'
       ? harnessId
-      : (project?.backend && project.backend !== 'default'
-        ? project.backend
-        : (settings?.backend && settings.backend !== 'default'
-          ? settings.backend
+      : (projectHarness && projectHarness !== 'default'
+        ? projectHarness
+        : (globalHarness && globalHarness !== 'default'
+          ? globalHarness
           : 'claude'))) as BackendId
 
     const projectName = projectPath.split(/[/\\]/).pop() || projectPath
@@ -291,16 +297,18 @@ export function useProjectHandlers({
       console.error('Failed to spawn PTY:', e)
       alert(sessionStartFailure(effectiveBackend, e))
     }
-  }, [api, addTab, projects, openTabs, settings?.backend, setTileTree])
+  }, [api, addTab, projects, openTabs, settings?.defaultHarnessId, settings?.backend, setTileTree])
 
   const handleAddTabToTile = useCallback(async (projectPath: string, tileId: string, backend?: string) => {
     const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
+    const projectHarness = project?.harnessId ?? project?.backend
+    const globalHarness = settings?.defaultHarnessId ?? settings?.backend
     const effectiveBackend = (backend && backend !== 'default'
       ? backend
-      : (project?.backend && project.backend !== 'default'
-        ? project.backend
-        : (settings?.backend && settings.backend !== 'default'
-          ? settings.backend
+      : (projectHarness && projectHarness !== 'default'
+        ? projectHarness
+        : (globalHarness && globalHarness !== 'default'
+          ? globalHarness
           : 'claude'))) as BackendId
     const projectName = projectPath.split(/[/\\]/).pop() || projectPath
     const title = `${projectName} - New`
@@ -331,7 +339,7 @@ export function useProjectHandlers({
       console.error('Failed to spawn PTY:', e)
       alert(sessionStartFailure(effectiveBackend, e))
     }
-  }, [api, addTab, projects, settings?.backend, setTileTree])
+  }, [api, addTab, projects, settings?.defaultHarnessId, settings?.backend, setTileTree])
 
   const handleCloseTab = useCallback((tabId: string) => {
     const tab = openTabs.find(t => t.id === tabId)

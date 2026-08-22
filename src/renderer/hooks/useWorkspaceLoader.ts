@@ -75,14 +75,17 @@ export async function spawnSessionTabs(
       let projectPathToRestore = savedTab.projectPath
 
       const projectForTab = projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
-      const savedBackend = savedTab.backend && savedTab.backend !== 'default'
-        ? savedTab.backend
+      const savedHarness = savedTab.harnessId ?? savedTab.backend
+      const projectHarness = projectForTab?.harnessId ?? projectForTab?.backend
+      const globalHarness = settings?.defaultHarnessId ?? settings?.backend
+      const savedBackend = savedHarness && savedHarness !== 'default'
+        ? savedHarness
         : undefined
       let effectiveBackend = (savedBackend
-        || (projectForTab?.backend && projectForTab.backend !== 'default'
-          ? projectForTab.backend
-          : (settings?.backend && settings.backend !== 'default'
-            ? settings.backend
+        || (projectHarness && projectHarness !== 'default'
+          ? projectHarness
+          : (globalHarness && globalHarness !== 'default'
+            ? globalHarness
             : 'claude'))) as BackendId
       const attachedPty = livePtysById.get(savedTab.ptyId) || livePtysById.get(savedTab.id)
       if (attachedPty) {
@@ -443,10 +446,12 @@ export function useWorkspaceLoader({
           setProjects(serverProjects)
           projectsRef.current = serverProjects
           for (const project of serverProjects) {
-            const projBackend = (project.backend && project.backend !== 'default'
-              ? project.backend
-              : (loadedSettings?.backend && loadedSettings.backend !== 'default'
-                ? loadedSettings.backend
+            const projectHarness = project.harnessId ?? project.backend
+            const globalHarness = loadedSettings?.defaultHarnessId ?? loadedSettings?.backend
+            const projBackend = (projectHarness && projectHarness !== 'default'
+              ? projectHarness
+              : (globalHarness && globalHarness !== 'default'
+                ? globalHarness
                 : 'claude')) as BackendId
             await api.ttsInstallInstructions?.(project.path, projBackend)
           }

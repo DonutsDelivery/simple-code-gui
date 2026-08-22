@@ -59,7 +59,8 @@ export const ProjectItem = React.memo(function ProjectItem({
 }: ProjectItemProps) {
   const connections = useConnectionsStore(state => state.connections)
   const [newServerId, setNewServerId] = React.useState(project.serverId)
-  const [newHarnessId, setNewHarnessId] = React.useState(project.backend && project.backend !== 'default' ? project.backend : 'claude')
+  const projectHarness = project.harnessId ?? project.backend
+  const [newHarnessId, setNewHarnessId] = React.useState(projectHarness && projectHarness !== 'default' ? projectHarness : 'claude')
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
 

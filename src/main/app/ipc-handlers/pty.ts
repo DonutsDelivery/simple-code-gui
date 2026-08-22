@@ -143,14 +143,15 @@ export function registerPtyHandlers(
       const project = workspace.projects.find(p => p.path === cwd)
       const globalSettings = sessionStore.getSettings()
 
-      const normalizedGlobalBackend = globalSettings.backend === 'default'
+      const globalHarnessId = globalSettings.defaultHarnessId ?? globalSettings.backend
+      const normalizedGlobalBackend = globalHarnessId === 'default'
         ? undefined
-        : globalSettings.backend
+        : globalHarnessId
 
       const normalizedBackend = backend === 'default' ? undefined : backend
       const effectiveBackend = normalizedBackend
-        || (project?.backend && project.backend !== 'default'
-          ? project.backend
+        || ((project?.harnessId ?? project?.backend) && (project?.harnessId ?? project?.backend) !== 'default'
+          ? (project?.harnessId ?? project?.backend)
           : normalizedGlobalBackend || 'claude')
 
       const pending = pendingApiPrompts.get(cwd)

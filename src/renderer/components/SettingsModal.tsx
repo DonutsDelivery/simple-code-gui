@@ -150,7 +150,7 @@ export function SettingsModal({
       themeCustomization: migrateThemeCustomization(loaded.themeCustomization),
       autoAcceptTools: loaded.autoAcceptTools || [],
       permissionMode: loaded.permissionMode || 'default',
-      backend: loaded.backend || 'default'
+      backend: loaded.defaultHarnessId ?? loaded.backend ?? 'default'
     }))
     setGlobalInstructionContent(loaded.globalInstructionInjection || '')
     setAgentNotifications({
@@ -231,7 +231,7 @@ export function SettingsModal({
       themeCustomization: general.themeCustomization,
       autoAcceptTools: general.autoAcceptTools,
       permissionMode: general.permissionMode,
-      backend: general.backend,
+      defaultHarnessId: general.backend,
       notificationSoundsEnabled: agentNotifications.enabled,
       notificationVolume: agentNotifications.volume,
       globalInstructionInjection: globalInstructionContent,
