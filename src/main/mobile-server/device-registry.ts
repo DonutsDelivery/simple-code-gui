@@ -42,17 +42,20 @@ export interface PairedDeviceInfo {
   scopes: Array<'read' | 'write'>
 }
 
-let devices: Map<string, PairedDevice> | null = null
+const deviceRegistries = new Map<string, Map<string, PairedDevice>>()
 
 function getStorePath(): string {
   return join(getRuntimeDataDir(), 'mobile-devices')
 }
 
 function load(): Map<string, PairedDevice> {
-  if (devices) return devices
-  devices = new Map()
+  const path = getStorePath()
+  const cached = deviceRegistries.get(path)
+  if (cached) return cached
+
+  const devices = new Map<string, PairedDevice>()
+  deviceRegistries.set(path, devices)
   try {
-    const path = getStorePath()
     if (existsSync(path)) {
       const raw = readFileSync(path, 'utf-8').trim()
       const decrypted = decryptToken(raw)
@@ -72,13 +75,19 @@ function load(): Map<string, PairedDevice> {
 }
 
 function persist(): void {
+  const path = getStorePath()
+  const devices = deviceRegistries.get(path)
   if (!devices) return
   try {
     const json = JSON.stringify(Array.from(devices.values()))
-    writeSecureFile(getStorePath(), encryptToken(json))
+    writeSecureFile(path, encryptToken(json))
   } catch (err) {
     log('Failed to persist device registry', { error: String(err) })
   }
+}
+
+export function clearDeviceRegistryCacheForTesting(): void {
+  deviceRegistries.clear()
 }
 
 /**

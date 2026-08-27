@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { EnvironmentRuntime } from '../environment-runtime'
 import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from '../headless-server'
-import { issueDeviceToken } from '../mobile-server/device-registry'
+import { clearDeviceRegistryCacheForTesting, issueDeviceToken } from '../mobile-server/device-registry'
 import { runtimeHttpRequest } from '../runtime-http'
 
 const tempDirs: string[] = []
@@ -44,6 +44,7 @@ async function requestAndApprovePairing(
 
 afterEach(async () => {
   await Promise.all(runtimes.splice(0).map(runtime => runtime.stop()))
+  clearDeviceRegistryCacheForTesting()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -174,6 +175,7 @@ describe('EnvironmentRuntime headless lifecycle', () => {
 
     await runtime.stop()
     runtimes.splice(runtimes.indexOf(runtime), 1)
+    clearDeviceRegistryCacheForTesting()
     const restarted = new EnvironmentRuntime({
       dataDir,
       appPath: process.cwd(),
@@ -185,6 +187,10 @@ describe('EnvironmentRuntime headless lifecycle', () => {
     })
     runtimes.push(restarted)
     const restartedEndpoint = await restarted.start()
+    const persistedCredential = await fetch(`http://${restartedEndpoint.host}:${restartedEndpoint.port}/api/environment/snapshot`, {
+      headers: { Authorization: `Bearer ${readOnlyCredential}` },
+    })
+    expect(persistedCredential.status).toBe(200)
     const replayAfterRestart = await fetch(`http://${restartedEndpoint.host}:${restartedEndpoint.port}/api/auth/pairing-offer/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
