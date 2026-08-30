@@ -8,6 +8,10 @@ import { EnvironmentState } from '../../environment-state'
 import { SessionRuntimeRegistry } from '../../session-runtime-registry'
 import type { LocalPty } from '../types'
 import { setupPtyRoutes } from './pty'
+import { DeviceRegistry } from '../device-registry'
+import { mkdtempSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { setupTerminalRoutes } from './terminal'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
@@ -54,6 +58,8 @@ async function startRoute(): Promise<{
   baseUrl: string
   ptyManager: FakePtyManager
   router: EnvironmentCommandRouter
+  registry: SessionRuntimeRegistry
+  localPtys: Map<string, LocalPty>
 }> {
   mkdirSync(projectPath, { recursive: true })
   const state = new EnvironmentState('server-http', {
@@ -70,6 +76,7 @@ async function startRoute(): Promise<{
   app.use(express.json())
   setupPtyRoutes(
     app,
+    new DeviceRegistry(mkdtempSync(join(tmpdir(), 'donutcode-pty-registry-'))),
     () => ptyManager,
     () => registry,
     () => ({
@@ -97,7 +104,7 @@ async function startRoute(): Promise<{
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Expected TCP server address')
-  return { baseUrl: `http://127.0.0.1:${address.port}`, ptyManager, router }
+  return { baseUrl: `http://127.0.0.1:${address.port}`, ptyManager, router, registry, localPtys }
 }
 
 describe('PTY runtime authority routes', () => {
@@ -178,5 +185,106 @@ describe('PTY runtime authority routes', () => {
     expect(ptyManager.terminate).toHaveBeenCalledWith(responses[0].ptyId)
     expect(ptyManager.getProcess(responses[0].ptyId)).toBeUndefined()
     expect(router.getSnapshot().sessions[0].lifecycle).toBe('stopped')
+  })
+
+  it('switches a live PTY to another harness and reports the replacement id', async () => {
+    const { baseUrl, ptyManager, router } = await startRoute()
+    const spawn = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectPath: '/tmp/donutcode-runtime-route-test',
+        sessionId: 'canonical-session',
+        agentSessionId: 'canonical-session',
+        backend: 'claude',
+      }),
+    }).then(response => response.json())
+
+    const switched = await fetch(`${baseUrl}/api/pty/${spawn.ptyId}/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'hermes' }),
+    }).then(response => response.json())
+
+    expect(switched).toMatchObject({ success: true, oldId: spawn.ptyId, backend: 'hermes' })
+    expect(switched.newId).not.toBe(spawn.ptyId)
+    // A harness change creates a distinct canonical session, not a resume.
+    expect(switched.sessionId).toBeUndefined()
+    expect(ptyManager.terminate).toHaveBeenCalledWith(spawn.ptyId)
+    expect(ptyManager.getProcess(switched.newId)).toBeTruthy()
+    expect(router.getSnapshot().sessions.map(s => s.harnessId)).toContain('hermes')
+
+    // Switching an unknown pty is rejected.
+    const missing = await fetch(`${baseUrl}/api/pty/nope/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'codex' }),
+    })
+    expect(missing.status).toBe(404)
+
+    // Unsupported harnesses are rejected.
+    const invalid = await fetch(`${baseUrl}/api/pty/${spawn.ptyId}/backend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backend: 'clippy' }),
+    })
+    expect(invalid.status).toBe(400)
+  })
+
+  it('lets the authority HTTP client resize a host-owned desktop PTY', async () => {
+    const { baseUrl, ptyManager, registry, localPtys } = await startRoute()
+    const runtime = await registry.ensureRuntime({
+      agentSessionId: 'desktop-session',
+      projectId: projectPath,
+      harnessId: 'claude',
+    })
+
+    const attached = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectPath,
+        sessionId: 'desktop-session',
+        agentSessionId: 'desktop-session',
+        backend: 'claude',
+      }),
+    }).then(response => response.json())
+    expect(attached).toMatchObject({ ptyId: runtime.ptyId, attached: true })
+    expect(localPtys.has(runtime.ptyId)).toBe(false)
+
+    const resized = await fetch(`${baseUrl}/api/pty/${runtime.ptyId}/resize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols: 42, rows: 18 }),
+    }).then(response => response.json())
+    expect(resized).toEqual({ success: true, applied: true })
+    expect(ptyManager.resize).toHaveBeenCalledWith(runtime.ptyId, 42, 18)
+  })
+
+  it('keeps a desktop HTTP spawn under authority resize ownership', async () => {
+    const { baseUrl, ptyManager, localPtys } = await startRoute()
+    const spawned = await fetch(`${baseUrl}/api/pty/spawn`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectPath, agentSessionId: 'remote-session', backend: 'claude' }),
+    }).then(response => response.json())
+    expect(spawned.attached).toBe(false)
+    expect(localPtys.has(spawned.ptyId)).toBe(false)
+
+    const resized = await fetch(`${baseUrl}/api/pty/${spawned.ptyId}/resize`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols: 100, rows: 36 }),
+    }).then(response => response.json())
+    expect(resized).toEqual({ success: true, applied: true })
+    expect(ptyManager.resize).toHaveBeenCalledWith(spawned.ptyId, 100, 36)
+  })
+
+  it('does not apply the remote 16-session cap to host desktop spawns', async () => {
+    const { baseUrl, localPtys } = await startRoute()
+    const ids = new Set<string>()
+    for (let i = 0; i < 18; i += 1) {
+      const spawned = await fetch(`${baseUrl}/api/pty/spawn`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath, agentSessionId: `desktop-${i}`, backend: 'claude' }),
+      }).then(response => response.json())
+      expect(spawned.ptyId).toBeTruthy()
+      expect(spawned.error).toBeUndefined()
+      ids.add(spawned.ptyId)
+    }
+    expect(ids.size).toBe(18)
+    expect(localPtys.size).toBe(0)
   })
 })

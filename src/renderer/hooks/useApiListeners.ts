@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { Api } from '../api'
+import { getApi, getConnectedServerIds } from '../api'
 import type { BackendId } from '../api/types'
 import type { AppSettings } from './useSettings'
 import type { TileNode } from '../components/tile-tree'
@@ -10,23 +11,7 @@ import {
   findLeafById,
   generateTileId,
 } from '../components/tile-tree'
-import { useWorkspaceStore, OpenTab, Project, serverResourceKey } from '../stores/workspace'
-
-function replaceTabIdInTree(node: TileNode, oldId: string, newId: string): TileNode {
-  if (node.type === 'leaf') {
-    const idx = node.tabIds.indexOf(oldId)
-    if (idx === -1) return node
-    const tabIds = [...node.tabIds]
-    tabIds[idx] = newId
-    return {
-      ...node,
-      tabIds,
-      activeTabId: node.activeTabId === oldId ? newId : node.activeTabId
-    }
-  }
-  const children = node.children.map(c => replaceTabIdInTree(c, oldId, newId))
-  return { ...node, children }
-}
+import { useWorkspaceStore, OpenTab, Project } from '../stores/workspace'
 
 export function getPtyRecreationTabIds(
   serverId: string,
@@ -38,7 +23,7 @@ export function getPtyRecreationTabIds(
   if (tab.ptyId !== oldPtyId && tab.authorityTabId !== oldPtyId && tab.id !== oldPtyId) return null
   return {
     oldRendererId: tab.id,
-    newRendererId: serverResourceKey(serverId, newPtyId),
+    newRendererId: `${serverId}\0${newPtyId}`,
   }
 }
 
@@ -77,12 +62,10 @@ export function useApiListeners({
       // Get project and determine effective backend
       const project = projects.find((p) => p.serverId === serverId && p.path === projectPath)
 
-      const projectHarness = project?.harnessId ?? project?.backend
-      const globalHarness = settings?.defaultHarnessId ?? settings?.backend
-      const effectiveBackend = (projectHarness && projectHarness !== 'default'
-        ? projectHarness
-        : (globalHarness && globalHarness !== 'default'
-          ? globalHarness
+      const effectiveBackend = (project?.backend && project.backend !== 'default'
+        ? project.backend
+        : (settings?.backend && settings.backend !== 'default'
+          ? settings.backend
           : 'claude')) as BackendId
 
       try {
@@ -105,7 +88,7 @@ export function useApiListeners({
     })
 
     return unsubscribe
-  }, [api, addTab, projects, settings?.defaultHarnessId, settings?.backend])
+  }, [api, addTab, projects, settings?.backend])
 
   // Listen for orchestrator-created sessions (MCP create_session tool)
   useEffect(() => {
@@ -172,35 +155,32 @@ export function useApiListeners({
   const tileTreeRef = useRef(tileTree)
   tileTreeRef.current = tileTree
 
-  // Listen for PTY recreation events
+  // Listen for PTY recreation events on every connected server. A harness
+  // switch can target a non-active server (e.g. a project opened from a
+  // paired remote server while another server is active), so subscriptions
+  // must cover all connected apis, not just the active one.
   useEffect(() => {
-    const unsubscribe = api.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
-      console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
-      // Find the tab with the old ID
-      const match = useWorkspaceStore.getState().openTabs
-        .map((tab) => ({ tab, ids: getPtyRecreationTabIds(serverId, tab, oldId, newId) }))
-        .find(({ ids }) => ids !== null)
-      if (match?.ids) {
-        const { oldRendererId, newRendererId } = match.ids
-        // Update the tab with the new ID and backend
-        updateTab(oldRendererId, {
-          id: newRendererId,
-          authorityTabId: newId,
-          ptyId: newId,
-          backend,
-          sessionId,
-          agentSessionId: sessionId,
-        })
-        // Update tile tree so tabIds stay in sync
-        if (tileTree) {
-          setTileTree(replaceTabIdInTree(tileTree, oldRendererId, newRendererId))
+    const serverApis = getConnectedServerIds()
+      .map(serverId => ({ serverId, api: getApi(serverId) }))
+      .filter((entry): entry is { serverId: string; api: Api } => entry.api !== null)
+    if (!serverApis.some(entry => entry.serverId === serverId)) {
+      serverApis.push({ serverId, api })
+    }
+
+    const unsubscribes = serverApis.map(({ serverId: originServerId, api: originApi }) =>
+      originApi.onPtyRecreated(({ oldId, newId, backend, sessionId }) => {
+        console.log(`PTY recreated: ${oldId} -> ${newId} with backend ${backend}`)
+        // Match the tab by its raw server pty id. The recreation event carries
+        // the raw ptyId; tabs created from session-open use a composite
+        // renderer id (`serverId\0ptyId`) while API-created tabs use the raw id.
+        const tab = useWorkspaceStore.getState().openTabs.find(
+          (t) => t.serverId === originServerId && (t.ptyId === oldId || t.authorityTabId === oldId || t.id === oldId)
+        )
+        if (tab) {
+          updateTab(tab.id, { ptyId: newId, backend, sessionId })
         }
-        // If it was the active tab, update the active tab ID
-        if (useWorkspaceStore.getState().activeTabId === oldRendererId) {
-          setActiveTab(newRendererId)
-        }
-      }
-    })
-    return unsubscribe
-  }, [api, updateTab, setActiveTab, tileTree, setTileTree])
+      })
+    )
+    return () => unsubscribes.forEach(unsubscribe => unsubscribe())
+  }, [api, serverId, updateTab, setActiveTab, tileTree, setTileTree])
 }

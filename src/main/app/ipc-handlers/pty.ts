@@ -257,12 +257,14 @@ export function registerPtyHandlers(
   })
   ipcMain.on('pty:resize', (_, { id, cols, rows }: { id: string; cols: number; rows: number }) => runtimeRegistry.resize(id, cols, rows))
   ipcMain.on('pty:kill', (_, id: string) => {
-    // Legacy event name: closing a renderer tab detaches this frontend. The
-    // host-owned runtime remains available to sibling/reconnecting clients.
+    // The renderer closed the tab. That is an explicit stop, not a detach —
+    // otherwise Hermes tmux servers survive in the background and the spawn
+    // cap stays full for projects that look empty in the GUI.
     detachDesktop(id)
     autoAcceptEnabled.delete(id)
     autoAcceptBuffers.delete(id)
     autoAcceptCooldown.delete(id)
+    void runtimeRegistry.stopRuntimeByPty(id)
   })
 
   ipcMain.handle('pty:set-backend', async (_, { id: oldId, backend: newBackend }: { id: string; backend: 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' }) => {

@@ -42,48 +42,105 @@ export interface PairedDeviceInfo {
   scopes: Array<'read' | 'write'>
 }
 
-const deviceRegistries = new Map<string, Map<string, PairedDevice>>()
+export class DeviceRegistry {
+  private readonly devices = new Map<string, PairedDevice>()
+  private readonly storePath: string
+
+  constructor(dataDir: string) {
+    this.storePath = join(dataDir, 'mobile-devices')
+    this.load()
+  }
+
+  private load(): void {
+    try {
+      if (!existsSync(this.storePath)) return
+      const decrypted = decryptToken(readFileSync(this.storePath, 'utf-8').trim())
+      if (!decrypted) return
+      const parsed = JSON.parse(decrypted) as PairedDevice[]
+      if (Array.isArray(parsed)) {
+        for (const device of parsed) {
+          if (device && typeof device.token === 'string') this.devices.set(device.token, device)
+        }
+      }
+    } catch (err) {
+      log('Failed to load device registry', { error: String(err) })
+    }
+  }
+
+  private persist(): void {
+    try {
+      writeSecureFile(this.storePath, encryptToken(JSON.stringify(Array.from(this.devices.values()))))
+    } catch (err) {
+      log('Failed to persist device registry', { error: String(err) })
+    }
+  }
+
+  issueDeviceToken(deviceId: string, name: string, scopes: Array<'read' | 'write'> = ['read', 'write']): string {
+    const now = Date.now()
+    for (const device of this.devices.values()) {
+      if (device.deviceId === deviceId && !device.revoked) {
+        device.lastSeen = now
+        if (name) device.name = name
+        device.scopes = scopes
+        this.persist()
+        return device.token
+      }
+    }
+    const token = randomBytes(32).toString('hex')
+    this.devices.set(token, { token, deviceId, name: name || 'Mobile device', createdAt: now, lastSeen: now, revoked: false, scopes })
+    this.persist()
+    log('Issued per-device token', { deviceId, name })
+    return token
+  }
+
+  isDeviceTokenValid(token: string): boolean {
+    const device = token ? this.devices.get(token) : undefined
+    return !!device && !device.revoked
+  }
+
+  deviceTokenAllows(token: string, scope: 'read' | 'write'): boolean {
+    const device = this.devices.get(token)
+    return !!device && !device.revoked && (device.scopes ?? ['read', 'write']).includes(scope)
+  }
+
+  touchDevice(token: string): void {
+    const device = this.devices.get(token)
+    if (device && !device.revoked) device.lastSeen = Date.now()
+  }
+
+  revokeDevice(deviceId: string): string[] {
+    const revoked: string[] = []
+    for (const device of this.devices.values()) {
+      if (device.deviceId === deviceId && !device.revoked) {
+        device.revoked = true
+        revoked.push(device.token)
+      }
+    }
+    if (revoked.length) this.persist()
+    return revoked
+  }
+
+  listDevices(): PairedDeviceInfo[] {
+    return Array.from(this.devices.values()).filter(device => !device.revoked).map(({ deviceId, name, createdAt, lastSeen, revoked, scopes }) => ({
+      deviceId, name, createdAt, lastSeen, revoked, scopes: scopes ?? ['read', 'write']
+    }))
+  }
+}
+
+const deviceRegistries = new Map<string, DeviceRegistry>()
 
 function getStorePath(): string {
   return join(getRuntimeDataDir(), 'mobile-devices')
 }
 
-function load(): Map<string, PairedDevice> {
+function load(): DeviceRegistry {
   const path = getStorePath()
   const cached = deviceRegistries.get(path)
   if (cached) return cached
 
-  const devices = new Map<string, PairedDevice>()
-  deviceRegistries.set(path, devices)
-  try {
-    if (existsSync(path)) {
-      const raw = readFileSync(path, 'utf-8').trim()
-      const decrypted = decryptToken(raw)
-      if (decrypted) {
-        const parsed = JSON.parse(decrypted) as PairedDevice[]
-        if (Array.isArray(parsed)) {
-          for (const d of parsed) {
-            if (d && typeof d.token === 'string') devices.set(d.token, d)
-          }
-        }
-      }
-    }
-  } catch (err) {
-    log('Failed to load device registry', { error: String(err) })
-  }
-  return devices
-}
-
-function persist(): void {
-  const path = getStorePath()
-  const devices = deviceRegistries.get(path)
-  if (!devices) return
-  try {
-    const json = JSON.stringify(Array.from(devices.values()))
-    writeSecureFile(path, encryptToken(json))
-  } catch (err) {
-    log('Failed to persist device registry', { error: String(err) })
-  }
+  const registry = new DeviceRegistry(getRuntimeDataDir())
+  deviceRegistries.set(path, registry)
+  return registry
 }
 
 export function clearDeviceRegistryCacheForTesting(): void {
@@ -100,49 +157,19 @@ export function issueDeviceToken(
   name: string,
   scopes: Array<'read' | 'write'> = ['read', 'write'],
 ): string {
-  const map = load()
-  const now = Date.now()
-  for (const d of map.values()) {
-    if (d.deviceId === deviceId && !d.revoked) {
-      d.lastSeen = now
-      if (name) d.name = name
-      d.scopes = scopes
-      persist()
-      return d.token
-    }
-  }
-  const token = randomBytes(32).toString('hex')
-  map.set(token, {
-    token,
-    deviceId,
-    name: name || 'Mobile device',
-    createdAt: now,
-    lastSeen: now,
-    revoked: false,
-    scopes
-  })
-  persist()
-  log('Issued per-device token', { deviceId, name })
-  return token
+  return load().issueDeviceToken(deviceId, name, scopes)
 }
 
 export function isDeviceTokenValid(token: string): boolean {
-  if (!token) return false
-  const d = load().get(token)
-  return !!d && !d.revoked
+  return load().isDeviceTokenValid(token)
 }
 
 export function deviceTokenAllows(token: string, scope: 'read' | 'write'): boolean {
-  const device = load().get(token)
-  if (!device || device.revoked) return false
-  return (device.scopes ?? ['read', 'write']).includes(scope)
+  return load().deviceTokenAllows(token, scope)
 }
 
 export function touchDevice(token: string): void {
-  const d = load().get(token)
-  if (d && !d.revoked) {
-    d.lastSeen = Date.now()
-  }
+  load().touchDevice(token)
 }
 
 /**
@@ -150,30 +177,9 @@ export function touchDevice(token: string): void {
  * terminate their live sockets.
  */
 export function revokeDevice(deviceId: string): string[] {
-  const map = load()
-  const revoked: string[] = []
-  for (const d of map.values()) {
-    if (d.deviceId === deviceId && !d.revoked) {
-      d.revoked = true
-      revoked.push(d.token)
-    }
-  }
-  if (revoked.length > 0) {
-    persist()
-    log('Revoked device', { deviceId, tokens: revoked.length })
-  }
-  return revoked
+  return load().revokeDevice(deviceId)
 }
 
 export function listDevices(): PairedDeviceInfo[] {
-  return Array.from(load().values())
-    .filter(d => !d.revoked)
-    .map(({ deviceId, name, createdAt, lastSeen, revoked, scopes }) => ({
-      deviceId,
-      name,
-      createdAt,
-      lastSeen,
-      revoked,
-      scopes: scopes ?? ['read', 'write']
-    }))
+  return load().listDevices()
 }

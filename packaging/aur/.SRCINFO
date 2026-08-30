@@ -1,0 +1,15 @@
+pkgbase = donutcode
+	pkgdesc = Distributed AI development workspace and headless server
+	pkgver = 1.3.58
+	pkgrel = 1
+	url = https://github.com/DonutsDelivery/simple-code-gui
+	arch = x86_64
+	license = custom
+	makedepends = npm
+	depends = nodejs
+	depends = git
+	depends = tmux
+	source = donutcode-1.3.58.tar.gz::https://github.com/DonutsDelivery/simple-code-gui/archive/refs/tags/v1.3.58.tar.gz
+	sha256sums = SKIP
+
+pkgname = donutcode

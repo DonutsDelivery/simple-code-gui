@@ -13,6 +13,7 @@ import {
 } from './terminalInit.js'
 import { createThemeUpdateHandler } from './eventHandlers.js'
 import { registerTerminal, unregisterTerminal } from '../../../debug/debugBridge.js'
+import type { PtyGeometry } from '../../../../common/pty-geometry.js'
 
 // Setup error handler on module load
 setupXtermErrorHandler()
@@ -20,7 +21,10 @@ setupXtermErrorHandler()
 /**
  * Creates PTY operations from the provided API or window.electronAPI.
  */
-function createPtyOperations(api: UseTerminalSetupOptions['api']): PtyOperations {
+function createPtyOperations(
+  api: UseTerminalSetupOptions['api'],
+  canonicalGeometryRef: { current: PtyGeometry | null },
+): PtyOperations {
   return {
     writePty: (id: string, data: string) => {
       if (api) {
@@ -50,6 +54,8 @@ function createPtyOperations(api: UseTerminalSetupOptions['api']): PtyOperations
         return window.electronAPI?.onPtyExit(id, callback)
       }
     },
+    onPtyGeometry: (id, callback) => api?.onPtyGeometry?.(id, callback),
+    getGeometry: () => canonicalGeometryRef.current,
   }
 }
 
@@ -73,8 +79,9 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
   const userScrolledUpRef = useRef(false)
   const currentLineInputRef = useRef<string>('')
   const inputSuppressedRef = useRef<boolean>(false)
+  const canonicalGeometryRef = useRef<PtyGeometry | null>(null)
 
-  const ptyOperations = createPtyOperations(api)
+  const ptyOperations = createPtyOperations(api, canonicalGeometryRef)
 
   // Main terminal setup effect
   useEffect(() => {
@@ -84,6 +91,7 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
     let initCheckInterval: ReturnType<typeof setInterval> | null = null
     let cleanupData: (() => void) | undefined
     let cleanupExit: (() => void) | undefined
+    let cleanupGeometry: (() => void) | undefined
 
     // Reset TTS state for this terminal session
     resetTTSState()
@@ -104,6 +112,11 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
         state
       )
       if (ok && state.terminal) {
+        const geometry = canonicalGeometryRef.current
+        if (geometry && !geometry.canResize) {
+          state.terminal.resize(geometry.cols, geometry.rows)
+          state.terminal.refresh(0, state.terminal.rows - 1)
+        }
         registerTerminal(ptyId, {
           terminal: state.terminal,
           fitAddon: state.fitAddon,
@@ -114,6 +127,22 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
       }
       return ok
     }
+
+    // Geometry must arrive before replay bytes so a projection interprets
+    // cursor-addressed output using the authority's canonical grid.
+    cleanupGeometry = ptyOperations.onPtyGeometry(ptyId, geometry => {
+      canonicalGeometryRef.current = geometry
+      containerRef.current?.classList.toggle('canonical-projection', !geometry.canResize)
+      if (!state.terminal) return
+      if (geometry.canResize) {
+        state.fitAddon?.fit()
+        const dims = state.fitAddon?.proposeDimensions()
+        if (dims && dims.cols > 0 && dims.rows > 0) ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
+      } else {
+        state.terminal.resize(geometry.cols, geometry.rows)
+        state.terminal.refresh(0, state.terminal.rows - 1)
+      }
+    })
 
     // PTY output handling
     cleanupData = ptyOperations.onPtyData(ptyId, (data) => {
@@ -127,7 +156,8 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
         ptyId,
         onTTSChunk,
         onSummaryChunk,
-        state
+        state,
+        options.backend,
       )
     })
 
@@ -170,6 +200,7 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
         window.removeEventListener('terminal-theme-update', handleThemeUpdate)
       }
       unregisterTerminal(ptyId)
+      cleanupGeometry?.()
       cleanupTerminal(containerRef, state, initCheckInterval, null, cleanupData, cleanupExit)
     }
   }, [ptyId])
@@ -196,5 +227,6 @@ export function useTerminalSetup(options: UseTerminalSetupOptions): UseTerminalS
     userScrolledUpRef,
     currentLineInputRef,
     inputSuppressedRef,
+    canonicalGeometryRef,
   }
 }

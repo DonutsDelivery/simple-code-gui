@@ -31,15 +31,29 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
   }, [api])
 
   // Backend change handler — must use the RAW server pty id, not the
-  // renderer-prefixed tab id (serverId\0ptyId), or the main-process registry
+  // renderer-prefixed tab id (serverId\0ptyId), or the server registry
   // cannot resolve the process and the switch silently no-ops.
-  const handleBackendChange = useCallback((newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
+  const handleBackendChange = useCallback(async (newBackend: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok') => {
     if (newBackend === 'default') return
     const rawPtyId = (ptyId.includes('\0') ? ptyId.split('\0').pop() : ptyId) || ptyId
-    const changeBackend = api?.setPtyBackend
-      ? api.setPtyBackend(rawPtyId, newBackend)
-      : window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
-    changeBackend?.catch((error) => console.error('Failed to change harness:', error))
+    try {
+      // Single authoritative path: `api` routes to the connected server
+      // (HttpBackend → POST /api/pty/:id/backend, or ElectronBackend →
+      // pty:set-backend IPC). Never also fire the raw IPC here — that would
+      // double-switch in local mode and no-op against the wrong process in
+      // remote mode.
+      if (api?.setPtyBackend) {
+        await api.setPtyBackend(rawPtyId, newBackend)
+      } else {
+        await window.electronAPI?.setPtyBackend?.(rawPtyId, newBackend)
+      }
+    } catch (error) {
+      // A stale ptyId (e.g. after a backend restart) makes the server 404 and
+      // the switch fail silently. Surface it instead of swallowing the error.
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`Failed to switch session to ${newBackend}:`, message)
+      alert(`Failed to switch to ${newBackend}:\n\n${message}\n\nIf the session was restarted, close this tab and reopen it.`)
+    }
   }, [api, ptyId])
 
   // Send backend-specific command
@@ -80,6 +94,7 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
     userScrolledUpRef,
     currentLineInputRef,
     inputSuppressedRef,
+    canonicalGeometryRef,
   } = useTerminalSetup({
     ptyId,
     theme,
@@ -104,10 +119,16 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
         if (rect.width > 50 && rect.height > 50) {
           const wasAtBottom = !userScrolledUpRef.current
 
-          fitAddonRef.current.fit()
-          const dims = fitAddonRef.current.proposeDimensions()
-          if (dims && dims.cols > 0 && dims.rows > 0) {
-            window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
+          const geometry = canonicalGeometryRef.current
+          if (geometry && !geometry.canResize) {
+            terminalRef.current.resize(geometry.cols, geometry.rows)
+          } else {
+            fitAddonRef.current.fit()
+            const dims = fitAddonRef.current.proposeDimensions()
+            if (dims && dims.cols > 0 && dims.rows > 0) {
+              if (api) api.resizePty(ptyId, dims.cols, dims.rows)
+              else window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
+            }
           }
 
           // Force repaint on reactivation (fixes grey frame from WebGL
@@ -131,26 +152,28 @@ export function Terminal({ ptyId, isActive, theme, onFocus, projectPath, backend
       // on a real SIGWINCH. Hermes is intentionally excluded: its initial
       // screen is actively streamed, and an extra resize during that paint can
       // leave cursor-addressed cells scattered across the viewport.
-      if (backend === 'opencode') {
+      if (backend === 'opencode' && canonicalGeometryRef.current?.canResize !== false) {
         setTimeout(() => {
           if (!fitAddonRef.current || !terminalRef.current) return
           fitAddonRef.current.fit()
           const dims = fitAddonRef.current.proposeDimensions()
           if (dims && dims.cols > 0 && dims.rows > 1) {
             terminalRef.current.resize(dims.cols, dims.rows - 1)
-            window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows - 1)
+            if (api) api.resizePty(ptyId, dims.cols, dims.rows - 1)
+            else window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows - 1)
             terminalRef.current.refresh(0, terminalRef.current.rows - 1)
             setTimeout(() => {
               if (!terminalRef.current) return
               terminalRef.current.resize(dims.cols, dims.rows)
-              window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
+              if (api) api.resizePty(ptyId, dims.cols, dims.rows)
+              else window.electronAPI?.resizePty(ptyId, dims.cols, dims.rows)
               terminalRef.current.refresh(0, terminalRef.current.rows - 1)
             }, 150)
           }
         }, 200)
       }
     }
-  }, [isActive, ptyId, backend, containerRef, terminalRef, fitAddonRef, userScrolledUpRef])
+  }, [api, isActive, ptyId, backend, containerRef, terminalRef, fitAddonRef, userScrolledUpRef, canonicalGeometryRef])
 
   // Allow keyboard tile-focus navigation to move xterm focus to this terminal
   useEffect(() => {

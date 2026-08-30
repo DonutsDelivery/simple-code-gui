@@ -3,6 +3,7 @@ import type { Terminal as XTerm } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { Theme } from '../../../themes.js'
 import type { Api } from '../../../api/types.js'
+import type { PtyGeometry, PtyGeometryCallback } from '../../../../common/pty-geometry.js'
 
 export interface UseTerminalSetupOptions {
   ptyId: string
@@ -24,6 +25,7 @@ export interface UseTerminalSetupReturn {
   userScrolledUpRef: RefObject<boolean>
   currentLineInputRef: RefObject<string>
   inputSuppressedRef: MutableRefObject<boolean>
+  canonicalGeometryRef: MutableRefObject<PtyGeometry | null>
 }
 
 export interface PtyOperations {
@@ -31,6 +33,8 @@ export interface PtyOperations {
   resizePty: (id: string, cols: number, rows: number) => void
   onPtyData: (id: string, callback: (data: string) => void) => (() => void) | undefined
   onPtyExit: (id: string, callback: (code: number) => void) => (() => void) | undefined
+  onPtyGeometry: (id: string, callback: PtyGeometryCallback) => (() => void) | undefined
+  getGeometry: () => PtyGeometry | null
 }
 
 export interface TerminalRefs {

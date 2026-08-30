@@ -14,6 +14,7 @@ export interface OpenTab {
   projectPath: string
   sessionId?: string
   title: string
+  harnessId?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
   backend?: 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok' | 'claude-codex'
 }
 

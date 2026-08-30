@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Api } from '../api'
 import type { BackendId, PtySession } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { useWorkspaceStore, WorkspaceSession, OpenTab, serverResourceKey, type WorkspaceView } from '../stores/workspace'
+import { markPendingRuntimeRebind, useWorkspaceStore, WorkspaceSession, OpenTab, serverResourceKey, type WorkspaceView } from '../stores/workspace'
 import {
   generateCanvasScene,
   loadCanvasScene,
@@ -75,12 +75,12 @@ export async function spawnSessionTabs(
       let projectPathToRestore = savedTab.projectPath
 
       const projectForTab = projects?.find((p: { path: string }) => p.path === savedTab.projectPath)
+      // Tabs are persisted with `harnessId` (normalizeTabForSave strips the
+      // `backend` field and writes `harnessId: backend`), so honor both names.
       const savedHarness = savedTab.harnessId ?? savedTab.backend
       const projectHarness = projectForTab?.harnessId ?? projectForTab?.backend
       const globalHarness = settings?.defaultHarnessId ?? settings?.backend
-      const savedBackend = savedHarness && savedHarness !== 'default'
-        ? savedHarness
-        : undefined
+      const savedBackend = savedHarness && savedHarness !== 'default' ? savedHarness : undefined
       let effectiveBackend = (savedBackend
         || (projectHarness && projectHarness !== 'default'
           ? projectHarness
@@ -88,7 +88,7 @@ export async function spawnSessionTabs(
             ? globalHarness
             : 'claude'))) as BackendId
       const attachedPty = livePtysById.get(savedTab.ptyId) || livePtysById.get(savedTab.id)
-      if (attachedPty) {
+      if (attachedPty?.backend) {
         effectiveBackend = attachedPty.backend
       }
 
@@ -99,10 +99,15 @@ export async function spawnSessionTabs(
         : savedTab.sessionId
       let sessionIdForSpawn = sessionIdToRestore
 
-      // A fully persisted canonical/native identity is authoritative. Avoid an
-      // expensive discovery scan (notably Hermes history) and never replace an
-      // exact saved conversation with whichever session happens to be newest.
-      if (!attachedPty && !(savedTab.agentSessionId && savedTab.sessionId)) {
+      // Hermes discovery is intentionally incomplete/ephemeral. An empty list
+      // is not evidence that a persisted native session ID is stale; only the
+      // authority may reject that exact resume. Skip client-side discovery and
+      // pass the persisted ID through unchanged.
+      const preserveExactHermesSession = !attachedPty
+        && Boolean(savedTab.sessionId)
+        && effectiveBackend === 'hermes'
+
+      if (!attachedPty && !preserveExactHermesSession) {
         let sessionsForProject = sessionsCache.get(savedTab.projectPath)
         if (!sessionsForProject) {
           const list = await api.discoverSessions(savedTab.projectPath, effectiveBackend)
@@ -196,6 +201,11 @@ export async function spawnSessionTabs(
         }
       }
 
+      if (preserveExactHermesSession) {
+        sessionIdToRestore = savedTab.sessionId
+        sessionIdForSpawn = savedTab.sessionId
+      }
+
       const ptyId = attachedPty
         ? attachedPty.id
         : await api.spawnPty(
@@ -205,7 +215,9 @@ export async function spawnSessionTabs(
           effectiveBackend,
           savedTab.agentSessionId || savedTab.sessionId || savedTab.id,
         )
-      const rendererTabId = serverResourceKey(serverId, ptyId)
+      const canonicalTabId = savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId
+      const rendererTabId = serverResourceKey(serverId, canonicalTabId)
+      markPendingRuntimeRebind(serverId, canonicalTabId, ptyId)
 
       if (savedTab.id) {
         idMapping.set(savedTab.id, rendererTabId)
@@ -214,9 +226,9 @@ export async function spawnSessionTabs(
       const tab: OpenTab = {
         serverId,
         id: rendererTabId,
-        authorityTabId: ptyId,
+        authorityTabId: canonicalTabId,
         projectPath: projectPathToRestore,
-        agentSessionId: savedTab.agentSessionId || savedTab.sessionId || savedTab.id || ptyId,
+        agentSessionId: canonicalTabId,
         sessionId: sessionIdToRestore,
         title: titleToRestore,
         customTitle: savedTab.customTitle || undefined,
@@ -365,6 +377,7 @@ export function useWorkspaceLoader({
     initSessions,
     setSessionSavedData,
     setSessionLiveData,
+    rebindSessionRuntime,
     markSessionRestored,
     switchSession,
     clearAllTabs,
@@ -414,7 +427,12 @@ export function useWorkspaceLoader({
       : restoredTabs[0]?.id ?? null
 
     setSessionLiveData(sessionId, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
-  }, [api, markSessionRestored, setSessionLiveData])
+    setTimeout(() => {
+      for (const tab of restoredTabs) {
+        rebindSessionRuntime(sessionId, tab.authorityTabId ?? tab.id, tab.ptyId)
+      }
+    }, 1500)
+  }, [api, markSessionRestored, rebindSessionRuntime, setSessionLiveData])
 
   useEffect(() => {
     if (initRef.current) return
@@ -451,12 +469,10 @@ export function useWorkspaceLoader({
           setProjects(serverProjects)
           projectsRef.current = serverProjects
           for (const project of serverProjects) {
-            const projectHarness = project.harnessId ?? project.backend
-            const globalHarness = loadedSettings?.defaultHarnessId ?? loadedSettings?.backend
-            const projBackend = (projectHarness && projectHarness !== 'default'
-              ? projectHarness
-              : (globalHarness && globalHarness !== 'default'
-                ? globalHarness
+            const projBackend = (project.backend && project.backend !== 'default'
+              ? project.backend
+              : (loadedSettings?.backend && loadedSettings.backend !== 'default'
+                ? loadedSettings.backend
                 : 'claude')) as BackendId
             await api.ttsInstallInstructions?.(project.path, projBackend)
           }
@@ -553,6 +569,11 @@ export function useWorkspaceLoader({
             : restoredTabs[0]?.id ?? null
 
           setSessionLiveData(activeClientSessionId!, restoredTabs, tree, canvas.scene, activeTabId, canvas.activeView, canvas.preservedScene)
+          setTimeout(() => {
+            for (const tab of restoredTabs) {
+              rebindSessionRuntime(activeClientSessionId!, tab.authorityTabId ?? tab.id, tab.ptyId)
+            }
+          }, 1500)
           switchSession(activeClientSessionId!)
         } else {
           markSessionRestored(activeClientSessionId!)
@@ -568,7 +589,7 @@ export function useWorkspaceLoader({
     }
 
     loadWorkspace()
-  }, [api, checkInstallation, clearAllTabs, initSessions, markSessionRestored, setCategories, setProjects, setSessionLiveData, setSessionSavedData, switchSession])
+  }, [api, checkInstallation, clearAllTabs, initSessions, markSessionRestored, rebindSessionRuntime, setCategories, setProjects, setSessionLiveData, setSessionSavedData, switchSession])
 
   return {
     loading,

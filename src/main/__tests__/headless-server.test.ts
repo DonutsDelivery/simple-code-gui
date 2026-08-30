@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { EnvironmentRuntime } from '../environment-runtime'
 import { HeadlessServer, isRuntimeInfoLive, readRuntimeInfo } from '../headless-server'
-import { clearDeviceRegistryCacheForTesting, issueDeviceToken } from '../mobile-server/device-registry'
+import { clearDeviceRegistryCacheForTesting } from '../mobile-server/device-registry'
 import { runtimeHttpRequest } from '../runtime-http'
 
 const tempDirs: string[] = []
@@ -147,7 +147,7 @@ describe('EnvironmentRuntime headless lifecycle', () => {
     })
     expect(revokedSecond.status).toBe(403)
 
-    const readOnlyCredential = issueDeviceToken('read-only-device', 'Read-only device', ['read'])
+    const readOnlyCredential = runtime.server.issueDeviceToken('read-only-device', 'Read-only device', ['read'])
     const readOnlySnapshot = await fetch(`http://${endpoint.host}:${endpoint.port}/api/environment/snapshot`, {
       headers: { Authorization: `Bearer ${readOnlyCredential}` },
     })
@@ -198,6 +198,48 @@ describe('EnvironmentRuntime headless lifecycle', () => {
     })
     expect(replayAfterRestart.status).toBe(403)
   }, 30_000)
+
+  it('stops promptly even with a connected frontend websocket', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'donutcode-headless-stop-'))
+    tempDirs.push(dataDir)
+    const runtime = new EnvironmentRuntime({
+      dataDir,
+      appPath: process.cwd(),
+      version: 'test-version',
+      serverId: 'server-headless-stop',
+      host: '127.0.0.1',
+      port: 0,
+      secure: false,
+    })
+    runtimes.push(runtime)
+
+    const endpoint = await runtime.start()
+    const baseUrl = `http://${endpoint.host}:${endpoint.port}`
+    const pairingOffer = runtime.server.getConnectionInfo().qrData
+    const deviceCredential = await requestAndApprovePairing(runtime, baseUrl, pairingOffer, 'stop-test', 'Stop test')
+
+    const ticketResponse = await fetch(`${baseUrl}/api/auth/websocket-ticket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${deviceCredential}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: '/ws' }),
+    })
+    const { ticket } = await ticketResponse.json() as { ticket: string }
+    const socket = new WebSocket(`${baseUrl.replace('http:', 'ws:')}/ws`, [`ticket-${ticket}`])
+    await new Promise<void>((resolve, reject) => {
+      socket.once('open', resolve)
+      socket.once('error', reject)
+    })
+
+    // server.close() waits for every open socket; without the force-terminate
+    // in stop(), this would hang until the test timeout. Must resolve fast.
+    const stopPromise = runtime.stop()
+    const timedOut = await new Promise<'stopped' | 'timeout'>(resolve => {
+      const timer = setTimeout(() => resolve('timeout'), 5_000)
+      stopPromise.then(() => { clearTimeout(timer); resolve('stopped') })
+    })
+    expect(timedOut).toBe('stopped')
+    runtimes.splice(runtimes.indexOf(runtime), 1)
+  }, 15_000)
 
   it('publishes atomic runtime identity and rejects a second live owner', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'donutcode-headless-info-'))

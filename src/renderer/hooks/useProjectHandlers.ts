@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { Api } from '../api'
 import type { BackendId } from '../api/types'
 import type { AppSettings } from './useSettings'
-import { serverResourceKey, OpenTab, Project } from '../stores/workspace'
+import { serverResourceKey, OpenTab, Project, useWorkspaceStore } from '../stores/workspace'
 import type { TileNode } from '../components/tile-tree.js'
 import type { DropZone } from '../components/tiled-layout-utils.js'
 import {
@@ -136,6 +136,13 @@ export function useProjectHandlers({
     const targetApi = getApiForServer(targetServerId)
     if (!targetApi) throw new Error(`Server ${targetServerId} is disconnected`)
 
+    // Route the session into a workspace owned by the target server. Tabs for
+    // a server must live in that server's session; otherwise the per-server
+    // workspace slice cannot round-trip (a tab opened on a paired remote
+    // server while a different server is active would land in the active
+    // server's session and be dropped by the next authoritative snapshot).
+    useWorkspaceStore.getState().ensureSessionForServer(targetServerId)
+
     // Check if this session is already open
     if (sessionId) {
       const existingTab = openTabs.find(tab => tab.serverId === targetServerId && tab.sessionId === sessionId)
@@ -184,7 +191,8 @@ export function useProjectHandlers({
       await targetApi.ttsInstallInstructions?.(workingPath, effectiveBackend)
 
       const ptyId = await targetApi.spawnPty(workingPath, sessionId, undefined, effectiveBackend, agentSessionId)
-      const rendererTabId = serverResourceKey(targetServerId, ptyId)
+      const canonicalTabId = agentSessionId || sessionId || ptyId
+      const rendererTabId = serverResourceKey(targetServerId, canonicalTabId)
 
       // Add leaf to tree — single operation, no race condition
       const currentTree = tileTreeRef.current
@@ -194,9 +202,9 @@ export function useProjectHandlers({
       addTab({
         serverId: targetServerId,
         id: rendererTabId,
-        authorityTabId: ptyId,
+        authorityTabId: canonicalTabId,
         projectPath: workingPath,
-        agentSessionId: agentSessionId || sessionId || ptyId,
+        agentSessionId: canonicalTabId,
         sessionId,
         title,
         ptyId,
@@ -370,7 +378,11 @@ export function useProjectHandlers({
   }, [api, openTabs, removeTab, setTileTree])
 
   const handleCloseProjectTabs = useCallback((projectPath: string) => {
-    const tabsToClose = openTabs.filter(tab => tab.serverId === serverId && tab.projectPath === projectPath)
+    // Close every open tile for this project path, including ones that live
+    // on a paired remote authority. Filtering by the currently viewed server
+    // left Linux PTYs running after the user closed the project from Mac,
+    // so slots never freed.
+    const tabsToClose = openTabs.filter(tab => tab.projectPath === projectPath)
     let currentTree = tileTreeRef.current
     for (const tab of tabsToClose) {
       closedTabsRef.current.push({

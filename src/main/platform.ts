@@ -33,6 +33,7 @@ export function getAdditionalPaths(): string[] {
   }
 
   return [
+    ...(isMac ? ['/opt/homebrew/bin', '/opt/homebrew/sbin'] : []),
     path.join(homeDir, '.nvm/versions/node/v20.18.1/bin'),
     path.join(homeDir, '.nvm/versions/node/v22.11.0/bin'),
     path.join(homeDir, '.local/bin'),

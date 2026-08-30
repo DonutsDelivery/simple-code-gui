@@ -5,6 +5,7 @@
 import { WebSocket } from 'ws'
 
 export interface MobileServerConfig {
+  dataDir?: string
   port?: number
   host?: string
   serverVersion?: string
@@ -23,6 +24,8 @@ export interface TerminalSubscription {
 export interface LocalPty {
   ptyId: string
   projectPath: string
+  /** Device credential that created and owns this PTY's canonical geometry. */
+  ownerToken: string
   dataCallbacks: Set<(data: string) => void>
   exitCallbacks: Set<(code: number) => void>
   disposeExit?: () => void

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, memo } from 'react'
 import { tabResourceKey, useWorkspaceStore, type AgentAttentionKind, type WorkspaceSession } from '../stores/workspace'
+import { useConnectionsStore } from '../stores/connections'
 
 export function getWorkspaceAttention(
   session: WorkspaceSession,
@@ -15,6 +16,7 @@ export function getWorkspaceAttention(
 }
 
 interface WorkspaceSwitcherProps {
+  localServerId: string
   sessions: WorkspaceSession[]
   activeSessionId: string | null
   onSwitch: (id: string) => void
@@ -30,6 +32,7 @@ interface WorkspaceSwitcherProps {
 }
 
 interface SessionTabProps {
+  localServerId: string
   session: WorkspaceSession
   index: number
   isActive: boolean
@@ -53,6 +56,7 @@ interface SessionTabProps {
 }
 
 const SessionTab = memo(function SessionTab({
+  localServerId,
   session,
   index,
   isActive,
@@ -106,10 +110,15 @@ const SessionTab = memo(function SessionTab({
   }, [])
 
   const tabCount = session.openTabs.length
+  const connections = useConnectionsStore(state => state.connections)
+  const isRemote = session.serverId !== localServerId
+  const originName = connections.find(connection => connection.serverId === session.serverId)?.displayName || session.serverId.slice(0, 8)
+  const serverHue = [...session.serverId].reduce((value, char) => (value * 31 + char.charCodeAt(0)) % 360, 0)
 
   return (
     <div
-      className={`tab workspace-tab ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${attention ? ` has-agent-attention has-agent-attention--${attention}` : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}${isDropTarget ? ' ws-drop-target' : ''}`}
+      className={`tab workspace-tab ${isRemote ? 'workspace-tab--remote' : 'workspace-tab--local'} ${isActive ? 'active' : ''} ${isRestoring ? 'restoring' : ''}${attention ? ` has-agent-attention has-agent-attention--${attention}` : ''}${insertSide === 'before' ? ' ws-insert-before' : ''}${insertSide === 'after' ? ' ws-insert-after' : ''}${isDropTarget ? ' ws-drop-target' : ''}`}
+      style={{ '--server-color': `hsl(${serverHue} 72% 62%)` } as React.CSSProperties}
       role="tab"
       aria-label={`${session.name}${attention === 'needs-input' ? ', needs your input' : attention === 'completed' ? ', agent completed' : ''}`}
       aria-selected={isActive}
@@ -186,6 +195,7 @@ const SessionTab = memo(function SessionTab({
           title={session.name}
           onDoubleClick={(e) => { e.stopPropagation(); startRename(e) }}
         >
+          {isRemote && <span className="workspace-origin-icon" aria-label={`Remote workspace on ${originName}`}>⌁</span>}
           {isRestoring ? '⟳ ' : ''}{session.name}
           {attention && <span className="agent-attention-dot" aria-hidden="true" />}
           {tabCount > 0 && (
@@ -206,6 +216,7 @@ const SessionTab = memo(function SessionTab({
 })
 
 export function WorkspaceSwitcher({
+  localServerId,
   sessions,
   activeSessionId,
   onSwitch,
@@ -284,6 +295,7 @@ export function WorkspaceSwitcher({
       {sessions.map((session, index) => (
         <SessionTab
           key={session.id}
+          localServerId={localServerId}
           session={session}
           index={index}
           isActive={session.id === activeSessionId}

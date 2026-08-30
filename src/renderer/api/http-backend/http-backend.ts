@@ -13,6 +13,7 @@ import {
   Session,
   PtyDataCallback,
   PtyExitCallback,
+  PtyGeometryCallback,
   PtyRecreatedCallback,
   AgentSessionSignalCallback,
   ApiOpenSessionCallback,
@@ -133,6 +134,10 @@ export class HttpBackend implements Api {
     this.ptyApi.killPty(id)
   }
 
+  setPtyBackend(id: string, backend: BackendId): Promise<void> {
+    return this.ptyApi.setPtyBackend(id, backend)
+  }
+
   writePty(id: string, data: string): void {
     this.ptyApi.writePty(id, data)
   }
@@ -143,6 +148,10 @@ export class HttpBackend implements Api {
 
   onPtyData(id: string, callback: PtyDataCallback): Unsubscribe {
     return this.ptyApi.onPtyData(id, callback)
+  }
+
+  onPtyGeometry(id: string, callback: PtyGeometryCallback): Unsubscribe {
+    return this.ptyApi.onPtyGeometry(id, callback)
   }
 
   onPtyExit(id: string, callback: PtyExitCallback): Unsubscribe {
@@ -161,6 +170,26 @@ export class HttpBackend implements Api {
 
   discoverSessions(projectPath: string, backend?: BackendId): Promise<Session[]> {
     return this.workspaceApi.discoverSessions(projectPath, backend)
+  }
+
+  listArtifacts(filter?: { producerServerId?: string; kind?: string }) {
+    return this.workspaceApi.listArtifacts(filter)
+  }
+
+  downloadArtifact(artifactId: string) {
+    return this.workspaceApi.downloadArtifact(artifactId)
+  }
+
+  expireArtifact(artifactId: string) {
+    return this.workspaceApi.expireArtifact(artifactId)
+  }
+
+  getCoordinationSnapshot() {
+    return this.workspaceApi.getCoordinationSnapshot()
+  }
+
+  sendCoordinationMessage(message: Record<string, unknown>) {
+    return this.workspaceApi.sendCoordinationMessage(message)
   }
 
   // Workspace Management

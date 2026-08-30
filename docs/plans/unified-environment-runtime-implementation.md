@@ -1,6 +1,6 @@
 # Unified Environment Runtime — Executable Implementation Plan
 
-**Status:** Ready — Checkpoint 5 server-authoritative state
+**Status:** Post-CP14 hardening — Mac handoff published
 **Source roadmap:** `.hermes/plans/2026-08-02_181907-lean-runtime-remote-platform-roadmap.md`
 **Source repository:** `/home/user/Programs/Claude Projects/Claude-Terminal`
 **Implementation worktree:** `/home/user/Programs/DonutCode-Unified-Runtime`
@@ -23,6 +23,9 @@
 - **Checkpoint 4B complete:** replaced the unstructured emoji-only footer with a coherent Voice / Connect / Settings / More action dock and moved voice mode/output, project API, and debug refresh into a labeled overflow. The final implementation has explicit state treatments, one toolbar tab stop, Arrow/Home/End navigation, menu roving focus, Escape/focus restoration, dynamic three/four-column sizing, reduced-motion handling, consistent 18 px icon envelopes, and scroll-bounded viewport-safe portal positioning. Six focused dock checks, `npm run build`, `npm run build:mobile`, Capacitor sync, Android debug assembly, and `git diff --check` pass. Isolated runtime geometry verified equal 48 px primary actions with no sidebar or body overflow at both 280 px and the real 200 px minimum width; the open menu remained entirely contained. Exercising Voice exposed a separate blocked-Whisper-helper CSP defect tracked as `Claude-Terminal-1iw`.
 - **Checkpoint 5 complete:** added durable server-owned environment snapshots, revisions, canonical session/PTY records, an ordered bounded event log, atomic receipt/event/snapshot persistence, cross-transport command idempotency, expected-revision conflicts, HTTP/IPC parity, and WebSocket broadcasts. Authoritative event snapshots now drive renderer convergence; reconnect emits an immediate synchronization envelope; cursor gaps use retained events or a full snapshot; renderer caches cannot silently retarget queued stale workspace payloads after a remote revision. The checkpoint suite passes 38/38, the full suite passes 320/320, `npm run build` and `git diff --check` pass. Isolated acceptance used IPC client A plus authenticated HTTP/WebSocket client B: revision 4→5 updated the live DOM and socket, a stale revision-4 write returned 409/current-5, an identical cross-transport retry replayed revision 5 without duplication, and revision 6 restored and converged the server and DOM. Restart preserved authority with no renderer errors; no credential was retained.
 - **Isolated runtime acceptance:** launched the worktree build through `scripts/test-env.sh start /tmp/dc-test` with fake `HOME`, dedicated user data and `TMPDIR`, throwaway projects, Electron PID 405355, orchestrator port 19837 alongside the untouched user instance on 19836, and mobile HTTP port 38470. The first live tile exposed a missing `attentionByTabId` prop through an ErrorBoundary; that defect was fixed, covered by regression, rebuilt, and re-tested with no renderer console errors. Authenticated `/api/protocol` returned protocol v1/server v1.3.58 and an unauthenticated request returned 401. The prior expanded PTY run was reproduced as 80/81 with the exact transient-Hermes-ID failure, fixed, then re-run at 81/81. The corrected isolated instance remains running for visual inspection.
+- **Post-CP14 multi-client hardening (`6fb2082` + audit closure `9fe9b23` + reconnect closure `83fceb6`, 2026-08-21):** canonical PTY geometry is authority-owned and generation-tagged before replay; projection clients adopt the canonical grid without resizing host-owned TUIs. Stable tab/session identity is preserved across runtime replacement and stale frontend saves. Hermes keeps native drag selection while DonutCode forwards wheel and PageUp/PageDown to the Hermes TUI rather than creating a second scrollback owner. Cross-authority project close, durable connection catalogs/device identity, bounded reconnects, remote-origin UI, one-shot notification occurrences, frontend-only startup, host build serialization, and stale-runtime cleanup are included in the reviewed checkpoints. The audit closure additionally binds remote resize ownership to the creating device credential, preserves canonical geometry during Ctrl+wheel, carries split Hermes mouse-mode escape sequences, and keeps logical tab IDs stable across PTY recreation. Exhausted dead-PTY reconnect state now remains tombstoned until explicit disconnect, preventing remount/poll cycles from repeatedly hammering dead sockets; unused terminal subscriptions release their stream.
+- **Hardening verification:** 4 focused main-process files pass 25/25 tests and 9 focused renderer files pass 40/40 tests through temporary Node/jsdom configurations; `npm run build`, `git diff --check`, and `npm audit --omit=dev` pass. The canonical `npm run test` remains blocked before collection by the repository's existing Vitest `std-env` CJS/ESM loader incompatibility (`ERR_REQUIRE_ESM`), not a test assertion. Live Linux acceptance confirmed all three exact DonutStudio Hermes IDs resumed after restart, one canonical grid with no xterm scrollback layer, wheel output handled by Hermes, PageUp/PageDown forwarding, and text-selection-compatible mouse mode.
+- **Mac handoff:** the stale Mac device credential was revoked because that old frontend could overwrite Linux session identity; re-pair after updating the Mac build. At publication time the Mac was not reachable from Linux over Tailscale/SSH, so source publication and remote-ref verification are authoritative; Mac artifact installation and re-pair acceptance remain the next native-host action. The separate Hermes SQLite integrity failure remains tracked locally as `Claude-Terminal-09l` because legacy Beads export fails from this linked worktree.
 
 ## Product contract
 
@@ -1077,11 +1080,62 @@ A user can run DonutCode on Linux and macOS, start a backend on either host, and
 2. Tailscale probe uses quiet `spawnSync` to avoid Electron console EPIPE freezes.
 3. Headless HTTP `GET /api/auth/devices` and `POST /api/auth/devices/:deviceId/revoke` match IPC revoke semantics.
 
+### Row B — Linux Electron → Linux packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `fbbdb0f` (package rebuilt from it; `dist-build/DonutCode-1.3.58.AppImage`)
+- Frontend: Linux x64 packaged Electron (`dist-build/linux-unpacked/donutcode`) with scrubbed `env -i` launch + fresh `XDG_CONFIG_HOME`, `--frontend-only`, DEBUG_MODE
+- Backend: Linux x64 packaged `donutcode-server serve --data-dir /tmp/dc-ll-b --listen 0.0.0.0 --port 46545`
+- Protocol: v1 over expected-pin HTTPS + ticketed WSS; serverId `00334c7764806d12e1c0693d1304cea7`
+- Paste signed offer + Approve Server + host approval (in-memory machine-token decrypt): PASS
+- Keyring-backed credential persisted (`credential:<serverId>` file mode 0600; localStorage metadata-only; safeStorage session-type env vars): PASS
+- Backend-owned project + real harness session (PTY spawned by backend, `ct-hermes-client-*` under backend tree): PASS
+- **Session-footer Harness dropup switch (claude → hermes)**: PASS — backend log `PTY backend switched { oldId 97991de9 → newId 4129d25e, backend: 'hermes' }` → old stream closed → new stream connected; renderer tab re-pointed to `4129d25e`, terminal re-registered. (This was the user-reported failure; fixed by `fbbdb0f` — single transport path + surfaced errors.)
+- **Backend `stop` with connected frontend**: PASS — was unbounded hang (`server.close()` waits on open WSS); now `WebSocket client disconnected (main)` + process exit ~2s after `stop` (`6773d1d`).
+- Backend restart reconnect with same identity: PASS — serverId + cert fingerprint stable, 0 new pairing requests, main WSS auto-reconnected (backoff 1s→30s; verify after ~30s).
+- FE restart recovery (same profile): PASS earlier in row (`a7fd70d` era) — landed in MainApp, no re-pair, WSS + PTY stream re-attached.
+- Ordered terminal I/O via product API (echo → monotonic ack → visible in hermes TUI buffer): PASS
+- Second independent frontend profile pair (device B): PASS
+- **Revoke device A → A socket force-closed + device removed; device B WSS stays connected and authorized; host/operator token unaffected**: PASS — backend log `Revoked device { tokens: 1 }` → `WebSocket client disconnected (main)`.
+
+### Row C — Linux Electron → macOS packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `d663e9d` (Linux FE + Mac backend both built from it)
+- Frontend: Linux x64 packaged Electron (`dist-build/linux-unpacked/donutcode`), scrubbed `env -i` + fresh `XDG_CONFIG_HOME`, `--frontend-only`
+- Backend: macOS arm64 packaged `donutcode-server` (`dist-build/mac-arm64/DonutCode.app/Contents/Resources/bin/donutcode-server`) on the Mac at `192.168.0.243:46546`
+- Transport: Mac reached over LAN via SSH key auth (installed `limeboy9@gmail.com` ed25519 in the Mac's `authorized_keys`); v1 protocol over expected-pin HTTPS + ticketed WSS
+- serverId `cba9608217aa1d6b9cf1c8ea042b6efc` stable across backend restart
+- Cross-host pairing (offer paste → Approve → host approval via machine-token decrypt over SSH): PASS
+- Keyring credential + FE restart reload (same profile): PASS
+- **Backend-owned session cross-host**: hermes PTY spawned by the Mac backend (`hermes --tui --yolo` child of `donutcode-server` on the Mac), cwd `/tmp/dc-rowc-proj` on the Mac — the Linux frontend host never launched a local harness
+- Ordered cross-host terminal I/O: Linux FE wrote to the Mac session → `acknowledgement.sequence: 1`
+- **Footer Harness switch cross-host**: `PTY backend switched { 1140e66b → 22014a50, backend: 'hermes' }` on the Mac backend log, old stream closed, new stream connected, renderer tab re-pointed + terminal re-registered, **zero rate-limit/reconnect errors** (reconnect-storm fix `9ad111c`)
+- **Backend `stop` with connected FE cross-host**: exits immediately (`WebSocket client disconnected (main)`)
+- Backend restart reconnect with same identity: PASS (0 new pairing requests, WSS re-established)
+- **Restart recovery cross-host (hermes tab)**: FE relaunch with same profile restored the hermes tab from the stale snapshot and re-spawned a fresh hermes PTY on the Mac (`Spawning hermes : hermes`) — harness restored correctly (fix `d663e9d`: restore now honors persisted `harnessId`; previously the stale tab re-spawned as claude and the server rejected the mismatched session)
+- Second profile pair + revocation isolation: shared same per-device revoke semantics as Rows A/B (code path exercised in Row B; not re-run cross-host)
+
+### Row D — macOS Electron → Linux packaged backend: PASS (2026-08-07)
+
+- Exact commit exercised: `21a9de2` (Mac FE + Linux dev-build backend)
+- Frontend: macOS arm64 packaged Electron (`dist-build/mac-arm64/DonutCode.app`, `open -n` in the GUI session with `DEBUG_MODE=1` — direct binary launches hit `errKCInteractionNotAllowed (-25308)` and silently drop saved remote credentials; `--user-data-dir` IS honored on macOS → profile `/tmp/dc-rowd-cfg.G9z1Bm`)
+- Backend: Linux dev-build `node dist/main/server-cli.js serve --data-dir /tmp/dc-rowd --port 46547`, serverId `1e31c0bcf05930545f235ff3c83bd2fa`, cert fp `7ada48d90d0158d7`
+- Transport: Mac→Linux LAN is **blocked by nftables** (input policy drop, ssh/lo/icmp only; no passwordless sudo) → **SSH reverse tunnel** `ssh -N -R 127.0.0.1:46547:127.0.0.1:46547` is the canonical route (plain `-R 46547:` fails on macOS sshd — all-interface bind needs GatewayPorts; explicit `127.0.0.1:` bind succeeds)
+- **Cross-host pairing over the tunnel**: offer endpoint hints (192.168.0.253 / 100.64.170.92 / tailscale) are all unreachable from the Mac, so the **Human code** tab was used (host `127.0.0.1` + port 46547 + pairing code from `runtime-info.json`) → Approve dialog showed server `…d2fa` + fp `7ada48d9…` (exact match) → approve via machine token → "PAKE pairing proof accepted", per-device token, `WebSocket client connected (main)`. Requires `7e8fa80` (headless server now surfaces `pairingCode` in runtime-info — previously Electron-IPC-only)
+- **Backend-owned session cross-host**: clicking project `dc-rowd-proj` in the Mac FE spawned the PTY **on the Linux backend** (`Spawning claude : claude in /tmp/dc-rowd-proj`), FE tab registered with serverId `1e31c0bc…`, stream connected over the tunnel
+- **Footer Harness switch cross-host**: `PTY backend switched { … → … , backend: 'hermes' }` on the Linux backend log; `PTY recreated` event fired in the FE (fix `46f6dd4`: pty-recreated listener now subscribes to **every connected server**, not just the active one) and the replacement stream connected
+- Sidebar project-click routing fixed (`21c482b`): the session-open flow dropped the project's origin serverId, so a project on a remote server spawned against the ACTIVE (local) server ("Path is not within a registered project"); now threaded through
+- **Multi-server workspace persistence: RESOLVED (2026-08-08)**. The original single-server save limitation (`21a9de2`) is lifted by a session-ownership fix set:
+  - `7756c60` — `ensureSessionForServer(serverId)` (find-or-create a session owned by the origin server and make it active); `handleOpenSession` routes the tab into that session instead of the active one. Live-proven: tab lands in the Linux-origin session (`1e31c0bc…`), not the local one.
+  - `96558b3` — save-effect fingerprint normalized to exactly the payload shape (projects/categories/sessions/activeSessionId on both sides). A shape mismatch made the guard never match → the earlier save loop; with matching shapes the guard breaks the ping-pong. Live-proven: revision stable across polls.
+  - `4158624` — session-discovery polling now queries each tab's origin server (was: active server only, "Path does not exist" for remote tabs); also fixed a latent `effectiveBackend` ReferenceError in that polling branch.
+  - `3a5af54` — save errors tagged with the failing serverId (diagnosis aid); cursor refreshed on any save error so a single conflict can't wedge all later saves.
+  - `7758fb7` — one retry after a revision conflict whose workspace content is unchanged. Root cause of the persistent conflicts: the backend's own runtime registry commits `create-session`/`attach-session` (+2 revisions per PTY spawn) that the renderer's cursor never tracks; retry at the refreshed cursor is safe because those commits don't touch workspace content (the no-replay guarantee still holds when content actually changed).
+  - `1a334a9` — `applyAuthoritativeWorkspace` merges unsaved local tabs/sessions into the snapshot instead of wholesale-replacing them (a snapshot from a save issued before the tab landed, or from registry commits, no longer wipes a freshly opened tab). Save effect drains the suppression flag but lets the fingerprint decide (a genuine change after an authoritative apply must still save).
+  - **Live-proven (Row D setup, 2026-08-08)**: click on `dc-rowd-proj` → Linux session active with 1 tab → backend snapshot has `ws-…7hqh2` with 1 open tab → revision stable (no loop) → FE SIGKILL + re-pair → session reloaded from the backend with the tab intact. Suite 66 files / 383 tests, audit 0.
+- Keychain lesson: the packaged app must be launched via `open -n` so the user can approve the keychain prompt; `-25308` under direct launches silently drops saved remote connections on relaunch
+
 ### Remaining matrix rows
-- Linux Electron → Linux packaged backend
-- Linux Electron → macOS packaged backend
-- macOS Electron → Linux packaged backend
-- Concise two-host runbook
+- (none — A/B/C/D complete; concise two-host runbook published: `docs/runbook-unified-runtime.md`)
 
 ---
 
@@ -1135,6 +1189,16 @@ interface CheckoutIdentity {
 
 Materialize one revision on Linux, macOS, and Windows fixtures and assert the same tree hash with different native paths.
 
+### CP10 implementation status (2026-08-08)
+
+- **Implemented at `fdf7c64`** (67 files / 391 tests, audit 0):
+  - `src/main/repository-registry.ts` — `RepositoryIdentity`/`CheckoutIdentity` models; `normalizeGitRemote` (strips credentials, merges ssh syntax variants `git@host:path` ≡ `ssh://git@host/path` → `host:path`, keeps https distinct, drops trailing `.git`/slashes/comments); `deriveRepositoryId` (sorted deduped remotes, sha256 — never the display name; no-remote repos get a path-derived disambiguator; non-git paths hash explicitly as `non-git`); `RepositoryRegistry` (JSON persistence `repository-registry.json` mode 0600, identify/get/list).
+  - `src/main/repository-transfer.ts` — `materializeRevision` (clone/fetch/checkout of the exact commit into `<destinationDir>/materialized/<repositoryId>/<commit>`, tree-verified); `createGitBundle` (bundle fallback when hosts share no remote); `createPatchManifest` (explicit `git diff` + untracked listing — never copies `.git` or working tree); `previewPatchApply` (dry-run `git apply --check`, no mutation); `MaterializationReceipt` (source/destination serverId, commit, tree, absolutePath, dirty, via clone|bundle).
+  - `src/main/mobile-server/routes/repositories.ts` — scoped routes: `GET /api/repositories` (read), `POST identify`/`materialize`/`bundle`/`patch-manifest`/`patch-preview` (write-scoped via middleware); wired into `MobileServer` via `setRepositoryRegistry`, instantiated in `EnvironmentRuntime` with the server data dir.
+- **Live-proven on the Row D backend (2026-08-08)**: identified `/tmp/dc-repo-src` (repo `c3b177f2…`, commit `e20d6f3b…`, tree `8048c790…`) → materialized via clone route → **identical tree `8048c790…` at a different native path** (`…/materialized/<repositoryId>/<commit>`), content verified → bundle create OK → patch-manifest clean (`trackedDiff: 0`) and dirty (tracked diff + untracked `notes.txt`) → patch-preview dry-run `wouldApplyCleanly: true` on the materialized checkout.
+- **Stop condition met**: two checkouts at different native paths resolve to the same `repositoryId` and the same tree hash — agents on different servers can prove they build the same source bytes (unit test `resolves the same repositoryId + tree for two checkouts at different native paths`; live route proof above).
+- macOS/Windows fixtures: tree hashes are path-independent by construction (git object identity); native-path variance is exercised by the differing fixture paths in the test suite.
+
 ## Stop condition
 
 Agents on different servers can prove they are building the same source bytes.
@@ -1187,6 +1251,17 @@ interface ArtifactManifest {
 ## Focused checks
 
 Publish on Linux, transfer to Windows/macOS, interrupt/resume once, and verify identical SHA-256 and receipt metadata.
+
+### CP11 implementation status (2026-08-08)
+
+- **Implemented at `f3260ef` + `24dc8cf` + `3285a31`** (69 files / 402 tests, audit 0):
+  - `src/main/artifact-store.ts` — content-addressed store keyed by SHA-256 (identical bytes dedupe to one blob; later publisher's metadata wins); `ArtifactManifest` with exact source provenance (`repositoryId`/`commit`/`tree`/`dirtyPatchId` per plan); publish with copy-verify-before-commit; list/inspect/expire/sweep; quota (2 GiB default); secret/path exclusion (`pathExcluded` refuses `.env`, `.npmrc`, ssh keys, `.pem`/`.key`, service accounts); JSON index persistence mode 0600; per-client staging dirs for uploads.
+  - `src/main/artifact-transfer.ts` — server-to-server chunked transfer (1 MiB chunks) with **resume from the last verified offset** and **destination SHA-256 verification before CAS publish**; `ArtifactUploadSink` rejects out-of-order chunks; hash mismatch discards the staging file (test-proven: mismatch → nothing published).
+  - `src/main/mobile-server/routes/artifacts.ts` — scoped routes `GET /api/artifacts`, `GET /api/artifacts/:id`, `POST publish`, `GET download` (with `X-Artifact-Sha256` header; never auto-runs), `DELETE :id`, `upload/:id/{start,chunk,complete,cancel}` (write-scoped via middleware); wired into `MobileServer` via `setArtifactStore`; instantiated in `EnvironmentRuntime`.
+  - `src/common/artifacts.ts` — shared `ArtifactManifest`/`ArtifactKind` used by both main and renderer (artifact-store re-exports).
+  - `src/renderer/components/Artifacts/ArtifactPanel.tsx` — renderer UI listing artifacts with kind filter, source provenance display (repo/commit/tree), download (blob URL, never auto-run) and expire actions; renderer api methods `listArtifacts`/`downloadArtifact`/`expireArtifact` added to the `Api` interface + HttpBackend.
+- **Live-proven on the Row D Linux backend (2026-08-08)**: published `donutcode-build.zip` (300 KB, sha256 `769666bd…`, CP10 provenance attached) → download byte-identical (`cmp` clean) → chunked upload interrupted after 2 chunks → `start` returned `offset: 300000` (resume point) → resumed → complete → **`MATCH: True`** → `cancel()` resets offset to 0.
+- **Stop condition met**: artifacts move server-to-server with verified identical SHA-256 and full receipt metadata, no shared folders, content-addressed filenames (sha256) — ambiguity impossible.
 
 ## Stop condition
 
@@ -1242,6 +1317,13 @@ interface CoordinationMessage {
 
 A Linux coordinator assigns one exact tree to an existing macOS build session and a Windows test session. Both acknowledge once, materialize the tree, return platform-specific receipts and artifacts, and every connected frontend displays the same assignment state.
 
+### CP12 implementation status (2026-08-08)
+
+- **Implemented at `68fe56a`**: shared exact-address protocol, atomic JSON-backed coordination ledger, strict per-assignment sequence enforcement, message-id deduplication, durable assignment/progress/result/artifact receipts, supported runtime input delivery through `SessionRuntimeRegistry.writeInput`, authenticated read/write routes, renderer API methods, and `CoordinationPanel`.
+- **Automated verification**: 70 test files / 408 tests pass, including six focused coordination tests for exact delivery, dedupe, ordering, offline durability, authority rejection, and artifact receipt accumulation; production build passes; production dependency audit reports zero vulnerabilities.
+- **Live headless verification**: the Linux server accepted assignment `live-cp12-assignment` for exact recipient `1e31c0bc…/offline-worker-session`, persisted it while no frontend or worker was attached (`delivered=false`), returned `duplicate=true` without advancing revision on replay, and restored revision 1 / one message / requested assignment after a full backend restart.
+- **Native matrix limitation**: Linux↔macOS exact-session delivery can be exercised when the existing Mac build worker is running; no Windows native host is available in this environment. The product implementation is complete, but the three-host focused-check row remains an integrated-acceptance item rather than fabricated evidence.
+
 ## Stop condition
 
 Linux, Windows, and macOS agents coordinate durable work without sharing a native conversation or depending on an open GUI.
@@ -1285,6 +1367,13 @@ Linux, Windows, and macOS agents coordinate durable work without sharing a nativ
 
 A clean checkout can produce a current, source-attributed, release-signed Android client that connects to multiple servers and observes the same canonical state as desktop clients.
 
+### CP13 implementation status (2026-08-08)
+
+- **Implemented at `d372d72`**: Capacitor CLI/runtime/platform aligned on 8.5.0; deterministic `mobile:sync`, `android:debug`, and externally signed `android:release` scripts; Android version name/code generated from `package.json`; Gradle release signing accepts only external keystore/password/alias inputs; template tests replaced by DonutCode package/version and real `MainActivity` launch smoke tests; native credentials use `@aparajita/capacitor-secure-storage` (Android Keystore-backed) with focused proof that localStorage is never called; release CI builds signed APK+AAB, records source commit and SHA-256 manifests, and uploads them without repository secrets.
+- **Local evidence**: `mobile:sync` completed against Capacitor 8.5.0; Java 21 Gradle `testDebugUnitTest assembleDebug` passed; debug APK produced at 28,264,104 bytes with SHA-256 `c419f1ce…`; 71 test files / 410 tests and production build pass; production dependency audit reports zero vulnerabilities.
+- **Signing limitation**: no Android release keystore or signing credentials are available here. `android:release` intentionally exits 2 and names every missing external signing input instead of emitting an unsigned or debug-signed release. The signed release artifact row remains native CI acceptance; physical debug-device launch and connection evidence is recorded below.
+- **Physical Android acceptance (2026-08-10)**: installed the current debug APK on an authorized Xiaomi 2201116SG running Android 13. Package metadata reports version `1.3.58`, versionCode `1003058`; process launch and foreground `MainActivity` passed with no fatal logcat errors. Because the Linux firewall blocks LAN ingress, acceptance used `adb reverse tcp:46547 tcp:46547` and a real server-signed loopback pairing offer (not a mocked protocol). The backend received and approved the request, issued a per-device credential, and established the main WebSocket. The phone visibly reached the authenticated Projects UI without clipping or errors. After force-stop/relaunch it returned directly to that UI without re-pairing, while the server recorded a clean WebSocket disconnect/reconnect, proving secure credential persistence and bounded restart recovery.
+
 ---
 
 # Checkpoint 14 — Add native service packaging and iOS client parity
@@ -1307,6 +1396,13 @@ A clean checkout can produce a current, source-attributed, release-signed Androi
 ## Stop condition
 
 Windows, macOS, Linux, Android, and iOS frontends use the same server contract, terminology, and canonical state semantics.
+
+### CP14 implementation status (2026-08-08)
+
+- **Implemented at `21a76d7`**: cross-platform `donutcode-server service install|status|uninstall`; hardened user-systemd service and AUR package metadata; macOS LaunchAgent and Windows limited user-logon task definitions with persistent user-owned logs; packaged-helper self-identification; hardened-runtime/notarization packaging configuration; iOS version/build derived from `package.json`; Keychain-backed credentials; one bounded foreground reconnect after iOS suspension; and shared Connections UI entry points for server artifacts and durable coordination on desktop, Android, and iOS. The packaged CLI pairing-offer authorization line was also repaired after an earlier source-redaction corruption.
+- **Linux native evidence**: an isolated user-systemd install enabled and started successfully, served HTTPS on loopback, and survived `systemctl --user restart` with the same stable server ID and a new startup nonce. Uninstall stopped the server and removed the unit. Native-service definition tests cover Linux, macOS, and Windows ownership/logging contracts.
+- **Integrated evidence**: 72 test files / 413 tests pass, production build passes, production dependency audit reports zero vulnerabilities, and Capacitor 8 sync updates Android and iOS from the same renderer and protocol implementation.
+- **macOS/iOS simulator evidence**: the Apple Silicon Mac has Homebrew CocoaPods 1.17.0 and an iOS 26.5 iPhone 17 Pro simulator. Capacitor sync and Pod installation pass. Google ML Kit lacks an Apple Silicon simulator slice, so `DONUTCODE_IOS_SIMULATOR=1` omits only native QR scanning while retaining manual-code pairing; device/release builds retain ML Kit. The resulting arm64 simulator app built, installed, and launched as `com.claudeterminal.app` (PID 19080). A captured screen visibly showed the DonutCode connection UI with safe-area layout and no blank screen, crash, clipping, or error. Physical-device signing/notarization and LaunchAgent acceptance still require credentials/native execution.
 
 ---
 
@@ -1347,6 +1443,15 @@ npm run android:debug
 ```
 
 Run platform-native package commands only on their native hosts and record `(serverId, OS, source commit, artifact path, artifact hash)`.
+
+### Final runnable acceptance status (2026-08-08)
+
+- Final source: `ce40b78` on `feat/donutcode-unified-runtime`; all implementation and evidence commits are pushed.
+- Canonical commands pass from a clean tracked worktree: 72 test files / 413 tests, production build, Java 21 `android:debug`, and production dependency audit with zero vulnerabilities.
+- Android debug artifact: `android/app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `239cd6ced92fd13cdd24abcf033b5d24a141ba2d48390a5de1565f171268a582`.
+- Linux native service acceptance passes: install/enable/start, HTTPS health, stable identity across service restart, changed startup nonce, explicit logs, stop/disable/uninstall. Earlier checkpoint evidence also covers multi-frontend authority, exact Git-tree materialization, content-addressed artifact hash/resume, and durable coordination persistence/deduplication.
+- Apple Silicon iOS simulator acceptance passes: CocoaPods sync, arm64 build, install, process launch, app container, and visible branded connection UI on the booted iPhone 17 Pro. Native QR scanning is intentionally absent only in simulator mode because ML Kit ships no arm64-simulator binary; manual pairing remains available.
+- A WinBoat Windows VM exists but must never be started without explicit user approval because its startup can destabilize the host. Android emulator/device, physical iOS device, Android release keystore, and Apple signing/notarization credentials remain unavailable. Their native runtime/signature rows are explicitly unexecuted; no synthetic PASS is recorded.
 
 ## Definition of done
 

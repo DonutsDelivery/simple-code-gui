@@ -15,6 +15,7 @@ import {
 import { ConnectionManager } from './connection'
 import { PtyWebSocketManager } from './pty-websocket'
 import { PtyWebSocketState } from './types'
+import type { PtyGeometryCallback } from '../../../common/pty-geometry.js'
 
 export class PtyApi {
   private connection: ConnectionManager
@@ -28,6 +29,15 @@ export class PtyApi {
   constructor(connection: ConnectionManager, wsManager: PtyWebSocketManager) {
     this.connection = connection
     this.wsManager = wsManager
+  }
+
+  private releaseStreamIfUnused(id: string, state: PtyWebSocketState | undefined): void {
+    if (!state) return
+    if (state.dataCallbacks.size === 0
+      && state.exitCallbacks.size === 0
+      && state.geometryCallbacks.size === 0) {
+      this.wsManager.disconnectPtyStream(id)
+    }
   }
 
   async listPtys(): Promise<PtySession[]> {
@@ -73,9 +83,48 @@ export class PtyApi {
     }
 
     // Then send kill request (fire and forget)
-    this.connection.fetch(`/api/pty/${id}`, { method: 'DELETE' }).catch((err) => {
+    this.connection.fetch(`/api/pty/${encodeURIComponent(id)}?stop=true`, { method: 'DELETE' }).catch((err) => {
       console.error('[HttpBackend] Failed to kill PTY:', err)
     })
+  }
+
+  /**
+   * Switch a live PTY to another harness on the Server. The Server stops the
+   * old runtime, creates a replacement bound to the requested harness, and
+   * returns the new pty id; local stream state is re-pointed so the open
+   * terminal keeps streaming. Mirrors the desktop IPC pty:set-backend.
+   */
+  async setPtyBackend(id: string, backend: BackendId): Promise<void> {
+    const result = await this.connection.fetchJson<{
+      success: boolean
+      oldId: string
+      newId: string
+      backend: BackendId
+      sessionId?: string
+    }>(`/api/pty/${encodeURIComponent(id)}/backend`, {
+      method: 'POST',
+      body: JSON.stringify({ backend }),
+    })
+    if (!result.success) throw new Error('Server rejected the harness switch')
+    if (result.newId !== id) {
+      // The old stream socket was closed by the Server; drop local state and
+      // notify renderers so tabs re-attach against the replacement pty.
+      this.wsManager.disconnectPtyStream(id)
+      this.attachedPtyIds.delete(id)
+      for (const cb of this.ptyRecreatedCallbacks) {
+        try {
+          cb({
+            oldId: result.oldId,
+            newId: result.newId,
+            harnessId: result.backend,
+            backend: result.backend,
+            sessionId: result.sessionId,
+          })
+        } catch (error) {
+          console.error('[HttpBackend] pty:recreated callback error:', error)
+        }
+      }
+    }
   }
 
   writePty(id: string, data: string): void {
@@ -123,6 +172,8 @@ export class PtyApi {
         ws: null as any, // Will be set by connectPtyStream
         dataCallbacks: new Set(),
         exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
         reconnectAttempts: 0,
         reconnectTimer: null,
         dataBuffer: []
@@ -157,7 +208,33 @@ export class PtyApi {
       const s = ptyWebsockets.get(id)
       if (s) {
         s.dataCallbacks.delete(callback)
+        this.releaseStreamIfUnused(id, s)
       }
+    }
+  }
+
+  onPtyGeometry(id: string, callback: PtyGeometryCallback): Unsubscribe {
+    const ptyWebsockets = this.wsManager.getPtyWebsockets()
+    let state = ptyWebsockets.get(id)
+    if (!state) {
+      state = {
+        ws: null as any,
+        dataCallbacks: new Set(),
+        exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
+        reconnectAttempts: 0,
+        reconnectTimer: null,
+        dataBuffer: [],
+      }
+      ptyWebsockets.set(id, state)
+    }
+    state.geometryCallbacks.add(callback)
+    if (state.geometry) callback(state.geometry)
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) this.wsManager.connectPtyStream(id)
+    return () => {
+      state?.geometryCallbacks.delete(callback)
+      this.releaseStreamIfUnused(id, state)
     }
   }
 
@@ -170,6 +247,8 @@ export class PtyApi {
         ws: null as any,
         dataCallbacks: new Set(),
         exitCallbacks: new Set(),
+        geometryCallbacks: new Set(),
+        geometry: null,
         reconnectAttempts: 0,
         reconnectTimer: null,
         dataBuffer: []
@@ -183,6 +262,7 @@ export class PtyApi {
       const s = ptyWebsockets.get(id)
       if (s) {
         s.exitCallbacks.delete(callback)
+        this.releaseStreamIfUnused(id, s)
       }
     }
   }

@@ -156,6 +156,7 @@ interface ClaudeProcess {
   resizeTimeout?: ReturnType<typeof setTimeout>
   lastResizeCols?: number
   lastResizeRows?: number
+  geometryGeneration: number
   outputBuffer: OutputBuffer
   signalDetector: AgentSessionSignalDetector
   signalOutputFilter: AgentSessionSignalOutputFilter
@@ -818,6 +819,7 @@ export class PtyManager {
   // renderer without disrupting the desktop's data feed.
   private dataListeners: Map<string, Set<(data: string) => void>> = new Map()
   private exitListeners: Map<string, Set<(code: number) => void>> = new Map()
+  private resizeListeners: Map<string, Set<(cols: number, rows: number, generation: number) => void>> = new Map()
 
   // Headroom proxy routing applied to newly spawned PTYs. Updated by the app
   // whenever settings change.
@@ -972,6 +974,9 @@ export class PtyManager {
       signalOutputFilter: new AgentSessionSignalOutputFilter(cwd),
       replayBuffer: new ReplayBuffer(),
       outputSequence: 0,
+      lastResizeCols: 120,
+      lastResizeRows: 30,
+      geometryGeneration: 0,
       hermesRuntimeDir,
     }
 
@@ -1062,6 +1067,9 @@ export class PtyManager {
           signalOutputFilter: new AgentSessionSignalOutputFilter(cwd),
           replayBuffer: new ReplayBuffer(),
           outputSequence: 0,
+          lastResizeCols: 120,
+          lastResizeRows: 30,
+          geometryGeneration: 0,
         }
         this.processes.set(id, retryProc)
 
@@ -1117,8 +1125,12 @@ export class PtyManager {
 
 
   private detectAgentSessionSignals(proc: ClaudeProcess, data: string): void {
-    for (const type of proc.signalDetector.push(data)) {
-      const event: AgentSessionSignalEvent = { ptyId: proc.id, type }
+    for (const [index, type] of proc.signalDetector.push(data).entries()) {
+      const event: AgentSessionSignalEvent = {
+        id: `${proc.id}:${proc.outputSequence}:${index}:${type}`,
+        ptyId: proc.id,
+        type,
+      }
       for (const listener of this.agentSessionSignalListeners) {
         try {
           listener(event)
@@ -1187,6 +1199,14 @@ export class PtyManager {
         console.log('PTY resize ignored (may have exited):', id)
       }
       proc.outputBuffer.resize(cols, rows)
+      proc.geometryGeneration += 1
+      for (const listener of this.resizeListeners.get(id) ?? []) {
+        try {
+          listener(cols, rows, proc.geometryGeneration)
+        } catch (error) {
+          console.error('[pty-manager] resize listener threw:', error)
+        }
+      }
 
       // First settled resize for resize-sensitive TUIs: stop suppressing output.
       // The resize triggered a clean re-render at the correct size —
@@ -1200,6 +1220,32 @@ export class PtyManager {
         if (cb) cb('\x1b[2J\x1b[H')
       }
     }, debounceMs)
+  }
+
+  getGeometry(id: string): { cols: number; rows: number; generation: number } | null {
+    const proc = this.processes.get(id)
+    if (!proc) return null
+    return {
+      cols: proc.lastResizeCols ?? proc.pty.cols,
+      rows: proc.lastResizeRows ?? proc.pty.rows,
+      generation: proc.geometryGeneration,
+    }
+  }
+
+  addResizeListener(
+    id: string,
+    callback: (cols: number, rows: number, generation: number) => void,
+  ): () => void {
+    let listeners = this.resizeListeners.get(id)
+    if (!listeners) {
+      listeners = new Set()
+      this.resizeListeners.set(id, listeners)
+    }
+    listeners.add(callback)
+    return () => {
+      listeners?.delete(callback)
+      if (listeners?.size === 0) this.resizeListeners.delete(id)
+    }
   }
 
   private cleanupProcess(id: string): void {
@@ -1234,12 +1280,20 @@ export class PtyManager {
     this.exitCallbacks.delete(id)
     this.dataListeners.delete(id)
     this.exitListeners.delete(id)
+    this.resizeListeners.delete(id)
   }
 
   kill(id: string): void {
     const proc = this.processes.get(id)
     if (proc) {
       try {
+        if (proc.backend === 'hermes' && process.platform === 'linux') {
+          try {
+            execFileSync('tmux', ['-L', `ct-hermes-client-${id}`, 'kill-server'], { stdio: 'ignore', timeout: 2000 })
+          } catch {
+            // Socket already gone or tmux already dead.
+          }
+        }
         // Windows doesn't support SIGKILL, use default signal
         if (isWindows) {
           proc.pty.kill()

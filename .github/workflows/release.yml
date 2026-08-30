@@ -132,8 +132,50 @@ jobs:
             dist-build/*.yml
             dist-build/*.blockmap
 
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - run: npm ci
+      - name: Restore external release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/donutcode-release.jks"
+      - name: Build signed APK and AAB
+        run: npm run android:release
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/donutcode-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Record source provenance and hashes
+        run: |
+          mkdir -p android-release
+          cp android/app/build/outputs/apk/release/*.apk android-release/
+          cp android/app/build/outputs/bundle/release/*.aab android-release/
+          printf 'source_commit=%s\n' "${{ github.sha }}" > android-release/provenance.txt
+          (cd android-release && sha256sum *.apk *.aab > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: android-release/
+
   release:
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -155,6 +197,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: windows-builds
+          path: dist-build
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-builds
           path: dist-build
 
       - name: Get version
@@ -186,6 +234,10 @@ jobs:
             dist-build/*.appx
             dist-build/*.yml
             dist-build/*.blockmap
+            dist-build/*.apk
+            dist-build/*.aab
+            dist-build/SHA256SUMS
+            dist-build/provenance.txt
           body: |
             ## Installation
 

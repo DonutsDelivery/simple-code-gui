@@ -8,6 +8,7 @@ import type { Theme } from '../../themes.js'
 import type { Api } from '../../api/types.js'
 import type { OpenTab, Project, ResizeEdge, ClientToCanvasPercent } from './types.js'
 import { tabResourceKey, type AgentAttentionKind } from '../../stores/workspace.js'
+import { resolveTerminalBackend } from '../terminal/types.js'
 
 interface TileTerminalProps {
   leafId: string
@@ -402,7 +403,7 @@ export function TileTerminal({
                 theme={theme}
                 onFocus={() => onFocusTab(tab.id)}
                 projectPath={tab.projectPath}
-                backend={tab.backend}
+                backend={resolveTerminalBackend(tab)}
                 api={getApiForServer?.(tab.serverId) ?? api}
               />
             </ErrorBoundary>

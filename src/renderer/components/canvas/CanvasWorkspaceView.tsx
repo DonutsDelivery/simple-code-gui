@@ -37,6 +37,7 @@ import {
 import { getNodeDetailLevel, planCanvasNodeMounts, type CanvasNodeDetailLevel } from './scene-visibility'
 import { CanvasContentBody } from './CanvasContentBody'
 import './canvas.css'
+import { resolveTerminalBackend } from '../terminal/types.js'
 
 const MIN_NODE_WIDTH = 360
 const MIN_NODE_HEIGHT = 220
@@ -293,7 +294,7 @@ const CanvasTerminalCard = React.memo(function CanvasTerminalCard({
                 theme={theme}
                 onFocus={() => onActivate(tab.id)}
                 projectPath={tab.projectPath}
-                backend={tab.backend}
+                backend={resolveTerminalBackend(tab)}
                 api={api}
                 onPtyExit={setExitCode}
               />

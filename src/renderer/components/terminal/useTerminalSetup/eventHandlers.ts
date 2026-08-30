@@ -8,6 +8,7 @@ import {
   FONT_SIZE_STORAGE_KEY,
 } from '../constants.js'
 import { handlePaste, isTerminalAtBottom, scrollDebug, scrollSnapshot } from '../utils.js'
+import type { PtyGeometry } from '../../../../common/pty-geometry.js'
 
 type BackendType = 'default' | 'claude' | 'gemini' | 'codex' | 'opencode' | 'aider' | 'droid' | 'hermes' | 'grok'
 
@@ -56,7 +57,8 @@ export function createWheelHandler(
   resizePty: (id: string, cols: number, rows: number) => void,
   ptyId: string,
   writePty: (id: string, data: string) => void,
-  backend?: BackendType
+  backend?: BackendType,
+  getGeometry: () => PtyGeometry | null = () => null,
 ): (e: WheelEvent) => boolean {
   return (e: WheelEvent) => {
     // Ctrl+scroll = zoom font size
@@ -68,13 +70,29 @@ export function createWheelHandler(
       if (newSize !== currentSize) {
         terminal.options.fontSize = newSize
         localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(newSize))
-        // Refit terminal after font size change
-        fitAddon.fit()
-        const dims = fitAddon.proposeDimensions()
-        if (dims && dims.cols > 0 && dims.rows > 0) {
-          resizePty(ptyId, dims.cols, dims.rows)
+        const geometry = getGeometry()
+        if (geometry && !geometry.canResize) {
+          terminal.resize(geometry.cols, geometry.rows)
+          terminal.refresh(0, terminal.rows - 1)
+        } else {
+          // Only the geometry owner may refit and publish a new canonical grid.
+          fitAddon.fit()
+          const dims = fitAddon.proposeDimensions()
+          if (dims && dims.cols > 0 && dims.rows > 0) {
+            resizePty(ptyId, dims.cols, dims.rows)
+          }
         }
       }
+      return false
+    }
+
+    if (backend === 'hermes') {
+      const reportCount = getWheelReportCount(e)
+      if (reportCount === 0) return true
+      e.preventDefault()
+      const { col, row } = getWheelCell(terminal, e)
+      const button = e.deltaY < 0 ? 64 : 65
+      writePty(ptyId, Array.from({ length: reportCount }, () => `\x1b[<${button};${col};${row}M`).join(''))
       return false
     }
 
@@ -110,7 +128,8 @@ export function createContextMenuHandler(
   terminal: XTerm,
   ptyId: string,
   backend?: BackendType,
-  currentLineInputRef?: MutableRefObject<string>
+  currentLineInputRef?: MutableRefObject<string>,
+  writePty?: (id: string, data: string) => void,
 ): (e: MouseEvent) => void {
   return (e: MouseEvent) => {
     e.preventDefault()
@@ -118,7 +137,7 @@ export function createContextMenuHandler(
     if (selection) {
       navigator.clipboard.writeText(selection)
     } else {
-      handlePaste(terminal, ptyId, backend, currentLineInputRef)
+      handlePaste(terminal, ptyId, backend, currentLineInputRef, writePty)
     }
   }
 }
@@ -130,12 +149,13 @@ export function createAuxClickHandler(
   terminal: XTerm,
   ptyId: string,
   backend?: BackendType,
-  currentLineInputRef?: MutableRefObject<string>
+  currentLineInputRef?: MutableRefObject<string>,
+  writePty?: (id: string, data: string) => void,
 ): (e: MouseEvent) => void {
   return (e: MouseEvent) => {
     if (e.button === 1) {
       e.preventDefault()
-      handlePaste(terminal, ptyId, backend, currentLineInputRef)
+      handlePaste(terminal, ptyId, backend, currentLineInputRef, writePty)
     }
   }
 }
@@ -173,7 +193,8 @@ export function createResizeHandler(
   userScrolledUpRef: MutableRefObject<boolean>,
   resizePty: (id: string, cols: number, rows: number) => void,
   ptyId: string,
-  disposedRef: { current: boolean }
+  disposedRef: { current: boolean },
+  getGeometry: () => PtyGeometry | null,
 ): () => void {
   return () => {
     if (disposedRef.current || !containerRef.current) return
@@ -189,6 +210,13 @@ export function createResizeHandler(
     const resizeRect = containerRef.current.getBoundingClientRect()
     if (resizeRect.width > 50 && resizeRect.height > 50) {
       const wasAtBottom = !userScrolledUpRef.current
+
+      const geometry = getGeometry()
+      if (geometry && !geometry.canResize) {
+        terminal.resize(geometry.cols, geometry.rows)
+        terminal.refresh(0, terminal.rows - 1)
+        return
+      }
 
       fitAddon.fit()
       const dims = fitAddon.proposeDimensions()

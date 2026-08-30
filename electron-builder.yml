@@ -50,6 +50,9 @@ mac:
   category: public.app-category.developer-tools
   icon: resources/icon.png
   artifactName: DonutCode-${version}-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
 
 win:
   target:

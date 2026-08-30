@@ -7,6 +7,7 @@ import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 import { useConnectionsStore } from '../../stores/connections.js'
 
 interface ProjectItemProps {
+  localServerId: string
   project: Project
   isExpanded: boolean
   isFocused: boolean
@@ -33,6 +34,7 @@ interface ProjectItemProps {
 }
 
 export const ProjectItem = React.memo(function ProjectItem({
+  localServerId,
   project,
   isExpanded,
   isFocused,
@@ -56,11 +58,14 @@ export const ProjectItem = React.memo(function ProjectItem({
   onEditingChange,
   onRenameSubmit,
   onRenameKeyDown,
-}: ProjectItemProps) {
+  harnessId,
+  onHarnessChange,
+}: ProjectItemProps & { harnessId?: string; onHarnessChange?: (harnessId: string) => void }) {
   const connections = useConnectionsStore(state => state.connections)
+  const isRemote = project.serverId !== localServerId
+  const originName = connections.find(connection => connection.serverId === project.serverId)?.displayName || project.serverId.slice(0, 8)
+  const serverHue = [...project.serverId].reduce((value, char) => (value * 31 + char.charCodeAt(0)) % 360, 0)
   const [newServerId, setNewServerId] = React.useState(project.serverId)
-  const projectHarness = project.harnessId ?? project.backend
-  const [newHarnessId, setNewHarnessId] = React.useState(projectHarness && projectHarness !== 'default' ? projectHarness : 'claude')
   const showDropBefore = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'before'
   const showDropAfter = dropTarget?.type === 'project' && dropTarget.id === project.path && dropTarget.position === 'after'
 
@@ -69,13 +74,13 @@ export const ProjectItem = React.memo(function ProjectItem({
       {showDropBefore && <div className="drop-indicator" />}
 
       <div
-        className={`project-item ${isExpanded ? 'expanded' : ''} ${hasOpenTab ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''} ${project.color ? 'has-color' : ''} ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''}`}
-        style={project.color ? { backgroundColor: `${project.color}20` } : undefined}
+        className={`project-item ${isRemote ? 'project-item--remote' : 'project-item--local'} ${isExpanded ? 'expanded' : ''} ${hasOpenTab ? 'has-open-tab' : ''} ${project.executable ? 'has-executable' : ''} ${project.color ? 'has-color' : ''} ${isFocused ? 'focused' : ''} ${isDragging ? 'dragging' : ''}`}
+        style={{ ...(project.color ? { backgroundColor: `${project.color}20` } : {}), '--server-color': `hsl(${serverHue} 72% 62%)` } as React.CSSProperties}
         draggable={!isEditing}
         onDragStart={(e) => {
           // Carry the sidebar's selected harness with the drag so dropped
           // sessions spawn with it instead of falling back to claude.
-          e.dataTransfer.setData('application/x-sidebar-harness', newHarnessId)
+          e.dataTransfer.setData('application/x-sidebar-harness', harnessId || 'claude')
           onDragStart(e)
         }}
         onDragEnd={onDragEnd}
@@ -116,6 +121,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             </div>
           )}
         </div>
+        {isRemote && <span className="backend-origin-badge" title={`Runs on ${originName}`}><span aria-hidden="true">⌁</span>{originName}</span>}
 
         {project.executable && (
           <button
@@ -148,7 +154,7 @@ export const ProjectItem = React.memo(function ProjectItem({
       {isExpanded && (
         <div className="sessions-list">
           <div className="session-origin" aria-label={`Project origin server ${project.serverId}`}>
-            Origin: {connections.find(connection => connection.serverId === project.serverId)?.displayName || project.serverId}
+            <span className="backend-origin-dot" aria-hidden="true" /> Origin: {originName}{isRemote ? ' · remote' : ' · local'}
           </div>
           <label className="session-launch-option">
             Server
@@ -160,7 +166,11 @@ export const ProjectItem = React.memo(function ProjectItem({
           </label>
           <label className="session-launch-option">
             Harness
-            <select value={newHarnessId} onClick={event => event.stopPropagation()} onChange={event => setNewHarnessId(event.target.value)}>
+            <select
+              value={harnessId || 'claude'}
+              onClick={event => event.stopPropagation()}
+              onChange={event => onHarnessChange?.(event.target.value)}
+            >
               {['claude', 'hermes', 'codex', 'gemini', 'opencode', 'aider', 'droid', 'grok'].map(harness => (
                 <option key={harness} value={harness}>{harness}</option>
               ))}
@@ -170,7 +180,7 @@ export const ProjectItem = React.memo(function ProjectItem({
             className="session-item new-session"
             onClick={(e) => {
               e.stopPropagation()
-              onOpenSession({ forceNewSession: true, serverId: newServerId, harnessId: newHarnessId as OpenSessionOptions['harnessId'] })
+              onOpenSession({ forceNewSession: true, serverId: newServerId, harnessId: (harnessId || 'claude') as OpenSessionOptions['harnessId'] })
             }}
           >
             <span>+</span>

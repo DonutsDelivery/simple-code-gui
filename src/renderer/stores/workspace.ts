@@ -12,6 +12,16 @@ import {
 } from '../components/canvas'
 import type { HarnessSelection, Workspace as AuthoritativeWorkspace } from '../api/types'
 
+// Only sessions created locally and not yet acknowledged by an authoritative
+// snapshot may survive a snapshot omission. Inferring "unsaved" from absence
+// resurrected sessions deleted by another frontend and caused save loops.
+const pendingCreatedSessionIds = new Set<string>()
+const pendingRuntimeRebinds = new Map<string, string>()
+
+export function markPendingRuntimeRebind(serverId: string, authorityTabId: string, ptyId: string): void {
+  if (authorityTabId !== ptyId) pendingRuntimeRebinds.set(serverResourceKey(serverId, authorityTabId), ptyId)
+}
+
 export interface ProjectCategory {
   serverId: string
   id: string
@@ -123,10 +133,12 @@ interface WorkspaceState {
   activeView: WorkspaceView
   attentionByTabId: Record<string, AgentAttentionKind>
   applyAuthoritativeWorkspace: (serverId: string, workspace: AuthoritativeWorkspace) => void
+  removeServerProjection: (serverId: string) => void
 
   // Session management
   initSessions: (sessions: WorkspaceSession[], activeId: string | null) => void
   addSession: (serverId: string, name?: string) => string
+  ensureSessionForServer: (serverId: string) => string
   removeSession: (id: string) => void
   renameSession: (id: string, name: string) => void
   reorderSessions: (id: string, toIndex: number) => void
@@ -142,6 +154,7 @@ interface WorkspaceState {
     activeView: WorkspaceView,
     preservedCanvasScene?: unknown
   ) => void
+  rebindSessionRuntime: (sessionId: string, authorityTabId: string, ptyId: string) => void
   markSessionRestored: (id: string) => void
   getAllOpenTabs: () => OpenTab[]
 
@@ -222,16 +235,37 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   applyAuthoritativeWorkspace: (serverId, workspace) => {
     set((state) => {
+      const existingForServer = state.sessions.filter(session => session.serverId === serverId)
+      const existingTabsByAuthorityId = new Map(existingForServer.flatMap(session =>
+        session.openTabs.map(tab => [tab.authorityTabId ?? tab.id, tab] as const)))
       const sessions: WorkspaceSession[] = (workspace.sessions ?? []).map((saved) => {
-        const tabIdMapping = new Map(saved.openTabs.map(tab => [tab.id, serverResourceKey(serverId, tab.id)]))
-        const openTabs: OpenTab[] = saved.openTabs.map(tab => ({
-          ...tab,
-          serverId,
-          authorityTabId: tab.id,
-          id: tabIdMapping.get(tab.id)!,
-          ptyId: tab.ptyId || tab.id,
-          harnessId: tab.harnessId ?? tab.backend,
-        }))
+        // Authority tab IDs are set membership, not an append-only history.
+        // Older clients could save the same restored tab once per reconnect;
+        // collapse those records at the projection boundary so every frontend
+        // sees one canonical tab and the next save repairs authority.
+        const authoritativeTabs = [...new Map(saved.openTabs.map(tab => [tab.id, tab])).values()]
+        const tabIdMapping = new Map(authoritativeTabs.map(tab => [tab.id, serverResourceKey(serverId, tab.id)]))
+        const openTabs: OpenTab[] = authoritativeTabs.map(tab => {
+          const rebindKey = serverResourceKey(serverId, tab.id)
+          const pendingPtyId = pendingRuntimeRebinds.get(rebindKey)
+          const existingTab = existingTabsByAuthorityId.get(tab.id)
+          if (pendingPtyId && tab.ptyId === pendingPtyId) pendingRuntimeRebinds.delete(rebindKey)
+          return {
+            ...tab,
+            serverId,
+            authorityTabId: tab.id,
+            id: tabIdMapping.get(tab.id)!,
+            agentSessionId: tab.agentSessionId ?? tab.id,
+            ptyId: pendingPtyId && existingTab?.ptyId === pendingPtyId
+              ? pendingPtyId
+              : tab.ptyId || tab.id,
+            harnessId: tab.harnessId ?? tab.backend,
+          }
+        })
+        // The authority owns tab membership. Preserving arbitrary local tabs
+        // omitted by a snapshot resurrects tabs closed on another frontend and
+        // creates a perpetual save/reconcile loop. A newly opened tab is saved
+        // before it is projected; after that, omission means deletion.
         const savedTree = (saved.tileTree ?? null) as TileNode | null
         const activeTileTree = savedTree ? remapTabIds(savedTree, tabIdMapping) : null
         const generatedScene = generateCanvasScene(toCanvasTabs(openTabs), { tileTree: activeTileTree })
@@ -262,6 +296,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           isRestored: true,
         }
       })
+      // Preserve only explicitly pending local creations. An arbitrary local
+      // session absent from authority may have been deleted by another client.
+      const authoritativeSessionIds = new Set(sessions.map(session => session.authoritySessionId))
+      for (const id of authoritativeSessionIds) pendingCreatedSessionIds.delete(serverResourceKey(serverId, id))
+      const unsavedLocalSessions = existingForServer.filter(session =>
+        !authoritativeSessionIds.has(session.authoritySessionId)
+        && pendingCreatedSessionIds.has(serverResourceKey(serverId, session.authoritySessionId)))
       const authoritativeActiveId = workspace.activeSessionId
         ? serverResourceKey(serverId, workspace.activeSessionId)
         : null
@@ -269,7 +310,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? authoritativeActiveId
         : sessions[0]?.id ?? null
       const siblingSessions = state.sessions.filter(session => session.serverId !== serverId)
-      const mergedSessions = [...siblingSessions, ...sessions]
+      const mergedSessions = [...siblingSessions, ...sessions, ...unsavedLocalSessions]
       const activeSessionId = state.activeSessionId && mergedSessions.some(session => session.id === state.activeSessionId)
         ? state.activeSessionId
         : serverActiveId
@@ -307,6 +348,38 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     })
   },
 
+  removeServerProjection: (serverId) => {
+    for (const id of pendingCreatedSessionIds) {
+      if (id.startsWith(`${serverId}\u0000`)) pendingCreatedSessionIds.delete(id)
+    }
+    for (const id of pendingRuntimeRebinds.keys()) {
+      if (id.startsWith(`${serverId}\u0000`)) pendingRuntimeRebinds.delete(id)
+    }
+    set(state => {
+      const sessions = state.sessions.filter(session => session.serverId !== serverId)
+      const activeSessionId = state.activeSessionId
+        && sessions.some(session => session.id === state.activeSessionId)
+        ? state.activeSessionId
+        : sessions[0]?.id ?? null
+      const active = sessions.find(session => session.id === activeSessionId) ?? null
+      const liveTabIds = new Set(sessions.flatMap(session => session.openTabs.map(tabResourceKey)))
+      return {
+        projects: state.projects.filter(project => project.serverId !== serverId),
+        categories: state.categories.filter(category => category.serverId !== serverId),
+        sessions,
+        activeSessionId,
+        openTabs: active?.openTabs ?? [],
+        activeTabId: active?.activeTabId ?? null,
+        activeTileTree: active?.activeTileTree ?? null,
+        activeCanvasScene: active?.canvasScene ?? null,
+        activeView: active?.activeView ?? 'tiles',
+        attentionByTabId: Object.fromEntries(
+          Object.entries(state.attentionByTabId).filter(([tabId]) => liveTabIds.has(tabId))
+        ),
+      }
+    })
+  },
+
   // -------------------------------------------------------------------------
   // Session management
   // -------------------------------------------------------------------------
@@ -328,7 +401,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   addSession: (serverId, name) => {
     const id = generateSessionId()
     const { sessions } = get()
-    const label = name ?? `Workspace ${sessions.length + 1}`
+    const label = name ?? `Workspace ${sessions.filter(session => session.serverId === serverId).length + 1}`
     const newSession: WorkspaceSession = {
       serverId,
       authoritySessionId: id,
@@ -341,6 +414,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       activeView: 'tiles',
       isRestored: true,
     }
+    pendingCreatedSessionIds.add(serverResourceKey(serverId, id))
     set(state => ({
       sessions: [...state.sessions, newSession],
       activeSessionId: id,
@@ -353,16 +427,35 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return id
   },
 
+  ensureSessionForServer: (serverId) => {
+    const { sessions, activeSessionId } = get()
+    // Prefer the active session when it already belongs to the target server.
+    const active = sessions.find(s => s.id === activeSessionId)
+    if (active && active.serverId === serverId) return active.id
+    // Otherwise find-or-create a session owned by the target server and make
+    // it active. Tabs for a server must live in that server's session so the
+    // per-server workspace slice round-trips cleanly.
+    const existing = sessions.find(s => s.serverId === serverId)
+    if (existing) {
+      get().switchSession(existing.id)
+      return existing.id
+    }
+    return get().addSession(serverId)
+  },
+
   removeSession: (id) => {
     set(state => {
       const removedSession = state.sessions.find(session => session.id === id)
+      if (removedSession) pendingCreatedSessionIds.delete(serverResourceKey(removedSession.serverId, removedSession.authoritySessionId))
       const sessions = state.sessions.filter(s => s.id !== id)
       if (sessions.length === 0) {
         // Always keep at least one session
+        const fallbackId = generateSessionId()
+        const fallbackServerId = removedSession?.serverId ?? state.projects[0]?.serverId ?? 'unbound'
         const fallback: WorkspaceSession = {
-          serverId: removedSession?.serverId ?? state.projects[0]?.serverId ?? 'unbound',
-          authoritySessionId: generateSessionId(),
-          id: generateSessionId(),
+          serverId: fallbackServerId,
+          authoritySessionId: fallbackId,
+          id: fallbackId,
           name: 'Workspace 1',
           openTabs: [],
           activeTabId: null,
@@ -371,6 +464,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           activeView: 'tiles',
           isRestored: true,
         }
+        pendingCreatedSessionIds.add(serverResourceKey(fallbackServerId, fallbackId))
         sessions.push(fallback)
       }
       const newActiveId = state.activeSessionId === id
@@ -534,6 +628,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }
       }
       return { sessions: updated }
+    })
+  },
+
+  rebindSessionRuntime: (sessionId, authorityTabId, ptyId) => {
+    set(state => {
+      const rebind = (tab: OpenTab): OpenTab => (tab.authorityTabId ?? tab.id) === authorityTabId
+        ? { ...tab, ptyId }
+        : tab
+      const sessions = state.sessions.map(session => session.id === sessionId
+        ? { ...session, openTabs: session.openTabs.map(rebind) }
+        : session)
+      return state.activeSessionId === sessionId
+        ? { sessions, openTabs: state.openTabs.map(rebind) }
+        : { sessions }
     })
   },
 

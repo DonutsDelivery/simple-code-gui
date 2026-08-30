@@ -49,9 +49,14 @@ if (!gotTheLock) {
 } else {
   migrateLegacyBrandData(app.getPath('appData'), app.getPath('userData'))
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+    const existingWindow = mainWindow
+    const usableWindow = existingWindow
+      && !existingWindow.isDestroyed()
+      && !existingWindow.webContents.isDestroyed()
+    if (usableWindow && existingWindow) {
+      if (existingWindow.isMinimized()) existingWindow.restore()
+      if (!existingWindow.isVisible()) existingWindow.show()
+      existingWindow.focus()
     } else if (app.isReady()) {
       mainWindow = createWindow(sessionStore, setMainWindow, handleRendererFailure)
       createApplicationMenu(mainWindow)
@@ -76,6 +81,8 @@ const {
   server: mobileServer,
 } = environmentRuntime
 const apiServerManager = new ApiServerManager()
+const frontendOnly = process.argv.includes('--frontend-only')
+  || process.env.DONUTCODE_FRONTEND_ONLY === '1'
 const hermesBackupManager = new HermesBackupManager(join(app.getPath('userData'), 'backups', 'hermes'))
 hermesBackupManager.setRecoveryContext(
   join(app.getPath('userData'), 'config', 'workspace.json'),
@@ -170,9 +177,12 @@ app.whenReady().then(async () => {
   const portableDirs = getPortableBinDirs()
   setPortableBinDirs(portableDirs)
 
-  // The local server is the desktop's domain boundary too. It is always
-  // available on loopback; mobile access only changes whether it is LAN-bound.
-  await environmentRuntime.start()
+  // A frontend-only desktop is a projection of a remote authority. Starting a
+  // second embedded authority here makes every project/session/harness check
+  // resolve against the frontend machine instead of the selected server.
+  if (!frontendOnly) {
+    await environmentRuntime.start()
+  }
 
   // Setup security headers
   setupSecurityHeaders()
@@ -236,7 +246,7 @@ app.whenReady().then(async () => {
   // so the user can turn it on later (Connect Mobile Device) without a restart.
   // Server is fully owned and wired by EnvironmentRuntime; Electron only controls
   // whether its local HTTP endpoint is enabled for this launch.
-  if (sessionStore.getSettings().mobileAccessEnabled === true) {
+  if (!frontendOnly && sessionStore.getSettings().mobileAccessEnabled === true) {
     environmentRuntime.start().then(() => {
       const info = mobileServer.getConnectionInfo()
       console.log(`[Mobile] Server ready at ${info.ips[0]}:${info.port}`)

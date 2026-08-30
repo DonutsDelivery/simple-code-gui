@@ -74,7 +74,11 @@ export function createWindow(
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[window] Renderer process exited (${details.reason})`)
-    if (details.reason !== 'crashed' && details.reason !== 'oom') return
+    // Any unexpected renderer loss leaves the BrowserWindow object alive but
+    // unusable. Reload it while the window is still owned by this authority.
+    // A normal window close destroys the BrowserWindow and is handled by the
+    // `closed` event instead.
+    if (details.reason === 'clean-exit') return
 
     const now = Date.now()
     rendererReloadTimes = rendererReloadTimes.filter(time => now - time < RENDERER_RELOAD_WINDOW_MS)

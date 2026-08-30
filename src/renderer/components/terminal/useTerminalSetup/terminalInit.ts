@@ -7,6 +7,7 @@ import {
   ENABLE_WEBGL,
   TTS_GUILLEMET_REGEX,
   SUMMARY_MARKER_DISPLAY_REGEX,
+  AGENT_SESSION_SIGNAL_DISPLAY_REGEX,
   TERMINAL_CONFIG,
   DEFAULT_FONT_SIZE,
   FONT_SIZE_STORAGE_KEY,
@@ -56,6 +57,58 @@ interface InitState {
   pendingWrites: string[]
   firstData: boolean
   replayPending: boolean
+  markerCarry: string
+  mouseModeCarry: string
+}
+
+const AGENT_SIGNAL_PREFIX = '<ct-signal'
+
+/** Hide signal metadata without changing terminal cell geometry. */
+export function hideStreamingAgentSignals(data: string, state: Pick<InitState, 'markerCarry'>): string {
+  let combined = state.markerCarry + data
+  state.markerCarry = ''
+  const signalStart = combined.lastIndexOf(AGENT_SIGNAL_PREFIX)
+  if (signalStart >= 0 && combined.indexOf('/>', signalStart) < 0) {
+    state.markerCarry = combined.slice(signalStart)
+    combined = combined.slice(0, signalStart)
+  } else {
+    for (let length = Math.min(AGENT_SIGNAL_PREFIX.length - 1, combined.length); length > 0; length -= 1) {
+      if (!AGENT_SIGNAL_PREFIX.startsWith(combined.slice(-length))) continue
+      state.markerCarry = combined.slice(-length)
+      combined = combined.slice(0, -length)
+      break
+    }
+  }
+  return combined.replace(AGENT_SESSION_SIGNAL_DISPLAY_REGEX, match => ' '.repeat(match.length))
+}
+
+const XTERM_MOUSE_MODES = new Set(['9', '1000', '1001', '1002', '1003', '1005', '1006', '1015', '1016'])
+const HERMES_MOUSE_RESET = [...XTERM_MOUSE_MODES].map(mode => `\x1b[?${mode}l`).join('')
+
+/** Hermes is keyboard-driven in DonutCode. Keeping xterm mouse tracking off
+ * preserves native viewport scrolling and ordinary drag selection. */
+export function disableHermesMouseTracking(
+  data: string,
+  backend?: BackendType,
+  state?: Pick<InitState, 'mouseModeCarry'>,
+): string {
+  if (backend !== 'hermes') return data
+  let combined = `${state?.mouseModeCarry ?? ''}${data}`
+  if (state) state.mouseModeCarry = ''
+
+  const escapeIndex = combined.lastIndexOf('\x1b')
+  if (escapeIndex >= 0) {
+    const tail = combined.slice(escapeIndex)
+    if (tail === '\x1b' || tail === '\x1b[' || /^\x1b\[\?[0-9;]*$/.test(tail)) {
+      if (state) state.mouseModeCarry = tail
+      combined = combined.slice(0, escapeIndex)
+    }
+  }
+
+  return combined.replace(/\x1b\[\?([0-9;]+)([hl])/g, (_sequence, params: string, action: string) => {
+    const retained = params.split(';').filter(param => !XTERM_MOUSE_MODES.has(param))
+    return retained.length > 0 ? `\x1b[?${retained.join(';')}${action}` : ''
+  })
 }
 
 function isFullScreenTuiBackend(backend?: BackendType): boolean {
@@ -69,6 +122,13 @@ function fitTerminalToContainer(
   ptyId: string,
   syncViewportBackground: () => void
 ): { cols: number; rows: number } | undefined {
+  const geometry = ptyOperations.getGeometry()
+  if (geometry && !geometry.canResize) {
+    terminal.resize(geometry.cols, geometry.rows)
+    syncViewportBackground()
+    terminal.refresh(0, terminal.rows - 1)
+    return { cols: geometry.cols, rows: geometry.rows }
+  }
   fitAddon.fit()
   syncViewportBackground()
   terminal.refresh(0, terminal.rows - 1)
@@ -227,7 +287,8 @@ function setupEventHandlers(
     ptyOperations.resizePty,
     ptyId,
     ptyOperations.writePty,
-    options.backend
+    options.backend,
+    ptyOperations.getGeometry,
   )
   terminal.attachCustomWheelEventHandler(wheelHandler)
 
@@ -261,11 +322,23 @@ function setupEventHandlers(
   })
 
   // Context menu handler
-  const contextmenuHandler = createContextMenuHandler(terminal, ptyId, options.backend, currentLineInputRef)
+  const contextmenuHandler = createContextMenuHandler(
+    terminal,
+    ptyId,
+    options.backend,
+    currentLineInputRef,
+    ptyOperations.writePty,
+  )
   container.addEventListener('contextmenu', contextmenuHandler)
 
   // Middle-click paste
-  const auxclickHandler = createAuxClickHandler(terminal, ptyId, options.backend, currentLineInputRef)
+  const auxclickHandler = createAuxClickHandler(
+    terminal,
+    ptyId,
+    options.backend,
+    currentLineInputRef,
+    ptyOperations.writePty,
+  )
   container.addEventListener('auxclick', auxclickHandler)
 
   // Auto-scroll on mousedown
@@ -280,7 +353,8 @@ function setupEventHandlers(
     userScrolledUpRef,
     ptyOperations.resizePty,
     ptyId,
-    disposedRef
+    disposedRef,
+    ptyOperations.getGeometry,
   )
 
   const debouncedResize = () => {
@@ -326,7 +400,7 @@ function setupEventHandlers(
     ptyOperations.writePty,
     ptyId,
     options.backend,
-    currentLineInputRef
+    currentLineInputRef,
   )
   terminal.attachCustomKeyEventHandler(keyEventHandler)
 
@@ -379,6 +453,7 @@ function postOpenSetup(
 
   // Initialize buffer
   initBuffer(ptyId)
+  if (options.backend === 'hermes') terminal.write(HERMES_MOUSE_RESET)
 
   // Force viewport background to match theme so gaps between the
   // rendered content and the viewport edge don't show a grey border.
@@ -400,7 +475,7 @@ function postOpenSetup(
     requestAnimationFrame(() => {
       if (state.disposed) return
       for (const chunk of buffer) {
-        terminal.write(chunk)
+        terminal.write(hideStreamingAgentSignals(chunk, state))
       }
       syncViewportBackground()
       terminal.refresh(0, terminal.rows - 1)
@@ -422,7 +497,7 @@ function postOpenSetup(
         // Chunks queued before the snapshot are already contained in it.
         state.pendingWrites.length = 0
         options.prePopulateSpokenContent([replay])
-        terminal.write(replay)
+        terminal.write(hideStreamingAgentSignals(replay, state))
         syncViewportBackground()
         terminal.refresh(0, terminal.rows - 1)
         scrollDebug('replayBuffer:restored', { bytes: replay.length, ...scrollSnapshot(terminal) })
@@ -646,11 +721,15 @@ export function handlePtyData(
   ptyId: string,
   onTTSChunk: (chunk: string) => void,
   onSummaryChunk: (chunk: string) => void,
-  state: InitState
+  state: InitState,
+  backend?: BackendType,
 ): void {
 
   // Strip markers from display
-  let displayData = data.replace(TTS_GUILLEMET_REGEX, '').replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
+  let displayData = hideStreamingAgentSignals(data, state)
+    .replace(TTS_GUILLEMET_REGEX, '')
+    .replace(SUMMARY_MARKER_DISPLAY_REGEX, '')
+  displayData = disableHermesMouseTracking(displayData, backend, state)
 
   // Handle OSC 52 clipboard escape sequences (used by opencode, tmux, etc.)
   // Format: ESC ] 52 ; <clipboard> ; <base64> BEL|ST
@@ -758,10 +837,12 @@ export function handlePtyData(
     if (fitAddon && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
       if (rect.width > 50 && rect.height > 50) {
-        fitAddon.fit()
-        const dims = fitAddon.proposeDimensions()
-        if (dims && dims.cols > 0 && dims.rows > 0) {
-          ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
+        const geometry = ptyOperations.getGeometry()
+        if (geometry && !geometry.canResize) terminal.resize(geometry.cols, geometry.rows)
+        else {
+          fitAddon.fit()
+          const dims = fitAddon.proposeDimensions()
+          if (dims && dims.cols > 0 && dims.rows > 0) ptyOperations.resizePty(ptyId, dims.cols, dims.rows)
         }
       }
     }
@@ -807,6 +888,8 @@ export function createInitState(): InitState {
     pendingWrites: [],
     firstData: true,
     replayPending: false,
+    markerCarry: '',
+    mouseModeCarry: '',
   }
 }
 

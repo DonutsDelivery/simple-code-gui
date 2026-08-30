@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Project } from '../../../stores/workspace.js'
 import { OpenTab, ClaudeSession } from '../types.js'
-import type { BackendId } from '../../../api/types'
+import type { BackendId, Session } from '../../../api/types'
 import type { OpenSessionOptions } from '../../../hooks/useProjectHandlers.js'
 
 interface UseSessionsOptions {
@@ -12,6 +12,14 @@ interface UseSessionsOptions {
     options?: OpenSessionOptions
   ) => void
   onSwitchToTab: (tabId: string) => void
+  /**
+   * Resolves the API for a project's origin server. Session discovery must run
+   * against the connected server (remote or local), not the local Electron
+   * bridge, or remote sessions never appear in the sidebar list.
+   */
+  getApiForServer?: (serverId: string) => { discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]> } | null | undefined
+  /** Global default harness from settings; used when neither the dropdown nor the project sets one. */
+  defaultHarnessId?: string
 }
 
 interface UseSessionsReturn {
@@ -24,6 +32,11 @@ interface UseSessionsReturn {
     projectPath: string,
     options?: OpenSessionOptions
   ) => void
+  /** Per-project harness chosen in the sidebar launch options. */
+  harnessByProject: Record<string, string>
+  setHarnessForProject: (projectPath: string, harnessId: string) => void
+  /** Effective harness for a project: dropdown selection → project → global default → claude. */
+  getEffectiveHarness: (projectPath: string) => string
 }
 
 export function useSessions({
@@ -31,24 +44,43 @@ export function useSessions({
   openTabs,
   onOpenSession,
   onSwitchToTab,
+  getApiForServer,
+  defaultHarnessId,
 }: UseSessionsOptions): UseSessionsReturn {
   const [expandedProject, setExpandedProject] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Record<string, ClaudeSession[]>>({})
+  const [harnessByProject, setHarnessByProject] = useState<Record<string, string>>({})
 
-  // Load sessions when a project is expanded
+  const getEffectiveHarness = useCallback((projectPath: string): BackendId => {
+    const project = projects.find((item) => item.path === projectPath)
+    return (harnessByProject[projectPath]
+      || ((project?.harnessId ?? project?.backend) && (project?.harnessId ?? project?.backend) !== 'default'
+        ? (project?.harnessId ?? project?.backend)
+        : null)
+      || (defaultHarnessId && defaultHarnessId !== 'default' ? defaultHarnessId : null)
+      || 'claude') as BackendId
+  }, [projects, harnessByProject, defaultHarnessId])
+
+  const setHarnessForProject = useCallback((projectPath: string, harnessId: string) => {
+    setHarnessByProject((prev) => ({ ...prev, [projectPath]: harnessId }))
+  }, [])
+
+  // Load sessions when a project is expanded. Discovery runs against the
+  // project's origin server API for the effective harness so remote servers
+  // and non-claude harnesses show their sessions.
   useEffect(() => {
     async function loadSessions(): Promise<void> {
       if (expandedProject) {
         try {
           const project = projects.find((item) => item.path === expandedProject)
-          const projectHarness = project?.harnessId ?? project?.backend
-          const backend = ((projectHarness && projectHarness !== 'default')
-            ? projectHarness
-            : 'claude') as BackendId
-          const projectSessions = (await window.electronAPI?.discoverSessions(
-            expandedProject,
-            backend
-          )) as ClaudeSession[] | undefined
+          const backend = getEffectiveHarness(expandedProject) as BackendId
+          const serverApi = project ? getApiForServer?.(project.serverId) : null
+          const projectSessions = serverApi?.discoverSessions
+            ? (await serverApi.discoverSessions(expandedProject, backend)) as ClaudeSession[]
+            : (await window.electronAPI?.discoverSessions(
+              expandedProject,
+              backend
+            )) as ClaudeSession[] | undefined
           setSessions((prev) => ({ ...prev, [expandedProject]: projectSessions ?? [] }))
         } catch (e) {
           console.error('Failed to discover sessions:', e)
@@ -56,7 +88,8 @@ export function useSessions({
       }
     }
     loadSessions()
-  }, [expandedProject, projects])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedProject, projects, getEffectiveHarness])
 
   const toggleProject = useCallback((e: React.MouseEvent, path: string) => {
     e.stopPropagation()
@@ -67,10 +100,7 @@ export function useSessions({
     async (projectPath: string) => {
       const existingTab = openTabs.find((tab) => tab.projectPath === projectPath)
       const project = projects.find((item) => item.path === projectPath)
-      const effectiveBackend =
-        (project?.harnessId ?? project?.backend) && (project?.harnessId ?? project?.backend) !== 'default'
-          ? (project?.harnessId ?? project?.backend) as BackendId
-          : 'claude'
+      const effectiveBackend = getEffectiveHarness(projectPath)
 
       if (existingTab) {
         onSwitchToTab(existingTab.id)
@@ -82,7 +112,10 @@ export function useSessions({
 
       if (!projectSessions) {
         try {
-          projectSessions = ((await window.electronAPI?.discoverSessions(projectPath, backend)) as ClaudeSession[] | undefined) ?? []
+          const serverApi = project ? getApiForServer?.(project.serverId) : null
+          projectSessions = serverApi?.discoverSessions
+            ? (await serverApi.discoverSessions(projectPath, backend)) as ClaudeSession[]
+            : ((await window.electronAPI?.discoverSessions(projectPath, backend)) as ClaudeSession[] | undefined) ?? []
           setSessions((prev) => ({ ...prev, [projectPath]: projectSessions! }))
         } catch (e) {
           console.error('Failed to discover sessions:', e)
@@ -96,28 +129,31 @@ export function useSessions({
           sessionId: mostRecent.sessionId,
           slug: mostRecent.slug,
           resumeCwd: mostRecent.cwd,
+          serverId: project?.serverId,
         })
       } else {
-        onOpenSession(projectPath)
+        onOpenSession(projectPath, { forceNewSession: true, harnessId: effectiveBackend as OpenSessionOptions['harnessId'], serverId: project?.serverId })
       }
     },
-    [openTabs, projects, sessions, onSwitchToTab, onOpenSession]
+    [openTabs, projects, sessions, onSwitchToTab, onOpenSession, getApiForServer, getEffectiveHarness]
   )
 
   const handleOpenSession = useCallback(
     (projectPath: string, options: OpenSessionOptions = {}) => {
-      const { sessionId, slug, forceNewSession, resumeCwd, harnessId } = options
+      const { sessionId, slug, forceNewSession, resumeCwd, harnessId, serverId } = options
+      const project = projects.find((item) => item.path === projectPath)
+      const originServerId = serverId || project?.serverId
       if (sessionId) {
         const discoveredCwd = resumeCwd ?? sessions[projectPath]?.find(session => session.sessionId === sessionId)?.cwd
-        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd, harnessId })
+        onOpenSession(projectPath, { sessionId, slug, resumeCwd: discoveredCwd, harnessId, serverId: originServerId })
       } else if (forceNewSession) {
         // Explicit "New Session" click - always create a new session
-        onOpenSession(projectPath, { forceNewSession: true, harnessId })
+        onOpenSession(projectPath, { forceNewSession: true, harnessId, serverId: originServerId })
       } else {
         openMostRecentSession(projectPath)
       }
     },
-    [onOpenSession, openMostRecentSession, sessions]
+    [onOpenSession, openMostRecentSession, sessions, projects]
   )
 
   return {
@@ -127,5 +163,8 @@ export function useSessions({
     toggleProject,
     openMostRecentSession,
     handleOpenSession,
+    harnessByProject,
+    setHarnessForProject,
+    getEffectiveHarness,
   }
 }

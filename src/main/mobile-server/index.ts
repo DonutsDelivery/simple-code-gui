@@ -33,17 +33,13 @@ import { createServerProtocolDescriptor } from '../../common/server-protocol'
 import { createPairingOffer, decodePairingOffer, encodePairingOffer, verifyPairingOffer } from '../../common/pairing-protocol'
 import type { EnvironmentCommandRouter } from '../environment-command-router.js'
 import type { SessionRuntimeRegistry } from '../session-runtime-registry.js'
+import { getRuntimeDataDir } from '../runtime-paths.js'
 import { loadOrCreateToken, regenerateToken as regenerateTokenFn, saveToken } from './token-manager'
-import {
-  isDeviceTokenValid,
-  revokeDevice as revokeDeviceFn,
-  listDevices as listDevicesFn,
-  type PairedDeviceInfo
-} from './device-registry'
+import { DeviceRegistry, type PairedDeviceInfo } from './device-registry'
 import { setupAuthRoutes } from './routes/auth'
 import { loadOrCreatePairingSigningKeyPair } from '../pairing-signing-key.js'
 import { PairingRequestStore } from '../pairing-requests.js'
-import { log, getRendererPath, getLocalIPs, getTailscaleHostname, tokensEqual } from './utils'
+import { log, getRendererPath, getLocalIPs, getLocalDiscoveryHostname, getTailscaleHostname, tokensEqual } from './utils'
 import {
   setupCorsMiddleware,
   setupStaticMiddleware,
@@ -60,13 +56,17 @@ import {
   setupPtyRoutes,
   setupTtsRoutes,
   setupProtocolRoutes,
-  setupEnvironmentRoutes
+  setupEnvironmentRoutes,
+  setupRepositoryRoutes,
+  setupArtifactRoutes,
+  setupCoordinationRoutes
 } from './routes/index'
 import {
   setupWebSocket,
   broadcastTerminalData as wsBroadcastTerminalData,
   broadcastPtyExit as wsBroadcastPtyExit
 } from './websocket-manager'
+import { ArtifactUploadSink } from '../artifact-transfer'
 import {
   sendFileToMobile as filePushSendFile,
   getPendingFilesList,
@@ -95,6 +95,10 @@ export class MobileServer {
   private environmentRouter: EnvironmentCommandRouter | null = null
   private sessionStore: any = null
   private voiceManager: any = null
+  private repositoryRegistry: import('../repository-registry').RepositoryRegistry | null = null
+  private artifactStore: import('../artifact-store').ArtifactStore | null = null
+  private artifactSinks = new Map<string, import('../artifact-transfer').ArtifactUploadSink>()
+  private coordinationRouter: import('../coordination-router').CoordinationRouter | null = null
 
   private localPtys: Map<string, LocalPty> = new Map()
   private pendingFiles: Map<string, PendingFile> = new Map()
@@ -104,12 +108,20 @@ export class MobileServer {
   private rateLimitCleanupInterval: ReturnType<typeof setInterval> | null = null
   private useTls: boolean
   private certFingerprint: string = ''
+  /** Raw TCP sockets accepted by the HTTP(S) server. `server.close()` waits
+   * for every open socket (including upgraded WebSockets) before its callback
+   * fires, so stop() would hang forever while a frontend is connected unless
+   * these are forcibly destroyed. */
+  private sockets = new Set<import('net').Socket>()
   private readonly pairingCode = `${randomInt(1000, 10_000)}-${randomInt(1000, 10_000)}`
   private readonly pairingSigningKeys = loadOrCreatePairingSigningKeyPair()
-  private readonly pairingRequests = new PairingRequestStore()
+  private readonly deviceRegistry: DeviceRegistry
+  private readonly pairingRequests: PairingRequestStore
 
 
   constructor(config: MobileServerConfig = {}) {
+    this.deviceRegistry = new DeviceRegistry(config.dataDir || getRuntimeDataDir())
+    this.pairingRequests = new PairingRequestStore(this.deviceRegistry)
     this.port = config.port ?? DEFAULT_PORT
     this.host = config.host || '0.0.0.0'
     this.serverVersion = config.serverVersion || 'unknown'
@@ -128,7 +140,7 @@ export class MobileServer {
     setupStaticMiddleware(this.app, this.rendererPath, () => this.token)
     setupJsonMiddleware(this.app)
     setupRateLimitMiddleware(this.app)
-    setupAuthMiddleware(this.app, () => this.token)
+    setupAuthMiddleware(this.app, () => this.token, this.deviceRegistry)
     setupIpAccessMiddleware(this.app)
     setupEndpointRateLimitMiddleware(this.app)
   }
@@ -138,7 +150,9 @@ export class MobileServer {
       serverId: this.serverId,
       humanCode: this.pairingCode,
       certificateFingerprint: () => this.certFingerprint,
-      endpointHints: () => getLocalIPs().map(ip => `${this.useTls ? 'https' : 'http'}://${ip}:${this.port}`),
+      endpointHints: () => [...getLocalIPs(), getLocalDiscoveryHostname(), getTailscaleHostname()]
+        .filter((host): host is string => Boolean(host))
+        .map(host => `${this.useTls ? 'https' : 'http'}://${host}:${this.port}`),
       createPairingRequest: (deviceId, deviceName) => this.pairingRequests.createPake(deviceId, deviceName),
     })
     this.app.post('/api/auth/pairing-offer/request', (req: Request, res: Response) => {
@@ -273,6 +287,9 @@ export class MobileServer {
 
     setupWorkspaceRoutes(this.app, () => this.sessionStore, () => this.environmentRouter)
     setupEnvironmentRoutes(this.app, () => this.environmentRouter)
+    setupRepositoryRoutes(this.app, () => this.repositoryRegistry, () => this.serverId)
+    setupArtifactRoutes(this.app, () => this.artifactStore, () => this.serverId, (clientKey) => this.getArtifactSink(clientKey))
+    setupCoordinationRoutes(this.app, () => this.coordinationRouter)
 
     setupFilesRoutes(
       this.app,
@@ -285,6 +302,7 @@ export class MobileServer {
 
     setupPtyRoutes(
       this.app,
+      this.deviceRegistry,
       () => this.ptyManager,
       () => this.runtimeRegistry,
       () => this.sessionStore,
@@ -300,6 +318,7 @@ export class MobileServer {
     if (!this.server) return
 
     this.wss = setupWebSocket(this.server, {
+      deviceRegistry: this.deviceRegistry,
       getToken: () => this.token,
       getPtyManager: () => this.ptyManager,
       getRuntimeRegistry: () => this.runtimeRegistry,
@@ -374,6 +393,32 @@ export class MobileServer {
     })
   }
 
+  setRepositoryRegistry(registry: import('../repository-registry').RepositoryRegistry): void {
+    this.repositoryRegistry = registry
+  }
+
+  setArtifactStore(store: import('../artifact-store').ArtifactStore): void {
+    this.artifactStore = store
+    // Drop any partial uploads from a previous run.
+    this.artifactSinks.clear()
+  }
+
+  setCoordinationRouter(router: import('../coordination-router').CoordinationRouter): void {
+    this.coordinationRouter = router
+  }
+
+  /** Get (or lazily create) the upload sink for a client key. */
+  private getArtifactSink(clientKey: string): import('../artifact-transfer').ArtifactUploadSink | null {
+    const store = this.artifactStore
+    if (!store) return null
+    let sink = this.artifactSinks.get(clientKey)
+    if (!sink) {
+      sink = new ArtifactUploadSink(store, { stagingDir: store.stagingDirFor(clientKey) })
+      this.artifactSinks.set(clientKey, sink)
+    }
+    return sink
+  }
+
   setVoiceManager(manager: any): void {
     this.voiceManager = manager
   }
@@ -384,14 +429,14 @@ export class MobileServer {
     // H3: a real revoke must drop live sockets, not just reject new ones.
     // Rotating the shared token invalidates any socket still holding the old
     // one; per-device-token sockets stay valid and are left connected.
-    this.closeSockets((token) => !tokensEqual(token, this.token) && !isDeviceTokenValid(token))
+    this.closeSockets((token) => !tokensEqual(token, this.token) && !this.deviceRegistry.isDeviceTokenValid(token))
     return this.token
   }
 
   // Per-device revoke (H3): mark the device revoked and forcibly close any of
   // its live WebSocket sessions so a removed phone stops streaming immediately.
   revokeDevice(deviceId: string): { revoked: number } {
-    const tokens = new Set(revokeDeviceFn(deviceId))
+    const tokens = new Set(this.deviceRegistry.revokeDevice(deviceId))
     if (tokens.size > 0) {
       this.closeSockets((token) => tokens.has(token))
     }
@@ -399,7 +444,11 @@ export class MobileServer {
   }
 
   listDevices(): PairedDeviceInfo[] {
-    return listDevicesFn()
+    return this.deviceRegistry.listDevices()
+  }
+
+  issueDeviceToken(deviceId: string, name: string, scopes: Array<'read' | 'write'> = ['read', 'write']): string {
+    return this.deviceRegistry.issueDeviceToken(deviceId, name, scopes)
   }
 
   /**
@@ -461,7 +510,7 @@ export class MobileServer {
     const { nonce, expiresAt } = createNonce()
 
     const tailscaleHostname = getTailscaleHostname()
-    const allHosts = tailscaleHostname ? [...ips, tailscaleHostname] : ips
+    const allHosts = [...new Set([...ips, getLocalDiscoveryHostname(), ...(tailscaleHostname ? [tailscaleHostname] : [])])]
 
     const offer = createPairingOffer({
       serverId: this.serverId,
@@ -527,6 +576,11 @@ export class MobileServer {
       this.setupWebSocket()
       startNonceCleanup()
 
+      this.server.on('connection', (socket) => {
+        this.sockets.add(socket)
+        socket.on('close', () => this.sockets.delete(socket))
+      })
+
       this.rateLimitCleanupInterval = setInterval(() => {
         cleanupEndpointRateLimits()
       }, 2 * 60 * 1000)
@@ -584,12 +638,24 @@ export class MobileServer {
     }
 
     if (this.wss) {
+      // Terminate open WebSocket sessions so the HTTP server can actually
+      // finish closing. `server.close()` waits for every open socket; an idle
+      // frontend connection would otherwise block stop() indefinitely.
+      for (const client of this.wss.clients) {
+        try { client.terminate() } catch { /* already closed */ }
+      }
       this.wss.close()
       this.wss = null
     }
     if (this.server) {
       const server = this.server
       this.server = null
+      // Destroy tracked sockets (keep-alive HTTP connections that never
+      // upgraded) so server.close()'s callback fires instead of waiting forever.
+      for (const socket of this.sockets) {
+        try { socket.destroy() } catch { /* already closed */ }
+      }
+      this.sockets.clear()
       await new Promise<void>(resolve => server.close(() => resolve()))
     }
     log('Stopped')

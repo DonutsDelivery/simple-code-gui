@@ -40,6 +40,21 @@ export interface ConnectableApi extends Api {
 type ApiFactory = (endpoint: ConnectionEndpoint, credential: string) => ConnectableApi
 
 type CredentialResolver = (credentialRef: string) => Promise<string> | string
+const ENDPOINT_CONNECT_TIMEOUT_MS = 5_000
+
+async function testEndpointWithTimeout(api: ConnectableApi): Promise<{ success: boolean; error?: string }> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      api.testConnection(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Connection attempt timed out')), ENDPOINT_CONNECT_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
 
 interface LiveConnection {
   saved: SavedServerConnection
@@ -104,7 +119,7 @@ export class ConnectionRegistry {
       const api = this.createApi(endpoint, credential)
       const startedAt = performance.now()
       try {
-        const result = await api.testConnection()
+        const result = await testEndpointWithTimeout(api)
         if (!result.success) throw new Error(result.error || 'Connection failed')
         const descriptor = api.getServerProtocol?.()
         if (!descriptor) throw new Error('Server did not publish its protocol descriptor')
@@ -112,6 +127,17 @@ export class ConnectionRegistry {
           throw new Error(`Server identity mismatch: expected ${serverId}, received ${descriptor.serverId}`)
         }
         connection.api = api
+        // Prefer the route that just proved this pinned server identity. A stale
+        // former LAN/Tailscale address should cost one bounded timeout, not one
+        // timeout on every subsequent application launch.
+        connection.saved.endpoints = [
+          { ...endpoint },
+          ...connection.saved.endpoints.filter(candidate =>
+            candidate.host !== endpoint.host
+            || candidate.port !== endpoint.port
+            || candidate.secure !== endpoint.secure
+          ),
+        ]
         connection.saved.lastSeenProtocolVersion = descriptor.protocolVersion
         connection.saved.capabilities = supportedCapabilities(descriptor)
         this.updateStatus(connection, {

@@ -658,7 +658,7 @@ describe('PtyManager', () => {
       dataCallback?.(`\x1b[1A${completeSignal}\r\n`)
 
       expect(listener).toHaveBeenCalledTimes(1)
-      expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ ptyId: id, type: 'complete' }))
     })
 
     // AC: @agent-session-notifications ac-2
@@ -674,7 +674,7 @@ describe('PtyManager', () => {
       dataCallback?.(`${inputNeededSignal}\r\n`)
 
       expect(listener).toHaveBeenCalledTimes(2)
-      expect(listener).toHaveBeenLastCalledWith({ ptyId: id, type: 'input-needed' })
+      expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ ptyId: id, type: 'input-needed' }))
     })
 
     it('does not forward managed signal tags to terminal consumers', () => {
@@ -698,7 +698,7 @@ describe('PtyManager', () => {
       dataCallback?.(`${completeSignal}\r\n`)
 
       expect(pty.spawn).toHaveBeenCalledTimes(2)
-      expect(listener).toHaveBeenCalledWith({ ptyId: id, type: 'complete' })
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ ptyId: id, type: 'complete' }))
     })
 
     it('preserves additive runtime listeners across a quick resume retry', () => {

@@ -2,7 +2,12 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import {
   EnvironmentCacheInvalidatedError,
   cacheEnvironmentSnapshot,
+  consumeAuthoritativeSaveSuppression,
+  getBaselineFingerprint,
+  recordAuthoritativeBaseline,
   getEnvironmentCursor,
+  loadAuthoritativeWorkspace,
+  markAuthoritativeSaveSuppressed,
   resetEnvironmentPersistenceForTests,
   resolveAuthoritativeEnvironmentEvent,
   saveAuthoritativeWorkspace,
@@ -224,6 +229,28 @@ describe('authoritative workspace persistence', () => {
     expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 5 })
   })
 
+  it('retries once when a revision conflict came from runtime-registry commits (workspace content unchanged)', async () => {
+    // Baseline recorded from a prior successful save at revision 4.
+    cacheEnvironmentSnapshot({ serverId: 'server-a', revision: 4, workspace, sessions: [], ptys: [] })
+    recordAuthoritativeBaseline('server-a', workspace)
+
+    // First command attempt conflicts: the server's runtime registry advanced
+    // the revision (create/attach-session) without changing workspace content.
+    const getEnvironmentSnapshot = vi.fn()
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 6, workspace, sessions: [], ptys: [] })
+    const executeEnvironmentCommand = vi.fn()
+      .mockRejectedValueOnce(new Error('Expected environment revision 4, current revision is 6'))
+      .mockResolvedValueOnce({ serverId: 'server-a', revision: 7, replayed: false, events: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
+
+    await expect(saveAuthoritativeWorkspace(api, 'server-a', workspace)).resolves.toBeUndefined()
+
+    expect(executeEnvironmentCommand).toHaveBeenCalledTimes(2)
+    // Second attempt must carry the refreshed cursor.
+    expect(executeEnvironmentCommand.mock.calls[1][0].expectedRevision).toBe(6)
+    expect(getEnvironmentCursor('server-a')).toEqual({ serverId: 'server-a', revision: 7 })
+  })
+
   it('applies the next broadcast snapshot and catches up across an event gap', async () => {
     const revisionOne = { serverId: 'server-a', revision: 1, workspace: { ...workspace, activeSessionId: 'one' }, sessions: [], ptys: [] }
     const revisionThree = { serverId: 'server-a', revision: 3, workspace: { ...workspace, activeSessionId: 'three' }, sessions: [], ptys: [] }
@@ -313,5 +340,61 @@ describe('authoritative workspace persistence', () => {
     })
     expect(() => saveAuthoritativeWorkspace(wrongApi, 'server-a', workspace))
       .toThrow('expected server-a')
+  })
+
+  it('scopes authoritative-save suppression per server', () => {
+    // An authoritative apply for server-a must not suppress a genuine state
+    // change for server-b (multi-server: pairing/attach applies each server's
+    // snapshot independently, while the save effect iterates every server).
+    markAuthoritativeSaveSuppressed('server-a')
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(true)
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(false)
+
+    markAuthoritativeSaveSuppressed('server-a')
+    expect(consumeAuthoritativeSaveSuppression('server-b')).toBe(false)
+    // server-a's pending suppression survives a probe of server-b.
+    expect(consumeAuthoritativeSaveSuppression('server-a')).toBe(true)
+  })
+
+  it('records a baseline fingerprint on authoritative apply and save', async () => {
+    const getEnvironmentSnapshot = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot })
+
+    const loaded = await loadAuthoritativeWorkspace(api, 'server-a')
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify({
+      projects: loaded.projects ?? [],
+      categories: loaded.categories ?? [],
+      sessions: loaded.sessions ?? [],
+      activeSessionId: loaded.activeSessionId ?? null,
+    }))
+
+    const executeEnvironmentCommand = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 1, result: { success: true }, replayed: false })
+    const api2 = identifiedApi('server-a', { getEnvironmentSnapshot, executeEnvironmentCommand })
+    await saveAuthoritativeWorkspace(api2, 'server-a', workspace)
+    expect(getBaselineFingerprint('server-a')).toBe(JSON.stringify({
+      projects: workspace.projects ?? [],
+      categories: workspace.categories ?? [],
+      sessions: workspace.sessions ?? [],
+      activeSessionId: workspace.activeSessionId ?? null,
+    }))
+  })
+
+  it('keeps a per-server baseline when another server applies', async () => {
+    const getEnvironmentSnapshot = vi.fn().mockResolvedValue({ serverId: 'server-a', revision: 0, workspace, sessions: [], ptys: [] })
+    const api = identifiedApi('server-a', { getEnvironmentSnapshot })
+    await loadAuthoritativeWorkspace(api, 'server-a')
+    const baselineA = getBaselineFingerprint('server-a')
+
+    const getEnvironmentSnapshotB = vi.fn().mockResolvedValue({ serverId: 'server-b', revision: 0, workspace, sessions: [], ptys: [] })
+    const apiB = identifiedApi('server-b', { getEnvironmentSnapshot: getEnvironmentSnapshotB })
+    await loadAuthoritativeWorkspace(apiB, 'server-b')
+
+    expect(getBaselineFingerprint('server-a')).toBe(baselineA)
+    expect(getBaselineFingerprint('server-b')).toBe(JSON.stringify({
+      projects: workspace.projects ?? [],
+      categories: workspace.categories ?? [],
+      sessions: workspace.sessions ?? [],
+      activeSessionId: workspace.activeSessionId ?? null,
+    }))
   })
 })

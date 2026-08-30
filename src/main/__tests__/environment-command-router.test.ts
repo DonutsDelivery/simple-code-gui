@@ -71,6 +71,34 @@ describe('EnvironmentCommandRouter', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves canonical native session identity when a stale frontend attempts to overwrite it', () => {
+    const { router } = createRouter()
+    const authoritative = makeWorkspace()
+    authoritative.sessions![0].openTabs = [{
+      id: 'tab-a',
+      projectPath: '/repo',
+      title: 'Hermes',
+      ptyId: 'pty-a',
+      agentSessionId: 'agent-a',
+      sessionId: '20260820_104135_167ab5',
+      harnessId: 'hermes',
+    }]
+    router.execute(envelope('seed-identity', 0, { type: 'replace-workspace', workspace: authoritative }))
+
+    const stale = structuredClone(authoritative)
+    stale.sessions![0].openTabs[0].sessionId = 'wrong-native-session'
+    stale.sessions![0].openTabs[0].harnessId = 'claude'
+    stale.sessions![0].openTabs[0].ptyId = 'pty-new'
+    router.execute(envelope('stale-projection', 1, { type: 'replace-workspace', workspace: stale }, 'client-b'))
+
+    expect(router.getSnapshot().workspace.sessions![0].openTabs[0]).toMatchObject({
+      ptyId: 'pty-new',
+      agentSessionId: 'agent-a',
+      sessionId: '20260820_104135_167ab5',
+      harnessId: 'hermes',
+    })
+  })
+
   it('rejects stale writes with the current revision and snapshot', () => {
     const { router } = createRouter()
     router.execute(envelope('rename-a', 0, { type: 'rename-workspace', workspaceId: 'workspace-1', name: 'Renamed' }))

@@ -4,7 +4,7 @@
 
 import { appendFileSync, existsSync, mkdirSync } from 'fs'
 import { join, resolve } from 'path'
-import { networkInterfaces } from 'os'
+import { hostname, networkInterfaces, platform } from 'os'
 import { timingSafeEqual } from 'crypto'
 import { getRuntimeAppPath, getRuntimeDataDir } from '../runtime-paths.js'
 
@@ -132,4 +132,19 @@ export function getTailscaleHostname(): string | null {
     // Tailscale not installed or not running
   }
   return null
+}
+
+export function getLocalDiscoveryHostname(): string {
+  if (platform() === 'darwin') {
+    try {
+      const { spawnSync } = require('child_process') as typeof import('child_process')
+      const result = spawnSync('scutil', ['--get', 'LocalHostName'], {
+        encoding: 'utf-8',
+        timeout: 2_000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      if (result.status === 0 && result.stdout.trim()) return `${result.stdout.trim()}.local`
+    } catch { /* fall through to the OS hostname */ }
+  }
+  return `${hostname().replace(/\.$/, '').split('.')[0]}.local`
 }

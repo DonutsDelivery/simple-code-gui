@@ -18,6 +18,7 @@ import { connectionScreenStyles } from './styles.js'
 import type { ConnectionScreenProps, ViewState, ConnectionConfig, SavedHost } from './types.js'
 import { loadDeviceCredential, removeDeviceCredential, storeDeviceCredential } from '../../security/device-credentials.js'
 import { pairWithHumanCode, redeemPairingOffer } from '../../security/human-code-pairing.js'
+import { getPairingDeviceId } from '../../security/pairing-device-identity.js'
 import { trustServerEndpoint } from '../../security/server-certificate-trust.js'
 import { verifyPairingOfferInBrowser } from '../../security/verify-pairing-offer.js'
 import { PairServerDialog, type PairedServerResult } from '../Connections/PairServerDialog.js'
@@ -240,7 +241,7 @@ export function ConnectionScreen({ onConnected, savedConfig }: ConnectionScreenP
         )
         if (!approved) throw new Error('Pairing approval was cancelled')
         const pairingOffer = connection.pairingOffer
-        const deviceId = crypto.randomUUID()
+        const deviceId = await getPairingDeviceId()
         let lastError: unknown
         for (const endpoint of connection.endpointHints) {
           try {

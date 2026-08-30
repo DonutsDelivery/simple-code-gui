@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'crypto'
 import type { PairingOfferPayload } from '../common/pairing-protocol.js'
 import { consumePairingOfferNonce, isPairingOfferNonceConsumed } from './pairing-offer-store.js'
-import { issueDeviceToken } from './mobile-server/device-registry.js'
+import type { DeviceRegistry } from './mobile-server/device-registry.js'
 
 export interface PairingRequestSummary {
   requestId: string
@@ -21,6 +21,8 @@ interface PairingRequest extends PairingRequestSummary {
 
 export class PairingRequestStore {
   private readonly requests = new Map<string, PairingRequest>()
+
+  constructor(private readonly deviceRegistry: DeviceRegistry) {}
 
   private prune(now = Date.now()): void {
     for (const [id, request] of this.requests) {
@@ -82,7 +84,7 @@ export class PairingRequestStore {
       request.status = 'rejected'
       return false
     }
-    request.deviceCredential = issueDeviceToken(request.deviceId, request.deviceName, request.requestedScopes)
+    request.deviceCredential = this.deviceRegistry.issueDeviceToken(request.deviceId, request.deviceName, request.requestedScopes)
     request.status = 'approved'
     for (const sibling of this.requests.values()) {
       if (sibling.requestId !== requestId && sibling.offerNonce === request.offerNonce && sibling.status === 'pending') {

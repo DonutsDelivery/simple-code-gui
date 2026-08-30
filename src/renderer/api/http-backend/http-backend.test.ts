@@ -22,7 +22,7 @@ describe('HttpBackend API contract', () => {
       'getWorkspace', 'saveWorkspace', 'getSettings', 'saveSettings',
       'getEnvironmentSnapshot', 'getEnvironmentEvents', 'executeEnvironmentCommand', 'onEnvironmentEvent',
       'discoverSessions', 'listPtys', 'spawnPty', 'writePty', 'resizePty', 'killPty',
-      'onPtyData', 'onPtyExit', 'onPtyRecreated', 'onAgentSessionSignal',
+      'onPtyData', 'onPtyGeometry', 'onPtyExit', 'onPtyRecreated', 'onAgentSessionSignal',
       'onApiOpenSession', 'onOrchestratorSessionCreated',
     ] as const) {
       expect(typeof api[method], method).toBe('function')

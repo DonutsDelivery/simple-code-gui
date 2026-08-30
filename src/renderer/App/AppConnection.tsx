@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { App as CapacitorApp } from '@capacitor/app'
 import { ConnectionScreen, type ConnectionConfig } from '../components/ConnectionScreen'
 import { MainApp } from './MainApp'
 import type { Api } from '../api'
 import { HttpBackend, isElectronEnvironment, setApi } from '../api'
-import { attachRuntimeConnection, disconnectRuntimeServer } from '../api/runtime-connections'
+import { attachRuntimeConnection, connectRuntimeServer, disconnectRuntimeServer } from '../api/runtime-connections'
 import { useConnectionsStore } from '../stores/connections'
 import { trustServerEndpoint } from '../security/server-certificate-trust'
 
@@ -91,9 +92,6 @@ export function AppConnection(): React.ReactElement | null {
 
   useEffect(() => {
     if (!isElectron) return
-    // Frontend-only is an explicit per-launch mode. Never persist it in the
-    // application profile: a prior matrix/test launch must not turn ordinary
-    // desktop launches into connection-only clients forever.
     const frontendOnly = isFrontendOnlyLaunch(
       window.electronAPI?.isFrontendOnly,
       window.location.search,
@@ -108,8 +106,12 @@ export function AppConnection(): React.ReactElement | null {
       setInitializingLocalServer(false)
       return
     }
-    void getConnectionInfo()
-      .then(async info => {
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let attempt = 0
+    const retryDelays = [250, 500, 1_000, 2_000, 5_000, 10_000]
+    const connectLocalServer = async (): Promise<void> => {
+      try {
+        const info = await getConnectionInfo()
         // The embedded backend serves HTTPS on loopback with a pinned cert.
         // Trust it (same path as remote pairing), then connect over HTTPS so
         // the auto-connect does not fall back to the pairing screen.
@@ -130,20 +132,56 @@ export function AppConnection(): React.ReactElement | null {
         const result = await localApi.testConnection()
         if (cancelled) return
         if (!result.success) throw new Error(result.error || 'Local DonutCode Server connection failed')
+        // The embedded token remains IPC-owned rather than copied into renderer persistence.
         await registerConnection(
           localApi,
           { host: '127.0.0.1', port: info.port, token: localToken },
           false,
         )
-      })
-      .catch(error => {
-        if (!cancelled) console.error('[App] Local server connection failed:', error)
-      })
-      .finally(() => {
         if (!cancelled) setInitializingLocalServer(false)
-      })
-    return () => { cancelled = true }
+      } catch (error) {
+        if (cancelled) return
+        console.error('[App] Local server connection failed:', error)
+        const delay = retryDelays[attempt++]
+        if (delay === undefined) {
+          setInitializingLocalServer(false)
+          return
+        }
+        retryTimer = setTimeout(() => { void connectLocalServer() }, delay)
+      }
+    }
+    void connectLocalServer()
+    return () => {
+      cancelled = true
+      if (retryTimer) clearTimeout(retryTimer)
+    }
   }, [isElectron, registerConnection])
+
+  // iOS suspends WebViews and networking while backgrounded. On foreground,
+  // perform one bounded health check and reconnect through the saved Keychain
+  // credential if needed; never run an unbounded background retry loop.
+  useEffect(() => {
+    if (!isCapacitor || !api) return
+    let removed = false
+    let listener: { remove: () => Promise<void> } | undefined
+    void CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
+      if (!isActive || removed) return
+      const result = await api.testConnection()
+      if (result.success) return
+      const serverId = api.getServerProtocol?.()?.serverId
+      if (!serverId) return
+      try {
+        const reconnected = await connectRuntimeServer(serverId)
+        if (!removed) setApiState(reconnected)
+      } catch (error) {
+        if (!removed) console.error('[App] Foreground reconnect failed:', error)
+      }
+    }).then(handle => { listener = handle })
+    return () => {
+      removed = true
+      void listener?.remove()
+    }
+  }, [api, isCapacitor])
 
   // Handle successful connection from ConnectionScreen
   const handleConnected = useCallback((connectedApi: HttpBackend, config: ConnectionConfig) => {

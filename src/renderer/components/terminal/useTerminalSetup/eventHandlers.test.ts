@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createWheelHandler } from './eventHandlers.js'
+import { createResizeHandler, createWheelHandler } from './eventHandlers.js'
 
 function createTerminal(overrides: Partial<any> = {}) {
   const screen = document.createElement('div')
@@ -78,6 +78,27 @@ describe('createWheelHandler', () => {
     expect(writePty).not.toHaveBeenCalled()
   })
 
+  it('keeps canonical projection geometry during Ctrl+wheel zoom', () => {
+    const terminal = createTerminal({ resize: vi.fn(), refresh: vi.fn() })
+    const fitAddon = { fit: vi.fn(), proposeDimensions: vi.fn() }
+    const resizePty = vi.fn()
+
+    createWheelHandler(
+      terminal as any,
+      fitAddon as any,
+      { current: false },
+      resizePty,
+      'pty-1',
+      vi.fn(),
+      'hermes',
+      () => ({ cols: 319, rows: 73, generation: 4, canResize: false }),
+    )(createWheelEvent({ ctrlKey: true, deltaY: -100 }))
+
+    expect((terminal as any).resize).toHaveBeenCalledWith(319, 73)
+    expect(fitAddon.fit).not.toHaveBeenCalled()
+    expect(resizePty).not.toHaveBeenCalled()
+  })
+
   it('lets normal-buffer wheel events pass through to xterm while tracking scroll state', () => {
     const terminal = createTerminal()
     const writePty = vi.fn()
@@ -98,6 +119,26 @@ describe('createWheelHandler', () => {
     expect(userScrolledUpRef.current).toBe(true)
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(writePty).not.toHaveBeenCalled()
+  })
+
+  it('forwards Hermes wheel input to its TUI while xterm remains selectable', () => {
+    const terminal = createTerminal()
+    const event = createWheelEvent({ deltaY: -120, clientX: 115, clientY: 65 })
+    const writePty = vi.fn()
+
+    const result = createWheelHandler(
+      terminal as any,
+      { fit: vi.fn(), proposeDimensions: vi.fn() } as any,
+      { current: false },
+      vi.fn(),
+      'pty-1',
+      writePty,
+      'hermes',
+    )(event)
+
+    expect(result).toBe(false)
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(writePty).toHaveBeenCalledWith('pty-1', '\x1b[<64;11;3M\x1b[<64;11;3M\x1b[<64;11;3M')
   })
 
   it('synthesizes SGR wheel reports for OpenCode alternate-buffer fallback', () => {
@@ -126,5 +167,31 @@ describe('createWheelHandler', () => {
     expect(result).toBe(false)
     expect(event.preventDefault).toHaveBeenCalled()
     expect(writePty).toHaveBeenCalledWith('pty-1', '\x1b[<64;11;3M\x1b[<64;11;3M')
+  })
+})
+
+describe('createResizeHandler canonical projection', () => {
+  it('keeps the authority grid locally without sending a projection resize', () => {
+    const terminal: any = createTerminal({ resize: vi.fn(), refresh: vi.fn() })
+    const fitAddon = { fit: vi.fn(), proposeDimensions: vi.fn(() => ({ cols: 80, rows: 24 })) }
+    const container = document.createElement('div')
+    container.getBoundingClientRect = () => ({ width: 900, height: 600 } as DOMRect)
+    ;(container as any).checkVisibility = () => true
+    const resizePty = vi.fn()
+
+    createResizeHandler(
+      terminal as any,
+      fitAddon as any,
+      { current: container },
+      { current: false },
+      resizePty,
+      'pty-1',
+      { current: false },
+      () => ({ cols: 319, rows: 73, generation: 4, canResize: false }),
+    )()
+
+    expect((terminal as any).resize).toHaveBeenCalledWith(319, 73)
+    expect(fitAddon.fit).not.toHaveBeenCalled()
+    expect(resizePty).not.toHaveBeenCalled()
   })
 })

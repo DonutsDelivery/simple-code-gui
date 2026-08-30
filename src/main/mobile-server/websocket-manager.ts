@@ -9,7 +9,7 @@ import { PendingFile, LocalPty } from './types'
 import type { SessionRuntimeRegistry } from '../session-runtime-registry'
 import type { EnvironmentSnapshot } from '../../common/environment-protocol'
 import { consumeWebSocketTicket } from './routes/auth'
-import { deviceTokenAllows, isDeviceTokenValid } from './device-registry'
+import type { DeviceRegistry } from './device-registry'
 
 // L3: ceiling on simultaneous WebSocket connections (main + PTY streams) so a
 // client can't exhaust sockets/file descriptors by opening connections in a loop.
@@ -23,6 +23,7 @@ function totalWsConnections(deps: WebSocketManagerDeps): number {
 }
 
 export interface WebSocketManagerDeps {
+  deviceRegistry: DeviceRegistry
   getToken: () => string
   getPtyManager: () => any
   getRuntimeRegistry?: () => SessionRuntimeRegistry | null
@@ -36,6 +37,22 @@ export interface WebSocketManagerDeps {
   // Optional: PTYs spawned by the mobile-server itself (vs. attached-to
   // desktop-owned PTYs).  Used to gate phone-driven resize.
   getLocalPtys?: () => Map<string, LocalPty>
+}
+
+export function canOwnedRemoteResizePty(
+  ptyId: string,
+  authToken: string,
+  deps: Pick<WebSocketManagerDeps, 'getLocalPtys'>,
+): boolean {
+  return tokensEqual(deps.getLocalPtys?.().get(ptyId)?.ownerToken, authToken)
+}
+
+export function canClientResizePty(
+  ptyId: string,
+  authToken: string,
+  deps: Pick<WebSocketManagerDeps, 'deviceRegistry' | 'getLocalPtys'>,
+): boolean {
+  return !deps.deviceRegistry.isDeviceTokenValid(authToken) || canOwnedRemoteResizePty(ptyId, authToken, deps)
 }
 
 export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebSocketServer {
@@ -66,7 +83,7 @@ export function setupWebSocket(server: Server, deps: WebSocketManagerDeps): WebS
 
     // Validate token for all WebSocket connections. Accept the legacy shared
     // token (back-compat) or a valid per-device token (H3).
-    if (!token || (!tokensEqual(token, deps.getToken()) && !isDeviceTokenValid(token))) {
+    if (!token || (!tokensEqual(token, deps.getToken()) && !deps.deviceRegistry.isDeviceTokenValid(token))) {
       log('WebSocket ticket auth failed')
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
       socket.destroy()
@@ -192,7 +209,9 @@ function handlePtyStreamUpgrade(
     }
     ptyStreams.get(ptyId)!.add(ws)
 
-    ws.send(JSON.stringify({ type: 'connected', ptyId }))
+    const canResize = canClientResizePty(ptyId, authToken, deps)
+    const geometry = ptyManager.getGeometry?.(ptyId) ?? { cols: 120, rows: 30, generation: 0 }
+    ws.send(JSON.stringify({ type: 'connected', ptyId, geometry: { ...geometry, canResize } }))
 
     // Replay buffered raw bytes so a late-attaching client (e.g. phone
     // attaching to a desktop-owned PTY) reconstructs the current screen.
@@ -205,6 +224,7 @@ function handlePtyStreamUpgrade(
         type: 'data',
         data: replayBytes,
         sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+        geometryGeneration: geometry.generation,
         snapshot: true,
       }))
     }
@@ -222,6 +242,7 @@ function handlePtyStreamUpgrade(
               type: 'data',
               data,
               sequence: ptyManager.getOutputSequence?.(ptyId) ?? 0,
+              geometryGeneration: ptyManager.getGeometry?.(ptyId)?.generation ?? geometry.generation,
             }))
           }
         })
@@ -234,15 +255,21 @@ function handlePtyStreamUpgrade(
           }
         })
       : (() => {})
-
+    const disposeResize = ptyManager.addResizeListener
+      ? ptyManager.addResizeListener(ptyId, (cols: number, rows: number, generation: number) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'geometry', ptyId, geometry: { cols, rows, generation, canResize } }))
+          }
+        })
+      : (() => {})
 
     ws.on('message', (message: Buffer) => {
       try {
         const msg = JSON.parse(message.toString())
         if (
           (msg.type === 'input' || msg.type === 'resize')
-          && isDeviceTokenValid(authToken)
-          && !deviceTokenAllows(authToken, 'write')
+          && deps.deviceRegistry.isDeviceTokenValid(authToken)
+          && !deps.deviceRegistry.deviceTokenAllows(authToken, 'write')
         ) {
           ws.close(1008, 'Device credential lacks write scope')
           return
@@ -261,10 +288,12 @@ function handlePtyStreamUpgrade(
             break
 
           case 'resize':
-            if (msg.cols && msg.rows && ptyManager) {
+            if (msg.cols && msg.rows && ptyManager && canResize) {
               const registry = deps.getRuntimeRegistry?.()
               if (!registry) throw new Error('Runtime authority is not available')
               registry.resize(ptyId, msg.cols, msg.rows)
+            } else if (msg.cols && msg.rows) {
+              log('Ignored remote resize for host-owned PTY', { ptyId, cols: msg.cols, rows: msg.rows })
             }
             break
 
@@ -284,6 +313,7 @@ function handlePtyStreamUpgrade(
       log('PTY stream disconnected', { ptyId })
       disposeData()
       disposeExit()
+      disposeResize()
       ptyStreams.get(ptyId)?.delete(ws)
       if (ptyStreams.get(ptyId)?.size === 0) {
         ptyStreams.delete(ptyId)
@@ -294,6 +324,7 @@ function handlePtyStreamUpgrade(
       log('PTY stream error', { error: String(err), ptyId })
       disposeData()
       disposeExit()
+      disposeResize()
       ptyStreams.get(ptyId)?.delete(ws)
     })
   })
@@ -303,7 +334,7 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
   const ptyManager = deps.getPtyManager()
   const terminalSubscriptions = deps.getTerminalSubscriptions()
   const authToken = (ws as WebSocket & { __authToken?: string }).__authToken || ''
-  const canWrite = tokensEqual(authToken, deps.getToken()) || deviceTokenAllows(authToken, 'write')
+  const canWrite = tokensEqual(authToken, deps.getToken()) || deps.deviceRegistry.deviceTokenAllows(authToken, 'write')
 
   switch (msg.type) {
     case 'subscribe':
@@ -340,10 +371,12 @@ function handleWebSocketMessage(ws: WebSocket, msg: any, deps: WebSocketManagerD
         ws.send(JSON.stringify({ type: 'authorization-error', requiredScope: 'write' }))
         break
       }
-      if (msg.ptyId && msg.cols && msg.rows && ptyManager) {
+      if (msg.ptyId && msg.cols && msg.rows && ptyManager && canClientResizePty(msg.ptyId, authToken, deps)) {
         const registry = deps.getRuntimeRegistry?.()
         if (!registry) throw new Error('Runtime authority is not available')
         registry.resize(msg.ptyId, msg.cols, msg.rows)
+      } else if (msg.ptyId && msg.cols && msg.rows) {
+        log('Ignored remote resize for host-owned PTY', { ptyId: msg.ptyId, cols: msg.cols, rows: msg.rows })
       }
       break
 

@@ -14,6 +14,7 @@ export interface RuntimeInfo {
   startupNonce: string
   startedAt: number
   certFingerprint: string
+  pairingCode?: string
 }
 
 export function getRuntimeInfoPath(dataDir: string): string {
@@ -140,6 +141,7 @@ export class HeadlessServer {
       startupNonce: this.startupNonce,
       startedAt: Date.now(),
       certFingerprint: endpoint.certFingerprint,
+      pairingCode: this.runtime.server.getConnectionInfo().pairingCode,
     }
     writeRuntimeInfoAtomic(this.options.dataDir, this.runtimeInfo)
     return this.runtimeInfo

@@ -27,6 +27,7 @@ function session(id: string, tabId: string): WorkspaceSession {
 describe('useAgentNotifications', () => {
   beforeEach(() => {
     vi.mocked(playAgentNotificationSound).mockClear()
+    localStorage.clear()
     Object.defineProperty(document, 'hidden', { configurable: true, value: false })
     useWorkspaceStore.getState().initSessions([session('one', 'visible'), session('two', 'hidden')], 'one')
   })
@@ -54,6 +55,38 @@ describe('useAgentNotifications', () => {
 
     act(() => useWorkspaceStore.getState().switchSession('two'))
     expect(useWorkspaceStore.getState().attentionByTabId).toEqual({})
+  })
+
+  it('plays a stable signal only once across redraws, remounts, and API replacement', () => {
+    let firstListener: ((event: { id: string; ptyId: string; type: 'complete' }) => void) | undefined
+    const first = renderHook(() => useAgentNotifications({
+      serverId: 'server-a',
+      api: { onAgentSessionSignal: (callback: typeof firstListener) => { firstListener = callback; return vi.fn() } } as any,
+      settings: { defaultProjectDir: '', theme: 'default' },
+      isMobile: false,
+    }))
+    const signal = { id: 'stable-signal', ptyId: 'pty-hidden', type: 'complete' as const }
+    act(() => {
+      firstListener?.(signal)
+      firstListener?.(signal)
+    })
+    first.unmount()
+
+    let replacementListener: typeof firstListener
+    renderHook(() => useAgentNotifications({
+      serverId: 'server-a',
+      api: { onAgentSessionSignal: (callback: typeof replacementListener) => { replacementListener = callback; return vi.fn() } } as any,
+      settings: { defaultProjectDir: '', theme: 'default' },
+      isMobile: false,
+    }))
+    act(() => {
+      replacementListener?.(signal)
+      replacementListener?.({ ...signal, id: 'next-signal' })
+    })
+
+    expect(playAgentNotificationSound).toHaveBeenCalledTimes(2)
+    expect(localStorage.getItem('donutcode.exhausted-agent-signal-ids.v1')).toContain('stable-signal')
+    expect(localStorage.getItem('donutcode.exhausted-agent-signal-ids.v1')).toContain('next-signal')
   })
 
   // AC: @agent-session-notifications ac-3

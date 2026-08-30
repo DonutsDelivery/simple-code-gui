@@ -15,7 +15,7 @@ import {
   checkEndpointRateLimit,
   IpClass
 } from '../mobile-security'
-import { deviceTokenAllows, isDeviceTokenValid, touchDevice } from './device-registry'
+import type { DeviceRegistry } from './device-registry'
 import { log, isStaticPath, tokensEqual } from './utils'
 import { EndpointAccess } from './types'
 
@@ -105,22 +105,25 @@ export function setupRateLimitMiddleware(app: Express): void {
     const rateLimit = checkRateLimit(clientIp)
 
     if (!rateLimit.allowed) {
-      return res.status(429).json({
-        error: 'Too many failed attempts. Please try again later.',
-        retryAfter: rateLimit.retryAfter
-      }).setHeader('Retry-After', String(rateLimit.retryAfter || 900))
+      return res
+        .setHeader('Retry-After', String(rateLimit.retryAfter || 900))
+        .status(429)
+        .json({
+          error: 'Too many failed attempts. Please try again later.',
+          retryAfter: rateLimit.retryAfter
+        })
     }
 
     next()
   })
 }
 
-export function setupAuthMiddleware(app: Express, getToken: () => string): void {
+export function setupAuthMiddleware(app: Express, getToken: () => string, deviceRegistry: DeviceRegistry): void {
   // A token authenticates if it's the legacy shared server token (back-compat
   // for already-paired devices) OR a valid per-device token (H3). Device tokens
   // let us revoke one phone without rotating the shared secret and re-scanning.
   const isTokenValid = (token?: string): boolean =>
-    !!token && (tokensEqual(token, getToken()) || isDeviceTokenValid(token))
+    !!token && (tokensEqual(token, getToken()) || deviceRegistry.isDeviceTokenValid(token))
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     // Skip auth for unauthenticated endpoints
@@ -163,13 +166,13 @@ export function setupAuthMiddleware(app: Express, getToken: () => string): void 
       ? 'read'
       : req.method === 'GET' || req.method === 'HEAD' ? 'read' : 'write'
     if (
-      isDeviceTokenValid(providedToken)
-      && !deviceTokenAllows(providedToken, requiredScope)
+      deviceRegistry.isDeviceTokenValid(providedToken)
+      && !deviceRegistry.deviceTokenAllows(providedToken, requiredScope)
     ) {
       return res.status(403).json({ error: `Device credential lacks ${requiredScope} scope` })
     }
 
-    touchDevice(providedToken)
+    deviceRegistry.touchDevice(providedToken)
     clearRateLimit(clientIp)
     ;(req as Request & { authToken?: string }).authToken = providedToken
 
@@ -199,6 +202,20 @@ export function getEndpointAccessLevel(path: string, method: string): EndpointAc
   }
 
   if (path.startsWith('/api/environment/')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
+  // Repository identity reads are read-only; identify/materialize/bundle/patch are writes
+  if (path.startsWith('/api/repositories')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
+  // Artifact reads are read-only; publish/upload/download/expire are writes
+  if (path.startsWith('/api/artifacts')) {
+    return method === 'GET' ? 'read' : 'write'
+  }
+
+  if (path.startsWith('/api/coordination')) {
     return method === 'GET' ? 'read' : 'write'
   }
 
@@ -299,10 +316,13 @@ export function setupEndpointRateLimitMiddleware(app: Express): void {
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(result.resetIn / 1000)))
 
     if (!result.allowed) {
-      return res.status(429).json({
-        error: 'Too many requests. Please slow down.',
-        retryAfter: Math.ceil(result.resetIn / 1000)
-      }).setHeader('Retry-After', String(Math.ceil(result.resetIn / 1000)))
+      return res
+        .setHeader('Retry-After', String(Math.ceil(result.resetIn / 1000)))
+        .status(429)
+        .json({
+          error: 'Too many requests. Please slow down.',
+          retryAfter: Math.ceil(result.resetIn / 1000)
+        })
     }
 
     next()

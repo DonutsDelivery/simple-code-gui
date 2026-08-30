@@ -19,6 +19,7 @@ export const ENABLE_WEBGL = true
 // Pre-compiled regex patterns for hot path (PTY data processing)
 export const TTS_GUILLEMET_REGEX = /«\/?tts»/g
 export const SUMMARY_MARKER_DISPLAY_REGEX = /===SUMMARY_(START|END)===/g
+export const AGENT_SESSION_SIGNAL_DISPLAY_REGEX = /<ct-signal\s+k="[^"\r\n]+"\s+t="[ci]"\s*\/>/g
 export const TTS_TAG_REGEX = /(?:«tts»|<tts>)([\s\S]*?)(?:«\/tts»|<\/tts>)/g
 export const CODE_PATTERN_REGEX = /[{}()\[\];=`$]|^\s*\/\/|^\s*#|function\s|const\s|let\s|var\s/
 export const SUMMARY_EXTRACT_REGEX = /===SUMMARY_START===([\s\S]*)===SUMMARY_END===/

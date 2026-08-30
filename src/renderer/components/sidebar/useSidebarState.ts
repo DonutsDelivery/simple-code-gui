@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo } from 'react'
 import { Project, useWorkspaceStore } from '../../stores/workspace.js'
 import { useVoice } from '../../contexts/VoiceContext.js'
 import { SidebarProps, OpenTab, ClaudeSession } from './types.js'
+import type { BackendId, Session } from '../../api/types'
 import type { OpenSessionOptions } from '../../hooks/useProjectHandlers.js'
 import { useSessions, useDragAndDrop, useProjectSettingsModal } from './hooks/index.js'
 
@@ -32,6 +33,9 @@ export interface SidebarState {
     projectPath: string,
     options?: OpenSessionOptions
   ) => void
+  harnessByProject: Record<string, string>
+  setHarnessForProject: (projectPath: string, harnessId: string) => void
+  getEffectiveHarness: (projectPath: string) => string
 
   // Drag and drop
   draggedProject: string | null
@@ -117,10 +121,12 @@ export interface UseSidebarStateParams {
   onOpenSession: SidebarProps['onOpenSession']
   onSwitchToTab: SidebarProps['onSwitchToTab']
   onUpdateProject: SidebarProps['onUpdateProject']
+  getApiForServer?: (serverId: string) => { discoverSessions: (projectPath: string, backend?: BackendId) => Promise<Session[]> } | null | undefined
+  defaultHarnessId?: string
 }
 
 export function useSidebarState(params: UseSidebarStateParams): SidebarState {
-  const { serverId, projects, openTabs, activeTabId, lastFocusedTabId, onOpenSession, onSwitchToTab, onUpdateProject } = params
+  const { serverId, projects, openTabs, activeTabId, lastFocusedTabId, onOpenSession, onSwitchToTab, onUpdateProject, getApiForServer, defaultHarnessId } = params
 
   // Voice context
   const { volume, setVolume, speed, setSpeed, skipOnNew, setSkipOnNew, voiceOutputEnabled } =
@@ -137,11 +143,13 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
   const reorderProjects = useWorkspaceStore((state) => state.reorderProjects)
 
   // Custom hooks for extracted logic
-  const { expandedProject, sessions, toggleProject, handleOpenSession } = useSessions({
+  const { expandedProject, sessions, toggleProject, handleOpenSession, harnessByProject, setHarnessForProject, getEffectiveHarness } = useSessions({
     projects,
     openTabs,
     onOpenSession,
     onSwitchToTab,
+    getApiForServer,
+    defaultHarnessId,
   })
 
   const {
@@ -271,6 +279,9 @@ export function useSidebarState(params: UseSidebarStateParams): SidebarState {
     sessions,
     toggleProject,
     handleOpenSession,
+    harnessByProject,
+    setHarnessForProject,
+    getEffectiveHarness,
 
     // Drag and drop hook
     draggedProject,

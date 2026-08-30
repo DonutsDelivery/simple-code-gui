@@ -24,18 +24,63 @@ interface EnvironmentPersistenceState {
  * not bounce a redundant replace-workspace back — which would emit another
  * event and loop forever (observed ~50 commands/sec).
  *
- * A counter, not a boolean: both subscribers may apply the same snapshot in
- * separate microtask ticks, and each effect run must be suppressed once.
+ * A counter per server (not a single global boolean): both subscribers may
+ * apply the same snapshot in separate microtask ticks, each effect run must
+ * be suppressed once, and the save effect iterates every connected server —
+ * an authoritative apply for server A must not suppress a genuine local state
+ * change for server B.
  */
-let suppressAuthoritativeSave = 0
+const suppressAuthoritativeSaveByServer = new Map<string, number>()
 
-export function markAuthoritativeSaveSuppressed(): void {
-  suppressAuthoritativeSave += 1
+/**
+ * Serialized fingerprint of each server's workspace slice as last applied from
+ * an authoritative snapshot (or last saved). The save effect skips a server
+ * whose slice is unchanged — this stops the cross-server save ping-pong where
+ * server A's save echo re-triggers a redundant save of server B, whose echo
+ * re-triggers A, forever. With tabs routed to their origin server's session
+ * the slices are disjoint, so the fingerprint stabilizes after one save.
+ */
+const baselineFingerprintByServer = new Map<string, string>()
+const authoritativeActiveSessionByServer = new Map<string, string | null>()
+
+export function recordAuthoritativeBaseline(serverId: string, workspace: Workspace): void {
+  baselineFingerprintByServer.set(serverId, fingerprintWorkspace(workspace))
+  authoritativeActiveSessionByServer.set(serverId, workspace.activeSessionId ?? null)
 }
 
-export function consumeAuthoritativeSaveSuppression(): boolean {
-  if (suppressAuthoritativeSave > 0) {
-    suppressAuthoritativeSave -= 1
+export function getBaselineFingerprint(serverId: string): string | undefined {
+  return baselineFingerprintByServer.get(serverId)
+}
+
+export function getAuthoritativeActiveSessionId(serverId: string): string | null {
+  return authoritativeActiveSessionByServer.get(serverId) ?? null
+}
+
+function isRevisionConflict(error: unknown): boolean {
+  return error instanceof Error && /^Expected environment revision \d+, current revision is \d+$/.test(error.message)
+}
+
+function fingerprintWorkspace(workspace: Workspace): string {
+  // Normalize to the exact shape the save effect compares — explicit key order
+  // and fields, so a server-side representation difference can never make the
+  // guard mismatch (which would loop the save forever).
+  return JSON.stringify({
+    projects: workspace.projects ?? [],
+    categories: workspace.categories ?? [],
+    sessions: workspace.sessions ?? [],
+    activeSessionId: workspace.activeSessionId ?? null,
+  })
+}
+
+export function markAuthoritativeSaveSuppressed(serverId: string): void {
+  suppressAuthoritativeSaveByServer.set(serverId, (suppressAuthoritativeSaveByServer.get(serverId) ?? 0) + 1)
+}
+
+export function consumeAuthoritativeSaveSuppression(serverId: string): boolean {
+  const count = suppressAuthoritativeSaveByServer.get(serverId) ?? 0
+  if (count > 0) {
+    if (count === 1) suppressAuthoritativeSaveByServer.delete(serverId)
+    else suppressAuthoritativeSaveByServer.set(serverId, count - 1)
     return true
   }
   return false
@@ -84,6 +129,9 @@ export function getEnvironmentCursor(serverId: string): EnvironmentCursor | null
 
 export function resetEnvironmentPersistenceForTests(): void {
   environmentPersistenceByServer.clear()
+  suppressAuthoritativeSaveByServer.clear()
+  baselineFingerprintByServer.clear()
+  authoritativeActiveSessionByServer.clear()
 }
 
 export function observeEnvironmentRevision(serverId: string, revision: number): boolean {
@@ -101,7 +149,8 @@ export async function loadAuthoritativeWorkspace(api: Api, serverId: string): Pr
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
-  markAuthoritativeSaveSuppressed()
+  recordAuthoritativeBaseline(serverId, snapshot.workspace)
+  markAuthoritativeSaveSuppressed(serverId)
   return snapshot.workspace
 }
 
@@ -127,7 +176,8 @@ export async function resolveAuthoritativeEnvironmentEvent(
     && eventSnapshot.revision === event.revision
   ) {
     cacheEnvironmentSnapshot(eventSnapshot)
-    markAuthoritativeSaveSuppressed()
+    recordAuthoritativeBaseline(serverId, eventSnapshot.workspace)
+    markAuthoritativeSaveSuppressed(serverId)
     return eventSnapshot
   }
 
@@ -139,7 +189,8 @@ export async function resolveAuthoritativeEnvironmentEvent(
     if (snapshot) {
       assertServerIdentity(serverId, snapshot.serverId, 'Environment catch-up')
       cacheEnvironmentSnapshot(snapshot)
-      markAuthoritativeSaveSuppressed()
+      recordAuthoritativeBaseline(serverId, snapshot.workspace)
+      markAuthoritativeSaveSuppressed(serverId)
       return snapshot
     }
   }
@@ -148,7 +199,8 @@ export async function resolveAuthoritativeEnvironmentEvent(
   const snapshot = await api.getEnvironmentSnapshot()
   assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
   cacheEnvironmentSnapshot(snapshot)
-  markAuthoritativeSaveSuppressed()
+  recordAuthoritativeBaseline(serverId, snapshot.workspace)
+  markAuthoritativeSaveSuppressed(serverId)
   return snapshot
 }
 
@@ -168,24 +220,47 @@ export function saveAuthoritativeWorkspace(api: Api, serverId: string, workspace
       cacheEnvironmentSnapshot(snapshot)
     }
     if (requestedEpoch !== state.epoch) throw new EnvironmentCacheInvalidatedError()
-    const cursor = state.cursor!
-    try {
-      const response = await api.executeEnvironmentCommand({
-        clientId: rendererClientId,
-        commandId: crypto.randomUUID(),
-        serverId,
-        expectedRevision: cursor.revision,
-        command: { type: 'replace-workspace', workspace },
-      })
-      assertServerIdentity(serverId, response.serverId, 'Environment command')
-      state.cursor = { serverId, revision: response.revision }
-    } catch (error) {
-      // Never retry the stale full-workspace payload at a newer revision. Refresh
-      // only the disposable cursor/cache and let the caller reconcile explicitly.
-      const snapshot = await api.getEnvironmentSnapshot()
-      assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
-      cacheEnvironmentSnapshot(snapshot)
-      throw error
+
+    // The server's own runtime registry commits create-session/attach-session
+    // (and stop-session) as it spawns PTYs, advancing the revision without the
+    // renderer seeing it first. Those commits do NOT change workspace content
+    // (they write the top-level sessions array), so a revision conflict here is
+    // almost always that race — retry once at the freshly-read cursor. If the
+    // workspace content really changed under us, the retry conflicts again and
+    // we stop, preserving the "never replay a stale payload" guarantee.
+    let attempts = 0
+    for (;;) {
+      try {
+        const cursor = state.cursor!
+        const response = await api.executeEnvironmentCommand({
+          clientId: rendererClientId,
+          commandId: crypto.randomUUID(),
+          serverId,
+          expectedRevision: cursor.revision,
+          command: { type: 'replace-workspace', workspace },
+        })
+        assertServerIdentity(serverId, response.serverId, 'Environment command')
+        state.cursor = { serverId, revision: response.revision }
+        recordAuthoritativeBaseline(serverId, workspace)
+        break
+      } catch (error) {
+        if (attempts >= 1) throw error
+        attempts += 1
+        // Refresh the cursor from the server's current snapshot so subsequent
+        // saves work even if we stop here. Without this, a single conflict
+        // leaves the cursor stale forever and every later save fails.
+        const snapshot = await api.getEnvironmentSnapshot()
+        assertServerIdentity(serverId, snapshot.serverId, 'Environment snapshot')
+        cacheEnvironmentSnapshot(snapshot)
+        // Retry only for revision conflicts that came from the server's own
+        // runtime-registry commits (create/attach/stop-session advance the
+        // revision without touching workspace content). If the workspace
+        // CONTENT changed since our last successful save, another client wrote
+        // it — replaying our payload would clobber that write, so stop (never
+        // replay a stale payload).
+        if (!isRevisionConflict(error)) throw error
+        if (fingerprintWorkspace(snapshot.workspace) !== getBaselineFingerprint(serverId)) throw error
+      }
     }
   })
   state.saveQueue = operation.catch(() => undefined)
@@ -226,8 +301,10 @@ export function serializeSessionsForSave(
         activeView: s.savedData.activeView ?? 'tiles',
       }
     }
-    const openTabs = s.openTabs
+    const serverTabs = [...new Map(s.openTabs
       .filter(tab => tab.serverId === serverId)
+      .map(tab => [tab.authorityTabId ?? tab.id, tab])).values()]
+    const openTabs = serverTabs
       .map(t => normalizeTabForSave({
         serverId: t.serverId,
         authorityTabId: t.authorityTabId,
@@ -240,8 +317,7 @@ export function serializeSessionsForSave(
         ptyId: t.ptyId,
         harnessId: t.harnessId ?? t.backend,
       })) as OpenTab[]
-    const tabIdMapping = new Map(s.openTabs
-      .filter(tab => tab.serverId === serverId)
+    const tabIdMapping = new Map(serverTabs
       .map(tab => [tab.id, tab.authorityTabId ?? tab.id]))
     const tileTree = s.activeTileTree?.type ? remapTabIds(s.activeTileTree, tabIdMapping) : s.activeTileTree || undefined
     const canvasScene = s.preservedCanvasScene

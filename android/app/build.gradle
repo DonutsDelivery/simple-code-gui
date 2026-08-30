@@ -1,14 +1,32 @@
 apply plugin: 'com.android.application'
 
+def versionProperties = new Properties()
+def versionPropertiesFile = file('version.properties')
+if (!versionPropertiesFile.exists()) {
+    throw new GradleException('Missing app/version.properties; run npm run mobile:version')
+}
+versionPropertiesFile.withInputStream { versionProperties.load(it) }
+
+def signingVariables = [
+    storeFile: System.getenv('ANDROID_KEYSTORE_FILE'),
+    storePassword: System.getenv('ANDROID_KEYSTORE_PASSWORD'),
+    keyAlias: System.getenv('ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('ANDROID_KEY_PASSWORD')
+]
+def hasReleaseSigning = signingVariables.values().every { it != null && !it.isEmpty() }
+
 android {
     namespace "com.claudeterminal.app"
+    buildFeatures {
+        buildConfig true
+    }
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.claudeterminal.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13053
-        versionName "1.3.53"
+        versionCode versionProperties['DONUTCODE_VERSION_CODE'].toInteger()
+        versionName versionProperties['DONUTCODE_VERSION_NAME']
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +34,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(signingVariables.storeFile)
+                storePassword signingVariables.storePassword
+                keyAlias signingVariables.keyAlias
+                keyPassword signingVariables.keyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) signingConfig signingConfigs.release
         }
     }
 }

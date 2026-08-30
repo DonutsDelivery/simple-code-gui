@@ -5,6 +5,7 @@
  */
 
 import { PtyDataCallback, PtyExitCallback } from '../types'
+import type { PtyGeometry, PtyGeometryCallback } from '../../../common/pty-geometry.js'
 
 export interface HttpBackendConfig {
   host: string
@@ -17,6 +18,8 @@ export interface PtyWebSocketState {
   ws: WebSocket
   dataCallbacks: Set<PtyDataCallback>
   exitCallbacks: Set<PtyExitCallback>
+  geometryCallbacks: Set<PtyGeometryCallback>
+  geometry: PtyGeometry | null
   reconnectAttempts: number
   reconnectTimer: ReturnType<typeof setTimeout> | null
   dataBuffer: string[] // Buffer data before callbacks are registered
