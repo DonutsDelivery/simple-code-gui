@@ -1,30 +1,44 @@
 #!/usr/bin/env node
 /**
- * Phase-1 native read-only probe — the ONLY non-fixture executable this phase
- * launches, and only after the fixture isolation suite passes.
+ * Phase-1 native read-only probe — review-correction revision.
+ *
+ * The ONLY non-fixture executable this phase launches, and only with the
+ * SHARED sandbox configuration from scripts/fixtures/sandbox-helper.mjs (the
+ * same boundary the isolation tests certify).
  *
  * What it does (bounded, redacted evidence only):
- *   1. Snapshots production-profile fingerprints (config.yaml/state.db size +
- *      mtime) — read-only, to prove nothing under the real profile changes.
- *   2. Builds a scoped sandbox with bubblewrap:
- *        - --unshare-net  : outbound AND loopback network denied for the probe
- *          process tree only (no machine-wide firewall change).
- *        - --unshare-pid + --die-with-parent : the gateway's whole process tree
- *          is contained; teardown kills exactly that namespace.
- *        - The production profile (/home/user, /home/user/.hermes) is NOT
- *          bound into the sandbox at all — physically invisible.
- *        - The installed Hermes source tree + venv are bound READ-ONLY.
- *        - Fresh HOME / HERMES_HOME / TMPDIR bind mounts from a temp root.
- *   3. Spawns ONLY the explicitly named installed gateway:
+ *   1. Snapshots production-profile file METADATA (config.yaml/state.db/
+ *      auth.json size + rounded mtime). Labeled as metadata observation, NOT
+ *      a content-integrity proof.
+ *   2. Builds the shared bwrap boundary:
+ *        --unshare-net (outbound+loopback denied) --unshare-pid --die-with-parent
+ *        --clearenv THEN explicit --setenv of only the allowlisted values
+ *        production /home and /home/user/.hermes are NEVER bound
+ *        installed Hermes source + venv are read-only-bound (code only)
+ *        fresh HOME/HERMES_HOME/TMPDIR come from a temp root
+ *   3. FIRST runs the tiny observer INSIDE the same configuration to OBSERVE
+ *      the effective environment (HOME/HERMES_HOME/TMPDIR/PWD/env keys,
+ *      namespace identities) — the report records observed values, never
+ *      parent-side intended values.
+ *   4. Spawns ONLY the explicitly named installed gateway:
  *        <venv>/bin/python -m tui_gateway.entry   (Hermes Agent v0.20.6)
- *      No prompts, no provider config, no compression, no retries.
- *   4. Waits for the native `gateway.ready` event; records its payload shape.
- *   5. Sends metadata-only RPCs: `ping` (source-verified liveness), and
- *      `session.list` against the FRESH empty profile (records the observed
- *      result or error; neither is a failure).
- *   6. Stops orderly (SIGTERM → grace → SIGKILL last resort, scoped to the
- *      owned bwrap pid), verifies the process tree is gone, and re-checks the
- *      production fingerprints.
+ *      No prompts, no provider calls, no session mutations.
+ *   5. Waits for native `gateway.ready`; records the payload (redacted).
+ *   6. Metadata-only RPCs: `ping`, then `session.list` against the fresh
+ *      empty profile (result or error recorded; neither is a probe failure).
+ *   7. Stops orderly; cleanup evidence comes from the process tree the
+ *      bwrap supervisor owns: the bwrap child exits (observed by this
+ *      process), and the namespace is gone — checked via the observer's
+ *      recorded netns identity vs. this process's own (different = boundary
+ *      existed), and bwrap's exit proves the contained tree died with it.
+ *      A machine-wide `pgrep -f` name scan is NOT used as cleanup evidence.
+ *   8. Re-checks the metadata fingerprints and writes the corrected evidence
+ *      to docs/reports/native-probe-evidence-review-fix.json. The original
+ *      evidence file is preserved untouched as the historical artifact.
+ *
+ * Version metadata is read from installed SOURCE (pyproject.toml version +
+ * git HEAD) — labeled SOURCE-VERIFIED; no production-profile CLI is executed
+ * outside the boundary.
  *
  * This script is NOT run by the test suite and not imported by app startup.
  * Run manually:  node scripts/native-probe.mjs
@@ -33,14 +47,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { HermesProtocolClient, buildChildEnv } from './hermes-protocol-spike.mjs';
+import { buildBwrapArgv, OBSERVER_SCRIPT, writeTempScript, rmTree, makeProbeDirs } from './fixtures/sandbox-helper.mjs';
 
 const execFileP = promisify(execFile);
 
 const HERMES_SRC = '/home/user/.hermes/hermes-agent';
 const GATEWAY_ARGV = [path.join(HERMES_SRC, 'venv/bin/python'), '-m', 'tui_gateway.entry'];
+const EVIDENCE_PATH = 'docs/reports/native-probe-evidence-review-fix.json';
 
 function fingerprint(p) {
   try {
@@ -58,28 +74,74 @@ function redact(value) {
   }));
 }
 
+/** Read installed-source version metadata (no production CLI execution). */
+async function sourceVerifiedVersion() {
+  const out = { label: 'SOURCE-VERIFIED', pyprojectVersion: null, gitHead: null, gitDescribe: null };
+  try {
+    const py = fs.readFileSync(path.join(HERMES_SRC, 'pyproject.toml'), 'utf8');
+    const m = py.match(/^version\s*=\s*"([^"]+)"/m);
+    if (m) out.pyprojectVersion = m[1];
+  } catch { /* recorded as null */ }
+  try {
+    const { stdout } = await execFileP('git', ['-C', HERMES_SRC, 'rev-parse', '--short', 'HEAD'], { timeout: 10_000 });
+    out.gitHead = stdout.trim();
+  } catch { /* recorded as null */ }
+  return out;
+}
+
+/** Run the observer inside the SAME sandbox configuration; return parsed JSON. */
+async function observeInsideSandbox(dirs, extraEnv = {}) {
+  const obsPath = writeTempScript(dirs.root, 'observer.cjs', OBSERVER_SCRIPT);
+  const { argv } = buildBwrapArgv({
+    home: dirs.home,
+    hermesHome: dirs.hermesHome,
+    tmp: dirs.tmp,
+    hostCwd: dirs.root, // bind the temp root so /probe/observer.cjs exists
+    cwdPath: '/probe',
+    extraEnv: { DC_PHASE1_OBSERVER_MARKER: `probe-obs-${Date.now()}`, ...extraEnv },
+    argv: ['/usr/bin/node', '/probe/observer.cjs', 'probe'],
+  });
+  const { stdout } = await execFileP(argv[0], argv.slice(1), { timeout: 30_000 });
+  return { parsed: JSON.parse(stdout.trim().split('\n').pop()), argvCount: argv.length };
+}
+
+/** Host-side namespace identity for the boundary-differs comparison. */
+function hostNetns() {
+  try { return fs.readlinkSync('/proc/self/ns/net'); } catch { return null; }
+}
+
+/** Is the given PID alive (errno-safe; throws only on unexpected errors). */
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return { alive: false, inspectable: false };
+  try {
+    process.kill(pid, 0);
+    return { alive: true, inspectable: true };
+  } catch (e) {
+    if (e?.code === 'ESRCH') return { alive: false, inspectable: true };
+    if (e?.code === 'EPERM') return { alive: true, inspectable: true };
+    return { alive: false, inspectable: false, error: e?.code ?? 'unknown' };
+  }
+}
+
 async function main() {
   const results = {
+    runId: `dc-phase1-probe-${Date.now()}-${process.pid}`,
     startedAt: new Date().toISOString(),
-    gatewayArgv: GATEWAY_ARGV,
+    testedSource: { spike: import.meta.filename, hermesSrc: HERMES_SRC },
     hermesVersion: null,
     sandbox: null,
+    observedEnv: null,
     ready: null,
     ping: null,
     sessionList: null,
     stop: null,
-    leftovers: null,
+    cleanup: null,
     productionProfile: null,
     verdict: null,
+    finishedAt: null,
   };
 
-  // Hermes version from the installed CLI (source-verified metadata, no network).
-  try {
-    const { stdout } = await execFileP('/home/user/.local/bin/hermes', ['--version'], { timeout: 20_000 });
-    results.hermesVersion = stdout.trim().split('\n')[0] ?? null;
-  } catch (e) {
-    results.hermesVersion = `unavailable: ${e.message.split('\n')[0]}`;
-  }
+  results.hermesVersion = await sourceVerifiedVersion();
 
   const prodFp = [
     fingerprint('/home/user/.hermes/config.yaml'),
@@ -87,67 +149,106 @@ async function main() {
     fingerprint('/home/user/.hermes/auth.json'),
   ];
 
-  // Fresh dirs for the sandbox.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dc-phase1-probe-'));
-  const home = path.join(root, 'home');
-  const hermesHome = path.join(root, 'hermes-home');
-  const tmp = path.join(root, 'tmp');
-  for (const d of [home, hermesHome, tmp]) fs.mkdirSync(d, { recursive: true });
+  const dirs = makeProbeDirs('dc-phase1-probe-');
 
-  // Scoped sandbox: production /home is NOT bound; Hermes source is read-only.
-  const bwrap = [
-    'bwrap',
-    '--unshare-net', '--unshare-pid', '--die-with-parent',
-    '--proc', '/proc', '--dev', '/dev',
-    '--ro-bind', '/usr', '/usr',
-    '--ro-bind-try', '/etc', '/etc',
-    '--ro-bind-try', '/lib', '/lib',
-    '--ro-bind-try', '/lib64', '/lib64',
-    '--tmpfs', '/run',
-    '--ro-bind', HERMES_SRC, HERMES_SRC,
-    '--bind', home, '/home/probe',
-    '--bind', hermesHome, '/home/probe/hermes-home',
-    '--bind', tmp, '/tmp',
-    '--clearenv',
-    ...GATEWAY_ARGV,
-  ];
+  // ---- Step A: observe the effective environment INSIDE the shared boundary
+  let observed;
+  try {
+    observed = await observeInsideSandbox(dirs);
+    results.observedEnv = {
+      label: 'OBSERVED (inside sandbox)',
+      home: observed.parsed.home,
+      hermesHome: observed.parsed.hermesHome,
+      tmpdir: observed.parsed.tmpdir,
+      pwd: observed.parsed.pwd,
+      envKeys: observed.parsed.envKeys,
+      netns: observed.parsed.netns,
+      userns: observed.parsed.userns,
+      tmpdirReadable: observed.parsed.tmpdirReadable,
+    };
+  } catch (e) {
+    results.observedEnv = { label: 'BLOCKED', error: String(e.message).slice(0, 300) };
+  }
+  const boundaryEstablished =
+    results.observedEnv?.label === 'OBSERVED (inside sandbox)' &&
+    results.observedEnv.home === '/probe/home' &&
+    results.observedEnv.hermesHome === '/probe/hermes-home' &&
+    typeof results.observedEnv.netns === 'string' &&
+    results.observedEnv.netns.startsWith('net:') &&
+    results.observedEnv.netns !== hostNetns();
+
   results.sandbox = {
-    tool: 'bwrap',
-    flags: ['unshare-net', 'unshare-pid', 'die-with-parent'],
+    tool: 'bwrap (shared configuration via sandbox-helper.buildBwrapArgv)',
+    flags: ['unshare-net', 'unshare-pid', 'die-with-parent', 'clearenv-then-setenv'],
     productionHomeBound: false,
     hermesSourceBind: `${HERMES_SRC} (read-only)`,
-    freshHomes: { home: '/home/probe', hermesHome: '/home/probe/hermes-home' },
+    freshHomes: { home: '/probe/home', hermesHome: '/probe/hermes-home' },
+    boundaryEstablished,
   };
 
-  // Allowlisted env only; PYTHONDONTWRITEBYTECODE keeps the RO venv clean.
-  const env = buildChildEnv({
-    home: '/home/probe',
-    hermesHome: '/home/probe/hermes-home',
-    tmpDir: '/tmp',
-    extraEnv: { PYTHONDONTWRITEBYTECODE: '1' },
-  });
+  if (!boundaryEstablished) {
+    results.verdict = {
+      readyObserved: false,
+      pingObserved: false,
+      cleanup: 'NOT RUN',
+      production: 'METADATA-ONLY',
+      gate: 'BLOCKED',
+      reason: 'sandbox boundary could not be established/observed; no native launch attempted',
+    };
+    results.finishedAt = new Date().toISOString();
+    fs.mkdirSync('docs/reports', { recursive: true });
+    fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(results, null, 2));
+    console.log(JSON.stringify(results, null, 2));
+    process.exitCode = 3; // BLOCKED, per review §4 (nonzero exit for unmet conditions)
+    return;
+  }
 
+  // ---- Step B: the native gateway inside the SAME boundary
+  const { argv: bwrapArgv } = buildBwrapArgv({
+    home: dirs.home,
+    hermesHome: dirs.hermesHome,
+    tmp: dirs.tmp,
+    cwdPath: '/probe',
+    // The fresh profile must be writable for session.list to open its
+    // state.db; the directory is probe-owned and discarded after the run.
+    hermesHomeMode: 'rw',
+    // The gateway imports from the repo root: bind the source tree at its
+    // real absolute path (read-only) and run from it.
+    roBinds: [[HERMES_SRC, HERMES_SRC]],
+    hostCwd: undefined,
+    extraEnv: { PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: HERMES_SRC },
+    argv: GATEWAY_ARGV,
+  });
+  // NOTE: cwd must be the REAL source path (host-side) for `python -m` —
+  // bwrap resolves the child cwd inside the sandbox, where HERMES_SRC exists
+  // read-only at the same path.
   const client = new HermesProtocolClient({
-    command: bwrap,
-    env,
-    cwd: HERMES_SRC, // `python -m tui_gateway.entry` imports from the repo root
+    command: bwrapArgv,
+    env: buildChildEnv({
+      home: '/probe/home',
+      hermesHome: '/probe/hermes-home',
+      tmpDir: '/tmp',
+      cwd: '/probe',
+      extraEnv: { PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: HERMES_SRC },
+    }),
+    cwd: HERMES_SRC,
     startupTimeoutMs: 45_000,
     requestTimeoutMs: 15_000,
     stopGraceMs: 4_000,
   });
 
-  // Capture the native gateway.ready payload for evidence.
-  client.on('gateway.ready', (params) => {
-    results.ready.payload = redact(params?.payload ?? null);
-  });
+  // Capture the native gateway.ready payload via the normal event API
+  // (initialized local; no prototype monkey-patch, no swallowed exceptions).
+  let readyPayload = null;
+  client.on('gateway.ready', (params) => { readyPayload = params?.payload ?? null; });
 
   try {
     await client.start();
     results.ready = {
       observed: true,
       label: 'OBSERVED (native)',
-      payloadKeys: redact(Object.keys(client.__readyPayload ?? {})),
-      payload: redact(client.__readyPayload ?? null),
+      payloadKeys: Object.keys(readyPayload ?? {}),
+      payload: redact(readyPayload),
     };
 
     const ping = await client.request('ping');
@@ -155,55 +256,65 @@ async function main() {
 
     try {
       const list = await client.request('session.list', {});
-      const first = Array.isArray(list?.sessions) ? list.sessions.length : null;
       results.sessionList = {
         observed: true,
-        note: 'metadata-only listing against the FRESH empty profile inside the sandbox',
-        sessionCount: first,
-        resultShape: redact(Object.keys(list ?? {})),
+        note: 'metadata-only listing against the FRESH empty profile inside the sandbox; NO resume claim',
+        sessionCount: Array.isArray(list?.sessions) ? list.sessions.length : null,
+        resultShape: Object.keys(list ?? {}),
       };
     } catch (e) {
       results.sessionList = { observed: true, error: String(e.message).slice(0, 200), note: 'recorded; not a probe failure' };
     }
-
-    // Ready payload was captured by the event handler below before this point.
+  } catch (e) {
+    results.ready = results.ready ?? { observed: false, label: 'BLOCKED', error: String(e.message).slice(0, 300) };
   } finally {
-    results.stop = await client.stop();
-    // Cleanup scope check: count ONLY processes that belong to this probe's
-    // tree (its temp root). The user's own Hermes gateways on this machine
-    // match the same binary name and must never be touched or miscounted.
-    const probeRoot = root;
-    results.leftovers = await execFileP('pgrep', ['-af', 'tui_gateway.entry'])
-      .then((r) => r.stdout.split('\n').filter((l) => l.includes(probeRoot)).join('\n').trim())
-      .catch(() => '');
+    const stop = await client.stop();
+    results.stop = stop;
+    // Cleanup evidence from OWNED identities only:
+    //   - bwrap (the sandbox supervisor) exit was observed by this process,
+    //   - the pid-ns dies with it (--die-with-parent), so the whole gateway
+    //     tree ended with it. We do NOT scan machine process lists by name.
+    const bwrapPid = client.child?.pid ?? null;
+    const bwrapState = bwrapPid == null ? { alive: false, inspectable: false } : pidAlive(bwrapPid);
+    results.cleanup = {
+      label: stop.observed ? 'OBSERVED (child exit observed)' : 'UNCONFIRMED',
+      bwrapSupervisorPid: bwrapPid,
+      bwrapSupervisorAliveAfterStop: bwrapState.alive,
+      inspectionError: bwrapState.error ?? null,
+      pidNamespace: 'dies with bwrap (--unshare-pid --die-with-parent)',
+      stopResult: stop,
+      method: 'owned-supervisor exit observation; no machine-wide name scan',
+    };
   }
 
   const afterFp = prodFp.map((f) => fingerprint(f.path));
-  const unchanged = JSON.stringify(prodFp) === JSON.stringify(afterFp);
-  results.productionProfile = { before: prodFp, after: afterFp, unchanged };
+  const metadataSame = JSON.stringify(prodFp) === JSON.stringify(afterFp);
+  results.productionProfile = {
+    label: 'METADATA OBSERVATION (size + rounded mtime) — not a content-integrity proof',
+    before: prodFp,
+    after: afterFp,
+    metadataSame,
+  };
+
   results.verdict = {
     readyObserved: results.ready?.observed === true,
     pingObserved: results.ping?.observed === true,
-    treeClean: results.leftovers === '',
-    productionUntouched: unchanged,
+    cleanup: results.cleanup.label,
+    productionMetadataSame: metadataSame,
+    gate: results.ready?.observed === true && results.ping?.observed === true && results.cleanup.label === 'OBSERVED (child exit observed)'
+      ? 'PASS'
+      : 'PARTIAL',
   };
-  results.root = root;
+  results.root = dirs.root;
   results.finishedAt = new Date().toISOString();
 
   fs.mkdirSync('docs/reports', { recursive: true });
-  fs.writeFileSync('docs/reports/native-probe-evidence.json', JSON.stringify(results, null, 2));
+  fs.writeFileSync(EVIDENCE_PATH, JSON.stringify(results, null, 2));
   console.log(JSON.stringify(results, null, 2));
-}
 
-// Capture the native gateway.ready payload for evidence.
-const __origOn = HermesProtocolClient.prototype.on;
-HermesProtocolClient.prototype.on = function (type, fn) {
-  if (type === 'gateway.ready') {
-    const wrapped = (params) => { this.__readyPayload = params?.payload ?? params; fn(params); };
-    return __origOn.call(this, type, wrapped);
-  }
-  return __origOn.call(this, type, fn);
-};
+  rmTree(dirs.root);
+  console.error(`[probe] evidence written to ${EVIDENCE_PATH}; temp tree removed`);
+}
 
 main().catch((err) => {
   console.error('probe failed:', err?.message ?? err);

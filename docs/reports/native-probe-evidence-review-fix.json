@@ -1,0 +1,214 @@
+{
+  "runId": "dc-phase1-probe-1788650681661-1393530",
+  "startedAt": "2026-09-05T23:24:41.661Z",
+  "testedSource": {
+    "spike": "/home/user/Programs/DonutCode-phase1-native-harness/scripts/native-probe.mjs",
+    "hermesSrc": "/home/user/.hermes/hermes-agent"
+  },
+  "hermesVersion": {
+    "label": "SOURCE-VERIFIED",
+    "pyprojectVersion": "0.20.6",
+    "gitHead": "10509b069f",
+    "gitDescribe": null
+  },
+  "sandbox": {
+    "tool": "bwrap (shared configuration via sandbox-helper.buildBwrapArgv)",
+    "flags": [
+      "unshare-net",
+      "unshare-pid",
+      "die-with-parent",
+      "clearenv-then-setenv"
+    ],
+    "productionHomeBound": false,
+    "hermesSourceBind": "/home/user/.hermes/hermes-agent (read-only)",
+    "freshHomes": {
+      "home": "/probe/home",
+      "hermesHome": "/probe/hermes-home"
+    },
+    "boundaryEstablished": true
+  },
+  "observedEnv": {
+    "label": "OBSERVED (inside sandbox)",
+    "home": "/probe/home",
+    "hermesHome": "/probe/hermes-home",
+    "tmpdir": "/tmp",
+    "pwd": "/probe/home",
+    "envKeys": [
+      "DC_PHASE1_OBSERVER_MARKER",
+      "HERMES_HOME",
+      "HOME",
+      "LANG",
+      "PATH",
+      "PWD",
+      "TMPDIR"
+    ],
+    "netns": "net:[4026534525]",
+    "userns": "user:[4026534743]",
+    "tmpdirReadable": true
+  },
+  "ready": {
+    "observed": true,
+    "label": "OBSERVED (native)",
+    "payloadKeys": [
+      "skin",
+      "change_events",
+      "replay_epoch"
+    ],
+    "payload": {
+      "skin": {
+        "name": "default",
+        "colors": {
+          "banner_border": "#CD7F32",
+          "banner_title": "#FFD700",
+          "banner_accent": "#FFBF00",
+          "banner_dim": "#B8860B",
+          "banner_text": "#FFF8DC",
+          "ui_accent": "#FFBF00",
+          "ui_label": "#DAA520",
+          "ui_ok": "#4caf50",
+          "ui_error": "#ef5350",
+          "ui_warn": "#ffa726",
+          "prompt": "#FFF8DC",
+          "input_rule": "#CD7F32",
+          "response_border": "#FFD700",
+          "status_bar_bg": "#1a1a2e",
+          "status_bar_text": "#C0C0C0",
+          "status_bar_strong": "#FFD700",
+          "status_bar_dim": "#8A7A4A",
+          "status_bar_good": "#8FBC8F",
+          "status_bar_warn": "#FFD700",
+          "status_bar_bad": "#FF8C00",
+          "status_bar_critical": "#FF6B6B",
+          "session_label": "#DAA520",
+          "session_border": "#8B8682",
+          "completion_menu_bg": "#1a1a2e",
+          "completion_menu_current_bg": "#333355",
+          "selection_bg": "#3a3a55",
+          "shell_dollar": "#4dabf7",
+          "voice_status_bg": "#1a1a2e"
+        },
+        "light_colors": {
+          "banner_title": "#C8961E",
+          "banner_accent": "#D89B04",
+          "banner_dim": "#B8860B",
+          "banner_text": "#5C4718",
+          "ui_accent": "#D89B04",
+          "ui_label": "#A97E10",
+          "ui_ok": "#2E7D32",
+          "ui_error": "#C62828",
+          "ui_warn": "#D97706",
+          "prompt": "#5C4718",
+          "response_border": "#C8961E",
+          "session_label": "#A97E10",
+          "status_bar_text": "#6F6F6F",
+          "status_bar_strong": "#C8961E",
+          "status_bar_dim": "#9A8A5A",
+          "status_bar_good": "#2E7D32",
+          "status_bar_warn": "#C8961E",
+          "status_bar_bad": "#C2410C",
+          "status_bar_critical": "#B91C1C",
+          "shell_dollar": "#1E6FC0",
+          "completion_menu_bg": "#F5F5F5",
+          "completion_menu_current_bg": "#E0D1BF",
+          "selection_bg": "#D4E4F7",
+          "status_bar_bg": "#F5F5F5",
+          "voice_status_bg": "#F5F5F5"
+        },
+        "dark_colors": {},
+        "branding": {
+          "agent_name": "Hermes Agent",
+          "welcome": "Welcome to Hermes Agent! Type your message or /help for commands.",
+          "goodbye": "Goodbye! ⚕",
+          "response_label": " ⚕ Hermes ",
+          "prompt_symbol": "❯",
+          "help_header": "(^_^)? Available Commands"
+        },
+        "banner_logo": "",
+        "banner_hero": "",
+        "tool_prefix": "┊",
+        "help_header": "(^_^)? Available Commands"
+      },
+      "change_events": true,
+      "replay_epoch": "3025d3c376c14a66ba731953a9b79829"
+    }
+  },
+  "ping": {
+    "observed": true,
+    "result": {
+      "pong": true
+    }
+  },
+  "sessionList": {
+    "observed": true,
+    "note": "metadata-only listing against the FRESH empty profile inside the sandbox; NO resume claim",
+    "sessionCount": 0,
+    "resultShape": [
+      "sessions"
+    ]
+  },
+  "stop": {
+    "observed": true,
+    "code": null,
+    "signal": "SIGTERM"
+  },
+  "cleanup": {
+    "label": "OBSERVED (child exit observed)",
+    "bwrapSupervisorPid": 1393549,
+    "bwrapSupervisorAliveAfterStop": false,
+    "inspectionError": null,
+    "pidNamespace": "dies with bwrap (--unshare-pid --die-with-parent)",
+    "stopResult": {
+      "observed": true,
+      "code": null,
+      "signal": "SIGTERM"
+    },
+    "method": "owned-supervisor exit observation; no machine-wide name scan"
+  },
+  "productionProfile": {
+    "label": "METADATA OBSERVATION (size + rounded mtime) — not a content-integrity proof",
+    "before": [
+      {
+        "path": "/home/user/.hermes/config.yaml",
+        "size": 15997,
+        "mtimeMs": 1788645928889
+      },
+      {
+        "path": "/home/user/.hermes/state.db",
+        "size": 11151589376,
+        "mtimeMs": 1788650616780
+      },
+      {
+        "path": "/home/user/.hermes/auth.json",
+        "size": 15068,
+        "mtimeMs": 1788645826873
+      }
+    ],
+    "after": [
+      {
+        "path": "/home/user/.hermes/config.yaml",
+        "size": 15997,
+        "mtimeMs": 1788645928889
+      },
+      {
+        "path": "/home/user/.hermes/state.db",
+        "size": 11151589376,
+        "mtimeMs": 1788650616780
+      },
+      {
+        "path": "/home/user/.hermes/auth.json",
+        "size": 15068,
+        "mtimeMs": 1788645826873
+      }
+    ],
+    "metadataSame": true
+  },
+  "verdict": {
+    "readyObserved": true,
+    "pingObserved": true,
+    "cleanup": "OBSERVED (child exit observed)",
+    "productionMetadataSame": true,
+    "gate": "PASS"
+  },
+  "finishedAt": "2026-09-05T23:24:41.852Z",
+  "root": "/tmp/dc-phase1-probe-Tstdhm"
+}
