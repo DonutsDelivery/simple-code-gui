@@ -147,3 +147,47 @@ export function makeProbeDirs(prefix = 'dc-phase1-') {
   for (const d of [home, hermesHome, tmp]) fs.mkdirSync(d, { recursive: true });
   return { root, home, hermesHome, tmp };
 }
+
+/**
+ * C3: the ACTUAL isolation-verdict classification used by the native probe
+ * and by the isolation tests. One function decides BLOCKED / FAIL / PASS
+ * from observed inputs; no test or probe may substitute its own boolean
+ * logic. Semantics:
+ *   - Any infrastructure/helper failure (launcher error, malformed/missing
+ *     helper output) => BLOCKED. Isolation was never established, so it is
+ *     neither proven nor denied — and never treated as a pass.
+ *   - Established boundary with the WRONG namespace identity, or an
+ *     unexpected connection outcome, or a missing marker => FAIL (boundary
+ *     existed but did not deliver the required property).
+ *   - Established boundary + correct namespace + expected connect outcome +
+ *     marker match => PASS.
+ * Inputs are OBSERVED values only (launcher result objects, parsed helper
+ * output, host-observed namespace id, expected outcome/marker).
+ */
+export function classifyIsolationRun({
+  launcherError = null,      // { message } when the launcher itself failed
+  helperOutput = null,       // parsed JSON object from the in-sandbox helper
+  hostNetns = null,          // host-side /proc/self/ns/net identity (string|null)
+  expectedOutcome = 'DENIED',// 'DENIED' (negative control) or 'CONNECTED'
+  expectedMarker = null,     // marker the helper must report back
+} = {}) {
+  if (launcherError) {
+    return { verdict: 'BLOCKED', reason: `launcher failed: ${launcherError.message}` };
+  }
+  if (!helperOutput || typeof helperOutput !== 'object') {
+    return { verdict: 'BLOCKED', reason: 'helper produced no parseable output' };
+  }
+  if (typeof helperOutput.netns !== 'string' || !helperOutput.netns.startsWith('net:')) {
+    return { verdict: 'BLOCKED', reason: 'helper did not report a namespace identity' };
+  }
+  if (expectedMarker != null && helperOutput.marker !== expectedMarker) {
+    return { verdict: 'BLOCKED', reason: 'helper marker mismatch (helper identity unproven)' };
+  }
+  if (hostNetns != null && helperOutput.netns === hostNetns) {
+    return { verdict: 'FAIL', reason: 'netns identity equals the host namespace (boundary not established)' };
+  }
+  if (helperOutput.outcome !== expectedOutcome) {
+    return { verdict: 'FAIL', reason: `connect outcome ${String(helperOutput.outcome)} != expected ${expectedOutcome}` };
+  }
+  return { verdict: 'PASS', reason: 'boundary established, namespace differs from host, connect outcome as expected' };
+}

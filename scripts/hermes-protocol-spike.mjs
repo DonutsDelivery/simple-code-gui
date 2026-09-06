@@ -154,16 +154,22 @@ export class HermesProtocolClient {
     this.signalLog = []; // every signal this client sent, for test/cleanup evidence
     this.pending = new Map(); // id -> { resolve, reject, timer, method }
     this.eventHandlers = new Map(); // type -> Set<fn>
-    this.stderrLines = []; // bounded ring buffer, scrubbed
+    this.stderrLines = []; // DEPRECATED: kept as always-empty for compatibility; see B4
+    this._bannerMeta = /^(Hermes Agent v\S+.*|[A-Za-z0-9_.-]+Error: .{0,120}|Traceback.*|.{0,40}Error: .{0,120})$/;
     this.diagnostics = {
-      protocolErrors: [],    // { kind, sample(capped+scrubbed) } — malformed JSON / nonconforming
-      unknownEventKinds: [], // event types with no handler (still delivered)
+      protocolErrors: [],    // { kind, sample } — bounded category metadata (B4: no raw bodies)
+      unknownEventKinds: [], // event types with no handler (byte-capped kind; still delivered)
       orphanResponses: 0,    // responses after timeout/exit (never re-sent requests)
       responseEnvelopesRejected: 0, // malformed response envelopes (never resolve)
       framesReceived: 0,
       bytesReceived: 0,
       droppedProtocolErrors: 0,   // records dropped by the count/byte bound
       droppedUnknownEvents: 0,
+      droppedStderrMeta: 0,
+      stderrLinesTotal: 0,   // B4: stderr metadata totals (counts/bytes only)
+      stderrBytesTotal: 0,
+      stderrMeta: [],        // bounded, error-shaped metadata only (B4)
+      fatalFraming: null,    // B1: set when the transport failed fatally
     };
     this._diagBytes = 0;
     this._seq = 0;
@@ -189,6 +195,12 @@ export class HermesProtocolClient {
       return this._readyPromise ?? Promise.resolve();
     }
     this.spawnCount += 1;
+    // A1: settle startup BEFORE any spawn path can fail, so start() always
+    // returns a pending-or-settled promise and a synchronous spawn throw can
+    // never be misread as a success-shaped `undefined`.
+    const childSpawning = Promise.withResolvers();
+    this._readyPromise = childSpawning.promise;
+    this._spawnedChildren = []; // owned supervisor + descendants, in spawn order
     let child;
     try {
       child = spawn(this.command[0], this.command.slice(1), {
@@ -200,7 +212,9 @@ export class HermesProtocolClient {
       // spawn() throws synchronously for e.g. invalid argv — same contract as
       // the async 'error' event below.
       this.spawnError = { message: err?.message ?? String(err) };
-      this._failStartup(new SpawnError(this.spawnError.message, { command: this.command[0] }));
+      childSpawning.reject(new SpawnError(this.spawnError.message, { command: this.command[0] }));
+      this._readySettled = true;
+      this.stopped = true;
       return this._readyPromise;
     }
     this.child = child;
@@ -226,26 +240,39 @@ export class HermesProtocolClient {
       this._failStartup(new ProcessExitedError(code, signal));
       this._resolveStopWaiters({ observed: true, code, signal });
     });
+    childSpawning.resolve();
     this._readyPromise = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this._startupTimer = null;
         this._failStartup(new StartupTimeoutError({
           timeoutMs: this.startupTimeoutMs,
-          stderrTail: this.stderrLines.slice(-5),
+          stderrTail: this.diagnostics.stderrMeta.slice(-5),
         }));
         this.stop().catch(() => {});
       }, this.startupTimeoutMs);
       this._startupTimer = timer;
       this._readyWaiters.push({ resolve, reject, timer });
     });
-    return this._readyPromise;
+    return this._readyPromise.then(() => this._readyPromise);
   }
 
   _onStderrChunk(chunk) {
+    // B4: stderr is NEVER retained as text. Default diagnostics are bounded
+    // metadata only (line counts and byte totals, plus bounded error-shaped
+    // metadata from the startup banner path). Arbitrary strings — including
+    // potential credentials — cannot leak through snapshot() by construction.
     for (const line of String(chunk).split('\n')) {
       if (!line) continue;
-      this.stderrLines.push(scrubText(line, this.maxTextSample));
-      if (this.stderrLines.length > this.maxStderrLines) this.stderrLines.shift();
+      this.diagnostics.stderrLinesTotal += 1;
+      this.diagnostics.stderrBytesTotal += Buffer.byteLength(line, 'utf8');
+      const bannerMatch = line.match(this._bannerMeta);
+      if (bannerMatch) {
+        this._pushDiagnostic(this.diagnostics.stderrMeta, 'droppedStderrMeta', {
+          kind: bannerMatch[1],
+          sample: scrubText(bannerMatch[2], this.maxTextSample),
+        });
+      }
+      if (this.diagnostics.stderrMeta.length > this.maxStderrLines) this.diagnostics.stderrMeta.shift();
     }
   }
 
@@ -286,6 +313,10 @@ export class HermesProtocolClient {
   }
 
   _onStdoutChunk(chunk) {
+    // B1: a fatally broken transport must stop retaining and parsing input
+    // immediately, even if the child keeps writing or ignores signals (a
+    // shutdown grace period must not make the input limit advisory).
+    if (this._fatalFraming || this.stopped) return;
     this.diagnostics.bytesReceived += chunk.length;
     // Byte-accurate line reassembly: UTF-8 multi-byte sequences split across
     // chunks are preserved until the line's newline arrives, then decoded whole.
@@ -295,21 +326,47 @@ export class HermesProtocolClient {
       const piece = chunk.subarray(start, idx);
       start = idx + 1;
       this._pushLine(piece);
+      if (this._fatalFraming) return;
     }
     if (start < chunk.length) {
       const rest = chunk.subarray(start);
       this._buf.push(rest);
       this._bufBytes += rest.length;
       if (this._bufBytes > this.maxFrameBytes) {
-        this._failAll(new FrameTooLargeError(this._bufBytes, this.maxFrameBytes));
-        this.stop().catch(() => {});
+        // Discard the partial frame and mark the transport fatal: later chunks
+        // are not retained (see the guard above). Pending ops settle via the
+        // fatal handler.
+        this._buf = [];
+        this._bufBytes = 0;
+        this._onFatalFraming(new FrameTooLargeError(this._bufBytes, this.maxFrameBytes));
       }
     }
   }
 
-  /** Bounded diagnostic record store with aggregate dropped counters. */
+  /** B1: fatal framing/transport path — settle work, stop retention, mark stopped. */
+  _onFatalFraming(err) {
+    if (this._fatalFraming) return;
+    this._fatalFraming = true;
+    this._buf = [];
+    this._bufBytes = 0;
+    this.diagnostics.fatalFraming = { message: err.message, name: err.name };
+    this._failAll(err);
+    this._failStartup(err);
+    this.stop().catch(() => {});
+  }
+
+  /**
+   * B2: byte budget is exact — every retained text field counts its real
+   * UTF-8 byte length (no fixed overhead); kind is truncated byte-safely to
+   * the same cap as samples. Count bounds stay a separate limit.
+   */
   _pushDiagnostic(list, droppedKey, record) {
-    const size = (record.sample?.length ?? 0) + 8;
+    const kindBuf = Buffer.from(String(record.kind ?? ''), 'utf8');
+    const sampleBuf = Buffer.from(String(record.sample ?? ''), 'utf8');
+    const cap = this.maxTextSample;
+    const kindBytes = kindBuf.length > cap ? cap : kindBuf.length;
+    const sampleBytes = sampleBuf.length > cap ? cap : sampleBuf.length;
+    const size = kindBytes + sampleBytes;
     if (list.length >= this.maxDiagnosticRecords || this._diagBytes + size > this.maxDiagnosticBytes) {
       this.diagnostics[droppedKey] += 1;
       return;
@@ -340,9 +397,10 @@ export class HermesProtocolClient {
     try {
       msg = JSON.parse(line);
     } catch {
+      // B4: no raw line body is retained — bounded category metadata only.
       this._pushDiagnostic(this.diagnostics.protocolErrors, 'droppedProtocolErrors', {
         kind: 'parse-error',
-        sample: scrubText(line, this.maxTextSample),
+        sample: `len=${Buffer.byteLength(line, 'utf8')}B`,
       });
       return;
     }
@@ -352,12 +410,17 @@ export class HermesProtocolClient {
       if (typeof type !== 'string') {
         this._pushDiagnostic(this.diagnostics.protocolErrors, 'droppedProtocolErrors', {
           kind: 'malformed-event',
-          sample: scrubText(line, this.maxTextSample),
+          sample: `len=${Buffer.byteLength(line, 'utf8')}B`,
         });
         return;
       }
       if (!this.eventHandlers.has(type)) {
-        this._pushDiagnostic(this.diagnostics.unknownEventKinds, 'droppedUnknownEvents', { kind: type });
+        // B2: the retained record carries a byte-safe kind (capped exactly like
+        // a sample); aggregate counters keep the full semantics without
+        // retaining unbounded event-name text.
+        this._pushDiagnostic(this.diagnostics.unknownEventKinds, 'droppedUnknownEvents', {
+          kind: scrubText(type, this.maxTextSample),
+        });
       }
       if (type === this.readyEventType && !this.ready) {
         this.ready = true;
@@ -368,17 +431,42 @@ export class HermesProtocolClient {
       }
       return;
     }
-    // Response frames: strict envelope validation. A frame must carry a valid
-    // id present in the pending map AND a result OR error — malformed
-    // envelopes are rejected explicitly and never resolve a request.
+    // B3: response frames are validated against the minimal real wire
+    // envelope BEFORE pending correlation is touched: jsonrpc === '2.0',
+    // scalar (string|number) id, and exactly one of result|error with a
+    // well-shaped error object. Invalid envelopes are rejected explicitly,
+    // the affected pending op (if any) is rejected with ProtocolError, and a
+    // response can never resolve through an invalid envelope.
     if (msg && typeof msg === 'object' && 'id' in msg && msg.id !== null) {
+      const versionOk = msg.jsonrpc === '2.0';
+      const idTypeOk = typeof msg.id === 'string' || typeof msg.id === 'number';
+      const hasResult = Object.prototype.hasOwnProperty.call(msg, 'result');
+      const hasError = Object.prototype.hasOwnProperty.call(msg, 'error') && msg.error !== null && msg.error !== undefined;
+      const exactlyOne = hasResult !== hasError;
+      const errorShapeOk = !hasError || (typeof msg.error === 'object'
+        && Number.isInteger(msg.error.code)
+        && typeof msg.error.message === 'string');
+      if (!versionOk || !idTypeOk || !exactlyOne || !errorShapeOk) {
+        this.diagnostics.responseEnvelopesRejected += 1;
+        this._pushDiagnostic(this.diagnostics.protocolErrors, 'droppedProtocolErrors', {
+          kind: 'invalid-response-envelope',
+          sample: `jsonrpc=${JSON.stringify(msg.jsonrpc)} idType=${typeof msg.id} result=${hasResult} error=${hasError} errorShape=${errorShapeOk}`,
+        });
+        const id = idTypeOk ? String(msg.id) : null;
+        const entry = id != null ? this.pending.get(id) : undefined;
+        if (entry) {
+          this.pending.delete(id);
+          clearTimeout(entry.timer);
+          entry.reject(new ProtocolError('invalid response envelope (never resolved via malformed frame)', {
+            jsonrpc: msg.jsonrpc ?? null, idType: typeof msg.id, hasResult, hasError,
+          }));
+        }
+        return;
+      }
       const id = String(msg.id);
       const entry = this.pending.get(id);
-      const hasResult = Object.prototype.hasOwnProperty.call(msg, 'result');
-      const hasError = msg.error !== undefined && msg.error !== null;
-      if (!entry || (!hasResult && !hasError)) {
-        if (!entry) this.diagnostics.orphanResponses += 1; // late/unknown id: never re-sent
-        this.diagnostics.responseEnvelopesRejected += 1;
+      if (!entry) {
+        this.diagnostics.orphanResponses += 1; // late/unknown id: never re-sent
         return;
       }
       this.pending.delete(id);
@@ -389,7 +477,7 @@ export class HermesProtocolClient {
     }
     this._pushDiagnostic(this.diagnostics.protocolErrors, 'droppedProtocolErrors', {
       kind: 'nonconforming-frame',
-      sample: scrubText(line, this.maxTextSample),
+      sample: `len=${Buffer.byteLength(line, 'utf8')}B`,
     });
   }
 
@@ -483,11 +571,13 @@ export class HermesProtocolClient {
       try { child.stdin.end(); } catch { /* already closed */ }
 
       if (!Number.isInteger(pid) || pid <= 0) {
-        // Cannot signal anything — report honestly and wait for the exit event.
+        // Cannot signal anything — record the skipped attempt honestly and
+        // wait for a real exit event. No signal is ever reported as sent.
         this.signalLog.push({ pid: pid ?? null, signal: null, skipped: 'invalid pid' });
       } else {
-        this.signalLog.push({ pid, signal: 'SIGTERM' });
-        try { child.kill('SIGTERM'); } catch { /* exited between checks */ }
+        let sent = false;
+        try { sent = child.kill('SIGTERM'); } catch { sent = false; }
+        this.signalLog.push({ pid, signal: 'SIGTERM', sent });
       }
 
       const prevExit = this.exitInfo;
@@ -503,35 +593,64 @@ export class HermesProtocolClient {
 
       this._stopKillTimer = setTimeout(() => {
         this._stopKillTimer = null;
-        if (this.exitInfo) return; // already reaped; nothing to do
+        if (this.exitInfo || prevExit) return; // already reaped; nothing to do
         if (Number.isInteger(pid) && pid > 0) {
-          this.signalLog.push({ pid, signal: 'SIGKILL' });
           let sent = false;
           try { sent = child.kill('SIGKILL'); } catch { sent = false; }
-          if (!sent) { this._resolveStopWaiters({ observed: true, ...prevExit ?? { code: null, signal: null } }); return; }
+          this.signalLog.push({ pid, signal: 'SIGKILL', sent });
+          if (!sent) {
+            // A2: kill() failure is NOT an observed exit. Report UNCONFIRMED
+            // after a finite bound; no signal is claimed as sent (tracked in
+            // signalLog), and `observed` stays false until a real exit event.
+            this.signalLog.push({ pid, signal: null, skipped: 'SIGKILL send failed' });
+            this._stopUnconfirmedTimer = setTimeout(() => {
+              this._stopUnconfirmedTimer = null;
+              this._resolveStopWaiters({
+                observed: false,
+                code: null,
+                signal: null,
+                confirmed: false,
+                note: 'SIGKILL send failed; exit not observed',
+              });
+            }, Math.max(grace, 1_000));
+            return;
+          }
+          // Bounded unconfirmed window: if the kernel reaps the child but the
+          // exit event is somehow lost, report UNCONFIRMED — never invent an
+          // observed exit. `signal` names the last signal actually SENT.
+          this._stopUnconfirmedTimer = setTimeout(() => {
+            this._stopUnconfirmedTimer = null;
+            this._resolveStopWaiters({
+              observed: false,
+              code: null,
+              signal: 'SIGKILL',
+              confirmed: false,
+              note: 'SIGKILL sent; exit not observed within bound',
+            });
+          }, Math.max(grace, 1_000));
+        } else {
+          // Invalid pid: no escalation is possible — nothing was ever sent,
+          // so the result must not carry a sent-signal name.
+          this._stopUnconfirmedTimer = setTimeout(() => {
+            this._stopUnconfirmedTimer = null;
+            this._resolveStopWaiters({
+              observed: false,
+              code: null,
+              signal: null,
+              confirmed: false,
+              note: 'invalid pid; no signal could be sent; exit not observed',
+            });
+          }, Math.max(grace, 1_000));
         }
-        // Bounded unconfirmed window: if the kernel reaps the child but the
-        // exit event is somehow lost, report UNCONFIRMED — never invent an
-        // observed exit.
-        this._stopUnconfirmedTimer = setTimeout(() => {
-          this._stopUnconfirmedTimer = null;
-          this._resolveStopWaiters({
-            observed: false,
-            code: null,
-            signal: 'SIGKILL',
-            confirmed: false,
-            note: 'SIGKILL sent; exit not observed within bound',
-          });
-        }, Math.max(grace, 1_000));
       }, grace);
     });
     return this._stopPromise;
   }
 
   /**
-   * Bounded, redaction-safe diagnostics. Raw frames are never included;
-   * text samples are capped and scrubbed; stderr is a scrubbed ring buffer;
-   * per-array count/byte bounds hold with aggregate dropped counters.
+   * Bounded, metadata-only diagnostics (B4). No stderr text and no raw
+   * frame bodies are retained: counts/byte-totals plus bounded, error-shaped
+   * metadata and byte-capped identifiers only.
    */
   snapshot() {
     return {
@@ -539,12 +658,12 @@ export class HermesProtocolClient {
       spawnError: this.spawnError,
       exitInfo: this.exitInfo,
       signalLog: [...this.signalLog],
-      stderrLines: [...this.stderrLines],
+      stderrLines: [], // B4: deprecated always-empty field (metadata lives in diagnostics)
       pendingCount: this.pending.size,
       stdioBroken: this._stdioBroken,
       stdioError: this._stdioError,
       ...this.diagnostics,
-      unknownEventKinds: [...new Set(this.diagnostics.unknownEventKinds)],
+      unknownEventKinds: [...new Map(this.diagnostics.unknownEventKinds.map((r) => [r.kind, r])).values()],
       bounds: {
         maxDiagnosticRecords: this.maxDiagnosticRecords,
         maxDiagnosticBytes: this.maxDiagnosticBytes,

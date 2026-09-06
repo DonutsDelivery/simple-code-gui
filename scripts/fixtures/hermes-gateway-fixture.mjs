@@ -56,6 +56,7 @@
 import { once } from 'node:events';
 import fs from 'node:fs';
 import readline from 'node:readline';
+import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
 function argOf(name, fallback) {
@@ -202,6 +203,24 @@ async function main() {
     case 'malformed': {
       emitReady();
       process.stdout.write('this is not json\n');
+      break;
+    }
+    case 'spawn-worker': {
+      // C1: the gateway ITSELF spawns a bounded worker child (same process
+      // boundary as the native path). The worker is a fixture-owned child —
+      // the client's stop() must end BOTH through the real supervisor (the
+      // client only signals its own child, exactly like production).
+      emitReady();
+      const workerArgv = argOf('--worker-argv', `${process.execPath},-e,setTimeout(()=>process.exit(0),20000)`)
+        .split(',').map((s) => s.trim()).filter(Boolean);
+      try {
+        const w = spawn(workerArgv[0], workerArgv.slice(1), { stdio: 'ignore' });
+        w.on('error', (e) => writeErr(`worker spawn error: ${e.message}`));
+        writeOut({ jsonrpc: '2.0', id: null, method: 'event', params: { type: 'fixture.worker.spawned', payload: { pid: w.pid }, synthetic: true } });
+        journal.push({ id: null, method: 'fixture.worker.spawned', params: { pid: w.pid } });
+      } catch (e) {
+        writeErr(`worker spawn failed: ${e.message}`);
+      }
       break;
     }
     default: {

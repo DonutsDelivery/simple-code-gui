@@ -1,162 +1,165 @@
-# Native Harness Phase 1 — Foundation Report (Review-Correction Revision)
+# Native Harness Phase 1 — Foundation Report (rev 3, remaining corrections)
 
-**Commit:** this commit (see git log for exact SHA) — one scoped review-correction
-commit on top of `90d6b56498501e9ee4c6211936ce9ead3e17202d`, on branch
-`feat/native-harness-phase-1`, worktree `/home/user/Programs/DonutCode-phase1-native-harness`.
+**Commit:** this commit (see git log for exact SHA) — one scoped follow-up on
+`bb89f4dba948879ecbec2aa5b5a31b14b3fbac0b`, on branch `feat/native-harness-phase-1`,
+worktree `/home/user/Programs/DonutCode-phase1-native-harness`. History retains
+`90d6b56` and `bb89f4d`; nothing was reset or force-pushed.
 
 ## Gate Status
 
 | Gate | Status |
 | --- | --- |
-| Full suite green | ✅ PASS — `node --test scripts/__tests__/hermes-protocol-spike.test.mjs`: 27/27 pass, 0 fail |
-| Synthetic fixture isolation | ✅ PASS — fixture isolation suite included in the 27 |
-| Native metadata-only probe | ✅ PASS — gate `PASS` in `docs/reports/native-probe-evidence-review-fix.json` (all conditions verified in-script; no unverified claims) |
-| Report published | ✅ PASS — this report; normal (non-force) push to `feat/native-harness-phase-1` |
-| Report format | ✅ PASS — Gate Status table + Phase 2/3 checklist, per review §5 |
+| Standalone Phase 1 suite | ✅ PASS — `node --test scripts/__tests__/hermes-protocol-spike.test.mjs`: 31/31 pass, 0 fail (author-run) |
+| Reviewer regressions | ✅ PASS — `reviewer-regressions.test.mjs` (extracted verbatim from the review evidence archive) against the corrected client: 12/12 (4 controls + 8 former failures). Before fixes, on the unchanged client: 4 pass / 8 fail — identical to the reviewer's TAP on Node v22.16.0; this host (Node v22.22.3) shows the same result, no environment-specific differences recorded. |
+| Real sandbox checks | ✅ PASS — sentinel-read denial under the shared boundary, in-sandbox env observation (marker visible, canary absent, ns identity), loopback denial with positive control, launcher-failure BLOCKED classification (all author-run on this host, bwrap 0.11.2) |
+| Native metadata-only probe | ✅ PASS — gate `PASS`, exit code 0, in `docs/reports/native-probe-evidence-review-fix-2.json` (one run; all four gate checks true) |
+| Report published | ✅ PASS — normal (non-force) push to `feat/native-harness-phase-1` |
 
-No phase gate relies on an unverified claim: every PASS above is backed by a
-command that ran in this worktree and by an evidence file written by the run.
+The application baseline (`npm run test`, 430/435 with 5 pre-existing red at
+HEAD) is AUTHOR-REPORTED from the phase-1 session and was NOT rerun in this
+correction per scope; it is unchanged from the earlier report.
 
-## What Changed (Review Corrections R1–R4)
+## Status Vocabulary (used throughout)
 
-- **R1 — Truthful stop/lifecycle state (`scripts/hermes-protocol-spike.mjs`)**
-  - `stop()` now reports completion-path truthfully: `result.observed === true`
-    iff child exit was observed; `UNCONFIRMED` fallback result is returned
-    instead of a fabricated value when observation races the bounded wait.
-  - Stop is idempotent (single shared promise; second caller gets the first
-    stop's result) and bounded: SIGTERM → `graceMs` → SIGKILL (child-pid only,
-    `kill()` on the exact child object; no process-group or other-process signal).
-  - All stop timers are cleared exactly once and only on the transition that
-    makes them redundant (`_stopKillTimer`, `_stopUnconfirmedTimer`, cleanup on
-    observed exit, exit-time and unconfirmed-path hygiene; no unconditional
-    `clearTimeout` on a stale id, no stray unref).
-  - Child stdin `error` and unexpected parent-side stdio `error` are captured,
-    recorded, and surfaced; pending requests fail fast with `StdioWriteError`
-    (exact cause), and pending NEVER silently settle as success.
-  - Startup spawn failure (ENOENT etc.) rejects deterministically with
-    `StartupSpawnError` (exact `spawnSync`-verified cause, no fabricated
-    `gateway.ready`).
-  - New failing-then-fixed regression tests: stdin-closed-live child
-    (`StdioWriteError`, no restart), nonexistent-executable startup
-    (`StartupSpawnError`, no phantom ready), stop idempotence + truthfulness
-    (including invalid-pid case: recorded `invalid-pid`, never signaled).
-- **R2 — Shared sandbox boundary (`scripts/fixtures/sandbox-helper.mjs`)**
-  - One `buildBwrapArgv()` builder: `--unshare-net --unshare-pid
-    --die-with-parent`, production `$HOME` never bound, installed source
-    read-only, fresh `HOME`/`HERMES_HOME` from a probe-owned temp root,
-    `--clearenv` followed ONLY by explicit `--setenv` of the allowlist
-    (order preserved; the original code's set-before-clear inversion removed).
-  - Corrected bwrap ordering/flags discovered by live debugging on this host:
-    `/proc` mount after binds (else `/proc/self/ns/*` unreadable on bwrap 0.11.2),
-    `--symlink /usr/lib /lib64` + `/lib` (Arch linker path), executable path
-    `/usr/bin/node` (host `node` is a shim outside the sandbox).
-  - Both the isolation tests and the native probe consume the SAME builder, so
-    the tested boundary is the shipped boundary.
-- **R3 — Isolation/cleanup tests assert the real property**
-  - Namespace identity observed INSIDE the sandbox (`/proc/self/ns/net`
-    readlink via observer; differs from host; marker via `--setenv`).
-  - Known-path sentinel read denial asserted against the SAME shared boundary
-    (positive control outside; DENIED inside; launcher failure = FAIL, not
-    network-denial PASS).
-  - Machine-wide `pgrep -f tui_gateway.entry` name-scan removed from cleanup
-    evidence. Ownership checks use namespace identity + owned PIDs; owned
-    child and owned descendant exit observed; an unrelated bounded control
-    process is verified alive, never signaled; launcher-failure test keeps the
-    boundary honest.
-  - No always-true assertions; no `Object.prototype`/prototype monkey-patching;
-    no swallowed exceptions in test code.
-- **R4 — Client safety hardening (`scripts/hermes-protocol-spike.mjs`)**
-  - Diagnostics bounded by count AND bytes (`stderrBounded`, `protocolErrorsBounded`,
-    `unknownEventsBounded`, `droppedStderrLines`, `droppedProtocolErrors`,
-    `droppedUnknownEvents`); oversized frames fail explicitly
-    (`maxLineBytes`); no unbounded buffering.
-  - Sensitive content scrubbed at capture: key-based `[REDACTED]`, secret-shaped
-    string/value patterns scrubbed everywhere (stderr lines, malformed samples,
-    ready payload); `TOPSECRET` sentinel asserted absent from diagnostics.
-  - Response envelopes validated (`jsonrpc`/`id`/`result|error`); malformed
-    envelope rejected, recorded, never resolves a request.
-  - UTF-8 split boundary fixed at REAL multibyte cut points in the fixture
-    (byte-offset verified via buffer scan; the previous constant offsets were
-    wrong and only accidentally inside a 2-byte sequence).
-  - Request journal in the fixture (`fixture.journal`) allows exact-count
-    assertions (single-send on timeout verified; no re-send storm).
-  - Monkey-patch removed: ready payload is captured through the client's normal
-    event API; no `__proto__`/prototype tampering; no silent exception
-    swallowing in tests.
+- **OBSERVED** — executed and verified on this host in this revision (command
+  and artifact named).
+- **SOURCE-VERIFIED** — read from installed Hermes source at the pinned commit;
+  not executed.
+- **NOT RUN / UNVERIFIED** — not executed here; explicitly no claim.
 
-## Honest Status of Remaining Limitations
+## Reviewer Regressions (A/B/C/D) — resolution
 
-- `native-probe-evidence-review-fix.json` is evidence of a **metadata-only
-  native session** (ready/ping/session.list against a fresh empty profile).
-  It is NOT an end-to-end prompt verification. Prompt lifecycle is Phase 2.
-- `productionProfile.metadataSame === true` proves metadata (size + rounded
-  mtime) of production config/state/auth was unchanged across the run. It is
-  explicitly labeled METADATA OBSERVATION — not a content-integrity proof.
-- The installed-gateway startup banner on stderr, if any, is captured bounded
-  and scrubbed; it is not treated as protocol evidence.
-- Protocol map below is SOURCE-VERIFIED (read from installed source); runtime
-  behavior of mapped methods beyond ping/session.list is Phase 2 work.
+Executed first against the UNCHANGED client, exactly as delivered: **4 pass /
+8 fail**, matching the reviewer's TAP byte-for-byte in outcomes (Node v22.22.3
+here vs v22.16.0 there; same results, no environment differences recorded).
 
-## SOURCE-VERIFIED Protocol Map (installed `tui_gateway` @ git 10509b069f, v0.20.6)
+- **A1 (sync spawn failure returned undefined)** — fixed: `start()` settles
+  startup BEFORE any spawn path can fail (`Promise.withResolvers()` settled
+  first; sync-throw path rejects with `SpawnError` and marks stopped). The
+  spawn-throw path always returns a rejected startup promise; async ENOENT
+  behavior and the no-restart rule are preserved (reviewer test 5 now passes).
+- **A2 (failed kill fabricated `observed: true`; invalid pid claimed SIGKILL)**
+  — fixed: `observed: true` comes ONLY from a real exit event. Kill-send
+  results are tracked (`signalLog` entries carry `sent: true/false`); a failed
+  send settles UNCONFIRMED after a finite bound with `signal: null` and note
+  `SIGKILL send failed`; the invalid-pid branch skips escalation entirely and
+  settles UNCONFIRMED with `signal: null`, note `invalid pid; no signal could
+  be sent` (reviewer tests 6–7 now pass). Stop remains idempotent, timers are
+  cleared on the transitions that make them redundant, and no unrelated
+  process is ever signaled.
+- **B1 (byte cap advisory; 102,400 bytes retained after stop)** — fixed: the
+  fatal-framing path clears the partial-frame buffer immediately, sets a
+  fatal-transport flag, and `_onStdoutChunk` returns early for all later
+  chunks (retention stays 0 after the cap; reviewer test 10 now passes).
+  Behavior stays finite for a peer that keeps writing or ignores SIGTERM.
+- **B2 (event-name bytes bypassed the diagnostic budget; counter 80 vs 10,080
+  retained)** — fixed: `_pushDiagnostic` accounts the REAL UTF-8 byte length
+  of every retained text field (kind and sample each capped at `maxTextSample`
+  bytes, byte-safe truncation); count bounds remain a separate limit. The
+  budget definition is now explicit: the budget covers retained text bytes
+  (kind + sample), not serialized-object overhead (reviewer test 11 passes:
+  ≤128 bytes retained under a 128-byte budget).
+- **B3 (wrong-version / array-id responses resolved pending requests)** —
+  fixed: minimal real wire envelope validated BEFORE pending correlation —
+  `jsonrpc === '2.0'`, scalar (string|number) id (no array/object coercion),
+  exactly one of result|error, error object shape (`code` integer,
+  `message` string). An invalid envelope with a correlating pending id
+  REJECTS that pending op with `ProtocolError` (never resolves); with no
+  matching id it is counted (`orphanResponses`/`responseEnvelopesRejected`).
+  Readiness/event envelope checks are consistent (`type` must be a string)
+  (reviewer tests 8–9 now pass, exercised with an ACTUALLY pending id).
+- **B4 (arbitrary text such as `api_key=...` retained in snapshot())** —
+  fixed per the reviewer's smallest preferred correction: default diagnostics
+  are bounded, allowlisted METADATA ONLY. stderr text is never retained
+  (line counts + byte totals + bounded, error-shaped metadata records);
+  malformed/parse-error samples are byte-length metadata (`len=NB`), not
+  bodies; `snapshot()` cannot carry arbitrary text by construction. There is
+  no opt-in raw capture. Conversation payload paths are not touched (this is
+  diagnostics-only; no TUI-style filtering of message content).
+- **C1 (the "descendant" was a sibling)** — fixed: the synthetic gateway now
+  has a `spawn-worker` mode where the GATEWAY spawns a bounded worker inside
+  the same process boundary; the test records gateway pid + gateway-reported
+  worker pid + control pid BEFORE teardown, stops ONLY the owned supervisor
+  through the normal path, and proves gateway + worker both ended (owner-chain
+  teardown, no manual worker kill) while the unrelated control stays alive and
+  is never signaled. The old sibling-kill test is gone.
+- **C2 (machine-wide name scan still in the suite)** — fixed: the
+  `pgrep -f hermes-gateway-fixture.mjs` test was replaced with owned-identity
+  cleanup evidence (owned child observed exit; control alive + never signaled;
+  every signal-log entry targets the owned child pid or an honest null-skip).
+- **C3 (tautological stand-ins)** — fixed: `classifyIsolationRun()` in
+  `sandbox-helper.mjs` is the single verdict classifier (BLOCKED on
+  launcher/helper/marker failures, FAIL on wrong-namespace or unexpected
+  outcome, PASS only on boundary + differing ns + expected outcome + marker).
+  The launcher-failure tests now feed the REAL classifier (BLOCKED, never
+  PASS); the malformed-helper, wrong-namespace, and genuine-denial paths are
+  tested against the same function. No `&& false` / `|| true` remains.
+- **C4 (PARTIAL without nonzero exit; weak PASS condition)** — fixed: the
+  probe defines the metadata gate explicitly (verified boundary via the shared
+  classifier + native readiness + valid EXPECTED ping `pong === true` +
+  CONFIRMED cleanup via observed supervisor exit; uninspectable pid ⇒
+  UNCONFIRMED, never confirmed-clean). Exit codes: PASS 0, PARTIAL 4, BLOCKED
+  5, crash 1. The gate decision and cleanup-confirmation logic are exercised
+  with deterministic synthetic results in the standalone suite BEFORE the
+  native run. `session.list` remains optional and is labeled
+  OPTIONAL / OPTIONAL-FAILED in the evidence.
 
-Wire format (verified in `tui_gateway/server.py` `_event_frame`, `entry.py`):
-newline-delimited JSON-RPC 2.0 over stdio; responses correlate by numeric `id`;
-notifications/events use `method:"event"` with `params.type` + `params.session_id`
-+ optional `params.payload`; first startup event is `gateway.ready`
-(payload: `skin`, `change_events`, `replay_epoch`).
+## Native probe (one metadata-only run)
 
-Selected request methods (all verified as registered `@method(...)` handlers):
-- Lifecycle: `ping`, `session.create` (params: `cols`, `messages`, `title`,
-  `parent_session_id`, `cwd`, `source`, `profile`, `model`, `provider`),
-  `session.resume` (`session_id` required, `cols`, `profile`, `defer_history`,
-  `omit_messages`), `session.close`, `session.interrupt`
-  (optional `expected_hosted_task_id` guard), `session.list`
-- Conversation: `prompt.submit` (`session_id`, `text`, `display_kind`),
-  `session.history` (persisted rows with `include_row_ids`),
-  `session.usage`, `session.steer`, `subagent.interrupt`/`steer`
-- Approvals: `approval.respond` (`choice` default `deny`, `all`, `request_id`;
-  resolves via `resolve_gateway_approval`), `sudo.respond`, `secret.respond`
-- Config/profiles: `config.get`/`config.set`/`config.show` (profile-scoped via
-  `_profile_scoped`), `profiles.list` (`include_sessions`), `profiles.create`
-- Tools: `tools.list`, `toolsets.list`, `shell.exec`, `process.list`/`stop`/`kill`
-- Session identity: durable `session_key` format
-  `YYYYMMDD_HHMMSS_<6-hex>` (`_new_session_key`); UI session ids are 8-hex;
-  state.db is per-profile at `$HERMES_HOME/state.db`
-- Turn events (emitted): `turn.start`, `message.start`, `message.delta`,
-  `message.complete`, `reasoning.delta`, `tool.start`, `tool.complete`,
-  `approval.request` (`_emit_approval_request`), `session.usage`,
-  `usage.bars`, `status.update`
+- Evidence: `docs/reports/native-probe-evidence-review-fix-2.json`
+  (run-specific, separately identified; the earlier
+  `native-probe-evidence.json` and `native-probe-evidence-review-fix.json`
+  are preserved untouched).
+- Result: gate **PASS** (exit 0): boundary PASS via `classifyIsolationRun`
+  (observed in-sandbox env: fresh `/probe/home` + `/probe/hermes-home`, allowlist-only env, `net:[…]` differing from host), native `gateway.ready`
+  observed from the real installed gateway, valid ping `{pong: true}`,
+  CONFIRMED cleanup (owned supervisor exit observed). `session.list` returned
+  0 sessions on the throwaway profile (OPTIONAL, not part of the gate).
+- Production profile files appear as METADATA OBSERVATION only (size +
+  rounded mtime, `metadataSame: true` across the run) — explicitly NOT a
+  content-integrity proof.
 
-Full parameter/response schemas are Phase 2 (schema extraction per handler);
-the map above is identity-level, sufficient for the Phase-2 plan.
+## Hermes source drift (recorded, not repaired)
 
-## Evidence Files
+The installed Hermes tree changed since the first probe: git HEAD moved from
+`7cd91114` (recorded in the phase-1 session's first probe context) to
+`10509b069fc0c3ec65dbc5cbbe82cd53068ed06e`, while the pyproject version label
+remained **0.20.6**. This probe recorded the full pinned commit AND the
+dirty-state observation (`gitDirty: true`) in its evidence file
+(SOURCE-VERIFIED, recorded, NOT updated — the tree was not touched to make
+tests pass). This drift is not claimed as evidence of a defect.
 
-- `docs/reports/native-probe-evidence-review-fix.json` — corrected-run native
-  probe evidence (version, observed in-sandbox env, ready payload keys, ping,
-  session.list count, stop truthfulness, cleanup via owned-supervisor exit,
-  production metadata before/after). Original `native-probe-evidence.json`
-  preserved untouched as the historical first-run artifact.
-- Test run: `node --test scripts/__tests__/hermes-protocol-spike.test.mjs` →
-  27/27 pass (command quoted above; re-runnable exactly).
+## Protocol map
 
-## Phase 2 / Phase 3 Checklist (unchanged scope, carried forward)
+SOURCE-VERIFIED from installed `tui_gateway` source at the pinned commit
+(rev-2 report content unchanged): newline-delimited JSON-RPC 2.0 over stdio;
+`gateway.ready` first event; selected request methods and turn events as
+listed in the previous revision's map. Per-method parameter/response schemas
+remain NOT RUN (Phase 2 work, pending independent approval).
 
-Phase 2 (unblocked by this revision):
-1. Extract per-method request/response schemas from installed source
-   (`methods_*.py`) into a fixture-validated contract file.
-2. Extend the synthetic fixture with approval-flow + turn-event sequences;
-   add client-side event-correlation tests.
-3. Implement prompt lifecycle over the native gateway inside the SAME shared
-   boundary (session.create → prompt.submit → message.* events → complete),
-   still read-only, still no provider calls (model/provider must be
-   offline/stub — Phase 2 gate decision).
-4. Interrupt/approval paths with deterministic fixtures first; native only
-   after fixture parity.
+## Remaining limitations (explicit)
 
-Phase 3 (unchanged): renderer integration behind the existing
-`session-runtime-registry`/`environment-runtime` seams; end-to-end gesture
-tests per repo policy; no production-profile writes.
+- The probe remains a METADATA-ONLY native session (ready/ping/session.list
+  against a throwaway profile). Prompt lifecycle is NOT RUN (Phase 2).
+- The suite is STANDALONE (`node --test`); the repo's `npm run test` baseline
+  is author-reported from the phase-1 session and NOT RERUN here.
+- Author-run claims (suite, sandbox checks, probe) are OBSERVED by the author;
+  no independent reviewer has rerun them on this host.
 
-Explicitly out of scope (unchanged): production DB writes, credential access,
-provider/model configuration changes, Phase-2 implementation.
+## Phase 2 status
+
+NOT started and NOT authorized by this correction. Phase 2 remains pending
+independent review approval; the previous revision's self-authored Phase 2/3
+checklist is NOT executed. No production profile hashing/copying/repair was
+performed; the usage investigation remains independent.
+
+## Evidence files
+
+- `docs/reports/native-probe-evidence-review-fix-2.json` — this revision's
+  single native probe run (gate PASS, exit 0, pinned Hermes commit + dirty
+  state).
+- Earlier evidence preserved untouched: `native-probe-evidence.json`,
+  `native-probe-evidence-review-fix.json`.
+- Reviewer regression result (before/after): see the Reviewer Regressions
+  section above; the reviewer's harness was executed verbatim from the
+  delivered archive (unmodified client first, corrected client after).
