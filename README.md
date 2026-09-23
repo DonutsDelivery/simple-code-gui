@@ -3,13 +3,15 @@
 </p>
 
 <p align="center">
-  <a href="https://donutsdelivery.online/#simplecodegui"><img src="https://img.shields.io/badge/Website-donutsdelivery.online-blue?logo=googlechrome&logoColor=white" alt="Website"></a>
+  <a href="https://donutsdelivery.online/"><img src="https://img.shields.io/badge/Website-donutsdelivery.online-blue?logo=googlechrome&logoColor=white" alt="Website"></a>
   <a href="https://discord.gg/ZhvPhXrdZ4"><img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <img src="https://img.shields.io/github/v/release/DonutsDelivery/simple-code-gui" alt="GitHub Release">
   <img src="https://img.shields.io/github/downloads/DonutsDelivery/simple-code-gui/total" alt="Downloads">
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron">
   <img src="https://img.shields.io/aur/version/simple-code-gui" alt="AUR">
 </p>
+
+> **Development status: On hiatus.** Development is currently inactive. The project is not in a good state of development, and stronger alternatives such as T3 and T3-Hermes have emerged since its inception. With few users and heavy competition, I need to focus on my other projects, so DonutCode is paused.
 
 A distributed development workspace for managing multiple AI coding sessions across projects and execution servers. Supports **Claude Code**, **Gemini CLI**, **Codex**, and **OpenCode**.
 
